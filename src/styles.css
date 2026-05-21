@@ -1013,7 +1013,7 @@ h3 {
   color: #45546c;
   display: grid;
   gap: 10px;
-  grid-template-columns: 70px minmax(120px, 1fr) minmax(120px, 0.8fr) minmax(110px, 0.7fr) minmax(120px, 0.8fr);
+  grid-template-columns: 60px minmax(120px, 1fr) minmax(110px, 0.75fr) minmax(100px, 0.65fr) minmax(110px, 0.75fr) minmax(110px, 0.75fr);
   min-width: 0;
   padding: 13px 14px;
 }
@@ -1563,7 +1563,7 @@ label {
 .market-detail-hero {
   display: grid;
   gap: 14px;
-  grid-template-columns: minmax(0, 1fr) 350px;
+  grid-template-columns: minmax(0, 1fr) 320px;
 }
 
 .detail-question-panel,
@@ -1583,9 +1583,9 @@ label {
     linear-gradient(90deg, rgba(8, 11, 25, 0.82), rgba(8, 11, 25, 0.42)),
     #080b19;
   display: grid;
-  min-height: 210px;
+  min-height: 150px;
   overflow: hidden;
-  padding: 24px;
+  padding: 20px;
   position: relative;
 }
 
@@ -1593,11 +1593,11 @@ label {
   height: 100%;
   inset: 0;
   margin-left: auto;
-  max-width: 48%;
+  max-width: 42%;
   object-fit: cover;
-  opacity: 0.3;
+  opacity: 0.22;
   position: absolute;
-  width: 48%;
+  width: 42%;
 }
 
 .detail-question-panel > div {
@@ -1608,10 +1608,10 @@ label {
 
 .detail-question-panel h1 {
   color: #ffffff;
-  font-size: clamp(1.35rem, 2vw, 2.2rem);
-  line-height: 1.14;
-  margin: 12px 0 0;
-  max-width: 760px;
+  font-size: clamp(1.05rem, 1.45vw, 1.55rem);
+  line-height: 1.22;
+  margin: 10px 0 0;
+  max-width: 620px;
 }
 
 .copy-market-button {
@@ -1659,7 +1659,7 @@ label {
 .detail-body-grid {
   display: grid;
   gap: 14px;
-  grid-template-columns: minmax(0, 1fr) 350px;
+  grid-template-columns: minmax(0, 1fr) 320px;
 }
 
 .detail-chart-card {
@@ -1700,7 +1700,7 @@ label {
   background: linear-gradient(180deg, rgba(24, 215, 255, 0.06), transparent);
   border-radius: 8px;
   display: block;
-  height: 310px;
+  height: 230px;
   width: 100%;
 }
 
@@ -1909,6 +1909,10 @@ label {
   color: #087f5b;
 }
 
+.profile-public:disabled {
+  opacity: 0.72;
+}
+
 .profile-public-dot {
   background: #12b981;
   border-radius: 999px;
@@ -1933,6 +1937,20 @@ label {
   right: 2px;
   top: 2px;
   width: 14px;
+}
+
+.profile-public.is-private {
+  color: #667085;
+}
+
+.profile-public.is-private .profile-public-dot,
+.profile-public.is-private .profile-toggle {
+  background: #9aa7bd;
+}
+
+.profile-public.is-private .profile-toggle::after {
+  left: 2px;
+  right: auto;
 }
 
 .profile-stat-grid,
@@ -2512,6 +2530,15 @@ label {
   color: #30e1b0;
 }
 
+[data-theme="dark"] .profile-public.is-private {
+  color: #9aa7bd;
+}
+
+[data-theme="dark"] .profile-public.is-private .profile-public-dot,
+[data-theme="dark"] .profile-public.is-private .profile-toggle {
+  background: #64748b;
+}
+
 [data-theme="dark"] .edge-grid {
   stroke: #26334a;
 }
@@ -2549,7 +2576,8 @@ label {
   }
 
   .leaderboard-row span:nth-child(4),
-  .leaderboard-row span:nth-child(5) {
+  .leaderboard-row span:nth-child(5),
+  .leaderboard-row span:nth-child(6) {
     display: none;
   }
 

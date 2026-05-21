@@ -66,7 +66,7 @@ type ActivityItem = {
 };
 
 type AppView = "markets" | "ended" | "leaderboard" | "profile" | "collection" | "market";
-type LeaderboardMetric = "volume" | "winRate" | "pnl";
+type LeaderboardMetric = "volume" | "winRate" | "pnl" | "auraPoints";
 type LeaderboardPeriod = "day" | "7d" | "30d" | "all";
 type MarketSectionKey = "fresh" | "hot" | "closing";
 type ThemeMode = "dark" | "light";
@@ -80,6 +80,8 @@ type LeaderboardRow = {
   wonMarkets: number;
   resolvedMarkets: number;
   winRate: number;
+  auraPoints: number;
+  createdMarkets: number;
 };
 
 enum Outcome {
@@ -97,7 +99,9 @@ const DISMISSED_RESULT_KEY = "aurapredict.dismissedResultNotices";
 const THEME_KEY = "aurapredict.theme";
 const PROFILE_NAMES_KEY = "aurapredict.profileNames";
 const PROFILE_JOINED_KEY = "aurapredict.profileJoined";
+const PROFILE_PUBLIC_KEY = "aurapredict.profilePublic";
 const MARKET_QUERY_KEY = "market";
+const PROFILE_QUERY_KEY = "profile";
 const X_URL = "https://x.com/AuraPredict";
 const DISCORD_URL = "https://discord.gg/3wTYhdsr";
 const CATEGORY_META: Record<string, { label: string; className: string }> = {
@@ -119,7 +123,8 @@ const LEADERBOARD_PERIODS: Array<{ value: LeaderboardPeriod; label: string; seco
 const LEADERBOARD_METRICS: Array<{ value: LeaderboardMetric; label: string }> = [
   { value: "volume", label: "Volume" },
   { value: "winRate", label: "Win rate" },
-  { value: "pnl", label: "PNL" }
+  { value: "pnl", label: "PNL" },
+  { value: "auraPoints", label: "Aura points" }
 ];
 
 function getInjectedProvider() {
@@ -259,8 +264,8 @@ function hasUserPosition(market: MarketView) {
   return market.yesPosition > 0n || market.noPosition > 0n;
 }
 
-function userSettlement(market: MarketView, feeBps: number) {
-  const stake = market.yesPosition + market.noPosition;
+function settlementForPosition(market: MarketView, feeBps: number, yesPosition: bigint, noPosition: bigint) {
+  const stake = yesPosition + noPosition;
   if (market.outcome === Outcome.Unresolved) {
     return { settled: false, stake, payout: 0n, pnl: 0n, won: false };
   }
@@ -269,7 +274,7 @@ function userSettlement(market: MarketView, feeBps: number) {
     return { settled: true, stake, payout: stake, pnl: 0n, won: false };
   }
 
-  const winningStake = market.outcome === Outcome.Yes ? market.yesPosition : market.noPosition;
+  const winningStake = market.outcome === Outcome.Yes ? yesPosition : noPosition;
   const winningPool = market.outcome === Outcome.Yes ? market.yesPool : market.noPool;
   const grossPayout =
     winningStake > 0n && winningPool > 0n ? (winningStake * marketVolume(market)) / winningPool : 0n;
@@ -284,6 +289,27 @@ function userSettlement(market: MarketView, feeBps: number) {
     pnl: payout - stake,
     won: winningStake > 0n
   };
+}
+
+function userSettlement(market: MarketView, feeBps: number) {
+  return settlementForPosition(market, feeBps, market.yesPosition, market.noPosition);
+}
+
+function auraPointsFor(
+  volume: bigint,
+  wonMarkets: number,
+  resolvedMarkets: number,
+  createdMarkets: number,
+  pnl: bigint
+) {
+  const volumeScore = Number(formatUnits(volume, ARC_NATIVE_USDC_DECIMALS)) * 10;
+  const pnlScore = Math.max(0, Number(formatUnits(pnl, ARC_NATIVE_USDC_DECIMALS)) * 12);
+  const winRate = resolvedMarkets > 0 ? (wonMarkets / resolvedMarkets) * 100 : 0;
+
+  return Math.max(
+    0,
+    Math.round(volumeScore + pnlScore + wonMarkets * 90 + resolvedMarkets * 18 + createdMarkets * 35 + winRate * 4)
+  );
 }
 
 function marketStatus(market: MarketView) {
@@ -310,10 +336,22 @@ function errorMessage(error: unknown) {
 
 function updateMarketRoute(marketId: number | null) {
   const url = new URL(window.location.href);
+  url.searchParams.delete(PROFILE_QUERY_KEY);
   if (marketId === null) {
     url.searchParams.delete(MARKET_QUERY_KEY);
   } else {
     url.searchParams.set(MARKET_QUERY_KEY, String(marketId));
+  }
+  window.history.pushState({}, "", `${url.pathname}${url.search}${url.hash}`);
+}
+
+function updateProfileRoute(address: string | null) {
+  const url = new URL(window.location.href);
+  url.searchParams.delete(MARKET_QUERY_KEY);
+  if (address) {
+    url.searchParams.set(PROFILE_QUERY_KEY, address);
+  } else {
+    url.searchParams.delete(PROFILE_QUERY_KEY);
   }
   window.history.pushState({}, "", `${url.pathname}${url.search}${url.hash}`);
 }
@@ -474,6 +512,7 @@ export default function App() {
   const [searchFocused, setSearchFocused] = useState(false);
   const [collectionView, setCollectionView] = useState<MarketSectionKey>("fresh");
   const [selectedMarketId, setSelectedMarketId] = useState<number | null>(null);
+  const [selectedProfileAddress, setSelectedProfileAddress] = useState("");
   const [profileNameInput, setProfileNameInput] = useState("");
   const [profileNames, setProfileNames] = useState<Record<string, string>>(() => {
     try {
@@ -485,6 +524,13 @@ export default function App() {
   const [profileJoinedDates, setProfileJoinedDates] = useState<Record<string, string>>(() => {
     try {
       return JSON.parse(window.localStorage.getItem(PROFILE_JOINED_KEY) || "{}") as Record<string, string>;
+    } catch {
+      return {};
+    }
+  });
+  const [profilePublicByAddress, setProfilePublicByAddress] = useState<Record<string, boolean>>(() => {
+    try {
+      return JSON.parse(window.localStorage.getItem(PROFILE_PUBLIC_KEY) || "{}") as Record<string, boolean>;
     } catch {
       return {};
     }
@@ -522,18 +568,59 @@ export default function App() {
   const endedMarkets = markets.filter((market) => market.outcome !== Outcome.Unresolved);
   const liveMarkets = activeMarkets.length;
   const totalLiquidity = markets.reduce((sum, market) => sum + marketVolume(market), 0n);
-  const profileMarkets = account
-    ? markets.filter((market) => hasUserPosition(market) || sameAddress(market.creator, account))
+  const accountKey = account ? account.toLowerCase() : "";
+  const viewedProfileAddress =
+    selectedProfileAddress && isAddress(selectedProfileAddress) ? selectedProfileAddress : account;
+  const viewedProfileKey = viewedProfileAddress ? viewedProfileAddress.toLowerCase() : "";
+  const isOwnProfile = !!account && !!viewedProfileAddress && sameAddress(account, viewedProfileAddress);
+  const isProfilePublic = viewedProfileKey ? profilePublicByAddress[viewedProfileKey] !== false : true;
+  const profileActivityPositions = useMemo(() => {
+    const positions = new Map<number, { yes: bigint; no: bigint }>();
+    if (!viewedProfileKey) return positions;
+
+    for (const activity of activities) {
+      if (!sameAddress(activity.user, viewedProfileKey)) continue;
+      const current = positions.get(activity.marketId) ?? { yes: 0n, no: 0n };
+      if (activity.side === Outcome.Yes) current.yes += activity.amount;
+      if (activity.side === Outcome.No) current.no += activity.amount;
+      positions.set(activity.marketId, current);
+    }
+
+    return positions;
+  }, [activities, viewedProfileKey]);
+  const profileMarkets = viewedProfileAddress
+    ? markets
+        .map((market) => {
+          const activityPosition = profileActivityPositions.get(market.id) ?? { yes: 0n, no: 0n };
+          const yesPosition = isOwnProfile ? market.yesPosition : activityPosition.yes;
+          const noPosition = isOwnProfile ? market.noPosition : activityPosition.no;
+          const settlement = settlementForPosition(market, protocolFeeBps, yesPosition, noPosition);
+
+          return {
+            ...market,
+            yesPosition,
+            noPosition,
+            claimed: isOwnProfile ? market.claimed : false,
+            potentialPayout: isOwnProfile ? market.potentialPayout : settlement.payout
+          };
+        })
+        .filter((market) => hasUserPosition(market) || sameAddress(market.creator, viewedProfileAddress))
     : [];
   const participatedProfileMarkets = profileMarkets.filter(hasUserPosition);
-  const createdProfileMarkets = account ? markets.filter((market) => sameAddress(market.creator, account)) : [];
-  const profileStake = profileMarkets.reduce((sum, market) => sum + market.yesPosition + market.noPosition, 0n);
-  const claimable = profileMarkets.reduce((sum, market) => sum + market.potentialPayout, 0n);
+  const createdProfileMarkets = viewedProfileAddress
+    ? profileMarkets.filter((market) => sameAddress(market.creator, viewedProfileAddress))
+    : [];
+  const profileStake = participatedProfileMarkets.reduce(
+    (sum, market) => sum + market.yesPosition + market.noPosition,
+    0n
+  );
+  const claimable = isOwnProfile ? profileMarkets.reduce((sum, market) => sum + market.potentialPayout, 0n) : 0n;
   const createdMarkets = createdProfileMarkets.length;
-  const accountKey = account ? account.toLowerCase() : "";
-  const profileDisplayName = account ? profileNames[accountKey] || shortAddress(account) : "Connect wallet";
+  const profileDisplayName = viewedProfileAddress
+    ? profileNames[viewedProfileKey] || shortAddress(viewedProfileAddress)
+    : "Connect wallet";
   const profileInitial = profileDisplayName.slice(0, 1).toUpperCase();
-  const profileJoinedDate = accountKey ? profileJoinedDates[accountKey] : "";
+  const profileJoinedDate = viewedProfileKey ? profileJoinedDates[viewedProfileKey] : "";
   const profileJoinedLabel = profileJoinedDate
     ? new Intl.DateTimeFormat("en-US", { month: "short", year: "numeric" }).format(new Date(profileJoinedDate))
     : "New profile";
@@ -549,14 +636,12 @@ export default function App() {
   const profileStakeNumber = Number(formatUnits(profileRealizedStake, ARC_NATIVE_USDC_DECIMALS));
   const profileEdgePercent = profileStakeNumber > 0 ? (profilePnlNumber / profileStakeNumber) * 100 : 0;
   const profileWinRate = profileResolvedCount > 0 ? (profileWonCount / profileResolvedCount) * 100 : 0;
-  const profileAuraScore = Math.max(
-    0,
-    Math.round(
-      profileWinRate * 10 +
-        profileResolvedCount * 35 +
-        Number(formatUnits(profileStake, ARC_NATIVE_USDC_DECIMALS)) * 8 +
-        createdMarkets * 20
-    )
+  const profileAuraScore = auraPointsFor(
+    profileStake,
+    profileWonCount,
+    profileResolvedCount,
+    createdMarkets,
+    profilePnl
   );
   const profileWinStreak = [...profileSettlements]
     .sort((a, b) => b.market.closeTime - a.market.closeTime)
@@ -766,40 +851,70 @@ export default function App() {
         pnl: bigint;
         wonMarkets: number;
         resolvedMarkets: number;
+        createdMarkets: number;
         positions: Map<number, { yes: bigint; no: bigint }>;
       }
     >();
+    const appliedUserMarkets = new Set<string>();
 
-    for (const activity of activities) {
-      if (activity.timestamp > 0 && activity.timestamp < periodStart) continue;
-      const market = marketMap.get(activity.marketId);
-      if (!market) continue;
-
-      const key = activity.user.toLowerCase();
+    const getRow = (address: string) => {
+      const key = address.toLowerCase();
       const row =
         rows.get(key) ??
         {
-          address: activity.user,
+          address,
           volume: 0n,
           stake: 0n,
           payout: 0n,
           pnl: 0n,
           wonMarkets: 0,
           resolvedMarkets: 0,
+          createdMarkets: 0,
           positions: new Map<number, { yes: bigint; no: bigint }>()
         };
-      const position = row.positions.get(activity.marketId) ?? { yes: 0n, no: 0n };
+      rows.set(key, row);
+      return row;
+    };
 
-      row.volume += activity.amount;
-      row.stake += activity.amount;
-      if (activity.side === Outcome.Yes) {
-        position.yes += activity.amount;
-      } else if (activity.side === Outcome.No) {
-        position.no += activity.amount;
+    const addPosition = (address: string, marketId: number, side: Outcome, amount: bigint) => {
+      if (amount <= 0n) return;
+      const row = getRow(address);
+      const position = row.positions.get(marketId) ?? { yes: 0n, no: 0n };
+
+      row.volume += amount;
+      row.stake += amount;
+      if (side === Outcome.Yes) {
+        position.yes += amount;
+      } else if (side === Outcome.No) {
+        position.no += amount;
       }
 
-      row.positions.set(activity.marketId, position);
-      rows.set(key, row);
+      row.positions.set(marketId, position);
+    };
+
+    for (const activity of activities) {
+      if (activity.timestamp > 0 && activity.timestamp < periodStart) continue;
+      const market = marketMap.get(activity.marketId);
+      if (!market) continue;
+
+      addPosition(activity.user, activity.marketId, activity.side, activity.amount);
+      appliedUserMarkets.add(`${activity.user.toLowerCase()}:${activity.marketId}`);
+    }
+
+    if (account) {
+      const accountPositionKey = account.toLowerCase();
+      for (const market of markets) {
+        if (period?.seconds && market.closeTime > 0 && market.closeTime < periodStart) continue;
+        if (appliedUserMarkets.has(`${accountPositionKey}:${market.id}`)) continue;
+
+        addPosition(account, market.id, Outcome.Yes, market.yesPosition);
+        addPosition(account, market.id, Outcome.No, market.noPosition);
+      }
+    }
+
+    for (const market of markets) {
+      if (period?.seconds && market.closeTime > 0 && market.closeTime < periodStart) continue;
+      getRow(market.creator).createdMarkets += 1;
     }
 
     const output = Array.from(rows.values()).map((row) => {
@@ -821,8 +936,11 @@ export default function App() {
           if (winningStake > 0n) row.wonMarkets += 1;
         } else if (market.outcome === Outcome.Canceled) {
           row.payout += stake;
+          row.resolvedMarkets += 1;
         }
       }
+
+      const winRate = row.resolvedMarkets > 0 ? (row.wonMarkets / row.resolvedMarkets) * 100 : 0;
 
       return {
         address: row.address,
@@ -832,14 +950,21 @@ export default function App() {
         pnl: row.pnl,
         wonMarkets: row.wonMarkets,
         resolvedMarkets: row.resolvedMarkets,
-        winRate: row.resolvedMarkets > 0 ? (row.wonMarkets / row.resolvedMarkets) * 100 : 0
+        winRate,
+        auraPoints: auraPointsFor(row.volume, row.wonMarkets, row.resolvedMarkets, row.createdMarkets, row.pnl),
+        createdMarkets: row.createdMarkets
       };
     });
 
     return output
+      .filter((row) => row.volume > 0n || row.createdMarkets > 0 || row.resolvedMarkets > 0)
       .sort((left, right) => {
         if (leaderboardMetric === "winRate") {
           if (right.winRate !== left.winRate) return right.winRate - left.winRate;
+          return right.volume > left.volume ? 1 : right.volume < left.volume ? -1 : 0;
+        }
+        if (leaderboardMetric === "auraPoints") {
+          if (right.auraPoints !== left.auraPoints) return right.auraPoints - left.auraPoints;
           return right.volume > left.volume ? 1 : right.volume < left.volume ? -1 : 0;
         }
         const rightValue = leaderboardMetric === "volume" ? right.volume : right.pnl;
@@ -847,7 +972,7 @@ export default function App() {
         return rightValue > leftValue ? 1 : rightValue < leftValue ? -1 : 0;
       })
       .slice(0, 50);
-  }, [activities, leaderboardMetric, leaderboardPeriod, leaderboardTimestamp, markets, protocolFeeBps]);
+  }, [account, activities, leaderboardMetric, leaderboardPeriod, leaderboardTimestamp, markets, protocolFeeBps]);
 
   const profileVolumeRows = useMemo(
     () =>
@@ -949,12 +1074,18 @@ export default function App() {
   }, []);
 
   const openProfile = useCallback(() => {
+    if (!account) {
+      setNotice("Connect wallet before opening your profile.");
+      return;
+    }
+
     setSelectedMarketId(null);
-    updateMarketRoute(null);
+    setSelectedProfileAddress(account);
+    updateProfileRoute(account);
     setView("profile");
     setWalletMenuOpen(false);
     setNotificationMenuOpen(false);
-  }, []);
+  }, [account]);
 
   const disconnectWallet = useCallback(async () => {
     setAccount("");
@@ -996,7 +1127,7 @@ export default function App() {
   const saveProfileName = useCallback(
     (event: React.FormEvent) => {
       event.preventDefault();
-      if (!accountKey) {
+      if (!accountKey || !isOwnProfile) {
         setNotice("Connect wallet before setting a username.");
         return;
       }
@@ -1012,27 +1143,46 @@ export default function App() {
       window.localStorage.setItem(PROFILE_NAMES_KEY, JSON.stringify(next));
       setNotice("Username saved for this wallet.");
     },
-    [accountKey, profileNameInput, profileNames]
+    [accountKey, isOwnProfile, profileNameInput, profileNames]
   );
 
-  const copyProfileLink = useCallback(async () => {
-    if (!account) {
-      setNotice("Connect wallet before sharing a profile.");
+  const toggleProfilePublic = useCallback(() => {
+    if (!accountKey || !isOwnProfile) {
+      setNotice("Only the connected wallet can change profile visibility.");
       return;
     }
 
-    const profileUrl = `${window.location.origin}${window.location.pathname}?profile=${account}`;
+    const nextPublic = !(profilePublicByAddress[accountKey] !== false);
+    const next = { ...profilePublicByAddress, [accountKey]: nextPublic };
+    setProfilePublicByAddress(next);
+    window.localStorage.setItem(PROFILE_PUBLIC_KEY, JSON.stringify(next));
+    setNotice(nextPublic ? "Profile is public." : "Profile is private. Share links are disabled.");
+  }, [accountKey, isOwnProfile, profilePublicByAddress]);
+
+  const copyProfileLink = useCallback(async () => {
+    const shareAddress = viewedProfileAddress || account;
+    if (!shareAddress) {
+      setNotice("Connect wallet before sharing a profile.");
+      return;
+    }
+    if (isOwnProfile && !isProfilePublic) {
+      setNotice("Turn Public on before sharing this profile.");
+      return;
+    }
+
+    const profileUrl = `${window.location.origin}${window.location.pathname}?profile=${shareAddress}`;
     try {
       await window.navigator.clipboard.writeText(profileUrl);
       setNotice("Profile link copied.");
     } catch {
       setNotice(profileUrl);
     }
-  }, [account]);
+  }, [account, isOwnProfile, isProfilePublic, viewedProfileAddress]);
 
   const openCollection = useCallback((section: MarketSectionKey) => {
     setCollectionView(section);
     setSelectedMarketId(null);
+    setSelectedProfileAddress("");
     updateMarketRoute(null);
     setView("collection");
     window.setTimeout(() => document.getElementById("markets")?.scrollIntoView({ block: "start" }), 50);
@@ -1040,6 +1190,7 @@ export default function App() {
 
   const openMarket = useCallback((marketId: number) => {
     setSelectedMarketId(marketId);
+    setSelectedProfileAddress("");
     updateMarketRoute(marketId);
     setView("market");
     setSearchQuery("");
@@ -1052,6 +1203,7 @@ export default function App() {
 
   const backToMarkets = useCallback(() => {
     setSelectedMarketId(null);
+    setSelectedProfileAddress("");
     updateMarketRoute(null);
     setView("markets");
     window.setTimeout(() => document.getElementById("markets")?.scrollIntoView({ block: "start" }), 50);
@@ -1060,6 +1212,7 @@ export default function App() {
   const openSearchedMarket = useCallback(
     (market: MarketView) => {
       setSelectedMarketId(market.id);
+      setSelectedProfileAddress("");
       updateMarketRoute(market.id);
       setView("market");
       setActiveCategory("All");
@@ -1645,20 +1798,35 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    const syncMarketRoute = () => {
-      const marketParam = new URLSearchParams(window.location.search).get(MARKET_QUERY_KEY);
-      if (!marketParam) return;
+    const syncRoute = () => {
+      const searchParams = new URLSearchParams(window.location.search);
+      const profileParam = searchParams.get(PROFILE_QUERY_KEY);
+      if (profileParam && isAddress(profileParam)) {
+        setSelectedMarketId(null);
+        setSelectedProfileAddress(profileParam);
+        setView("profile");
+        return;
+      }
+
+      const marketParam = searchParams.get(MARKET_QUERY_KEY);
+      if (!marketParam) {
+        setSelectedMarketId(null);
+        setSelectedProfileAddress("");
+        setView("markets");
+        return;
+      }
       const marketId = Number(marketParam);
       if (!Number.isInteger(marketId) || marketId < 0) return;
 
       setSelectedMarketId(marketId);
+      setSelectedProfileAddress("");
       setView("market");
     };
 
-    syncMarketRoute();
-    window.addEventListener("popstate", syncMarketRoute);
+    syncRoute();
+    window.addEventListener("popstate", syncRoute);
 
-    return () => window.removeEventListener("popstate", syncMarketRoute);
+    return () => window.removeEventListener("popstate", syncRoute);
   }, []);
 
   useEffect(() => {
@@ -1666,11 +1834,23 @@ export default function App() {
   }, [loadMarkets]);
 
   useEffect(() => {
-    const refreshTimer = window.setInterval(() => {
-      loadMarkets();
-    }, 60 * 60 * 1000);
+    const now = new Date();
+    const nextUtcHour = new Date(now);
+    nextUtcHour.setUTCMinutes(0, 0, 0);
+    nextUtcHour.setUTCHours(nextUtcHour.getUTCHours() + 1);
 
-    return () => window.clearInterval(refreshTimer);
+    let refreshInterval: number | undefined;
+    const refreshTimeout = window.setTimeout(() => {
+      loadMarkets();
+      refreshInterval = window.setInterval(() => {
+        loadMarkets();
+      }, 60 * 60 * 1000);
+    }, Math.max(1000, nextUtcHour.getTime() - now.getTime()));
+
+    return () => {
+      window.clearTimeout(refreshTimeout);
+      if (refreshInterval) window.clearInterval(refreshInterval);
+    };
   }, [loadMarkets]);
 
   const renderMarketCards = (items: MarketView[], emptyTitle: string, emptyText: string) => (
@@ -2186,6 +2366,7 @@ export default function App() {
               className={view === "ended" ? "tab active" : "tab"}
               onClick={() => {
                 setSelectedMarketId(null);
+                setSelectedProfileAddress("");
                 updateMarketRoute(null);
                 setView("ended");
               }}
@@ -2196,6 +2377,7 @@ export default function App() {
               className={view === "leaderboard" ? "tab active" : "tab"}
               onClick={() => {
                 setSelectedMarketId(null);
+                setSelectedProfileAddress("");
                 updateMarketRoute(null);
                 setView("leaderboard");
               }}
@@ -2491,7 +2673,7 @@ export default function App() {
               {view === "collection" && <p>{collectionDescription}</p>}
               {view === "market" && <p>Open a market to review odds, stake, settlement state, and timeline.</p>}
               {view === "leaderboard" && (
-                <p>Updates every 1 hour while this app is open. Last refresh: {lastRefreshText}.</p>
+                <p>Updates at the top of every UTC hour while this app is open. Last refresh: {lastRefreshText}.</p>
               )}
             </div>
             <div className="board-actions">
@@ -2571,19 +2753,20 @@ export default function App() {
                     <form className="profile-name-form" onSubmit={saveProfileName}>
                       <input
                         maxLength={24}
-                        placeholder={account ? "Set username" : "Connect wallet"}
-                        value={profileNameInput}
+                        placeholder={isOwnProfile ? "Set username" : profileDisplayName}
+                        value={isOwnProfile ? profileNameInput : ""}
                         onChange={(event) => setProfileNameInput(event.target.value)}
-                        disabled={!account}
+                        disabled={!isOwnProfile}
                       />
-                      <button type="submit" disabled={!account}>
+                      <button type="submit" disabled={!isOwnProfile}>
                         Save
                       </button>
                     </form>
                     <h2>{profileDisplayName}</h2>
                     <div className="profile-id-row">
-                      <span>{account ? shortAddress(account) : "No wallet connected"}</span>
+                      <span>{viewedProfileAddress ? shortAddress(viewedProfileAddress) : "No wallet connected"}</span>
                       <span>Joined {profileJoinedLabel}</span>
+                      {!isOwnProfile && <span>Shared profile</span>}
                     </div>
                     <div className="profile-chip-row">
                       <span>Arc Testnet</span>
@@ -2593,12 +2776,17 @@ export default function App() {
                   </div>
                 </div>
                 <div className="profile-actions">
-                  <button className="profile-public" type="button">
+                  <button
+                    className={isProfilePublic ? "profile-public" : "profile-public is-private"}
+                    disabled={!isOwnProfile}
+                    onClick={toggleProfilePublic}
+                    type="button"
+                  >
                     <span className="profile-public-dot" />
-                    Public
+                    {isProfilePublic ? "Public" : "Private"}
                     <span className="profile-toggle" />
                   </button>
-                  <button className="secondary" type="button" onClick={copyProfileLink}>
+                  <button className="secondary" type="button" onClick={copyProfileLink} disabled={isOwnProfile && !isProfilePublic}>
                     Share profile
                   </button>
                 </div>
@@ -2712,6 +2900,7 @@ export default function App() {
                 {participatedProfileMarkets.map((market) => {
                   const canUseDisputeFlow = contractVersion !== "legacy";
                   const canPropose =
+                    isOwnProfile &&
                     canUseDisputeFlow &&
                     account &&
                     market.outcome === Outcome.Unresolved &&
@@ -2719,12 +2908,14 @@ export default function App() {
                     Date.now() / 1000 >= market.closeTime &&
                     [market.resolver.toLowerCase(), owner.toLowerCase()].includes(account.toLowerCase());
                   const canFinalize =
+                    isOwnProfile &&
                     canUseDisputeFlow &&
                     market.outcome === Outcome.Unresolved &&
                     market.proposedAt > 0 &&
                     !market.disputed &&
                     Date.now() / 1000 >= market.disputeDeadline;
                   const canFinalizeDispute =
+                    isOwnProfile &&
                     canUseDisputeFlow &&
                     account &&
                     owner &&
@@ -2732,6 +2923,7 @@ export default function App() {
                     market.disputed &&
                     sameAddress(account, owner);
                   const canLegacyResolve =
+                    isOwnProfile &&
                     contractVersion === "legacy" &&
                     account &&
                     market.outcome === Outcome.Unresolved &&
@@ -2774,7 +2966,7 @@ export default function App() {
                         canLegacyResolve ||
                         canFinalize ||
                         canFinalizeDispute ||
-                        (market.potentialPayout > 0n && !market.claimed)) && (
+                        (isOwnProfile && market.potentialPayout > 0n && !market.claimed)) && (
                         <div className="settlement-row">
                           {canLegacyResolve && (
                             <>
@@ -2820,7 +3012,7 @@ export default function App() {
                               </button>
                             </>
                           )}
-                          {market.potentialPayout > 0n && !market.claimed && (
+                          {isOwnProfile && market.potentialPayout > 0n && !market.claimed && (
                             <button onClick={() => claim(market.id)}>
                               Claim {formatUsdc(market.potentialPayout)} USDC
                             </button>
@@ -2879,6 +3071,7 @@ export default function App() {
                   <span>Volume</span>
                   <span>Win rate</span>
                   <span>PNL</span>
+                  <span>Aura points</span>
                 </div>
                 {leaderboardRows.length === 0 && (
                   <div className="empty-state">
@@ -2897,6 +3090,7 @@ export default function App() {
                     <span className={row.pnl >= 0n ? "pnl-positive" : "pnl-negative"}>
                       {formatSignedUsdc(row.pnl)} USDC
                     </span>
+                    <span>{row.auraPoints.toLocaleString("en-US")}</span>
                   </div>
                 ))}
               </div>
