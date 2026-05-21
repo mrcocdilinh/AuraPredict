@@ -102,6 +102,8 @@ const PROFILE_JOINED_KEY = "aurapredict.profileJoined";
 const PROFILE_PUBLIC_KEY = "aurapredict.profilePublic";
 const MARKET_QUERY_KEY = "market";
 const PROFILE_QUERY_KEY = "profile";
+const LANDING_HOSTS = new Set(["aurapredict.xyz", "www.aurapredict.xyz"]);
+const APP_URL = "https://app.aurapredict.xyz";
 const X_URL = "https://x.com/AuraPredict";
 const DISCORD_URL = "https://discord.gg/3wTYhdsr";
 const CATEGORY_META: Record<string, { label: string; className: string }> = {
@@ -479,7 +481,198 @@ function CheckIcon() {
   );
 }
 
+function LandingPage() {
+  const featureCards = [
+    {
+      title: "YES/NO markets",
+      text: "Create binary prediction markets for crypto, macro, sports, politics, Arc, AI, and community events."
+    },
+    {
+      title: "Native Arc USDC",
+      text: "Stake directly with native USDC on Arc Testnet and keep every position transparent onchain."
+    },
+    {
+      title: "Creator resolution",
+      text: "Market creators propose outcomes after close, with dispute and finalization flows built into the protocol."
+    },
+    {
+      title: "Profiles and reputation",
+      text: "Set a username, share your profile, track PNL, win rate, created markets, and prediction history."
+    },
+    {
+      title: "Aura Points",
+      text: "A social score for forecasters, combining volume, winning markets, PNL, resolved activity, and market creation."
+    },
+    {
+      title: "Leaderboard",
+      text: "Rank traders by volume, win rate, PNL, and Aura Points across 24H, 7D, 1M, and all-time views."
+    }
+  ];
+  const flow = ["Create a market", "Stake YES or NO", "Track odds", "Resolve result", "Claim payout"];
+
+  return (
+    <main className="landing-page">
+      <nav className="landing-nav">
+        <a className="landing-brand" href="#top" aria-label="AuraPredict home">
+          <img src="/aurapredict-logo.png" alt="AuraPredict" />
+          <span>AuraPredict</span>
+        </a>
+        <div>
+          <a href="#features">Features</a>
+          <a href="#how-it-works">How it works</a>
+          <a href={X_URL} target="_blank" rel="noreferrer">
+            X
+          </a>
+          <a href={DISCORD_URL} target="_blank" rel="noreferrer">
+            Discord
+          </a>
+          <a className="landing-enter-small" href={APP_URL}>
+            Enter Dapp
+          </a>
+        </div>
+      </nav>
+
+      <section className="landing-hero" id="top">
+        <div className="landing-hero-copy">
+          <p className="landing-kicker">Arc Testnet prediction markets</p>
+          <h1>Predict the future. Build your onchain reputation.</h1>
+          <p>
+            AuraPredict is a social prediction market on Arc Testnet where users create YES/NO markets,
+            stake native USDC, track live odds, resolve outcomes, claim payouts, and compete with Aura Points.
+          </p>
+          <div className="landing-actions">
+            <a className="landing-primary" href={APP_URL}>
+              Enter Dapp
+            </a>
+            <a className="landing-secondary" href="#features">
+              Explore Features
+            </a>
+          </div>
+          <div className="landing-proof">
+            <span>Native USDC</span>
+            <span>Profile reputation</span>
+            <span>Hourly UTC leaderboard</span>
+          </div>
+        </div>
+        <aside className="landing-visual">
+          <img src="/aurapredict-logo.png" alt="AuraPredict logo" />
+          <div className="landing-market-preview">
+            <span>Market Preview</span>
+            <strong>Will Arc become a leading prediction market ecosystem?</strong>
+            <div>
+              <b>YES 68%</b>
+              <b>NO 32%</b>
+            </div>
+          </div>
+        </aside>
+      </section>
+
+      <section className="landing-strip" aria-label="AuraPredict highlights">
+        <div>
+          <strong>YES/NO</strong>
+          <span>Simple prediction format</span>
+        </div>
+        <div>
+          <strong>UTC</strong>
+          <span>Unified market close time</span>
+        </div>
+        <div>
+          <strong>USDC</strong>
+          <span>Native Arc testnet staking</span>
+        </div>
+        <div>
+          <strong>Aura Points</strong>
+          <span>Prediction reputation score</span>
+        </div>
+      </section>
+
+      <section className="landing-section" id="features">
+        <div className="landing-section-head">
+          <p className="landing-kicker">Core features</p>
+          <h2>A full prediction market experience for the Arc community.</h2>
+          <p>
+            AuraPredict combines market creation, live participation, settlement tools, wallet profiles,
+            leaderboards, and social sharing into one app.
+          </p>
+        </div>
+        <div className="landing-feature-grid">
+          {featureCards.map((feature) => (
+            <article key={feature.title}>
+              <span />
+              <h3>{feature.title}</h3>
+              <p>{feature.text}</p>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section className="landing-section landing-split" id="how-it-works">
+        <div>
+          <p className="landing-kicker">How it works</p>
+          <h2>From question to payout, every step is transparent.</h2>
+          <p>
+            A market starts as a clear YES/NO question. Users stake based on their conviction.
+            When the market closes, the result is proposed and finalized before winners claim directly from their wallet.
+          </p>
+          <a className="landing-primary" href={APP_URL}>
+            Launch the App
+          </a>
+        </div>
+        <div className="landing-flow">
+          {flow.map((item, index) => (
+            <article key={item}>
+              <span>{index + 1}</span>
+              <strong>{item}</strong>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section className="landing-section landing-dark-panel">
+        <div className="landing-section-head">
+          <p className="landing-kicker">Why AuraPredict</p>
+          <h2>Prediction markets become more powerful when they are social.</h2>
+          <p>
+            AuraPredict is designed around public forecasting identity. Every trade, market, payout,
+            and ranking can help users build a visible prediction track record.
+          </p>
+        </div>
+        <div className="landing-benefit-grid">
+          <article>
+            <strong>For traders</strong>
+            <p>Discover fresh markets, back your view with USDC, track positions, and compete on leaderboard metrics.</p>
+          </article>
+          <article>
+            <strong>For creators</strong>
+            <p>Launch markets for your community, resolve outcomes, build creator reputation, and grow market volume.</p>
+          </article>
+          <article>
+            <strong>For Arc</strong>
+            <p>Create an engaging social finance primitive around information, events, and ecosystem participation.</p>
+          </article>
+        </div>
+      </section>
+
+      <section className="landing-cta">
+        <div>
+          <p className="landing-kicker">Start predicting</p>
+          <h2>Enter AuraPredict and explore live Arc Testnet markets.</h2>
+        </div>
+        <a className="landing-primary" href={APP_URL}>
+          Enter Dapp
+        </a>
+      </section>
+    </main>
+  );
+}
+
 export default function App() {
+  const isLandingHost = typeof window !== "undefined" && LANDING_HOSTS.has(window.location.hostname.toLowerCase());
+
+  if (isLandingHost) {
+    return <LandingPage />;
+  }
+
   const transactionLockRef = useRef(false);
   const [account, setAccount] = useState("");
   const [owner, setOwner] = useState("");
