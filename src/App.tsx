@@ -713,6 +713,27 @@ function LandingPage() {
     }
   ];
   const flow = ["Create a market", "Stake YES or NO", "Track odds", "Resolve result", "Claim payout"];
+  const architectureSteps = ["Wallet", "AuraPredict UI", "Arc RPC", "Prediction Market Contract", "Arcscan"];
+  const settlementSteps = [
+    "Market closes in UTC",
+    "Creator proposes YES, NO, or Cancel",
+    "Dispute window stays open",
+    "Final outcome is locked",
+    "Winners claim payout"
+  ];
+  const dataFlow = [
+    "Frontend reads marketCount and latest markets",
+    "RPC fallback reduces public endpoint failures",
+    "Local cache keeps markets visible on reload",
+    "Wallet position and claim data load after markets",
+    "Leaderboards calculate from loaded trades and market state"
+  ];
+  const roadmapItems = [
+    "Backend/indexer for full market history, search, profiles, and leaderboard speed",
+    "Resolution evidence fields for source links, notes, screenshots, and official references",
+    "AI-assisted result suggestions with human review and dispute protection",
+    "Oracle integration when Arc supports the right optimistic oracle or data providers"
+  ];
   const nextTheme = landingTheme === "dark" ? "light" : "dark";
 
   useEffect(() => {
@@ -729,6 +750,7 @@ function LandingPage() {
         <div>
           <a href="#features">Features</a>
           <a href="#how-it-works">How it works</a>
+          <a href="#docs">Docs</a>
           <a href={X_URL} target="_blank" rel="noreferrer">
             X
           </a>
@@ -842,6 +864,149 @@ function LandingPage() {
               <strong>{item}</strong>
             </article>
           ))}
+        </div>
+      </section>
+
+      <section className="landing-section landing-docs" id="docs">
+        <div className="landing-section-head">
+          <p className="landing-kicker">Project docs</p>
+          <h2>AuraPredict project overview.</h2>
+          <p>
+            AuraPredict is a prediction market dapp for Arc Testnet. The current product focuses on
+            fast YES/NO market creation, native USDC staking, transparent onchain settlement, wallet
+            profiles, and social forecasting reputation.
+          </p>
+        </div>
+
+        <div className="docs-summary-grid">
+          <article className="docs-card">
+            <span className="docs-label">Purpose</span>
+            <h3>Make forecasting social on Arc</h3>
+            <p>
+              Users can create public markets, back YES or NO with Arc native USDC, track odds, and
+              build a visible record through profiles, rankings, PNL, win rate, and Aura Points.
+            </p>
+          </article>
+          <article className="docs-card">
+            <span className="docs-label">Current network</span>
+            <h3>Arc Testnet first</h3>
+            <p>
+              The app currently targets Arc Testnet and is designed for testing product flow, market
+              mechanics, wallet UX, and community behavior before any mainnet deployment decisions.
+            </p>
+          </article>
+          <article className="docs-card">
+            <span className="docs-label">Resolution model</span>
+            <h3>Creator proposes, users can dispute</h3>
+            <p>
+              Market creators propose the final result after close. A dispute window protects users
+              from incorrect reports before settlement becomes claimable.
+            </p>
+          </article>
+        </div>
+
+        <div className="docs-diagram-panel">
+          <div>
+            <span className="docs-label">System architecture</span>
+            <h3>How the app talks to Arc</h3>
+            <p>
+              AuraPredict is currently a frontend-first dapp. It reads market state through Arc RPC
+              endpoints, sends wallet-signed transactions to the prediction market contract, and links
+              users to Arcscan for verification.
+            </p>
+          </div>
+          <div className="docs-flow-diagram" aria-label="AuraPredict architecture diagram">
+            {architectureSteps.map((step, index) => (
+              <div className="docs-flow-step" key={step}>
+                <span>{index + 1}</span>
+                <strong>{step}</strong>
+                {index < architectureSteps.length - 1 && <i />}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="docs-two-column">
+          <article className="docs-card docs-large-card">
+            <span className="docs-label">Market lifecycle</span>
+            <h3>From question to payout</h3>
+            <div className="docs-step-list">
+              {settlementSteps.map((step, index) => (
+                <div key={step}>
+                  <span>{index + 1}</span>
+                  <p>{step}</p>
+                </div>
+              ))}
+            </div>
+          </article>
+
+          <article className="docs-card docs-large-card">
+            <span className="docs-label">Data loading</span>
+            <h3>Why market data can take time</h3>
+            <div className="docs-step-list">
+              {dataFlow.map((step, index) => (
+                <div key={step}>
+                  <span>{index + 1}</span>
+                  <p>{step}</p>
+                </div>
+              ))}
+            </div>
+          </article>
+        </div>
+
+        <div className="docs-feature-table">
+          <article>
+            <span>Market creation</span>
+            <strong>YES/NO questions with UTC close time and category labels.</strong>
+          </article>
+          <article>
+            <span>Trading</span>
+            <strong>Users stake native Arc USDC on YES or NO directly from their wallet.</strong>
+          </article>
+          <article>
+            <span>Settlement</span>
+            <strong>Finalized outcomes unlock claimable payouts for winning positions.</strong>
+          </article>
+          <article>
+            <span>Profiles</span>
+            <strong>Wallet profile tracks participation, created markets, PNL, win rate, and claims.</strong>
+          </article>
+          <article>
+            <span>Leaderboard</span>
+            <strong>Ranks users by volume, win rate, PNL, and Aura Points.</strong>
+          </article>
+          <article>
+            <span>Future oracle path</span>
+            <strong>AI can assist result research, but final settlement should remain disputeable.</strong>
+          </article>
+        </div>
+
+        <div className="docs-diagram-panel docs-roadmap-panel">
+          <div>
+            <span className="docs-label">Roadmap</span>
+            <h3>Path toward a production-grade prediction market</h3>
+            <p>
+              The current dapp proves the market flow on Arc Testnet. The next major step is a real
+              backend/indexer so the frontend does not need to scan blockchain state directly for every user.
+            </p>
+          </div>
+          <div className="docs-roadmap">
+            {roadmapItems.map((item, index) => (
+              <article key={item}>
+                <span>{`0${index + 1}`}</span>
+                <strong>{item}</strong>
+              </article>
+            ))}
+          </div>
+        </div>
+
+        <div className="docs-note">
+          <strong>Important note</strong>
+          <p>
+            AuraPredict is currently a testnet dapp. It is not financial advice and the current market
+            resolution flow is not fully automated by AI or an external oracle. The safest near-term
+            design is AI-assisted research plus human proposal, evidence, and user dispute.
+          </p>
         </div>
       </section>
 
