@@ -107,6 +107,11 @@ const CATEGORIES = ["All", "Crypto", "Macro", "Sports", "Politics", "Arc", "AI",
 const SECTION_LIMIT = 6;
 const PROFILE_PAGE_SIZE = 10;
 const LEADERBOARD_LIMIT = 100;
+const MARKET_LOAD_CONCURRENCY = 2;
+const EVENT_LOAD_CONCURRENCY = 2;
+const RPC_RETRY_ATTEMPTS = 4;
+const RPC_RETRY_DELAY_MS = 850;
+const RPC_CALL_STAGGER_MS = 120;
 const WALLET_CONNECTED_KEY = "aurapredict.walletConnected";
 const DISMISSED_RESULT_KEY = "aurapredict.dismissedResultNotices";
 const THEME_KEY = "aurapredict.theme";
@@ -163,6 +168,10 @@ function getWalletClient(provider?: EthereumProvider | null) {
     chain: arcTestnet,
     transport: custom(getInjectedProvider(provider) as never)
   });
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
 }
 
 function shortAddress(address: string) {
@@ -405,6 +414,56 @@ function errorMessage(error: unknown) {
     return String((error as { message?: unknown }).message);
   }
   return String(error);
+}
+
+function isRateLimitError(error: unknown) {
+  const message = errorMessage(error).toLowerCase();
+  return message.includes("429") || message.includes("too many requests") || message.includes("rate limit");
+}
+
+async function withRpcRetry<T>(request: () => Promise<T>) {
+  let lastError: unknown;
+
+  for (let attempt = 0; attempt < RPC_RETRY_ATTEMPTS; attempt += 1) {
+    try {
+      return await request();
+    } catch (error) {
+      lastError = error;
+      if (!isRateLimitError(error) || attempt === RPC_RETRY_ATTEMPTS - 1) {
+        throw error;
+      }
+
+      const delay = RPC_RETRY_DELAY_MS * 2 ** attempt + Math.floor(Math.random() * 250);
+      await sleep(delay);
+    }
+  }
+
+  throw lastError;
+}
+
+async function mapWithConcurrency<T, R>(
+  items: T[],
+  limit: number,
+  mapper: (item: T, index: number) => Promise<R>
+) {
+  const results = new Array<R>(items.length);
+  let nextIndex = 0;
+  const workerCount = Math.min(limit, items.length);
+
+  await Promise.all(
+    Array.from({ length: workerCount }, async () => {
+      while (nextIndex < items.length) {
+        const index = nextIndex;
+        nextIndex += 1;
+        results[index] = await mapper(items[index], index);
+        if (RPC_CALL_STAGGER_MS > 0) {
+          await sleep(RPC_CALL_STAGGER_MS);
+        }
+      }
+    })
+  );
+
+  return results;
 }
 
 function updateMarketRoute(marketId: number | null) {
@@ -1659,42 +1718,42 @@ export default function App() {
     try {
       const publicClient = getPublicClient();
       const [count, contractOwner, contractMinStake] = await Promise.all([
-        publicClient.readContract({
+        withRpcRetry(() => publicClient.readContract({
           address: contractAddress,
           abi: arcPredictionMarketAbi,
           functionName: "marketCount"
-        }),
-        publicClient.readContract({
+        })),
+        withRpcRetry(() => publicClient.readContract({
           address: contractAddress,
           abi: arcPredictionMarketAbi,
           functionName: "owner"
-        }),
-        publicClient.readContract({
+        })),
+        withRpcRetry(() => publicClient.readContract({
           address: contractAddress,
           abi: arcPredictionMarketAbi,
           functionName: "minStake"
-        })
+        }))
       ]);
 
       setOwner(contractOwner);
       setMinStake(contractMinStake);
       try {
         const [contractCreatorBond, contractDisputeBond, contractDisputeWindow] = await Promise.all([
-          publicClient.readContract({
+          withRpcRetry(() => publicClient.readContract({
             address: contractAddress,
             abi: arcPredictionMarketAbi,
             functionName: "creatorBond"
-          }),
-          publicClient.readContract({
+          })),
+          withRpcRetry(() => publicClient.readContract({
             address: contractAddress,
             abi: arcPredictionMarketAbi,
             functionName: "disputeBond"
-          }),
-          publicClient.readContract({
+          })),
+          withRpcRetry(() => publicClient.readContract({
             address: contractAddress,
             abi: arcPredictionMarketAbi,
             functionName: "disputeWindow"
-          })
+          }))
         ]);
         setCreatorBond(contractCreatorBond);
         setDisputeBond(contractDisputeBond);
@@ -1706,16 +1765,16 @@ export default function App() {
       }
       try {
         const [feeBps, protocolFees] = await Promise.all([
-          publicClient.readContract({
+          withRpcRetry(() => publicClient.readContract({
             address: contractAddress,
             abi: arcPredictionMarketAbi,
             functionName: "protocolFeeBps"
-          }),
-          publicClient.readContract({
+          })),
+          withRpcRetry(() => publicClient.readContract({
             address: contractAddress,
             abi: arcPredictionMarketAbi,
             functionName: "accumulatedProtocolFees"
-          })
+          }))
         ]);
         setProtocolFeeBps(Number(feeBps));
         setAccumulatedProtocolFees(protocolFees);
@@ -1724,18 +1783,22 @@ export default function App() {
         setAccumulatedProtocolFees(0n);
       }
 
-      const rows = await Promise.all(
-        Array.from({ length: Number(count) }, async (_, id) => {
+      let failedMarketLoads = 0;
+      const marketIds = Array.from({ length: Number(count) }, (_, id) => id);
+      const rows = await mapWithConcurrency<number, MarketView | null>(
+        marketIds,
+        MARKET_LOAD_CONCURRENCY,
+        async (id) => {
           let marketData;
           let isLegacyMarket = false;
 
           try {
-            marketData = await publicClient.readContract({
+            marketData = await withRpcRetry(() => publicClient.readContract({
               address: contractAddress,
               abi: arcPredictionMarketAbi,
               functionName: "getMarket",
               args: [BigInt(id)]
-            });
+            }));
           } catch (error) {
             const message = errorMessage(error);
             if (
@@ -1763,12 +1826,12 @@ export default function App() {
                   ]
                 }
               ] as const;
-              const legacyMarket = await publicClient.readContract({
+              const legacyMarket = await withRpcRetry(() => publicClient.readContract({
                 address: contractAddress,
                 abi: legacyAbi,
                 functionName: "getMarket",
                 args: [BigInt(id)]
-              });
+              }));
               marketData = [
                 legacyMarket[0],
                 legacyMarket[1],
@@ -1786,7 +1849,9 @@ export default function App() {
                 legacyMarket[8]
               ] as const;
             } else {
-              throw error;
+              failedMarketLoads += 1;
+              console.warn(`Failed to load market #${id}`, error);
+              return null;
             }
           }
 
@@ -1815,21 +1880,21 @@ export default function App() {
           let potentialPayout = 0n;
 
           if (account && isAddress(account)) {
-            const position = await publicClient.readContract({
+            const position = await withRpcRetry(() => publicClient.readContract({
               address: contractAddress,
               abi: arcPredictionMarketAbi,
               functionName: "positionOf",
               args: [BigInt(id), account as Address]
-            });
+            }));
             yesPosition = position[0];
             noPosition = position[1];
             claimed = position[2];
-            potentialPayout = await publicClient.readContract({
+            potentialPayout = await withRpcRetry(() => publicClient.readContract({
               address: contractAddress,
               abi: arcPredictionMarketAbi,
               functionName: "potentialPayout",
               args: [BigInt(id), account as Address]
-            });
+            }));
           }
 
           return {
@@ -1854,45 +1919,53 @@ export default function App() {
             claimed,
             potentialPayout
           };
-        })
+        }
       );
 
       if (Number(count) === 0) setContractVersion("unknown");
-      let sortedRows = rows.sort((a, b) => b.id - a.id);
+      const loadedRows = rows.filter((row): row is MarketView => Boolean(row));
+
+      if (Number(count) > 0 && loadedRows.length === 0) {
+        throw new Error("Arc RPC is rate-limiting requests right now (429). Wait 30-60 seconds, then refresh.");
+      }
+
+      let sortedRows = loadedRows.sort((a, b) => b.id - a.id);
 
       try {
         const blockTimestamps = new Map<bigint, number>();
         const getBlockTimestamp = async (blockNumber?: bigint | null) => {
           if (!blockNumber) return 0;
           if (!blockTimestamps.has(blockNumber)) {
-            const block = await publicClient.getBlock({ blockNumber });
+            const block = await withRpcRetry(() => publicClient.getBlock({ blockNumber }));
             blockTimestamps.set(blockNumber, Number(block.timestamp));
           }
           return blockTimestamps.get(blockNumber) ?? 0;
         };
         const [createdEvents, betEvents] = await Promise.all([
-          publicClient.getContractEvents({
+          withRpcRetry(() => publicClient.getContractEvents({
             address: contractAddress,
             abi: arcPredictionMarketAbi,
             eventName: "MarketCreated",
             fromBlock: 0n,
             toBlock: "latest"
-          }),
-          publicClient.getContractEvents({
+          })),
+          withRpcRetry(() => publicClient.getContractEvents({
             address: contractAddress,
             abi: arcPredictionMarketAbi,
             eventName: "BetPlaced",
             fromBlock: 0n,
             toBlock: "latest"
-          })
+          }))
         ]);
         const createdAtByMarket = new Map<number, number>();
 
-        await Promise.all(
-          createdEvents.map(async (event) => {
+        await mapWithConcurrency(
+          createdEvents,
+          EVENT_LOAD_CONCURRENCY,
+          async (event) => {
             const args = event.args as { marketId?: bigint };
             createdAtByMarket.set(Number(args.marketId ?? 0n), await getBlockTimestamp(event.blockNumber));
-          })
+          }
         );
 
         sortedRows = sortedRows.map((market) => ({
@@ -1901,8 +1974,10 @@ export default function App() {
         }));
 
         const marketMap = new Map(sortedRows.map((market) => [market.id, market]));
-        const activityRows = await Promise.all(
-          betEvents.map(async (event) => {
+        const activityRows = await mapWithConcurrency(
+          betEvents,
+          EVENT_LOAD_CONCURRENCY,
+          async (event) => {
             const args = event.args as {
               marketId?: bigint;
               user?: Address;
@@ -1920,7 +1995,7 @@ export default function App() {
               amount: args.amount ?? 0n,
               timestamp: await getBlockTimestamp(event.blockNumber)
             };
-          })
+          }
         );
         setActivities(activityRows.sort((a, b) => b.timestamp - a.timestamp));
       } catch {
@@ -1928,8 +2003,17 @@ export default function App() {
       }
       setMarkets(sortedRows);
       setLastDataRefresh(new Date());
+      if (failedMarketLoads > 0) {
+        setNotice(
+          `Loaded ${loadedRows.length}/${Number(count)} markets. Arc RPC skipped ${failedMarketLoads} rate-limited market calls; refresh again in a moment.`
+        );
+      }
     } catch (error) {
-      setNotice(errorMessage(error));
+      setNotice(
+        isRateLimitError(error)
+          ? "Arc Testnet RPC is rate-limiting requests (429). Wait 30-60 seconds, then press Refresh."
+          : errorMessage(error)
+      );
     } finally {
       setLoading(false);
     }
