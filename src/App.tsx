@@ -111,11 +111,11 @@ const PROFILE_PAGE_SIZE = 10;
 const LEADERBOARD_LIMIT = 100;
 const MARKET_INITIAL_LOAD = 24;
 const MARKET_LOAD_STEP = 24;
-const MARKET_LOAD_CONCURRENCY = 2;
+const MARKET_LOAD_CONCURRENCY = 4;
 const EVENT_LOAD_CONCURRENCY = 2;
-const RPC_RETRY_ATTEMPTS = 4;
-const RPC_RETRY_DELAY_MS = 850;
-const RPC_CALL_STAGGER_MS = 120;
+const RPC_RETRY_ATTEMPTS = 2;
+const RPC_RETRY_DELAY_MS = 450;
+const RPC_CALL_STAGGER_MS = 40;
 const WALLET_CONNECTED_KEY = "aurapredict.walletConnected";
 const DISMISSED_RESULT_KEY = "aurapredict.dismissedResultNotices";
 const THEME_KEY = "aurapredict.theme";
@@ -891,6 +891,7 @@ export default function App() {
   }
 
   const transactionLockRef = useRef(false);
+  const silentLoadRef = useRef(false);
   const [account, setAccount] = useState("");
   const [owner, setOwner] = useState("");
   const [contractVersion, setContractVersion] = useState<MarketContractVersion>("unknown");
@@ -1654,7 +1655,8 @@ export default function App() {
     setCreateModalOpen(true);
   }, []);
 
-  const loadMoreMarkets = useCallback(() => {
+  const loadMoreMarkets = useCallback((silent = false) => {
+    silentLoadRef.current = silent;
     setMarketLoadLimit((current) => {
       if (knownMarketCount <= 0) return current + MARKET_LOAD_STEP;
       return Math.min(knownMarketCount, current + MARKET_LOAD_STEP);
@@ -1792,7 +1794,9 @@ export default function App() {
   const loadMarkets = useCallback(async () => {
     if (!hasContract) return;
 
-    setLoading(true);
+    const isSilentLoad = silentLoadRef.current;
+    silentLoadRef.current = false;
+    if (!isSilentLoad) setLoading(true);
     try {
       const publicClient = getPublicClient();
       const [count, contractOwner, contractMinStake] = await Promise.all([
@@ -2022,8 +2026,9 @@ export default function App() {
       );
       setLastDataRefresh(new Date());
       writeCachedMarkets(sortedRows);
+      if (!isSilentLoad) setLoading(false);
 
-      if (account && isAddress(account) && sortedRows.length > 0) {
+      if (!isSilentLoad && account && isAddress(account) && sortedRows.length > 0) {
         const positionRows = await mapWithConcurrency(
           sortedRows,
           MARKET_LOAD_CONCURRENCY,
@@ -2066,7 +2071,7 @@ export default function App() {
         );
       }
 
-      try {
+      if (!isSilentLoad) try {
         const blockTimestamps = new Map<bigint, number>();
         const getBlockTimestamp = async (blockNumber?: bigint | null) => {
           if (!blockNumber) return 0;
@@ -2173,7 +2178,7 @@ export default function App() {
           : errorMessage(error)
       );
     } finally {
-      setLoading(false);
+      if (!isSilentLoad) setLoading(false);
     }
   }, [account, contractAddress, hasContract, marketLoadLimit, selectedMarketId]);
 
@@ -2190,7 +2195,7 @@ export default function App() {
       const hash = await action();
       await getPublicClient().waitForTransactionReceipt({ hash });
       setNotice(`Transaction finalized on Arc: ${shortHash(hash)}`);
-      await loadMarkets();
+      void loadMarkets();
       return true;
     } finally {
       transactionLockRef.current = false;
@@ -2204,10 +2209,6 @@ export default function App() {
       if (!account || !isAddress(account)) throw new Error("Connect wallet first.");
       if (!createForm.question.trim()) throw new Error("Market question is required.");
       if (!createForm.closeTime) throw new Error("Close time is required.");
-      if (contractVersion === "unknown") {
-        throw new Error("Contract data is still loading. Wait a moment, then try again.");
-      }
-
       const closeTime = parseUtcDateTime(createForm.closeTime);
       const earliestCloseTime = BigInt(Math.floor(Date.now() / 1000) + 5 * 60);
       if (closeTime <= earliestCloseTime) {
@@ -2553,7 +2554,7 @@ export default function App() {
     if (!hasMoreMarkets || loading || view === "market") return;
 
     const timer = window.setTimeout(() => {
-      loadMoreMarkets();
+      loadMoreMarkets(true);
     }, 7000);
 
     return () => window.clearTimeout(timer);
@@ -3466,7 +3467,7 @@ export default function App() {
                     {loading ? "Refreshing..." : "Refresh"}
                   </button>
                   {view !== "market" && hasMoreMarkets && (
-                    <button className="secondary" onClick={loadMoreMarkets} disabled={loading || !hasContract} type="button">
+                    <button className="secondary" onClick={() => loadMoreMarkets(false)} disabled={loading || !hasContract} type="button">
                       Load more
                     </button>
                   )}
@@ -3477,7 +3478,7 @@ export default function App() {
                     {loading ? "Refreshing..." : "Refresh"}
                   </button>
                   {hasMoreMarkets && (
-                    <button className="secondary" onClick={loadMoreMarkets} disabled={loading || !hasContract} type="button">
+                    <button className="secondary" onClick={() => loadMoreMarkets(false)} disabled={loading || !hasContract} type="button">
                       Load more
                     </button>
                   )}
