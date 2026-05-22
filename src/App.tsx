@@ -332,6 +332,42 @@ function personalMarketResult(market: MarketView, subject = "You") {
     : { label: `${subject} lost`, className: "lost" };
 }
 
+function claimStatusFor(market: MarketView, settlement: ReturnType<typeof userSettlement>, isOwnProfile: boolean) {
+  if (!settlement.settled) {
+    return "Not settled";
+  }
+
+  if (settlement.stake === 0n) {
+    return "No position";
+  }
+
+  if (market.outcome === Outcome.Canceled) {
+    if (!isOwnProfile) {
+      return "Refund estimate";
+    }
+
+    if (market.claimed) {
+      return "Refund claimed";
+    }
+
+    return market.potentialPayout > 0n ? "Refund ready" : "No refund";
+  }
+
+  if (!settlement.won) {
+    return "No payout";
+  }
+
+  if (!isOwnProfile) {
+    return "Estimated";
+  }
+
+  if (market.claimed) {
+    return "Claimed";
+  }
+
+  return market.potentialPayout > 0n ? "Ready to claim" : "Refresh required";
+}
+
 function auraPointsFor(
   volume: bigint,
   wonMarkets: number,
@@ -3416,6 +3452,9 @@ export default function App() {
                     [market.resolver.toLowerCase(), owner.toLowerCase()].includes(account.toLowerCase());
                   const meta = categoryMeta(market.category || "Other");
                   const result = personalMarketResult(market, isOwnProfile ? "You" : "Profile");
+                  const settlement = userSettlement(market, protocolFeeBps);
+                  const claimStatus = claimStatusFor(market, settlement, isOwnProfile);
+                  const claimableValue = isOwnProfile ? market.potentialPayout : settlement.payout;
 
                   return (
                     <article className="history-card" key={market.id}>
@@ -3448,8 +3487,16 @@ export default function App() {
                           <strong>{countdownText(market.closeTime, currentTime)}</strong>
                         </div>
                         <div>
-                          <span>Payout</span>
-                          <strong>{formatUsdc(market.potentialPayout)} USDC</strong>
+                          <span>Est. payout</span>
+                          <strong>{formatUsdc(settlement.payout)} USDC</strong>
+                        </div>
+                        <div>
+                          <span>{isOwnProfile ? "Claimable" : "Est. claim"}</span>
+                          <strong>{formatUsdc(claimableValue)} USDC</strong>
+                        </div>
+                        <div>
+                          <span>Claim status</span>
+                          <strong>{claimStatus}</strong>
                         </div>
                       </div>
                       {(canPropose ||
