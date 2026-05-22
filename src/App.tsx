@@ -2,6 +2,7 @@ import {
   createPublicClient,
   createWalletClient,
   custom,
+  fallback,
   formatUnits,
   http,
   isAddress,
@@ -14,6 +15,7 @@ import {
   ARC_CHAIN_ID_DECIMAL,
   ARC_EXPLORER_URL,
   ARC_NATIVE_USDC_DECIMALS,
+  ARC_RPC_URLS,
   arcTestnet,
   arcTestnetParams
 } from "./arc";
@@ -120,6 +122,7 @@ const THEME_KEY = "aurapredict.theme";
 const PROFILE_NAMES_KEY = "aurapredict.profileNames";
 const PROFILE_JOINED_KEY = "aurapredict.profileJoined";
 const PROFILE_PUBLIC_KEY = "aurapredict.profilePublic";
+const MARKET_CACHE_KEY = "aurapredict.marketCache";
 const MARKET_QUERY_KEY = "market";
 const PROFILE_QUERY_KEY = "profile";
 const PROFILE_NAME_QUERY_KEY = "name";
@@ -150,6 +153,14 @@ const LEADERBOARD_METRICS: Array<{ value: LeaderboardMetric; label: string }> = 
   { value: "auraPoints", label: "Aura points" }
 ];
 
+type CachedMarketView = Omit<
+  MarketView,
+  "yesPool" | "noPool" | "yesPosition" | "noPosition" | "potentialPayout"
+> & {
+  yesPool: string;
+  noPool: string;
+};
+
 function getInjectedProvider(provider?: EthereumProvider | null) {
   const injected = provider ?? window.ethereum;
   if (!injected) {
@@ -159,9 +170,17 @@ function getInjectedProvider(provider?: EthereumProvider | null) {
 }
 
 function getPublicClient() {
+  const envRpc = String(import.meta.env.VITE_ARC_RPC_URL || "").trim();
+  const rpcUrls = [envRpc, ...ARC_RPC_URLS].filter(
+    (url, index, list): url is string => Boolean(url) && list.indexOf(url) === index
+  );
+
   return createPublicClient({
     chain: arcTestnet,
-    transport: http()
+    transport: fallback(
+      rpcUrls.map((url) => http(url, { retryCount: 1, retryDelay: 250, timeout: 10_000 })),
+      { rank: false, retryCount: 2, retryDelay: 500 }
+    )
   });
 }
 
@@ -174,6 +193,52 @@ function getWalletClient(provider?: EthereumProvider | null) {
 
 function sleep(ms: number) {
   return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
+function readCachedMarkets() {
+  try {
+    const rows = JSON.parse(window.localStorage.getItem(MARKET_CACHE_KEY) || "[]") as CachedMarketView[];
+    return rows
+      .map((market) => ({
+        ...market,
+        yesPool: BigInt(market.yesPool || "0"),
+        noPool: BigInt(market.noPool || "0"),
+        yesPosition: 0n,
+        noPosition: 0n,
+        claimed: false,
+        potentialPayout: 0n
+      }))
+      .filter((market) => Number.isInteger(market.id));
+  } catch {
+    return [];
+  }
+}
+
+function writeCachedMarkets(markets: MarketView[]) {
+  try {
+    const cachedRows: CachedMarketView[] = markets.slice(0, 120).map((market) => ({
+      id: market.id,
+      question: market.question,
+      category: market.category,
+      createdAt: market.createdAt,
+      closeTime: market.closeTime,
+      creator: market.creator,
+      resolver: market.resolver,
+      yesPool: market.yesPool.toString(),
+      noPool: market.noPool.toString(),
+      traderCount: market.traderCount,
+      proposedOutcome: market.proposedOutcome,
+      proposedAt: market.proposedAt,
+      disputeDeadline: market.disputeDeadline,
+      disputed: market.disputed,
+      disputer: market.disputer,
+      outcome: market.outcome,
+      claimed: false
+    }));
+    window.localStorage.setItem(MARKET_CACHE_KEY, JSON.stringify(cachedRows));
+  } catch {
+    // Cache is a best-effort UX optimization.
+  }
 }
 
 function shortAddress(address: string) {
@@ -835,9 +900,9 @@ export default function App() {
   const [disputeWindow, setDisputeWindow] = useState(0);
   const [protocolFeeBps, setProtocolFeeBps] = useState(0);
   const [accumulatedProtocolFees, setAccumulatedProtocolFees] = useState<bigint>(0n);
-  const [markets, setMarkets] = useState<MarketView[]>([]);
+  const [markets, setMarkets] = useState<MarketView[]>(() => readCachedMarkets());
   const [activities, setActivities] = useState<ActivityItem[]>([]);
-  const [knownMarketCount, setKnownMarketCount] = useState(0);
+  const [knownMarketCount, setKnownMarketCount] = useState(() => readCachedMarkets().length);
   const [marketLoadLimit, setMarketLoadLimit] = useState(MARKET_INITIAL_LOAD);
   const [loading, setLoading] = useState(false);
   const [connecting, setConnecting] = useState(false);
@@ -1786,10 +1851,12 @@ export default function App() {
         setCreatorBond(contractCreatorBond);
         setDisputeBond(contractDisputeBond);
         setDisputeWindow(Number(contractDisputeWindow));
+        setContractVersion("dispute");
       } catch {
         setCreatorBond(0n);
         setDisputeBond(0n);
         setDisputeWindow(0);
+        setContractVersion("legacy");
       }
       try {
         const [feeBps, protocolFees] = await Promise.all([
@@ -1906,26 +1973,6 @@ export default function App() {
           let claimed = false;
           let potentialPayout = 0n;
 
-          if (account && isAddress(account)) {
-            const position = await withRpcRetry(() => publicClient.readContract({
-              address: contractAddress,
-              abi: arcPredictionMarketAbi,
-              functionName: "positionOf",
-              args: [BigInt(id), account as Address]
-            }));
-            yesPosition = position[0];
-            noPosition = position[1];
-            claimed = position[2];
-            if (Number(outcome) !== Outcome.Unresolved && !claimed && (yesPosition > 0n || noPosition > 0n)) {
-              potentialPayout = await withRpcRetry(() => publicClient.readContract({
-                address: contractAddress,
-                abi: arcPredictionMarketAbi,
-                functionName: "potentialPayout",
-                args: [BigInt(id), account as Address]
-              }));
-            }
-          }
-
           return {
             id,
             question,
@@ -1959,8 +2006,65 @@ export default function App() {
       }
 
       let sortedRows = loadedRows.sort((a, b) => b.id - a.id);
-      setMarkets(sortedRows);
+      setMarkets((current) =>
+        sortedRows.map((market) => {
+          const currentMarket = current.find((item) => item.id === market.id);
+          return currentMarket
+            ? {
+                ...market,
+                yesPosition: currentMarket.yesPosition,
+                noPosition: currentMarket.noPosition,
+                claimed: currentMarket.claimed,
+                potentialPayout: currentMarket.potentialPayout
+              }
+            : market;
+        })
+      );
       setLastDataRefresh(new Date());
+      writeCachedMarkets(sortedRows);
+
+      if (account && isAddress(account) && sortedRows.length > 0) {
+        const positionRows = await mapWithConcurrency(
+          sortedRows,
+          MARKET_LOAD_CONCURRENCY,
+          async (market) => {
+            const position = await withRpcRetry(() => publicClient.readContract({
+              address: contractAddress,
+              abi: arcPredictionMarketAbi,
+              functionName: "positionOf",
+              args: [BigInt(market.id), account as Address]
+            }));
+            const yesPosition = position[0];
+            const noPosition = position[1];
+            const claimed = position[2];
+            let potentialPayout = 0n;
+
+            if (market.outcome !== Outcome.Unresolved && !claimed && (yesPosition > 0n || noPosition > 0n)) {
+              potentialPayout = await withRpcRetry(() => publicClient.readContract({
+                address: contractAddress,
+                abi: arcPredictionMarketAbi,
+                functionName: "potentialPayout",
+                args: [BigInt(market.id), account as Address]
+              }));
+            }
+
+            return {
+              id: market.id,
+              yesPosition,
+              noPosition,
+              claimed,
+              potentialPayout
+            };
+          }
+        );
+        const positionsByMarket = new Map(positionRows.map((position) => [position.id, position]));
+        setMarkets((current) =>
+          current.map((market) => {
+            const position = positionsByMarket.get(market.id);
+            return position ? { ...market, ...position } : market;
+          })
+        );
+      }
 
       try {
         const blockTimestamps = new Map<bigint, number>();
@@ -2012,6 +2116,7 @@ export default function App() {
           ...market,
           createdAt: createdAtByMarket.get(market.id) ?? market.createdAt
         }));
+        writeCachedMarkets(sortedRows);
 
         const marketMap = new Map(sortedRows.map((market) => [market.id, market]));
         const activityRows = await mapWithConcurrency(
@@ -2041,7 +2146,20 @@ export default function App() {
       } catch {
         setActivities((current) => current);
       }
-      setMarkets(sortedRows);
+      setMarkets((current) =>
+        sortedRows.map((market) => {
+          const currentMarket = current.find((item) => item.id === market.id);
+          return currentMarket
+            ? {
+                ...market,
+                yesPosition: currentMarket.yesPosition,
+                noPosition: currentMarket.noPosition,
+                claimed: currentMarket.claimed,
+                potentialPayout: currentMarket.potentialPayout
+              }
+            : market;
+        })
+      );
       setLastDataRefresh(new Date());
       if (failedMarketLoads > 0) {
         setNotice(
@@ -2086,8 +2204,8 @@ export default function App() {
       if (!account || !isAddress(account)) throw new Error("Connect wallet first.");
       if (!createForm.question.trim()) throw new Error("Market question is required.");
       if (!createForm.closeTime) throw new Error("Close time is required.");
-      if (contractVersion !== "legacy" && creatorBond <= 0n) {
-        throw new Error("Creator bond is not loaded. Refresh contract data first.");
+      if (contractVersion === "unknown") {
+        throw new Error("Contract data is still loading. Wait a moment, then try again.");
       }
 
       const closeTime = parseUtcDateTime(createForm.closeTime);
@@ -2432,6 +2550,16 @@ export default function App() {
   }, [loadMarkets]);
 
   useEffect(() => {
+    if (!hasMoreMarkets || loading || view === "market") return;
+
+    const timer = window.setTimeout(() => {
+      loadMoreMarkets();
+    }, 7000);
+
+    return () => window.clearTimeout(timer);
+  }, [hasMoreMarkets, loadMoreMarkets, loading, view]);
+
+  useEffect(() => {
     const now = new Date();
     const nextUtcHour = new Date(now);
     nextUtcHour.setUTCMinutes(0, 0, 0);
@@ -2455,8 +2583,12 @@ export default function App() {
     <section className="market-grid">
       {items.length === 0 && (
         <div className="empty-state">
-          <strong>{emptyTitle}</strong>
-          <span>{emptyText}</span>
+          <strong>{loading ? "Loading markets..." : emptyTitle}</strong>
+          <span>
+            {loading
+              ? "Reading the latest Arc markets. Cached markets will appear instantly after the first successful load."
+              : emptyText}
+          </span>
         </div>
       )}
       {items.map((market) => {
