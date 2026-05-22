@@ -107,6 +107,8 @@ const CATEGORIES = ["All", "Crypto", "Macro", "Sports", "Politics", "Arc", "AI",
 const SECTION_LIMIT = 6;
 const PROFILE_PAGE_SIZE = 10;
 const LEADERBOARD_LIMIT = 100;
+const MARKET_INITIAL_LOAD = 24;
+const MARKET_LOAD_STEP = 24;
 const MARKET_LOAD_CONCURRENCY = 2;
 const EVENT_LOAD_CONCURRENCY = 2;
 const RPC_RETRY_ATTEMPTS = 4;
@@ -835,6 +837,8 @@ export default function App() {
   const [accumulatedProtocolFees, setAccumulatedProtocolFees] = useState<bigint>(0n);
   const [markets, setMarkets] = useState<MarketView[]>([]);
   const [activities, setActivities] = useState<ActivityItem[]>([]);
+  const [knownMarketCount, setKnownMarketCount] = useState(0);
+  const [marketLoadLimit, setMarketLoadLimit] = useState(MARKET_INITIAL_LOAD);
   const [loading, setLoading] = useState(false);
   const [connecting, setConnecting] = useState(false);
   const [walletProviders, setWalletProviders] = useState<Eip6963ProviderDetail[]>([]);
@@ -914,6 +918,8 @@ export default function App() {
   );
   const endedMarkets = markets.filter((market) => market.outcome !== Outcome.Unresolved);
   const liveMarkets = activeMarkets.length;
+  const loadedScopeCount = knownMarketCount > 0 ? Math.min(marketLoadLimit, knownMarketCount) : markets.length;
+  const hasMoreMarkets = knownMarketCount > loadedScopeCount;
   const totalLiquidity = markets.reduce((sum, market) => sum + marketVolume(market), 0n);
   const liveLiquidity = activeMarkets.reduce((sum, market) => sum + marketVolume(market), 0n);
   const totalTradeVolume = activities.length > 0
@@ -1583,6 +1589,13 @@ export default function App() {
     setCreateModalOpen(true);
   }, []);
 
+  const loadMoreMarkets = useCallback(() => {
+    setMarketLoadLimit((current) => {
+      if (knownMarketCount <= 0) return current + MARKET_LOAD_STEP;
+      return Math.min(knownMarketCount, current + MARKET_LOAD_STEP);
+    });
+  }, [knownMarketCount]);
+
   const setThemeMode = useCallback((nextTheme: ThemeMode) => {
     setTheme(nextTheme);
     setThemeMenuOpen(false);
@@ -1735,6 +1748,21 @@ export default function App() {
         }))
       ]);
 
+      const totalMarketCount = Number(count);
+      const requestedMarketCount = Math.min(marketLoadLimit, totalMarketCount);
+      const latestMarketStart = Math.max(0, totalMarketCount - requestedMarketCount);
+      const marketIdSet = new Set<number>();
+
+      for (let id = latestMarketStart; id < totalMarketCount; id += 1) {
+        marketIdSet.add(id);
+      }
+
+      if (selectedMarketId !== null && selectedMarketId >= 0 && selectedMarketId < totalMarketCount) {
+        marketIdSet.add(selectedMarketId);
+      }
+
+      const marketIds = Array.from(marketIdSet).sort((a, b) => a - b);
+      setKnownMarketCount(totalMarketCount);
       setOwner(contractOwner);
       setMinStake(contractMinStake);
       try {
@@ -1784,7 +1812,6 @@ export default function App() {
       }
 
       let failedMarketLoads = 0;
-      const marketIds = Array.from({ length: Number(count) }, (_, id) => id);
       const rows = await mapWithConcurrency<number, MarketView | null>(
         marketIds,
         MARKET_LOAD_CONCURRENCY,
@@ -1889,12 +1916,14 @@ export default function App() {
             yesPosition = position[0];
             noPosition = position[1];
             claimed = position[2];
-            potentialPayout = await withRpcRetry(() => publicClient.readContract({
-              address: contractAddress,
-              abi: arcPredictionMarketAbi,
-              functionName: "potentialPayout",
-              args: [BigInt(id), account as Address]
-            }));
+            if (Number(outcome) !== Outcome.Unresolved && !claimed && (yesPosition > 0n || noPosition > 0n)) {
+              potentialPayout = await withRpcRetry(() => publicClient.readContract({
+                address: contractAddress,
+                abi: arcPredictionMarketAbi,
+                functionName: "potentialPayout",
+                args: [BigInt(id), account as Address]
+              }));
+            }
           }
 
           return {
@@ -1922,14 +1951,16 @@ export default function App() {
         }
       );
 
-      if (Number(count) === 0) setContractVersion("unknown");
+      if (totalMarketCount === 0) setContractVersion("unknown");
       const loadedRows = rows.filter((row): row is MarketView => Boolean(row));
 
-      if (Number(count) > 0 && loadedRows.length === 0) {
+      if (totalMarketCount > 0 && marketIds.length > 0 && loadedRows.length === 0) {
         throw new Error("Arc RPC is rate-limiting requests right now (429). Wait 30-60 seconds, then refresh.");
       }
 
       let sortedRows = loadedRows.sort((a, b) => b.id - a.id);
+      setMarkets(sortedRows);
+      setLastDataRefresh(new Date());
 
       try {
         const blockTimestamps = new Map<bigint, number>();
@@ -1958,9 +1989,18 @@ export default function App() {
           }))
         ]);
         const createdAtByMarket = new Map<number, number>();
+        const loadedMarketIds = new Set(sortedRows.map((market) => market.id));
+        const relevantCreatedEvents = createdEvents.filter((event) => {
+          const args = event.args as { marketId?: bigint };
+          return loadedMarketIds.has(Number(args.marketId ?? 0n));
+        });
+        const relevantBetEvents = betEvents.filter((event) => {
+          const args = event.args as { marketId?: bigint };
+          return loadedMarketIds.has(Number(args.marketId ?? 0n));
+        });
 
         await mapWithConcurrency(
-          createdEvents,
+          relevantCreatedEvents,
           EVENT_LOAD_CONCURRENCY,
           async (event) => {
             const args = event.args as { marketId?: bigint };
@@ -1975,7 +2015,7 @@ export default function App() {
 
         const marketMap = new Map(sortedRows.map((market) => [market.id, market]));
         const activityRows = await mapWithConcurrency(
-          betEvents,
+          relevantBetEvents,
           EVENT_LOAD_CONCURRENCY,
           async (event) => {
             const args = event.args as {
@@ -2005,7 +2045,7 @@ export default function App() {
       setLastDataRefresh(new Date());
       if (failedMarketLoads > 0) {
         setNotice(
-          `Loaded ${loadedRows.length}/${Number(count)} markets. Arc RPC skipped ${failedMarketLoads} rate-limited market calls; refresh again in a moment.`
+          `Loaded ${loadedRows.length}/${totalMarketCount} markets in the current window. Arc RPC skipped ${failedMarketLoads} rate-limited calls; refresh again in a moment.`
         );
       }
     } catch (error) {
@@ -2017,7 +2057,7 @@ export default function App() {
     } finally {
       setLoading(false);
     }
-  }, [account, contractAddress, hasContract]);
+  }, [account, contractAddress, hasContract, marketLoadLimit, selectedMarketId]);
 
   const runTransaction = async (action: () => Promise<Hash>, message: string) => {
     if (transactionLockRef.current) {
@@ -3278,6 +3318,11 @@ export default function App() {
                   Last refresh: {lastRefreshText}.
                 </p>
               )}
+              {knownMarketCount > 0 && view !== "market" && (
+                <p className="data-scope-note">
+                  Showing {markets.length} loaded markets out of {knownMarketCount} total. Load more only when you need older markets to avoid Arc RPC rate limits.
+                </p>
+              )}
             </div>
             <div className="board-actions">
               {view === "collection" || view === "market" ? (
@@ -3288,12 +3333,22 @@ export default function App() {
                   <button className="secondary" onClick={loadMarkets} disabled={loading || !hasContract}>
                     {loading ? "Refreshing..." : "Refresh"}
                   </button>
+                  {view !== "market" && hasMoreMarkets && (
+                    <button className="secondary" onClick={loadMoreMarkets} disabled={loading || !hasContract} type="button">
+                      Load more
+                    </button>
+                  )}
                 </>
               ) : (
                 <>
                   <button className="secondary" onClick={loadMarkets} disabled={loading || !hasContract}>
                     {loading ? "Refreshing..." : "Refresh"}
                   </button>
+                  {hasMoreMarkets && (
+                    <button className="secondary" onClick={loadMoreMarkets} disabled={loading || !hasContract} type="button">
+                      Load more
+                    </button>
+                  )}
                   <button onClick={openCreateMarket}>Create Market</button>
                 </>
               )}
@@ -3862,12 +3917,16 @@ export default function App() {
           <section className="protocol-card protocol-stats-card">
             <span className="section-label">Project stats</span>
             <div className="protocol-stat-feature">
-              <span>Total volume</span>
+              <span>Loaded volume</span>
               <strong>{formatUsdc(totalTradeVolume)} USDC</strong>
             </div>
             <div className="protocol-metric-grid">
               <div>
-                <span>Markets</span>
+                <span>Total markets</span>
+                <strong>{knownMarketCount || markets.length}</strong>
+              </div>
+              <div>
+                <span>Loaded</span>
                 <strong>{markets.length}</strong>
               </div>
               <div>

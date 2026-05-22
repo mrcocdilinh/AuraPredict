@@ -1358,6 +1358,12 @@ h3 {
   margin: 8px 0 0;
 }
 
+.board-header .data-scope-note {
+  color: #4568e8;
+  font-weight: 780;
+  max-width: 760px;
+}
+
 .board-actions {
   align-items: center;
   display: flex;
@@ -2963,6 +2969,10 @@ label {
 [data-theme="dark"] .wallet-option small,
 [data-theme="dark"] label {
   color: #9aa7bd;
+}
+
+[data-theme="dark"] .board-header .data-scope-note {
+  color: #7ddfff;
 }
 
 [data-theme="dark"] .hero-stats div,
