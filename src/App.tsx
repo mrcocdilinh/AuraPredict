@@ -25,6 +25,16 @@ type EthereumProvider = {
   removeListener?: (event: string, handler: (...args: unknown[]) => void) => void;
 };
 
+type Eip6963ProviderDetail = {
+  info: {
+    uuid: string;
+    name: string;
+    icon?: string;
+    rdns?: string;
+  };
+  provider: EthereumProvider;
+};
+
 declare global {
   interface Window {
     ethereum?: EthereumProvider;
@@ -102,6 +112,7 @@ const PROFILE_JOINED_KEY = "aurapredict.profileJoined";
 const PROFILE_PUBLIC_KEY = "aurapredict.profilePublic";
 const MARKET_QUERY_KEY = "market";
 const PROFILE_QUERY_KEY = "profile";
+const PROFILE_NAME_QUERY_KEY = "name";
 const LANDING_HOSTS = new Set(["aurapredict.xyz", "www.aurapredict.xyz"]);
 const APP_URL = "https://app.aurapredict.xyz";
 const X_URL = "https://x.com/AuraPredict";
@@ -129,11 +140,12 @@ const LEADERBOARD_METRICS: Array<{ value: LeaderboardMetric; label: string }> = 
   { value: "auraPoints", label: "Aura points" }
 ];
 
-function getInjectedProvider() {
-  if (!window.ethereum) {
-    throw new Error("Install MetaMask or Rabby, then open AuraPredict again.");
+function getInjectedProvider(provider?: EthereumProvider | null) {
+  const injected = provider ?? window.ethereum;
+  if (!injected) {
+    throw new Error("Open AuraPredict inside a wallet browser such as Zerion, MetaMask, Rabby, or OKX.");
   }
-  return window.ethereum;
+  return injected;
 }
 
 function getPublicClient() {
@@ -143,10 +155,10 @@ function getPublicClient() {
   });
 }
 
-function getWalletClient() {
+function getWalletClient(provider?: EthereumProvider | null) {
   return createWalletClient({
     chain: arcTestnet,
-    transport: custom(getInjectedProvider() as never)
+    transport: custom(getInjectedProvider(provider) as never)
   });
 }
 
@@ -482,6 +494,13 @@ function CheckIcon() {
 }
 
 function LandingPage() {
+  const [landingTheme, setLandingTheme] = useState<ThemeMode>(() => {
+    try {
+      return window.localStorage.getItem(THEME_KEY) === "light" ? "light" : "dark";
+    } catch {
+      return "dark";
+    }
+  });
   const featureCards = [
     {
       title: "YES/NO markets",
@@ -509,9 +528,14 @@ function LandingPage() {
     }
   ];
   const flow = ["Create a market", "Stake YES or NO", "Track odds", "Resolve result", "Claim payout"];
+  const nextTheme = landingTheme === "dark" ? "light" : "dark";
+
+  useEffect(() => {
+    window.localStorage.setItem(THEME_KEY, landingTheme);
+  }, [landingTheme]);
 
   return (
-    <main className="landing-page">
+    <main className={`landing-page landing-${landingTheme}`}>
       <nav className="landing-nav">
         <a className="landing-brand" href="#top" aria-label="AuraPredict home">
           <img src="/aurapredict-logo.png" alt="AuraPredict" />
@@ -526,6 +550,14 @@ function LandingPage() {
           <a href={DISCORD_URL} target="_blank" rel="noreferrer">
             Discord
           </a>
+          <button
+            className="landing-theme-toggle"
+            onClick={() => setLandingTheme(nextTheme)}
+            type="button"
+            aria-label={`Switch to ${nextTheme} mode`}
+          >
+            <ThemeIcon theme={landingTheme} />
+          </button>
           <a className="landing-enter-small" href={APP_URL}>
             Enter Dapp
           </a>
@@ -687,6 +719,8 @@ export default function App() {
   const [activities, setActivities] = useState<ActivityItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [connecting, setConnecting] = useState(false);
+  const [walletProviders, setWalletProviders] = useState<Eip6963ProviderDetail[]>([]);
+  const [selectedWalletProvider, setSelectedWalletProvider] = useState<EthereumProvider | null>(null);
   const [walletMenuOpen, setWalletMenuOpen] = useState(false);
   const [notificationMenuOpen, setNotificationMenuOpen] = useState(false);
   const [themeMenuOpen, setThemeMenuOpen] = useState(false);
@@ -812,6 +846,13 @@ export default function App() {
   const profileDisplayName = viewedProfileAddress
     ? profileNames[viewedProfileKey] || shortAddress(viewedProfileAddress)
     : "Connect wallet";
+  const displayNameForAddress = useCallback(
+    (address: string) => {
+      const key = address.toLowerCase();
+      return profileNames[key]?.trim() || shortAddress(address);
+    },
+    [profileNames]
+  );
   const profileInitial = profileDisplayName.slice(0, 1).toUpperCase();
   const profileJoinedDate = viewedProfileKey ? profileJoinedDates[viewedProfileKey] : "";
   const profileJoinedLabel = profileJoinedDate
@@ -886,6 +927,16 @@ export default function App() {
       if (a.closeTime !== b.closeTime) return a.closeTime - b.closeTime;
       return b.id - a.id;
     });
+  const heroHotMarkets = [...activeMarkets]
+    .sort((a, b) => {
+      if (b.traderCount !== a.traderCount) return b.traderCount - a.traderCount;
+      const bVolume = marketVolume(b);
+      const aVolume = marketVolume(a);
+      if (bVolume === aVolume) return b.id - a.id;
+      return bVolume > aVolume ? 1 : bVolume < aVolume ? -1 : 0;
+    })
+    .slice(0, 10);
+  const heroHotLoop = heroHotMarkets.length > 0 ? [...heroHotMarkets, ...heroHotMarkets] : [];
   const collectionMarkets =
     collectionView === "hot"
       ? allHottestMarkets
@@ -971,6 +1022,11 @@ export default function App() {
     : [];
   const tickerSource = activities.slice(0, 24);
   const tickerActivities = tickerSource.length > 0 ? [...tickerSource, ...tickerSource] : [];
+  const tickerFallbackMarkets = activeMarkets
+    .filter((market) => marketVolume(market) > 0n)
+    .sort((a, b) => (marketVolume(b) > marketVolume(a) ? 1 : marketVolume(b) < marketVolume(a) ? -1 : b.id - a.id))
+    .slice(0, 12);
+  const tickerFallbackLoop = tickerFallbackMarkets.length > 0 ? [...tickerFallbackMarkets, ...tickerFallbackMarkets] : [];
   const resolveNotifications = account
     ? pendingResolutionMarkets.filter(
         (market) =>
@@ -1014,6 +1070,18 @@ export default function App() {
     disputeReviewNotifications.length +
     claimNotifications.length +
     resultNotifications.length;
+  const walletOptions =
+    walletProviders.length > 0
+      ? walletProviders
+      : window.ethereum
+        ? [
+            {
+              info: { uuid: "browser-wallet", name: "Browser Wallet" },
+              provider: window.ethereum
+            }
+          ]
+        : [];
+  const recommendedWallets = ["Zerion", "MetaMask", "Rabby Wallet", "OKX Wallet", "Rainbow"];
   const leaderboardTimestamp = lastDataRefresh ? Math.floor(lastDataRefresh.getTime() / 1000) : nowSeconds;
   const lastRefreshText = lastDataRefresh
     ? `${lastDataRefresh.toLocaleTimeString("en-US", { timeZone: "UTC", hour12: false })} UTC`
@@ -1107,7 +1175,11 @@ export default function App() {
 
     for (const market of markets) {
       if (period?.seconds && market.closeTime > 0 && market.closeTime < periodStart) continue;
-      getRow(market.creator).createdMarkets += 1;
+      const creatorRow = getRow(market.creator);
+      creatorRow.createdMarkets += 1;
+      if (activities.length === 0) {
+        creatorRow.volume += marketVolume(market);
+      }
     }
 
     const output = Array.from(rows.values()).map((row) => {
@@ -1211,8 +1283,55 @@ export default function App() {
     });
   }, [accountKey, profileNames]);
 
-  const switchToArc = useCallback(async () => {
-    const injected = getInjectedProvider();
+  useEffect(() => {
+    const providers = new Map<string, Eip6963ProviderDetail>();
+    const addProvider = (detail: Eip6963ProviderDetail) => {
+      if (!detail?.provider || !detail.info?.uuid) return;
+      providers.set(detail.info.uuid, detail);
+      setWalletProviders(Array.from(providers.values()));
+    };
+
+    const handleProvider = (event: Event) => {
+      addProvider((event as CustomEvent<Eip6963ProviderDetail>).detail);
+    };
+
+    window.addEventListener("eip6963:announceProvider", handleProvider as EventListener);
+    window.dispatchEvent(new Event("eip6963:requestProvider"));
+
+    const legacyProviders = ((window.ethereum as EthereumProvider & { providers?: EthereumProvider[] })?.providers || [])
+      .filter(Boolean)
+      .map((provider, index) => ({
+        info: {
+          uuid: `legacy-${index}`,
+          name:
+            (provider as EthereumProvider & { isZerion?: boolean; isRabby?: boolean; isOkxWallet?: boolean; isMetaMask?: boolean })
+              .isZerion
+              ? "Zerion"
+              : (provider as EthereumProvider & { isRabby?: boolean }).isRabby
+                ? "Rabby Wallet"
+                : (provider as EthereumProvider & { isOkxWallet?: boolean }).isOkxWallet
+                  ? "OKX Wallet"
+                  : (provider as EthereumProvider & { isMetaMask?: boolean }).isMetaMask
+                    ? "MetaMask"
+                    : `Browser Wallet ${index + 1}`
+        },
+        provider
+      }));
+
+    for (const provider of legacyProviders) addProvider(provider);
+
+    return () => {
+      window.removeEventListener("eip6963:announceProvider", handleProvider as EventListener);
+    };
+  }, []);
+
+  const getActiveWalletClient = useCallback(
+    (provider?: EthereumProvider | null) => getWalletClient(provider ?? selectedWalletProvider),
+    [selectedWalletProvider]
+  );
+
+  const switchToArc = useCallback(async (provider?: EthereumProvider | null) => {
+    const injected = getInjectedProvider(provider ?? selectedWalletProvider);
     try {
       await injected.request({
         method: "wallet_switchEthereumChain",
@@ -1229,13 +1348,14 @@ export default function App() {
         params: [{ chainId: arcTestnetParams.chainId }]
       });
     }
-  }, []);
+  }, [selectedWalletProvider]);
 
-  const connectWallet = useCallback(async () => {
+  const connectWallet = useCallback(async (provider?: EthereumProvider | null) => {
     setNotice("");
     setConnecting(true);
-    await switchToArc();
-    const walletClient = getWalletClient();
+    const providerToUse = provider ?? selectedWalletProvider ?? window.ethereum ?? null;
+    await switchToArc(providerToUse);
+    const walletClient = getWalletClient(providerToUse);
     const addresses = await walletClient.requestAddresses();
     const chainId = await walletClient.getChainId();
     if (BigInt(chainId) !== ARC_CHAIN_ID_DECIMAL) {
@@ -1245,14 +1365,15 @@ export default function App() {
       throw new Error("No wallet account returned.");
     }
     setAccount(addresses[0]);
+    setSelectedWalletProvider(providerToUse);
     window.localStorage.setItem(WALLET_CONNECTED_KEY, "true");
     setNotice("Wallet connected on Arc Testnet.");
     setConnecting(false);
-  }, [switchToArc]);
+  }, [selectedWalletProvider, switchToArc]);
 
-  const handleConnectWallet = useCallback(async () => {
+  const handleConnectWallet = useCallback(async (provider?: EthereumProvider | null) => {
     try {
-      await connectWallet();
+      await connectWallet(provider);
       setWalletModalOpen(false);
     } catch (error) {
       setConnecting(false);
@@ -1363,14 +1484,22 @@ export default function App() {
       return;
     }
 
-    const profileUrl = `${window.location.origin}${window.location.pathname}?profile=${shareAddress}`;
+    const url = new URL(window.location.href);
+    url.search = "";
+    url.hash = "";
+    url.searchParams.set(PROFILE_QUERY_KEY, shareAddress);
+    const sharedName = profileNames[shareAddress.toLowerCase()]?.trim();
+    if (sharedName) {
+      url.searchParams.set(PROFILE_NAME_QUERY_KEY, sharedName);
+    }
+    const profileUrl = url.toString();
     try {
       await window.navigator.clipboard.writeText(profileUrl);
       setNotice("Profile link copied.");
     } catch {
       setNotice(profileUrl);
     }
-  }, [account, isOwnProfile, isProfilePublic, viewedProfileAddress]);
+  }, [account, isOwnProfile, isProfilePublic, profileNames, viewedProfileAddress]);
 
   const openCollection = useCallback((section: MarketSectionKey) => {
     setCollectionView(section);
@@ -1400,6 +1529,19 @@ export default function App() {
     updateMarketRoute(null);
     setView("markets");
     window.setTimeout(() => document.getElementById("markets")?.scrollIntoView({ block: "start" }), 50);
+  }, []);
+
+  const goHomeTop = useCallback(() => {
+    setSelectedMarketId(null);
+    setSelectedProfileAddress("");
+    updateMarketRoute(null);
+    setView("markets");
+    setSearchQuery("");
+    setSearchFocused(false);
+    setWalletMenuOpen(false);
+    setNotificationMenuOpen(false);
+    setThemeMenuOpen(false);
+    window.setTimeout(() => window.scrollTo({ top: 0, behavior: "smooth" }), 50);
   }, []);
 
   const openSearchedMarket = useCallback(
@@ -1716,7 +1858,7 @@ export default function App() {
       }
 
       await switchToArc();
-      const walletClient = getWalletClient();
+      const walletClient = getActiveWalletClient();
 
       let completed = false;
 
@@ -1779,7 +1921,7 @@ export default function App() {
     if (!amount || Number(amount) <= 0) throw new Error("Enter a valid USDC amount.");
 
     await switchToArc();
-    const walletClient = getWalletClient();
+    const walletClient = getActiveWalletClient();
     const value = parseUnits(amount, ARC_NATIVE_USDC_DECIMALS);
 
     const completed = await runTransaction(
@@ -1796,6 +1938,19 @@ export default function App() {
       `Staking ${amount} USDC...`
     );
     if (completed) {
+      const market = markets.find((item) => item.id === marketId);
+      setActivities((current) => [
+        {
+          id: `local-${Date.now()}-${marketId}-${side}`,
+          user: account,
+          marketId,
+          question: market?.question ?? `Market #${marketId}`,
+          side,
+          amount: value,
+          timestamp: Math.floor(Date.now() / 1000)
+        },
+        ...current
+      ].slice(0, 100));
       setStakeInputs((current) => ({ ...current, [marketId]: "" }));
     }
   };
@@ -1803,7 +1958,7 @@ export default function App() {
   const resolveMarket = async (marketId: number, outcome: Outcome) => {
     if (!account || !isAddress(account)) throw new Error("Connect wallet first.");
     await switchToArc();
-    const walletClient = getWalletClient();
+    const walletClient = getActiveWalletClient();
     await runTransaction(
       () =>
         walletClient.writeContract({
@@ -1822,7 +1977,7 @@ export default function App() {
     if (!account || !isAddress(account)) throw new Error("Connect wallet first.");
     if (disputeBond <= 0n) throw new Error("Dispute bond is not loaded. Refresh contract data first.");
     await switchToArc();
-    const walletClient = getWalletClient();
+    const walletClient = getActiveWalletClient();
     await runTransaction(
       () =>
         walletClient.writeContract({
@@ -1841,7 +1996,7 @@ export default function App() {
   const finalizeMarket = async (marketId: number) => {
     if (!account || !isAddress(account)) throw new Error("Connect wallet first.");
     await switchToArc();
-    const walletClient = getWalletClient();
+    const walletClient = getActiveWalletClient();
     await runTransaction(
       () =>
         walletClient.writeContract({
@@ -1859,7 +2014,7 @@ export default function App() {
   const finalizeDispute = async (marketId: number, outcome: Outcome) => {
     if (!account || !isAddress(account)) throw new Error("Connect owner wallet first.");
     await switchToArc();
-    const walletClient = getWalletClient();
+    const walletClient = getActiveWalletClient();
     await runTransaction(
       () =>
         walletClient.writeContract({
@@ -1877,7 +2032,7 @@ export default function App() {
   const cancelMarket = async (marketId: number) => {
     if (!account || !isAddress(account)) throw new Error("Connect wallet first.");
     await switchToArc();
-    const walletClient = getWalletClient();
+    const walletClient = getActiveWalletClient();
     await runTransaction(
       () =>
         walletClient.writeContract({
@@ -1895,7 +2050,7 @@ export default function App() {
   const claim = async (marketId: number) => {
     if (!account || !isAddress(account)) throw new Error("Connect wallet first.");
     await switchToArc();
-    const walletClient = getWalletClient();
+    const walletClient = getActiveWalletClient();
     await runTransaction(
       () =>
         walletClient.writeContract({
@@ -1914,7 +2069,7 @@ export default function App() {
     if (!account || !isAddress(account)) throw new Error("Connect owner wallet first.");
     if (!owner || !sameAddress(account, owner)) throw new Error("Only the protocol owner can withdraw fees.");
     await switchToArc();
-    const walletClient = getWalletClient();
+    const walletClient = getActiveWalletClient();
     await runTransaction(
       () =>
         walletClient.writeContract({
@@ -1970,7 +2125,8 @@ export default function App() {
         const next = Array.isArray(accounts) ? String(accounts[0] || "") : "";
         if (!mounted || !next) return;
 
-        const walletClient = getWalletClient();
+        setSelectedWalletProvider(window.ethereum ?? null);
+        const walletClient = getWalletClient(window.ethereum ?? null);
         const chainId = await walletClient.getChainId();
         setAccount(next);
         window.localStorage.setItem(WALLET_CONNECTED_KEY, "true");
@@ -1995,6 +2151,16 @@ export default function App() {
       const searchParams = new URLSearchParams(window.location.search);
       const profileParam = searchParams.get(PROFILE_QUERY_KEY);
       if (profileParam && isAddress(profileParam)) {
+        const sharedName = searchParams.get(PROFILE_NAME_QUERY_KEY)?.trim().replace(/\s+/g, " ").slice(0, 24);
+        if (sharedName && sharedName.length >= 2) {
+          const profileKey = profileParam.toLowerCase();
+          setProfileNames((current) => {
+            if (current[profileKey] === sharedName) return current;
+            const next = { ...current, [profileKey]: sharedName };
+            window.localStorage.setItem(PROFILE_NAMES_KEY, JSON.stringify(next));
+            return next;
+          });
+        }
         setSelectedMarketId(null);
         setSelectedProfileAddress(profileParam);
         setView("profile");
@@ -2154,7 +2320,7 @@ export default function App() {
               </div>
               <div>
                 <span>Creator</span>
-                <strong>{shortAddress(market.creator)}</strong>
+                <strong>{displayNameForAddress(market.creator)}</strong>
               </div>
               {market.proposedAt > 0 && (
                 <div>
@@ -2391,7 +2557,7 @@ export default function App() {
             </div>
             <div>
               <span>Creator</span>
-              <strong>{shortAddress(selectedMarket.creator)}</strong>
+              <strong>{displayNameForAddress(selectedMarket.creator)}</strong>
             </div>
           </aside>
         </section>
@@ -2533,15 +2699,15 @@ export default function App() {
   };
 
   return (
-    <main className="app-shell">
+    <main className="app-shell" id="top">
       <nav className="topbar">
         <a
           className="brand"
-          href="#markets"
+          href="#top"
           aria-label="AuraPredict home"
           onClick={(event) => {
             event.preventDefault();
-            backToMarkets();
+            goHomeTop();
           }}
         >
           <img src="/aurapredict-logo.png" alt="AuraPredict" />
@@ -2551,7 +2717,7 @@ export default function App() {
           <div className="nav-tabs">
             <button
               className={view === "markets" || view === "collection" || view === "market" ? "tab active" : "tab"}
-              onClick={backToMarkets}
+              onClick={goHomeTop}
             >
               Markets
             </button>
@@ -2721,7 +2887,7 @@ export default function App() {
                         <span>Dispute review</span>
                         <strong>{shortQuestion(market.question)}</strong>
                         <small>
-                          Proposed {outcomeLabel(market.proposedOutcome)}. Disputer {shortAddress(market.disputer)}.
+                          Proposed {outcomeLabel(market.proposedOutcome)}. Disputer {displayNameForAddress(market.disputer)}.
                         </small>
                         <div className="notification-actions">
                           <button onClick={() => finalizeDispute(market.id, Outcome.Yes)}>Final YES</button>
@@ -2789,17 +2955,28 @@ export default function App() {
 
       <section className="activity-ticker" aria-label="Recent market activity">
         <div className="ticker-track">
-          {tickerActivities.map((activity, index) => (
-            <span className="ticker-item" key={`${activity.id}-${index}`}>
-              <strong>{shortAddress(activity.user)}</strong> bought{" "}
-              <b className={activity.side === Outcome.Yes ? "ticker-yes" : "ticker-no"}>
-                {activity.side === Outcome.Yes ? "YES" : "NO"}
-              </b>{" "}
-              {formatUsdc(activity.amount)} USDC on {shortQuestion(activity.question)}
-              {activity.timestamp > 0 ? ` - ${timeAgo(activity.timestamp, currentTime)}` : ""}
-            </span>
-          ))}
-          {activities.length === 0 && (
+          {tickerActivities.length > 0 &&
+            tickerActivities.map((activity, index) => (
+              <span className="ticker-item" key={`${activity.id}-${index}`}>
+                <strong>{displayNameForAddress(activity.user)}</strong> bought{" "}
+                <b className={activity.side === Outcome.Yes ? "ticker-yes" : "ticker-no"}>
+                  {activity.side === Outcome.Yes ? "YES" : "NO"}
+                </b>{" "}
+                {formatUsdc(activity.amount)} USDC on {shortQuestion(activity.question)}
+                {activity.timestamp > 0 ? ` - ${timeAgo(activity.timestamp, currentTime)}` : ""}
+              </span>
+            ))}
+          {tickerActivities.length === 0 &&
+            tickerFallbackLoop.map((market, index) => {
+              const yesPercent = percent(market.yesPool, marketVolume(market));
+              return (
+                <span className="ticker-item" key={`fallback-${market.id}-${index}`}>
+                  <strong>Market #{market.id}</strong> has {formatUsdc(marketVolume(market))} USDC live liquidity on{" "}
+                  {shortQuestion(market.question)} - YES {yesPercent.toFixed(0)}%
+                </span>
+              );
+            })}
+          {tickerActivities.length === 0 && tickerFallbackLoop.length === 0 && (
             <span className="ticker-item">
               Recent trades will appear here once players stake YES or NO on AuraPredict markets.
             </span>
@@ -2825,22 +3002,47 @@ export default function App() {
               </button>
             </div>
           </div>
-          <aside className="hero-card">
-            <div className="orbital-logo">
-              <img src="/aurapredict-logo.png" alt="AuraPredict logo" />
+          <aside className="hero-hot-panel">
+            <div className="hero-hot-head">
+              <div>
+                <span className="section-label">Hot markets</span>
+                <strong>{liveMarkets} live / {formatUsdc(totalLiquidity)} USDC</strong>
+              </div>
+              <button className="see-all-button" onClick={() => openCollection("hot")} type="button">
+                See all
+              </button>
             </div>
-            <div className="hero-stats">
-              <div>
-                <span>Markets</span>
-                <strong>{markets.length}</strong>
-              </div>
-              <div>
-                <span>Live</span>
-                <strong>{liveMarkets}</strong>
-              </div>
-              <div>
-                <span>Liquidity</span>
-                <strong>{formatUsdc(totalLiquidity)} USDC</strong>
+            <div className="hero-hot-window">
+              <div className="hero-hot-track">
+                {heroHotLoop.map((market, index) => {
+                  const totalPool = marketVolume(market);
+                  const yesPercent = percent(market.yesPool, totalPool);
+                  const meta = categoryMeta(market.category || "Other");
+
+                  return (
+                    <button
+                      className="hero-hot-card"
+                      key={`hero-hot-${market.id}-${index}`}
+                      onClick={() => openMarket(market.id)}
+                      type="button"
+                    >
+                      <span className={`category ${meta.className}`}>
+                        <CategoryIcon category={market.category || "Other"} />
+                        {market.category || "Other"}
+                      </span>
+                      <strong>{shortQuestion(market.question)}</strong>
+                      <div className="hero-hot-meter">
+                        <span style={{ width: `${yesPercent}%` }} />
+                      </div>
+                      <small>
+                        YES {yesPercent.toFixed(0)}% / {formatUsdc(totalPool)} USDC / {countdownText(market.closeTime, currentTime)}
+                      </small>
+                    </button>
+                  );
+                })}
+                {heroHotLoop.length === 0 && (
+                  <div className="hero-hot-empty">Hot markets will appear here after people create and stake.</div>
+                )}
               </div>
             </div>
           </aside>
@@ -3275,7 +3477,7 @@ export default function App() {
                 {leaderboardRows.map((row, index) => (
                   <div className="leaderboard-row" key={row.address}>
                     <span>#{index + 1}</span>
-                    <strong>{shortAddress(row.address)}</strong>
+                    <strong>{displayNameForAddress(row.address)}</strong>
                     <span>{formatUsdc(row.volume)} USDC</span>
                     <span>
                       {row.winRate.toFixed(1)}% ({row.wonMarkets}/{row.resolvedMarkets})
@@ -3499,19 +3701,50 @@ export default function App() {
                 </button>
               </div>
               <span className="wallet-group-label">Installed</span>
-              <button className="wallet-option" onClick={handleConnectWallet} disabled={connecting}>
-                <span className="wallet-badge">W</span>
-                <strong>Browser Wallet</strong>
-                <small>{window.ethereum ? "Detected" : "Not detected"}</small>
-              </button>
-              <span className="wallet-group-label">Recommended</span>
-              {["MetaMask", "Rabby Wallet", "OKX Wallet", "Rainbow"].map((wallet) => (
-                <button className="wallet-option" key={wallet} onClick={handleConnectWallet} disabled={connecting}>
-                  <span className="wallet-badge">{wallet.slice(0, 1)}</span>
-                  <strong>{wallet}</strong>
-                  <small>{window.ethereum ? "Use injected provider" : "Install first"}</small>
+              {walletOptions.length > 0 ? (
+                walletOptions.map((wallet) => (
+                  <button
+                    className="wallet-option"
+                    key={wallet.info.uuid}
+                    onClick={() => handleConnectWallet(wallet.provider)}
+                    disabled={connecting}
+                  >
+                    {wallet.info.icon ? (
+                      <img className="wallet-badge wallet-badge-image" src={wallet.info.icon} alt="" />
+                    ) : (
+                      <span className="wallet-badge">{wallet.info.name.slice(0, 1)}</span>
+                    )}
+                    <strong>{wallet.info.name}</strong>
+                    <small>Detected provider</small>
+                  </button>
+                ))
+              ) : (
+                <button className="wallet-option disabled-wallet" type="button" disabled>
+                  <span className="wallet-badge">W</span>
+                  <strong>No wallet detected</strong>
+                  <small>Open AuraPredict inside Zerion, MetaMask, OKX, or another wallet browser.</small>
                 </button>
-              ))}
+              )}
+              <span className="wallet-group-label">Recommended</span>
+              {recommendedWallets.map((walletName) => {
+                const detected = walletOptions.find((wallet) =>
+                  wallet.info.name.toLowerCase().includes(walletName.toLowerCase().replace(" wallet", ""))
+                );
+
+                return (
+                <button
+                  className={detected ? "wallet-option" : "wallet-option disabled-wallet"}
+                  key={walletName}
+                  onClick={() => detected && handleConnectWallet(detected.provider)}
+                  disabled={connecting || !detected}
+                  type="button"
+                >
+                  <span className="wallet-badge">{walletName.slice(0, 1)}</span>
+                  <strong>{walletName}</strong>
+                  <small>{detected ? "Detected" : "Use the wallet in-app browser"}</small>
+                </button>
+                );
+              })}
               <span className="wallet-group-label">Other</span>
               {["Phantom", "WalletConnect"].map((wallet) => (
                 <button className="wallet-option disabled-wallet" key={wallet} type="button" disabled>
