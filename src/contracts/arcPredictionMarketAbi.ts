@@ -1,6 +1,18 @@
 export const arcPredictionMarketAbi = [
   {
     type: "event",
+    name: "MarketCreated",
+    inputs: [
+      { type: "uint256", name: "marketId", indexed: true },
+      { type: "string", name: "question", indexed: false },
+      { type: "string", name: "category", indexed: false },
+      { type: "uint256", name: "closeTime", indexed: false },
+      { type: "address", name: "creator", indexed: true },
+      { type: "address", name: "resolver", indexed: true }
+    ]
+  },
+  {
+    type: "event",
     name: "BetPlaced",
     inputs: [
       { type: "uint256", name: "marketId", indexed: true },

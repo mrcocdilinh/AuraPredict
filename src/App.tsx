@@ -45,6 +45,7 @@ type MarketView = {
   id: number;
   question: string;
   category: string;
+  createdAt: number;
   closeTime: number;
   creator: string;
   resolver: string;
@@ -1098,9 +1099,7 @@ export default function App() {
             : view === "profile"
               ? "Wallet profile"
               : "Live markets";
-  const leaderboardRows = useMemo<LeaderboardRow[]>(() => {
-    const period = LEADERBOARD_PERIODS.find((item) => item.value === leaderboardPeriod);
-    const periodStart = period?.seconds ? leaderboardTimestamp - period.seconds : 0;
+  const buildPlayerRows = useCallback((periodStart: number) => {
     const marketMap = new Map(markets.map((market) => [market.id, market]));
     const rows = new Map<
       string,
@@ -1162,10 +1161,9 @@ export default function App() {
       appliedUserMarkets.add(`${activity.user.toLowerCase()}:${activity.marketId}`);
     }
 
-    if (account) {
+    if (account && periodStart === 0) {
       const accountPositionKey = account.toLowerCase();
       for (const market of markets) {
-        if (period?.seconds && market.closeTime > 0 && market.closeTime < periodStart) continue;
         if (appliedUserMarkets.has(`${accountPositionKey}:${market.id}`)) continue;
 
         addPosition(account, market.id, Outcome.Yes, market.yesPosition);
@@ -1174,12 +1172,9 @@ export default function App() {
     }
 
     for (const market of markets) {
-      if (period?.seconds && market.closeTime > 0 && market.closeTime < periodStart) continue;
+      if (periodStart > 0 && (market.createdAt === 0 || market.createdAt < periodStart)) continue;
       const creatorRow = getRow(market.creator);
       creatorRow.createdMarkets += 1;
-      if (activities.length === 0) {
-        creatorRow.volume += marketVolume(market);
-      }
     }
 
     const output = Array.from(rows.values()).map((row) => {
@@ -1221,41 +1216,53 @@ export default function App() {
       };
     });
 
-    return output
-      .filter((row) => row.volume > 0n || row.createdMarkets > 0 || row.resolvedMarkets > 0)
+    return output.filter((row) => row.volume > 0n || row.createdMarkets > 0 || row.resolvedMarkets > 0);
+  }, [account, activities, markets, protocolFeeBps]);
+
+  const sortLeaderboardRows = useCallback((rows: LeaderboardRow[], metric: LeaderboardMetric) => {
+    return [...rows]
       .sort((left, right) => {
-        if (leaderboardMetric === "winRate") {
+        if (metric === "winRate") {
           if (right.winRate !== left.winRate) return right.winRate - left.winRate;
           return right.volume > left.volume ? 1 : right.volume < left.volume ? -1 : 0;
         }
-        if (leaderboardMetric === "auraPoints") {
+        if (metric === "auraPoints") {
           if (right.auraPoints !== left.auraPoints) return right.auraPoints - left.auraPoints;
           return right.volume > left.volume ? 1 : right.volume < left.volume ? -1 : 0;
         }
-        const rightValue = leaderboardMetric === "volume" ? right.volume : right.pnl;
-        const leftValue = leaderboardMetric === "volume" ? left.volume : left.pnl;
+        const rightValue = metric === "volume" ? right.volume : right.pnl;
+        const leftValue = metric === "volume" ? left.volume : left.pnl;
         return rightValue > leftValue ? 1 : rightValue < leftValue ? -1 : 0;
       })
       .slice(0, 50);
-  }, [account, activities, leaderboardMetric, leaderboardPeriod, leaderboardTimestamp, markets, protocolFeeBps]);
+  }, []);
+
+  const allTimePlayerRows = useMemo(() => buildPlayerRows(0), [buildPlayerRows]);
+  const leaderboardRows = useMemo<LeaderboardRow[]>(() => {
+    const period = LEADERBOARD_PERIODS.find((item) => item.value === leaderboardPeriod);
+    const periodStart = period?.seconds ? leaderboardTimestamp - period.seconds : 0;
+    return sortLeaderboardRows(buildPlayerRows(periodStart), leaderboardMetric);
+  }, [buildPlayerRows, leaderboardMetric, leaderboardPeriod, leaderboardTimestamp, sortLeaderboardRows]);
 
   const profileVolumeRows = useMemo(
     () =>
-      Array.from(
-        activities.reduce((rows, activity) => {
-          const key = activity.user.toLowerCase();
-          rows.set(key, (rows.get(key) ?? 0n) + activity.amount);
-          return rows;
-        }, new Map<string, bigint>())
-      ).sort((left, right) => (right[1] > left[1] ? 1 : right[1] < left[1] ? -1 : 0)),
-    [activities]
+      sortLeaderboardRows(allTimePlayerRows, "volume")
+        .filter((row) => row.volume > 0n)
+        .map((row) => [row.address.toLowerCase(), row.volume] as const),
+    [allTimePlayerRows, sortLeaderboardRows]
   );
-  const profileVolumeRank = accountKey
-    ? profileVolumeRows.findIndex(([address]) => address === accountKey) + 1
+  const profileVolumeRank = viewedProfileKey
+    ? profileVolumeRows.findIndex(([address]) => address === viewedProfileKey) + 1
     : 0;
-  const profileLeaderboardRow = accountKey
-    ? leaderboardRows.find((row) => sameAddress(row.address, accountKey))
+  const profileLeaderboardRow = viewedProfileKey
+    ? allTimePlayerRows.find((row) => sameAddress(row.address, viewedProfileKey))
     : undefined;
+  const displayedProfileVolume = profileLeaderboardRow?.volume ?? profileStake;
+  const displayedProfilePnl = profileLeaderboardRow?.pnl ?? profilePnl;
+  const displayedProfileResolvedCount = profileLeaderboardRow?.resolvedMarkets ?? profileResolvedCount;
+  const displayedProfileWonCount = profileLeaderboardRow?.wonMarkets ?? profileWonCount;
+  const displayedProfileWinRate = profileLeaderboardRow?.winRate ?? profileWinRate;
+  const displayedProfileAuraScore = profileLeaderboardRow?.auraPoints ?? profileAuraScore;
 
   useEffect(() => {
     if (!notice) return;
@@ -1745,6 +1752,7 @@ export default function App() {
             id,
             question,
             category,
+            createdAt: 0,
             closeTime: Number(closeTime),
             creator,
             resolver,
@@ -1766,21 +1774,51 @@ export default function App() {
       );
 
       if (Number(count) === 0) setContractVersion("unknown");
-      const sortedRows = rows.sort((a, b) => b.id - a.id);
-      setMarkets(sortedRows);
+      let sortedRows = rows.sort((a, b) => b.id - a.id);
 
       try {
-        const marketMap = new Map(sortedRows.map((market) => [market.id, market]));
-        const events = await publicClient.getContractEvents({
-          address: contractAddress,
-          abi: arcPredictionMarketAbi,
-          eventName: "BetPlaced",
-          fromBlock: 0n,
-          toBlock: "latest"
-        });
         const blockTimestamps = new Map<bigint, number>();
+        const getBlockTimestamp = async (blockNumber?: bigint | null) => {
+          if (!blockNumber) return 0;
+          if (!blockTimestamps.has(blockNumber)) {
+            const block = await publicClient.getBlock({ blockNumber });
+            blockTimestamps.set(blockNumber, Number(block.timestamp));
+          }
+          return blockTimestamps.get(blockNumber) ?? 0;
+        };
+        const [createdEvents, betEvents] = await Promise.all([
+          publicClient.getContractEvents({
+            address: contractAddress,
+            abi: arcPredictionMarketAbi,
+            eventName: "MarketCreated",
+            fromBlock: 0n,
+            toBlock: "latest"
+          }),
+          publicClient.getContractEvents({
+            address: contractAddress,
+            abi: arcPredictionMarketAbi,
+            eventName: "BetPlaced",
+            fromBlock: 0n,
+            toBlock: "latest"
+          })
+        ]);
+        const createdAtByMarket = new Map<number, number>();
+
+        await Promise.all(
+          createdEvents.map(async (event) => {
+            const args = event.args as { marketId?: bigint };
+            createdAtByMarket.set(Number(args.marketId ?? 0n), await getBlockTimestamp(event.blockNumber));
+          })
+        );
+
+        sortedRows = sortedRows.map((market) => ({
+          ...market,
+          createdAt: createdAtByMarket.get(market.id) ?? market.createdAt
+        }));
+
+        const marketMap = new Map(sortedRows.map((market) => [market.id, market]));
         const activityRows = await Promise.all(
-          events.map(async (event) => {
+          betEvents.map(async (event) => {
             const args = event.args as {
               marketId?: bigint;
               user?: Address;
@@ -1788,14 +1826,6 @@ export default function App() {
               amount?: bigint;
             };
             const marketId = Number(args.marketId ?? 0n);
-            let timestamp = 0;
-            if (event.blockNumber) {
-              if (!blockTimestamps.has(event.blockNumber)) {
-                const block = await publicClient.getBlock({ blockNumber: event.blockNumber });
-                blockTimestamps.set(event.blockNumber, Number(block.timestamp));
-              }
-              timestamp = blockTimestamps.get(event.blockNumber) ?? 0;
-            }
 
             return {
               id: `${event.transactionHash}-${event.logIndex}`,
@@ -1804,14 +1834,15 @@ export default function App() {
               question: marketMap.get(marketId)?.question ?? `Market #${marketId}`,
               side: Number(args.side ?? 0) as Outcome,
               amount: args.amount ?? 0n,
-              timestamp
+              timestamp: await getBlockTimestamp(event.blockNumber)
             };
           })
         );
         setActivities(activityRows.sort((a, b) => b.timestamp - a.timestamp));
       } catch {
-        setActivities([]);
+        setActivities((current) => current);
       }
+      setMarkets(sortedRows);
       setLastDataRefresh(new Date());
     } catch (error) {
       setNotice(errorMessage(error));
@@ -3190,16 +3221,16 @@ export default function App() {
               <section className="profile-stat-grid">
                 <article className="profile-stat-card">
                   <span>Your edge</span>
-                  <strong className={profilePnl >= 0n ? "profile-positive" : "profile-negative"}>
-                    {formatSignedUsdc(profilePnl)} USDC
+                  <strong className={displayedProfilePnl >= 0n ? "profile-positive" : "profile-negative"}>
+                    {formatSignedUsdc(displayedProfilePnl)} USDC
                   </strong>
                   <small>{profileEdgePercent.toFixed(1)}% realized return</small>
                 </article>
                 <article className="profile-stat-card">
                   <span>Markets resolved</span>
-                  <strong>{profileResolvedCount}</strong>
+                  <strong>{displayedProfileResolvedCount}</strong>
                   <small>
-                    {profileWonCount} wins / {profileResolvedCount} settled
+                    {displayedProfileWonCount} wins / {displayedProfileResolvedCount} settled
                   </small>
                 </article>
                 <article className="profile-stat-card">
@@ -3209,8 +3240,8 @@ export default function App() {
                 </article>
                 <article className="profile-stat-card">
                   <span>Aura points</span>
-                  <strong>{profileAuraScore.toLocaleString("en-US")}</strong>
-                  <small>{profileWinRate.toFixed(1)}% win rate</small>
+                  <strong>{displayedProfileAuraScore.toLocaleString("en-US")}</strong>
+                  <small>{displayedProfileWinRate.toFixed(1)}% win rate</small>
                 </article>
               </section>
 
@@ -3262,18 +3293,18 @@ export default function App() {
                 </article>
                 <article>
                   <span>Total volume</span>
-                  <strong>{formatUsdc(profileLeaderboardRow?.volume ?? profileStake)} USDC</strong>
+                  <strong>{formatUsdc(displayedProfileVolume)} USDC</strong>
                   <small>all active wallet positions</small>
                 </article>
                 <article>
                   <span>Win rate</span>
-                  <strong>{profileWinRate.toFixed(1)}%</strong>
-                  <small>{profileWonCount} winning markets</small>
+                  <strong>{displayedProfileWinRate.toFixed(1)}%</strong>
+                  <small>{displayedProfileWonCount} winning markets</small>
                 </article>
                 <article>
                   <span>PNL</span>
-                  <strong className={profilePnl >= 0n ? "profile-positive" : "profile-negative"}>
-                    {formatSignedUsdc(profilePnl)} USDC
+                  <strong className={displayedProfilePnl >= 0n ? "profile-positive" : "profile-negative"}>
+                    {formatSignedUsdc(displayedProfilePnl)} USDC
                   </strong>
                   <small>settled markets only</small>
                 </article>
