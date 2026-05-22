@@ -1645,6 +1645,13 @@ h3 {
   grid-template-columns: 1fr auto;
 }
 
+.status-stack {
+  align-items: flex-end;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
 .category {
   align-items: center;
   color: var(--category-color, #4568e8);
@@ -1677,6 +1684,52 @@ h3 {
 
 .status-3 {
   background: #667085;
+}
+
+.personal-result {
+  border: 1px solid #dfe6f1;
+  border-radius: 999px;
+  color: #536178;
+  font-size: 0.7rem;
+  font-weight: 900;
+  padding: 5px 8px;
+  white-space: nowrap;
+}
+
+.personal-result.won,
+.personal-result-text.won {
+  color: #087f5b;
+}
+
+.personal-result.won {
+  background: #e9fff8;
+  border-color: #baf3df;
+}
+
+.personal-result.lost,
+.personal-result-text.lost {
+  color: #c92a3b;
+}
+
+.personal-result.lost {
+  background: #fff0f2;
+  border-color: #ffd0d6;
+}
+
+.personal-result.neutral,
+.personal-result.live,
+.personal-result.refund,
+.personal-result-text.neutral,
+.personal-result-text.live,
+.personal-result-text.refund {
+  color: #536178;
+}
+
+.personal-result.neutral,
+.personal-result.live,
+.personal-result.refund {
+  background: #f8fafc;
+  border-color: #e5ebf4;
 }
 
 .odds-row {
@@ -1826,6 +1879,30 @@ textarea {
   display: grid;
   gap: 13px;
   padding: 15px;
+}
+
+.protocol-metric-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 1fr 1fr;
+}
+
+.protocol-card .protocol-metric-grid {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  gap: 10px;
+  padding: 0;
+}
+
+.protocol-stat-feature {
+  background:
+    linear-gradient(135deg, rgba(24, 215, 255, 0.1), rgba(127, 92, 255, 0.08)),
+    #f8fafc;
+}
+
+.protocol-stat-feature strong {
+  font-size: 1.08rem;
 }
 
 .modal-backdrop {
@@ -2711,7 +2788,20 @@ label {
 }
 
 .history-metrics {
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
+.pagination-row {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+}
+
+.pagination-row span {
+  color: #667085;
+  font-size: 0.82rem;
+  font-weight: 850;
 }
 
 .empty-state {
@@ -2890,6 +2980,43 @@ label {
 [data-theme="dark"] .arc-facts span {
   background: #0b1020;
   border-color: #202a3f;
+}
+
+[data-theme="dark"] .protocol-card .protocol-metric-grid {
+  background: transparent;
+  border: 0;
+}
+
+[data-theme="dark"] .personal-result.neutral,
+[data-theme="dark"] .personal-result.live,
+[data-theme="dark"] .personal-result.refund {
+  background: #0b1020;
+  border-color: #26334a;
+  color: #9aa7bd;
+}
+
+[data-theme="dark"] .personal-result.won {
+  background: rgba(18, 185, 129, 0.12);
+  border-color: rgba(18, 185, 129, 0.34);
+  color: #30e1b0;
+}
+
+[data-theme="dark"] .personal-result.lost {
+  background: rgba(239, 68, 68, 0.12);
+  border-color: rgba(239, 68, 68, 0.34);
+  color: #ff8a96;
+}
+
+[data-theme="dark"] .personal-result-text.won {
+  color: #30e1b0;
+}
+
+[data-theme="dark"] .personal-result-text.lost {
+  color: #ff8a96;
+}
+
+[data-theme="dark"] .pagination-row span {
+  color: #9aa7bd;
 }
 
 [data-theme="dark"] .hero-hot-head strong,

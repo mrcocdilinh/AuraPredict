@@ -105,6 +105,8 @@ enum Outcome {
 const CONTRACT_ADDRESS = import.meta.env.VITE_PREDICTION_MARKET_ADDRESS || "";
 const CATEGORIES = ["All", "Crypto", "Macro", "Sports", "Politics", "Arc", "AI", "Other"];
 const SECTION_LIMIT = 6;
+const PROFILE_PAGE_SIZE = 10;
+const LEADERBOARD_LIMIT = 100;
 const WALLET_CONNECTED_KEY = "aurapredict.walletConnected";
 const DISMISSED_RESULT_KEY = "aurapredict.dismissedResultNotices";
 const THEME_KEY = "aurapredict.theme";
@@ -308,6 +310,26 @@ function settlementForPosition(market: MarketView, feeBps: number, yesPosition: 
 
 function userSettlement(market: MarketView, feeBps: number) {
   return settlementForPosition(market, feeBps, market.yesPosition, market.noPosition);
+}
+
+function personalMarketResult(market: MarketView, subject = "You") {
+  const stake = market.yesPosition + market.noPosition;
+  if (stake === 0n) {
+    return { label: "Not participated", className: "neutral" };
+  }
+
+  if (market.outcome === Outcome.Unresolved) {
+    return { label: "Position open", className: "live" };
+  }
+
+  if (market.outcome === Outcome.Canceled) {
+    return { label: "Canceled / refund", className: "refund" };
+  }
+
+  const winningStake = market.outcome === Outcome.Yes ? market.yesPosition : market.noPosition;
+  return winningStake > 0n
+    ? { label: `${subject} won`, className: "won" }
+    : { label: `${subject} lost`, className: "lost" };
 }
 
 function auraPointsFor(
@@ -741,6 +763,8 @@ export default function App() {
   const [collectionView, setCollectionView] = useState<MarketSectionKey>("fresh");
   const [selectedMarketId, setSelectedMarketId] = useState<number | null>(null);
   const [selectedProfileAddress, setSelectedProfileAddress] = useState("");
+  const [profileHistoryPage, setProfileHistoryPage] = useState(1);
+  const [profileCreatedPage, setProfileCreatedPage] = useState(1);
   const [profileNameInput, setProfileNameInput] = useState("");
   const [profileNames, setProfileNames] = useState<Record<string, string>>(() => {
     try {
@@ -796,6 +820,13 @@ export default function App() {
   const endedMarkets = markets.filter((market) => market.outcome !== Outcome.Unresolved);
   const liveMarkets = activeMarkets.length;
   const totalLiquidity = markets.reduce((sum, market) => sum + marketVolume(market), 0n);
+  const liveLiquidity = activeMarkets.reduce((sum, market) => sum + marketVolume(market), 0n);
+  const totalTradeVolume = activities.length > 0
+    ? activities.reduce((sum, activity) => sum + activity.amount, 0n)
+    : totalLiquidity;
+  const uniquePlayerCount = new Set(activities.map((activity) => activity.user.toLowerCase())).size;
+  const participantEntries = markets.reduce((sum, market) => sum + market.traderCount, 0);
+  const averageMarketVolume = markets.length > 0 ? totalTradeVolume / BigInt(markets.length) : 0n;
   const accountKey = account ? account.toLowerCase() : "";
   const viewedProfileAddress =
     selectedProfileAddress && isAddress(selectedProfileAddress) ? selectedProfileAddress : account;
@@ -838,6 +869,18 @@ export default function App() {
   const createdProfileMarkets = viewedProfileAddress
     ? profileMarkets.filter((market) => sameAddress(market.creator, viewedProfileAddress))
     : [];
+  const profileHistoryPageCount = Math.max(1, Math.ceil(participatedProfileMarkets.length / PROFILE_PAGE_SIZE));
+  const safeProfileHistoryPage = Math.min(profileHistoryPage, profileHistoryPageCount);
+  const paginatedParticipatedProfileMarkets = participatedProfileMarkets.slice(
+    (safeProfileHistoryPage - 1) * PROFILE_PAGE_SIZE,
+    safeProfileHistoryPage * PROFILE_PAGE_SIZE
+  );
+  const profileCreatedPageCount = Math.max(1, Math.ceil(createdProfileMarkets.length / PROFILE_PAGE_SIZE));
+  const safeProfileCreatedPage = Math.min(profileCreatedPage, profileCreatedPageCount);
+  const paginatedCreatedProfileMarkets = createdProfileMarkets.slice(
+    (safeProfileCreatedPage - 1) * PROFILE_PAGE_SIZE,
+    safeProfileCreatedPage * PROFILE_PAGE_SIZE
+  );
   const profileStake = participatedProfileMarkets.reduce(
     (sum, market) => sum + market.yesPosition + market.noPosition,
     0n
@@ -1234,7 +1277,7 @@ export default function App() {
         const leftValue = metric === "volume" ? left.volume : left.pnl;
         return rightValue > leftValue ? 1 : rightValue < leftValue ? -1 : 0;
       })
-      .slice(0, 50);
+      .slice(0, LEADERBOARD_LIMIT);
   }, []);
 
   const allTimePlayerRows = useMemo(() => buildPlayerRows(0), [buildPlayerRows]);
@@ -1289,6 +1332,11 @@ export default function App() {
       return next;
     });
   }, [accountKey, profileNames]);
+
+  useEffect(() => {
+    setProfileHistoryPage(1);
+    setProfileCreatedPage(1);
+  }, [viewedProfileKey]);
 
   useEffect(() => {
     const providers = new Map<string, Eip6963ProviderDetail>();
@@ -2243,7 +2291,7 @@ export default function App() {
     };
   }, [loadMarkets]);
 
-  const renderMarketCards = (items: MarketView[], emptyTitle: string, emptyText: string) => (
+  const renderMarketCards = (items: MarketView[], emptyTitle: string, emptyText: string, resultSubject = "You") => (
     <section className="market-grid">
       {items.length === 0 && (
         <div className="empty-state">
@@ -2256,6 +2304,7 @@ export default function App() {
         const yesPercent = percent(market.yesPool, totalPool);
         const noPercent = 100 - yesPercent;
         const meta = categoryMeta(market.category || "Other");
+        const walletResult = personalMarketResult(market, resultSubject);
         const canUseDisputeFlow = contractVersion !== "legacy";
         const canPropose =
           canUseDisputeFlow &&
@@ -2314,7 +2363,12 @@ export default function App() {
                 <CategoryIcon category={market.category || "Other"} />
                 {market.category || "Other"}
               </span>
-              <span className={`status status-${market.outcome}`}>{marketStatus(market)}</span>
+              <div className="status-stack">
+                <span className={`status status-${market.outcome}`}>{marketStatus(market)}</span>
+                {market.outcome !== Outcome.Unresolved && (
+                  <span className={`personal-result ${walletResult.className}`}>{walletResult.label}</span>
+                )}
+              </div>
             </div>
             <h3>{market.question}</h3>
 
@@ -3099,7 +3153,10 @@ export default function App() {
               {view === "collection" && <p>{collectionDescription}</p>}
               {view === "market" && <p>Open a market to review odds, stake, settlement state, and timeline.</p>}
               {view === "leaderboard" && (
-                <p>Updates at the top of every UTC hour while this app is open. Last refresh: {lastRefreshText}.</p>
+                <p>
+                  Top {LEADERBOARD_LIMIT} wallets per metric. Updates at the top of every UTC hour while this app is open.
+                  Last refresh: {lastRefreshText}.
+                </p>
               )}
             </div>
             <div className="board-actions">
@@ -3280,8 +3337,8 @@ export default function App() {
                 </div>
                 <div className="edge-legend">
                   <span>Market line</span>
-                  <span className="won">You won</span>
-                  <span className="lost">You lost</span>
+                  <span className="won">{isOwnProfile ? "You won" : "Profile won"}</span>
+                  <span className="lost">{isOwnProfile ? "You lost" : "Profile lost"}</span>
                 </div>
               </section>
 
@@ -3320,10 +3377,12 @@ export default function App() {
                 {participatedProfileMarkets.length > 0 && (
                   <div className="profile-section-title">
                     <h3>Markets participated</h3>
-                    <span>{participatedProfileMarkets.length} markets</span>
+                    <span>
+                      {participatedProfileMarkets.length} markets / page {safeProfileHistoryPage} of {profileHistoryPageCount}
+                    </span>
                   </div>
                 )}
-                {participatedProfileMarkets.map((market) => {
+                {paginatedParticipatedProfileMarkets.map((market) => {
                   const canUseDisputeFlow = contractVersion !== "legacy";
                   const canPropose =
                     isOwnProfile &&
@@ -3356,6 +3415,7 @@ export default function App() {
                     Date.now() / 1000 >= market.closeTime &&
                     [market.resolver.toLowerCase(), owner.toLowerCase()].includes(account.toLowerCase());
                   const meta = categoryMeta(market.category || "Other");
+                  const result = personalMarketResult(market, isOwnProfile ? "You" : "Profile");
 
                   return (
                     <article className="history-card" key={market.id}>
@@ -3376,8 +3436,12 @@ export default function App() {
                           <strong>{formatUsdc(market.noPosition)} USDC</strong>
                         </div>
                         <div>
-                          <span>Status</span>
+                          <span>Market result</span>
                           <strong>{marketStatus(market)}</strong>
+                        </div>
+                        <div>
+                          <span>{isOwnProfile ? "Your result" : "Profile result"}</span>
+                          <strong className={`personal-result-text ${result.className}`}>{result.label}</strong>
                         </div>
                         <div>
                           <span>Countdown</span>
@@ -3448,16 +3512,65 @@ export default function App() {
                     </article>
                   );
                 })}
+                {participatedProfileMarkets.length > PROFILE_PAGE_SIZE && (
+                  <div className="pagination-row">
+                    <button
+                      className="secondary"
+                      type="button"
+                      onClick={() => setProfileHistoryPage((page) => Math.max(1, page - 1))}
+                      disabled={safeProfileHistoryPage <= 1}
+                    >
+                      Previous
+                    </button>
+                    <span>
+                      Page {safeProfileHistoryPage} / {profileHistoryPageCount}
+                    </span>
+                    <button
+                      className="secondary"
+                      type="button"
+                      onClick={() => setProfileHistoryPage((page) => Math.min(profileHistoryPageCount, page + 1))}
+                      disabled={safeProfileHistoryPage >= profileHistoryPageCount}
+                    >
+                      Next
+                    </button>
+                  </div>
+                )}
                 {createdProfileMarkets.length > 0 && (
                   <>
                     <div className="profile-section-title">
                       <h3>Markets created</h3>
-                      <span>{createdProfileMarkets.length} markets</span>
+                      <span>
+                        {createdProfileMarkets.length} markets / page {safeProfileCreatedPage} of {profileCreatedPageCount}
+                      </span>
                     </div>
                     {renderMarketCards(
-                      createdProfileMarkets,
+                      paginatedCreatedProfileMarkets,
                       "No created markets",
-                      "Created markets from your wallet will appear here."
+                      "Created markets from your wallet will appear here.",
+                      isOwnProfile ? "You" : "Profile"
+                    )}
+                    {createdProfileMarkets.length > PROFILE_PAGE_SIZE && (
+                      <div className="pagination-row">
+                        <button
+                          className="secondary"
+                          type="button"
+                          onClick={() => setProfileCreatedPage((page) => Math.max(1, page - 1))}
+                          disabled={safeProfileCreatedPage <= 1}
+                        >
+                          Previous
+                        </button>
+                        <span>
+                          Page {safeProfileCreatedPage} / {profileCreatedPageCount}
+                        </span>
+                        <button
+                          className="secondary"
+                          type="button"
+                          onClick={() => setProfileCreatedPage((page) => Math.min(profileCreatedPageCount, page + 1))}
+                          disabled={safeProfileCreatedPage >= profileCreatedPageCount}
+                        >
+                          Next
+                        </button>
+                      </div>
                     )}
                   </>
                 )}
@@ -3615,6 +3728,47 @@ export default function App() {
 
         {view !== "collection" && view !== "market" && (
         <aside className="side-rail">
+          <section className="protocol-card protocol-stats-card">
+            <span className="section-label">Project stats</span>
+            <div className="protocol-stat-feature">
+              <span>Total volume</span>
+              <strong>{formatUsdc(totalTradeVolume)} USDC</strong>
+            </div>
+            <div className="protocol-metric-grid">
+              <div>
+                <span>Markets</span>
+                <strong>{markets.length}</strong>
+              </div>
+              <div>
+                <span>Live</span>
+                <strong>{liveMarkets}</strong>
+              </div>
+              <div>
+                <span>Ended</span>
+                <strong>{endedMarkets.length}</strong>
+              </div>
+              <div>
+                <span>Awaiting result</span>
+                <strong>{pendingResolutionMarkets.length}</strong>
+              </div>
+              <div>
+                <span>Known players</span>
+                <strong>{uniquePlayerCount}</strong>
+              </div>
+              <div>
+                <span>Entries</span>
+                <strong>{participantEntries}</strong>
+              </div>
+              <div>
+                <span>Live liquidity</span>
+                <strong>{formatUsdc(liveLiquidity)} USDC</strong>
+              </div>
+              <div>
+                <span>Avg market</span>
+                <strong>{formatUsdc(averageMarketVolume)} USDC</strong>
+              </div>
+            </div>
+          </section>
           <section className="protocol-card">
             <span className="section-label">Protocol</span>
             <div>
