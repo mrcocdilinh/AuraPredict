@@ -1160,6 +1160,7 @@ export default function App() {
   const [noticeTxHash, setNoticeTxHash] = useState<Hash | "">("");
   const [transactionPending, setTransactionPending] = useState(false);
   const [stakeInputs, setStakeInputs] = useState<Record<number, string>>({});
+  const [selectedTradeSides, setSelectedTradeSides] = useState<Record<number, Outcome.Yes | Outcome.No>>({});
   const [activeCategory, setActiveCategory] = useState("All");
   const [marketViewMode, setMarketViewMode] = useState<MarketViewMode>("grid");
   const [view, setView] = useState<AppView>("markets");
@@ -2049,6 +2050,18 @@ export default function App() {
     const value = (walletBalance * BigInt(Math.round(clamped * 100))) / 10000n;
     setStakeInputs((current) => ({ ...current, [marketId]: value > 0n ? formatUsdcInput(value) : "" }));
   }, [walletBalance]);
+
+  const chooseTradeSide = useCallback((marketId: number, side: Outcome.Yes | Outcome.No) => {
+    setSelectedTradeSides((current) => {
+      const next = { ...current };
+      if (next[marketId] === side) {
+        delete next[marketId];
+      } else {
+        next[marketId] = side;
+      }
+      return next;
+    });
+  }, []);
 
   const setThemeMode = useCallback((nextTheme: ThemeMode) => {
     setTheme(nextTheme);
@@ -3318,15 +3331,27 @@ export default function App() {
     const tradeAmount = parseUsdcInput(stakeInputs[selectedMarket.id] || "");
     const yesEstimate = betEstimate(selectedMarket, Outcome.Yes, tradeAmount, protocolFeeBps);
     const noEstimate = betEstimate(selectedMarket, Outcome.No, tradeAmount, protocolFeeBps);
+    const selectedTradeSide = selectedTradeSides[selectedMarket.id];
+    const selectedEstimate = selectedTradeSide === Outcome.No ? noEstimate : yesEstimate;
+    const selectedSideLabel = selectedTradeSide === Outcome.No ? "NO" : "YES";
     const balancePercent =
       walletBalance > 0n ? Math.min(100, Number((tradeAmount * 10000n) / walletBalance) / 100) : 0;
     const meta = categoryMeta(selectedMarket.category || "Other");
     const chartRows = detailChartRows;
-    const chartLinePoints = chartRows.map((point) => `${point.x},${point.yesY}`).join(" ");
+    const chartPrimaryPercent = selectedTradeSide === Outcome.No ? selectedMarketNoPercent : selectedMarketYesPercent;
+    const chartPrimaryLabel = selectedTradeSide === Outcome.No ? "NO" : "YES";
+    const chartLineY = (point: (typeof chartRows)[number]) => selectedTradeSide === Outcome.No ? point.noY : point.yesY;
+    const chartLinePoints = chartRows.map((point) => `${point.x},${chartLineY(point)}`).join(" ");
+    const chartNoLinePoints = chartRows.map((point) => `${point.x},${point.noY}`).join(" ");
     const chartAreaPath =
       chartRows.length > 0
         ? `M${chartRows[0].x},${CHART_BOTTOM} L${chartLinePoints} L${chartRows[chartRows.length - 1].x},${CHART_BOTTOM} Z`
         : "";
+    const submitLabel = !selectedTradeSide
+      ? "Select YES or NO"
+      : tradeAmount <= 0n
+        ? "Enter Amount"
+        : `Buy ${selectedSideLabel}`;
     const copyMarketLink = async () => {
       const url = `${window.location.origin}${window.location.pathname}?market=${selectedMarket.id}`;
       try {
@@ -3354,7 +3379,7 @@ export default function App() {
               <h1>{selectedMarket.question}</h1>
             </div>
             <button className="secondary copy-market-button" onClick={copyMarketLink} type="button">
-              Copy link
+              Copy
             </button>
           </div>
 
@@ -3388,7 +3413,7 @@ export default function App() {
               <div>
                 <span className="section-label">Odds movement</span>
                 <h2>
-                  <b>YES {selectedMarketYesPercent.toFixed(0)}%</b>
+                  <b>{chartPrimaryLabel} {chartPrimaryPercent.toFixed(0)}%</b>
                   <span>Chance</span>
                 </h2>
               </div>
@@ -3401,8 +3426,14 @@ export default function App() {
             <div className="chart-frame">
               <svg className="detail-chart" viewBox="0 0 100 58" preserveAspectRatio="none" role="img" aria-label="Market odds chart">
                 <path className="edge-grid" d="M8 8H92 M8 31H92 M8 54H92" />
-                {chartAreaPath && <path className="detail-yes-area" d={chartAreaPath} />}
-                <polyline className="detail-yes-line" points={chartLinePoints} />
+                {chartAreaPath && (
+                  <path
+                    className={selectedTradeSide === Outcome.No ? "detail-no-area" : "detail-yes-area"}
+                    d={chartAreaPath}
+                  />
+                )}
+                <polyline className={selectedTradeSide === Outcome.No ? "detail-no-line" : "detail-yes-line"} points={chartLinePoints} />
+                {!selectedTradeSide && <polyline className="detail-no-line secondary-line" points={chartNoLinePoints} />}
               </svg>
               <div className="chart-y-labels" aria-hidden="true">
                 <span>100%</span>
@@ -3471,26 +3502,43 @@ export default function App() {
               />
             </label>
             <div className="trade-side-buttons">
-              <button className="yes-button" onClick={() => placeBet(selectedMarket.id, Outcome.Yes)} disabled={!canBet}>
+              <button
+                className={selectedTradeSide === Outcome.Yes ? "yes-button active" : "yes-button"}
+                onClick={() => chooseTradeSide(selectedMarket.id, Outcome.Yes)}
+                disabled={!canBet}
+                type="button"
+              >
                 <span>YES {selectedMarketYesPercent.toFixed(0)}%</span>
-                <small>Buy YES</small>
+                <small>Select YES</small>
               </button>
-              <button className="no-button" onClick={() => placeBet(selectedMarket.id, Outcome.No)} disabled={!canBet}>
+              <button
+                className={selectedTradeSide === Outcome.No ? "no-button active" : "no-button"}
+                onClick={() => chooseTradeSide(selectedMarket.id, Outcome.No)}
+                disabled={!canBet}
+                type="button"
+              >
                 <span>NO {selectedMarketNoPercent.toFixed(0)}%</span>
-                <small>Buy NO</small>
+                <small>Select NO</small>
               </button>
             </div>
-            <div className="payout-preview">
-              <div>
-                <span>YES payout if correct</span>
-                <strong>{formatUsdc(yesEstimate.payout)} USDC</strong>
-                <small>Profit {formatUsdc(yesEstimate.profit)} / price {yesEstimate.pricePercent.toFixed(1)}%</small>
-              </div>
-              <div>
-                <span>NO payout if correct</span>
-                <strong>{formatUsdc(noEstimate.payout)} USDC</strong>
-                <small>Profit {formatUsdc(noEstimate.profit)} / price {noEstimate.pricePercent.toFixed(1)}%</small>
-              </div>
+            <button
+              className="trade-submit-button"
+              disabled={!canBet || !selectedTradeSide || tradeAmount <= 0n || transactionPending}
+              onClick={() => selectedTradeSide && placeBet(selectedMarket.id, selectedTradeSide)}
+              type="button"
+            >
+              {submitLabel}
+            </button>
+            <div className={selectedTradeSide ? "payout-preview payout-preview-compact" : "trade-hint"}>
+              {selectedTradeSide ? (
+                <div>
+                  <span>{selectedSideLabel} payout if correct</span>
+                  <strong>{formatUsdc(selectedEstimate.payout)} USDC</strong>
+                  <small>Profit {formatUsdc(selectedEstimate.profit)} / price {selectedEstimate.pricePercent.toFixed(1)}%</small>
+                </div>
+              ) : (
+                <span>Select YES or NO to focus the chart and preview payout. No side selected shows both lines.</span>
+              )}
             </div>
             {account && (
               <div className="position-chip">

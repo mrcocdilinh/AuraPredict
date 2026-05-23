@@ -2612,7 +2612,7 @@ label {
 .market-detail-hero {
   display: grid;
   gap: 12px;
-  grid-template-columns: minmax(0, 1fr) 270px;
+  grid-template-columns: minmax(0, 1fr) 254px;
 }
 
 .detail-question-panel,
@@ -2665,8 +2665,10 @@ label {
 
 .copy-market-button {
   position: absolute;
-  right: 18px;
-  top: 18px;
+  min-height: 32px;
+  padding: 0 10px;
+  right: 12px;
+  top: 12px;
   z-index: 2;
 }
 
@@ -2709,7 +2711,7 @@ label {
   align-items: start;
   display: grid;
   gap: 12px;
-  grid-template-columns: minmax(0, 1fr) 330px;
+  grid-template-columns: minmax(0, 1fr) 300px;
 }
 
 .detail-chart-card {
@@ -2774,7 +2776,7 @@ label {
 .chart-frame {
   background: linear-gradient(180deg, rgba(24, 215, 255, 0.06), transparent);
   border-radius: 8px;
-  height: 172px;
+  height: clamp(220px, 24vw, 300px);
   overflow: hidden;
   position: relative;
   width: 100%;
@@ -2803,8 +2805,16 @@ label {
   fill: rgba(18, 185, 129, 0.12);
 }
 
+.detail-no-area {
+  fill: rgba(47, 128, 237, 0.12);
+}
+
 .detail-no-line {
   stroke: #2f80ed;
+}
+
+.secondary-line {
+  opacity: 0.72;
 }
 
 .chart-y-labels {
@@ -2872,6 +2882,11 @@ label {
   padding: 8px;
 }
 
+.trade-side-buttons button.active {
+  border-color: currentColor;
+  box-shadow: inset 0 0 0 1px currentColor, 0 10px 24px rgba(24, 215, 255, 0.12);
+}
+
 .trade-side-buttons button span {
   font-size: 0.94rem;
   line-height: 1;
@@ -2882,6 +2897,19 @@ label {
   line-height: 1.15;
   max-width: 100%;
   overflow-wrap: anywhere;
+}
+
+.trade-submit-button {
+  background: #111827;
+  color: #ffffff;
+  min-height: 40px;
+  width: 100%;
+}
+
+.trade-submit-button:disabled {
+  background: #e5e7eb;
+  color: #64748b;
+  opacity: 1;
 }
 
 .stake-shortcuts {
@@ -2925,6 +2953,21 @@ label {
 .payout-preview {
   display: grid;
   gap: 8px;
+}
+
+.payout-preview-compact {
+  gap: 0;
+}
+
+.trade-hint {
+  background: #f8fafc;
+  border: 1px solid #e5ebf4;
+  border-radius: 8px;
+  color: #667085;
+  font-size: 0.76rem;
+  font-weight: 780;
+  line-height: 1.4;
+  padding: 10px;
 }
 
 .payout-preview div {
@@ -3954,6 +3997,7 @@ label {
 [data-theme="dark"] .trade-balance-line,
 [data-theme="dark"] .chart-frame,
 [data-theme="dark"] .chart-window-tabs,
+[data-theme="dark"] .trade-hint,
 [data-theme="dark"] .payout-preview div,
 [data-theme="dark"] .related-market-card,
 [data-theme="dark"] .timeline-step span {
@@ -3988,6 +4032,16 @@ label {
 
 [data-theme="dark"] .payout-preview strong {
   color: #f7f9ff;
+}
+
+[data-theme="dark"] .trade-submit-button {
+  background: #18d7ff;
+  color: #06111e;
+}
+
+[data-theme="dark"] .trade-submit-button:disabled {
+  background: #2a3347;
+  color: #8b98ad;
 }
 
 [data-theme="dark"] .notification-bulk-actions,
@@ -4558,7 +4612,7 @@ label {
     top: 12px;
   }
 
-  .detail-chart {
+  .chart-frame {
     height: 180px;
   }
 
