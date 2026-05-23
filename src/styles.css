@@ -1596,20 +1596,19 @@ h3 {
 
 .toast-notice {
   animation: toast-enter 180ms ease;
-  align-items: center;
-  background: #101827;
-  border: 1px solid #26334a;
+  align-items: flex-start;
+  background: rgba(16, 24, 39, 0.96);
+  border: 1px solid rgba(18, 185, 129, 0.72);
   border-radius: 8px;
-  box-shadow: 0 18px 44px rgba(17, 24, 39, 0.18);
+  box-shadow: 0 18px 44px rgba(17, 24, 39, 0.22);
   color: #ffffff;
-  display: flex;
-  font-size: 0.88rem;
+  display: grid;
+  font-size: 0.86rem;
   font-weight: 760;
-  gap: 12px;
-  justify-content: space-between;
+  gap: 4px;
   line-height: 1.45;
-  max-width: min(430px, calc(100vw - 32px));
-  padding: 12px 14px;
+  max-width: min(360px, calc(100vw - 32px));
+  padding: 11px 13px;
   position: fixed;
   right: 24px;
   top: 82px;
@@ -1621,14 +1620,15 @@ h3 {
 }
 
 .toast-notice a {
-  background: rgba(24, 215, 255, 0.1);
-  border: 1px solid rgba(24, 215, 255, 0.42);
-  border-radius: 999px;
-  color: #7ddfff;
-  flex: 0 0 auto;
-  font-size: 0.78rem;
-  font-weight: 900;
-  padding: 5px 9px;
+  align-self: start;
+  background: transparent;
+  border: 0;
+  color: #9aa7bd;
+  font-size: 0.76rem;
+  font-weight: 780;
+  padding: 0;
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
 @keyframes toast-enter {
@@ -1711,7 +1711,7 @@ h3 {
 
 .view-mode-toggle {
   align-items: center;
-  background: #ffffff;
+  background: #0b1020;
   border: 1px solid #dfe6f1;
   border-radius: 8px;
   display: inline-flex;
@@ -1722,18 +1722,30 @@ h3 {
 }
 
 .view-mode-toggle button {
-  background: transparent;
+  background: #ffffff;
+  border: 1px solid #dfe6f1;
   box-shadow: none;
   color: #536178;
-  font-size: 0.78rem;
-  min-height: 28px;
-  padding: 0 10px;
+  min-height: 34px;
+  padding: 0;
+  width: 34px;
+}
+
+.view-mode-toggle svg {
+  fill: none;
+  height: 17px;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2;
+  width: 17px;
 }
 
 .view-mode-toggle button.active,
 .view-mode-toggle button:hover:not(:disabled) {
-  background: #111827;
-  color: #ffffff;
+  background: #12b981;
+  border-color: #12b981;
+  color: #06111e;
 }
 
 .category-icon {
@@ -2753,22 +2765,23 @@ label {
   border-radius: 999px;
   display: flex;
   gap: 5px;
+  overflow-x: auto;
   padding: 4px;
 }
 
-.chart-window-tabs span,
-.chart-window-tabs strong {
+.chart-window-tabs button {
+  background: transparent;
   border-radius: 999px;
+  box-shadow: none;
+  color: #667085;
   font-size: 0.72rem;
+  font-weight: 850;
+  min-height: 26px;
   padding: 4px 8px;
 }
 
-.chart-window-tabs span {
-  color: #667085;
-  font-weight: 850;
-}
-
-.chart-window-tabs strong {
+.chart-window-tabs button.active,
+.chart-window-tabs button:hover:not(:disabled) {
   background: #111827;
   color: #ffffff;
 }
@@ -3829,17 +3842,20 @@ label {
 }
 
 [data-theme="dark"] .view-mode-toggle {
-  background: #0b1020;
+  background: #080d1a;
   border-color: #26334a;
 }
 
 [data-theme="dark"] .view-mode-toggle button {
+  background: #0b1020;
+  border-color: #26334a;
   color: #d8e1f0;
 }
 
 [data-theme="dark"] .view-mode-toggle button.active,
 [data-theme="dark"] .view-mode-toggle button:hover:not(:disabled) {
-  background: #18d7ff;
+  background: #12b981;
+  border-color: #12b981;
   color: #06111e;
 }
 
@@ -3980,7 +3996,7 @@ label {
 [data-theme="dark"] .detail-summary-card span,
 [data-theme="dark"] .detail-outcome-row span,
 [data-theme="dark"] .detail-chart-header span,
-[data-theme="dark"] .chart-window-tabs span,
+[data-theme="dark"] .chart-window-tabs button,
 [data-theme="dark"] .chart-y-labels,
 [data-theme="dark"] .chart-time-row,
 [data-theme="dark"] .related-market-card small,
@@ -4080,6 +4096,12 @@ label {
   background: linear-gradient(180deg, rgba(24, 215, 255, 0.08), transparent);
 }
 
+[data-theme="dark"] .chart-window-tabs button.active,
+[data-theme="dark"] .chart-window-tabs button:hover:not(:disabled) {
+  background: #18d7ff;
+  color: #06111e;
+}
+
 [data-theme="dark"] .related-market-meter {
   background: #202a3f;
 }
@@ -4088,11 +4110,6 @@ label {
   background: #141d31;
   border-color: rgba(24, 215, 255, 0.5);
   color: #ffffff;
-}
-
-[data-theme="dark"] .chart-window-tabs strong {
-  background: #18d7ff;
-  color: #06111e;
 }
 
 [data-theme="dark"] .timeline-step:not(:last-child)::after {

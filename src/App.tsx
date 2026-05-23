@@ -84,6 +84,7 @@ type LeaderboardPeriod = "day" | "7d" | "30d" | "all";
 type MarketSectionKey = "fresh" | "hot" | "closing";
 type ThemeMode = "dark" | "light";
 type MarketViewMode = "grid" | "list";
+type ChartWindowKey = "1h" | "4h" | "8h" | "12h" | "1d" | "1w" | "1m" | "all";
 
 type LeaderboardRow = {
   address: string;
@@ -99,6 +100,19 @@ type LeaderboardRow = {
 };
 
 type UserRegistry = Record<string, { address: string; joinedAt: string }>;
+
+type ProjectStats = {
+  totalMarkets: number;
+  indexedMarkets: number;
+  liveMarkets: number;
+  endedMarkets: number;
+  pendingMarkets: number;
+  totalVolume: bigint;
+  liveLiquidity: bigint;
+  averageMarketVolume: bigint;
+  participantEntries: number;
+  knownPlayers: number;
+};
 
 enum Outcome {
   Unresolved = 0,
@@ -160,6 +174,16 @@ const LEADERBOARD_METRICS: Array<{ value: LeaderboardMetric; label: string }> = 
   { value: "winRate", label: "Win rate" },
   { value: "pnl", label: "PNL" },
   { value: "auraPoints", label: "Aura points" }
+];
+const CHART_WINDOWS: Array<{ value: ChartWindowKey; label: string; seconds: number | null }> = [
+  { value: "1h", label: "1H", seconds: 60 * 60 },
+  { value: "4h", label: "4H", seconds: 4 * 60 * 60 },
+  { value: "8h", label: "8H", seconds: 8 * 60 * 60 },
+  { value: "12h", label: "12H", seconds: 12 * 60 * 60 },
+  { value: "1d", label: "1D", seconds: 24 * 60 * 60 },
+  { value: "1w", label: "1W", seconds: 7 * 24 * 60 * 60 },
+  { value: "1m", label: "1M", seconds: 30 * 24 * 60 * 60 },
+  { value: "all", label: "ALL", seconds: null }
 ];
 
 type CachedMarketView = Omit<
@@ -263,6 +287,14 @@ function formatUsdc(value: bigint) {
   return new Intl.NumberFormat("en-US", {
     minimumFractionDigits: formatted < 1 && formatted > 0 ? 4 : 2,
     maximumFractionDigits: 6
+  }).format(formatted);
+}
+
+function formatStatUsdc(value: bigint) {
+  const formatted = Number(formatUnits(value, ARC_NATIVE_USDC_DECIMALS));
+  return new Intl.NumberFormat("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
   }).format(formatted);
 }
 
@@ -752,6 +784,30 @@ function CheckIcon() {
   );
 }
 
+function GridViewIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M5 5h5v5H5z" />
+      <path d="M14 5h5v5h-5z" />
+      <path d="M5 14h5v5H5z" />
+      <path d="M14 14h5v5h-5z" />
+    </svg>
+  );
+}
+
+function ListViewIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M8 6h12" />
+      <path d="M8 12h12" />
+      <path d="M8 18h12" />
+      <path d="M4 6h.01" />
+      <path d="M4 12h.01" />
+      <path d="M4 18h.01" />
+    </svg>
+  );
+}
+
 function LandingPage() {
   const [landingTheme, setLandingTheme] = useState<ThemeMode>(() => {
     try {
@@ -1163,6 +1219,8 @@ export default function App() {
   const [selectedTradeSides, setSelectedTradeSides] = useState<Record<number, Outcome.Yes | Outcome.No>>({});
   const [activeCategory, setActiveCategory] = useState("All");
   const [marketViewMode, setMarketViewMode] = useState<MarketViewMode>("grid");
+  const [detailChartWindow, setDetailChartWindow] = useState<ChartWindowKey>("all");
+  const [projectStats, setProjectStats] = useState<ProjectStats | null>(null);
   const [view, setView] = useState<AppView>("markets");
   const [leaderboardMetric, setLeaderboardMetric] = useState<LeaderboardMetric>("volume");
   const [leaderboardPeriod, setLeaderboardPeriod] = useState<LeaderboardPeriod>("all");
@@ -1251,6 +1309,18 @@ export default function App() {
   const uniquePlayerCount = uniquePlayerAddresses.size;
   const participantEntries = markets.reduce((sum, market) => sum + market.traderCount, 0);
   const averageMarketVolume = markets.length > 0 ? totalTradeVolume / BigInt(markets.length) : 0n;
+  const statsSummary = projectStats ?? {
+    totalMarkets: knownMarketCount || markets.length,
+    indexedMarkets: markets.length,
+    liveMarkets,
+    endedMarkets: endedMarkets.length,
+    pendingMarkets: pendingResolutionMarkets.length,
+    totalVolume: totalLiquidity,
+    liveLiquidity,
+    averageMarketVolume,
+    participantEntries,
+    knownPlayers: uniquePlayerCount
+  };
   const accountKey = account ? account.toLowerCase() : "";
   const viewedProfileAddress =
     selectedProfileAddress && isAddress(selectedProfileAddress) ? selectedProfileAddress : account;
@@ -1431,36 +1501,47 @@ export default function App() {
   const selectedMarketTotal = selectedMarket ? marketVolume(selectedMarket) : 0n;
   const selectedMarketYesPercent = selectedMarket ? percent(selectedMarket.yesPool, selectedMarketTotal) : 50;
   const selectedMarketNoPercent = 100 - selectedMarketYesPercent;
+  const activeChartWindow = CHART_WINDOWS.find((item) => item.value === detailChartWindow) ?? CHART_WINDOWS[CHART_WINDOWS.length - 1];
   const detailChartRows = (() => {
     if (!selectedMarket) return [];
-
-    let yesPool = 0n;
-    let noPool = 0n;
-    const activityPoints = selectedMarketActivities.map((activity) => {
-      if (activity.side === Outcome.Yes) yesPool += activity.amount;
-      if (activity.side === Outcome.No) noPool += activity.amount;
-      const total = yesPool + noPool;
-      const yes = total > 0n ? percent(yesPool, total) : selectedMarketYesPercent;
-
-      return {
-        timestamp: activity.timestamp || selectedMarket.createdAt || Math.min(nowSeconds, selectedMarket.closeTime),
-        yesPercent: yes,
-        noPercent: 100 - yes
-      };
-    });
 
     const referenceEnd = Math.max(
       selectedMarket.createdAt || 0,
       Math.min(nowSeconds, selectedMarket.closeTime || nowSeconds)
     );
-    const fallbackStart = selectedMarket.createdAt || Math.max(0, referenceEnd - 60 * 60);
-    const points =
-      activityPoints.length > 0
-        ? activityPoints
-        : [
-            { timestamp: fallbackStart, yesPercent: selectedMarketYesPercent, noPercent: selectedMarketNoPercent },
-            { timestamp: referenceEnd, yesPercent: selectedMarketYesPercent, noPercent: selectedMarketNoPercent }
-          ];
+    const firstActivityTime = selectedMarketActivities[0]?.timestamp || selectedMarket.createdAt || referenceEnd;
+    const windowStart = activeChartWindow.seconds
+      ? Math.max(selectedMarket.createdAt || firstActivityTime, referenceEnd - activeChartWindow.seconds)
+      : Math.min(selectedMarket.createdAt || firstActivityTime, firstActivityTime);
+    let yesPool = 0n;
+    let noPool = 0n;
+    const points: Array<{ timestamp: number; yesPercent: number; noPercent: number }> = [];
+    const pushPoint = (timestamp: number) => {
+      const total = yesPool + noPool;
+      const yes = total > 0n ? percent(yesPool, total) : selectedMarketYesPercent;
+      points.push({ timestamp, yesPercent: yes, noPercent: 100 - yes });
+    };
+
+    for (const activity of selectedMarketActivities) {
+      const timestamp = activity.timestamp || selectedMarket.createdAt || referenceEnd;
+      if (timestamp >= windowStart && points.length === 0) {
+        pushPoint(windowStart);
+      }
+      if (activity.side === Outcome.Yes) yesPool += activity.amount;
+      if (activity.side === Outcome.No) noPool += activity.amount;
+      if (timestamp >= windowStart) pushPoint(timestamp);
+    }
+
+    if (points.length === 0) {
+      const fallbackStart = activeChartWindow.seconds
+        ? Math.max(0, referenceEnd - activeChartWindow.seconds)
+        : selectedMarket.createdAt || Math.max(0, referenceEnd - 60 * 60);
+      points.push(
+        { timestamp: fallbackStart, yesPercent: selectedMarketYesPercent, noPercent: selectedMarketNoPercent },
+        { timestamp: referenceEnd, yesPercent: selectedMarketYesPercent, noPercent: selectedMarketNoPercent }
+      );
+    }
+
     const last = points[points.length - 1];
     if (
       points.length > 0 &&
@@ -1474,7 +1555,7 @@ export default function App() {
     }
     if (points.length === 1) {
       points.unshift({
-        timestamp: Math.max(0, points[0].timestamp - 60 * 30),
+        timestamp: Math.max(0, windowStart),
         yesPercent: points[0].yesPercent,
         noPercent: points[0].noPercent
       });
@@ -2283,101 +2364,92 @@ export default function App() {
       }
 
       let failedMarketLoads = 0;
-      const rows = await mapWithConcurrency<number, MarketView | null>(
-        marketIds,
-        MARKET_LOAD_CONCURRENCY,
-        async (id) => {
-          let marketData;
-          let isLegacyMarket = false;
+      const readMarketById = async (id: number, trackFailure: boolean) => {
+        let marketData;
+        let isLegacyMarket = false;
 
-          try {
-            marketData = await withRpcRetry(() => publicClient.readContract({
+        try {
+          marketData = await withRpcRetry(() => publicClient.readContract({
+            address: contractAddress,
+            abi: arcPredictionMarketAbi,
+            functionName: "getMarket",
+            args: [BigInt(id)]
+          }));
+        } catch (error) {
+          const message = errorMessage(error);
+          if (
+            message.includes("valid boolean") ||
+            message.includes("returned data did not match") ||
+            message.includes("decode")
+          ) {
+            isLegacyMarket = true;
+            const legacyAbi = [
+              {
+                type: "function",
+                name: "getMarket",
+                stateMutability: "view",
+                inputs: [{ type: "uint256", name: "marketId" }],
+                outputs: [
+                  { type: "string", name: "question" },
+                  { type: "string", name: "category" },
+                  { type: "uint256", name: "closeTime" },
+                  { type: "address", name: "creator" },
+                  { type: "address", name: "resolver" },
+                  { type: "uint256", name: "yesPool" },
+                  { type: "uint256", name: "noPool" },
+                  { type: "uint256", name: "traderCount" },
+                  { type: "uint8", name: "outcome" }
+                ]
+              }
+            ] as const;
+            const legacyMarket = await withRpcRetry(() => publicClient.readContract({
               address: contractAddress,
-              abi: arcPredictionMarketAbi,
+              abi: legacyAbi,
               functionName: "getMarket",
               args: [BigInt(id)]
             }));
-          } catch (error) {
-            const message = errorMessage(error);
-            if (
-              message.includes("valid boolean") ||
-              message.includes("returned data did not match") ||
-              message.includes("decode")
-            ) {
-              isLegacyMarket = true;
-              const legacyAbi = [
-                {
-                  type: "function",
-                  name: "getMarket",
-                  stateMutability: "view",
-                  inputs: [{ type: "uint256", name: "marketId" }],
-                  outputs: [
-                    { type: "string", name: "question" },
-                    { type: "string", name: "category" },
-                    { type: "uint256", name: "closeTime" },
-                    { type: "address", name: "creator" },
-                    { type: "address", name: "resolver" },
-                    { type: "uint256", name: "yesPool" },
-                    { type: "uint256", name: "noPool" },
-                    { type: "uint256", name: "traderCount" },
-                    { type: "uint8", name: "outcome" }
-                  ]
-                }
-              ] as const;
-              const legacyMarket = await withRpcRetry(() => publicClient.readContract({
-                address: contractAddress,
-                abi: legacyAbi,
-                functionName: "getMarket",
-                args: [BigInt(id)]
-              }));
-              marketData = [
-                legacyMarket[0],
-                legacyMarket[1],
-                legacyMarket[2],
-                legacyMarket[3],
-                legacyMarket[4],
-                legacyMarket[5],
-                legacyMarket[6],
-                legacyMarket[7],
-                Outcome.Unresolved,
-                0n,
-                0n,
-                false,
-                "0x0000000000000000000000000000000000000000",
-                legacyMarket[8]
-              ] as const;
-            } else {
-              failedMarketLoads += 1;
-              console.warn(`Failed to load market #${id}`, error);
-              return null;
-            }
+            marketData = [
+              legacyMarket[0],
+              legacyMarket[1],
+              legacyMarket[2],
+              legacyMarket[3],
+              legacyMarket[4],
+              legacyMarket[5],
+              legacyMarket[6],
+              legacyMarket[7],
+              Outcome.Unresolved,
+              0n,
+              0n,
+              false,
+              "0x0000000000000000000000000000000000000000",
+              legacyMarket[8]
+            ] as const;
+          } else {
+            if (trackFailure) failedMarketLoads += 1;
+            console.warn(`Failed to load market #${id}`, error);
+            return null;
           }
+        }
 
-          const [
-            question,
-            category,
-            closeTime,
-            creator,
-            resolver,
-            yesPool,
-            noPool,
-            traderCount,
-            proposedOutcome,
-            proposedAt,
-            disputeDeadline,
-            disputed,
-            disputer,
-            outcome
-          ] = marketData;
+        const [
+          question,
+          category,
+          closeTime,
+          creator,
+          resolver,
+          yesPool,
+          noPool,
+          traderCount,
+          proposedOutcome,
+          proposedAt,
+          disputeDeadline,
+          disputed,
+          disputer,
+          outcome
+        ] = marketData;
 
-          if (id === 0) setContractVersion(isLegacyMarket ? "legacy" : "dispute");
-
-          let yesPosition = 0n;
-          let noPosition = 0n;
-          let claimed = false;
-          let potentialPayout = 0n;
-
-          return {
+        return {
+          market: {
             id,
             question,
             category,
@@ -2394,11 +2466,22 @@ export default function App() {
             disputed,
             disputer,
             outcome: Number(outcome) as Outcome,
-            yesPosition,
-            noPosition,
-            claimed,
-            potentialPayout
-          };
+            yesPosition: 0n,
+            noPosition: 0n,
+            claimed: false,
+            potentialPayout: 0n
+          },
+          isLegacyMarket
+        };
+      };
+
+      const rows = await mapWithConcurrency<number, MarketView | null>(
+        marketIds,
+        MARKET_LOAD_CONCURRENCY,
+        async (id) => {
+          const row = await readMarketById(id, true);
+          if (id === 0 && row) setContractVersion(row.isLegacyMarket ? "legacy" : "dispute");
+          return row?.market ?? null;
         }
       );
 
@@ -2427,6 +2510,38 @@ export default function App() {
       setLastDataRefresh(new Date());
       writeCachedMarkets(sortedRows);
       if (!isSilentLoad) setLoading(false);
+
+      let projectCreatorAddresses = new Set<string>();
+      const projectRows = await mapWithConcurrency(
+        Array.from({ length: totalMarketCount }, (_, id) => id),
+        MARKET_LOAD_CONCURRENCY,
+        async (id) => readMarketById(id, false)
+      );
+      const projectMarkets = projectRows.flatMap((row) => row ? [row.market as MarketView] : []);
+      if (projectMarkets.length > 0 || totalMarketCount === 0) {
+        const statsNow = Math.floor(Date.now() / 1000);
+        const projectTotalVolume = projectMarkets.reduce((sum, market) => sum + marketVolume(market), 0n);
+        const projectLiveMarkets = projectMarkets.filter(
+          (market) => market.outcome === Outcome.Unresolved && market.closeTime > statsNow
+        );
+        const projectEndedMarkets = projectMarkets.filter((market) => market.outcome !== Outcome.Unresolved);
+        const projectPendingMarkets = projectMarkets.filter(
+          (market) => market.outcome === Outcome.Unresolved && market.closeTime <= statsNow
+        );
+        projectCreatorAddresses = new Set(projectMarkets.map((market) => market.creator.toLowerCase()));
+        setProjectStats({
+          totalMarkets: totalMarketCount,
+          indexedMarkets: projectMarkets.length,
+          liveMarkets: projectLiveMarkets.length,
+          endedMarkets: projectEndedMarkets.length,
+          pendingMarkets: projectPendingMarkets.length,
+          totalVolume: projectTotalVolume,
+          liveLiquidity: projectLiveMarkets.reduce((sum, market) => sum + marketVolume(market), 0n),
+          averageMarketVolume: projectMarkets.length > 0 ? projectTotalVolume / BigInt(projectMarkets.length) : 0n,
+          participantEntries: projectMarkets.reduce((sum, market) => sum + market.traderCount, 0),
+          knownPlayers: projectCreatorAddresses.size
+        });
+      }
 
       if (!isSilentLoad && account && isAddress(account) && sortedRows.length > 0) {
         const positionRows = await mapWithConcurrency(
@@ -2548,6 +2663,19 @@ export default function App() {
           }
         );
         setActivities(activityRows.sort((a, b) => b.timestamp - a.timestamp));
+        const eventPlayerAddresses = new Set(projectCreatorAddresses);
+        for (const event of betEvents) {
+          const args = event.args as { user?: Address };
+          if (args.user) eventPlayerAddresses.add(args.user.toLowerCase());
+        }
+        setProjectStats((current) =>
+          current
+            ? {
+                ...current,
+                knownPlayers: Math.max(current.knownPlayers, eventPlayerAddresses.size)
+              }
+            : current
+        );
       } catch {
         setActivities((current) => current);
       }
@@ -3418,9 +3546,16 @@ export default function App() {
                 </h2>
               </div>
               <div className="chart-window-tabs">
-                <span>1D</span>
-                <span>1W</span>
-                <strong>All</strong>
+                {CHART_WINDOWS.map((windowOption) => (
+                  <button
+                    className={detailChartWindow === windowOption.value ? "active" : ""}
+                    key={windowOption.value}
+                    onClick={() => setDetailChartWindow(windowOption.value)}
+                    type="button"
+                  >
+                    {windowOption.label}
+                  </button>
+                ))}
               </div>
             </div>
             <div className="chart-frame">
@@ -4120,15 +4255,17 @@ export default function App() {
                   className={marketViewMode === "grid" ? "active" : ""}
                   onClick={() => setMarketViewMode("grid")}
                   type="button"
+                  aria-label="Grid view"
                 >
-                  Grid
+                  <GridViewIcon />
                 </button>
                 <button
                   className={marketViewMode === "list" ? "active" : ""}
                   onClick={() => setMarketViewMode("list")}
                   type="button"
+                  aria-label="List view"
                 >
-                  List
+                  <ListViewIcon />
                 </button>
               </div>
             </div>
@@ -4692,45 +4829,45 @@ export default function App() {
           <section className="protocol-card protocol-stats-card">
             <span className="section-label">Project stats</span>
             <div className="protocol-stat-feature">
-              <span>Loaded volume</span>
-              <strong>{formatUsdc(totalTradeVolume)} USDC</strong>
+              <span>Total volume</span>
+              <strong>{formatStatUsdc(statsSummary.totalVolume)} USDC</strong>
             </div>
             <div className="protocol-metric-grid">
               <div>
                 <span>Total markets</span>
-                <strong>{knownMarketCount || markets.length}</strong>
+                <strong>{statsSummary.totalMarkets}</strong>
               </div>
               <div>
-                <span>Loaded</span>
-                <strong>{markets.length}</strong>
+                <span>Indexed</span>
+                <strong>{statsSummary.indexedMarkets}</strong>
               </div>
               <div>
                 <span>Live</span>
-                <strong>{liveMarkets}</strong>
+                <strong>{statsSummary.liveMarkets}</strong>
               </div>
               <div>
                 <span>Ended</span>
-                <strong>{endedMarkets.length}</strong>
+                <strong>{statsSummary.endedMarkets}</strong>
               </div>
               <div>
                 <span>Awaiting result</span>
-                <strong>{pendingResolutionMarkets.length}</strong>
+                <strong>{statsSummary.pendingMarkets}</strong>
               </div>
               <div>
                 <span>Known players</span>
-                <strong>{uniquePlayerCount}</strong>
+                <strong>{statsSummary.knownPlayers}</strong>
               </div>
               <div>
                 <span>Entries</span>
-                <strong>{participantEntries}</strong>
+                <strong>{statsSummary.participantEntries}</strong>
               </div>
               <div>
                 <span>Live liquidity</span>
-                <strong>{formatUsdc(liveLiquidity)} USDC</strong>
+                <strong>{formatStatUsdc(statsSummary.liveLiquidity)} USDC</strong>
               </div>
               <div>
                 <span>Avg market</span>
-                <strong>{formatUsdc(averageMarketVolume)} USDC</strong>
+                <strong>{formatStatUsdc(statsSummary.averageMarketVolume)} USDC</strong>
               </div>
             </div>
           </section>
