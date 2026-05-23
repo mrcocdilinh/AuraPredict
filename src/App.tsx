@@ -249,6 +249,8 @@ const LANDING_HOSTS = new Set(["aurapredict.xyz", "www.aurapredict.xyz"]);
 const APP_URL = "https://app.aurapredict.xyz";
 const X_URL = "https://x.com/AuraPredict";
 const DISCORD_URL = "https://discord.gg/3wTYhdsr";
+const DEMO_VIDEO_URL = "https://www.youtube.com/watch?v=tdYqpAIG82s";
+const DEMO_EMBED_URL = "https://www.youtube.com/embed/tdYqpAIG82s";
 const CURRENT_APP_URL =
   typeof window !== "undefined" ? `${window.location.host}${window.location.pathname}${window.location.search}` : "app.aurapredict.xyz";
 const WALLET_DEEP_LINKS = [
@@ -1182,6 +1184,7 @@ function LandingPage() {
       return "dark";
     }
   });
+  const [landingStats, setLandingStats] = useState<ProjectStats | null>(null);
   const featureCards = [
     {
       title: "YES/NO markets",
@@ -1222,11 +1225,9 @@ function LandingPage() {
     "Winners claim payout"
   ];
   const dataFlow = [
-    "The public indexer serves market lists, activity, stats, and leaderboard-ready history first",
-    "The frontend falls back to Arc RPC only if the indexer is unavailable",
-    "Local cache keeps markets visible on reload",
-    "Wallet-specific position and claim data still load from the contract",
-    "Leaderboards calculate from indexed trades and resolved market state"
+    "Indexer-first market stats keep the public app quick to scan",
+    "Wallet actions still sign directly against the Arc contract",
+    "Arcscan keeps settlement and claim transactions verifiable"
   ];
   const roadmapItems = [
     "Move from scheduled static indexer exports to a low-latency public indexer service",
@@ -1235,10 +1236,39 @@ function LandingPage() {
     "Evaluate oracle integration when Arc supports the right optimistic oracle or data providers"
   ];
   const nextTheme = landingTheme === "dark" ? "light" : "dark";
+  const liveMetricCards = [
+    {
+      value: landingStats ? landingStats.totalMarkets.toLocaleString("en-US") : "--",
+      label: "Markets created"
+    },
+    {
+      value: landingStats ? `${formatStatUsdc(landingStats.totalVolume)} USDC` : "--",
+      label: "Indexed volume"
+    },
+    {
+      value: landingStats ? landingStats.knownPlayers.toLocaleString("en-US") : "--",
+      label: "Known players"
+    },
+    {
+      value: landingStats ? landingStats.liveMarkets.toLocaleString("en-US") : "--",
+      label: "Live markets"
+    }
+  ];
 
   useEffect(() => {
     window.localStorage.setItem(THEME_KEY, landingTheme);
   }, [landingTheme]);
+
+  useEffect(() => {
+    let canceled = false;
+    fetchIndexerJson<{ stats: IndexedProjectStats }>("/api/stats").then((response) => {
+      if (canceled || !response?.stats) return;
+      setLandingStats(indexedStatsToProjectStats(response.stats));
+    });
+    return () => {
+      canceled = true;
+    };
+  }, []);
 
   return (
     <main className={`landing-page landing-${landingTheme}`}>
@@ -1251,6 +1281,9 @@ function LandingPage() {
           <a href="#features">Features</a>
           <a href="#how-it-works">How it works</a>
           <a href="#docs">Docs</a>
+          <a href={DEMO_VIDEO_URL} target="_blank" rel="noreferrer">
+            Demo
+          </a>
           <a href={X_URL} target="_blank" rel="noreferrer">
             X
           </a>
@@ -1274,30 +1307,40 @@ function LandingPage() {
       <section className="landing-hero" id="top">
         <div className="landing-hero-copy">
           <p className="landing-kicker">Arc Testnet prediction markets</p>
-          <h1>Social prediction markets with onchain reputation.</h1>
+          <h1>A social forecasting arena for Arc.</h1>
           <p>
-            AuraPredict combines YES/NO markets, native Arc USDC staking, public evidence, Aura Agent
-            resolution support, trader profiles, and reputation badges in one forecasting app.
+            Trade YES/NO markets with native Arc USDC, build a public forecasting profile, and turn
+            every prediction into visible Aura reputation.
           </p>
           <div className="landing-actions">
             <a className="landing-primary" href={APP_URL}>
-              Enter Dapp
+              Launch the App
             </a>
-            <a className="landing-secondary" href="#features">
-              Explore Features
+            <a className="landing-secondary" href={DEMO_VIDEO_URL} target="_blank" rel="noreferrer">
+              Watch Demo
+            </a>
+            <a className="landing-secondary" href={DISCORD_URL} target="_blank" rel="noreferrer">
+              Join Discord
             </a>
           </div>
           <div className="landing-proof">
-            <span>Native USDC</span>
-            <span>Aura Agent</span>
-            <span>Social reputation</span>
+            <span>Arc native USDC</span>
+            <span>Aura Points</span>
+            <span>Evidence-based resolution</span>
           </div>
         </div>
-        <aside className="landing-visual">
-          <img src="/aurapredict-logo.png" alt="AuraPredict logo" />
+        <aside className="landing-visual landing-video-card">
+          <div className="landing-video-frame">
+            <iframe
+              src={DEMO_EMBED_URL}
+              title="AuraPredict demo video"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+              allowFullScreen
+            />
+          </div>
           <div className="landing-market-preview">
-            <span>Market Preview</span>
-            <strong>Will Arc become a leading prediction market ecosystem?</strong>
+            <span>Live market feel</span>
+            <strong>Stake on outcomes, follow odds, attach evidence, and build reputation.</strong>
             <div>
               <b>YES 68%</b>
               <b>NO 32%</b>
@@ -1306,32 +1349,22 @@ function LandingPage() {
         </aside>
       </section>
 
-      <section className="landing-strip" aria-label="AuraPredict highlights">
-        <div>
-          <strong>YES/NO</strong>
-          <span>Simple prediction format</span>
-        </div>
-        <div>
-          <strong>UTC</strong>
-          <span>Unified market close time</span>
-        </div>
-        <div>
-          <strong>USDC</strong>
-          <span>Native Arc testnet staking</span>
-        </div>
-        <div>
-          <strong>Aura Points</strong>
-          <span>Prediction reputation score</span>
-        </div>
+      <section className="landing-strip landing-live-stats" aria-label="AuraPredict live stats">
+        {liveMetricCards.map((metric) => (
+          <div key={metric.label}>
+            <strong>{metric.value}</strong>
+            <span>{metric.label}</span>
+          </div>
+        ))}
       </section>
 
       <section className="landing-section" id="features">
         <div className="landing-section-head">
           <p className="landing-kicker">Core features</p>
-          <h2>A full prediction market experience for the Arc community.</h2>
+          <h2>Built for people who want their forecasts to compound into reputation.</h2>
           <p>
-            AuraPredict combines market creation, live participation, settlement tools, wallet profiles,
-            leaderboards, and social sharing into one app.
+            The app keeps the trading surface simple while making evidence, profiles, and leaderboard
+            performance visible enough for social forecasting.
           </p>
         </div>
         <div className="landing-feature-grid">
@@ -1370,11 +1403,11 @@ function LandingPage() {
       <section className="landing-section landing-docs" id="docs">
         <div className="landing-section-head">
           <p className="landing-kicker">Project docs</p>
-          <h2>AuraPredict project overview.</h2>
+          <h2>Transparent testnet mechanics without hiding the roadmap.</h2>
           <p>
-            AuraPredict is a prediction market dapp for Arc Testnet. The current product focuses on
-            fast YES/NO market creation, native USDC staking, transparent onchain settlement, wallet
-            profiles, and social forecasting reputation.
+            AuraPredict is live as an Arc Testnet MVP. The current product proves market creation,
+            staking, settlement, profiles, and public reputation while the data layer moves toward
+            realtime persistence.
           </p>
         </div>
 
@@ -1408,11 +1441,10 @@ function LandingPage() {
         <div className="docs-diagram-panel">
           <div>
             <span className="docs-label">System architecture</span>
-            <h3>How the app talks to Arc</h3>
+            <h3>Indexer first, wallet signed</h3>
             <p>
-              AuraPredict now reads shared market state from the public AuraPredict indexer first, then
-              falls back to Arc RPC when needed. Wallets still sign transactions directly against the
-              prediction market contract, and Arcscan remains the source for transaction verification.
+              The public app reads indexed market state first for speed. Wallets still sign transactions
+              against the prediction market contract, and Arcscan remains the verification layer.
             </p>
           </div>
           <div className="docs-flow-diagram" aria-label="AuraPredict architecture diagram">
@@ -1442,7 +1474,7 @@ function LandingPage() {
 
           <article className="docs-card docs-large-card">
             <span className="docs-label">Data loading</span>
-            <h3>Why market data can take time</h3>
+            <h3>What the data layer does</h3>
             <div className="docs-step-list">
               {dataFlow.map((step, index) => (
                 <div key={step}>
@@ -1539,11 +1571,16 @@ function LandingPage() {
       <section className="landing-cta">
         <div>
           <p className="landing-kicker">Start predicting</p>
-          <h2>Enter AuraPredict and explore live Arc Testnet markets.</h2>
+          <h2>Watch the demo, then enter the live Arc Testnet app.</h2>
         </div>
-        <a className="landing-primary" href={APP_URL}>
-          Enter Dapp
-        </a>
+        <div className="landing-actions">
+          <a className="landing-secondary" href={DEMO_VIDEO_URL} target="_blank" rel="noreferrer">
+            View Demo
+          </a>
+          <a className="landing-primary" href={APP_URL}>
+            Enter Dapp
+          </a>
+        </div>
       </section>
     </main>
   );

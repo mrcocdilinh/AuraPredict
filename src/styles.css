@@ -318,8 +318,8 @@ h3 {
 .landing-hero {
   align-items: center;
   display: grid;
-  gap: 36px;
-  grid-template-columns: minmax(0, 1fr) 430px;
+  gap: 42px;
+  grid-template-columns: minmax(0, 0.95fr) minmax(440px, 1.05fr);
   min-height: calc(100vh - 120px);
   padding: 72px 0 48px;
 }
@@ -332,7 +332,7 @@ h3 {
 }
 
 .landing-hero-copy h1 {
-  font-size: clamp(2.6rem, 6vw, 6rem);
+  font-size: clamp(2.8rem, 6.4vw, 6.8rem);
   line-height: 0.95;
   margin-bottom: 22px;
   max-width: 900px;
@@ -380,9 +380,9 @@ h3 {
 }
 
 .landing-primary {
-  background: linear-gradient(135deg, #18d7ff, #7f5cff);
-  color: #ffffff;
-  box-shadow: 0 18px 44px rgba(24, 215, 255, 0.2);
+  background: #18d7ff;
+  color: #06111e;
+  box-shadow: 0 18px 44px rgba(24, 215, 255, 0.22);
 }
 
 .landing-secondary {
@@ -423,6 +423,34 @@ h3 {
   padding: 18px;
 }
 
+.landing-video-card {
+  gap: 14px;
+  padding: 12px;
+}
+
+.landing-video-frame {
+  background: #030611;
+  border: 1px solid rgba(83, 105, 143, 0.36);
+  border-radius: 8px;
+  overflow: hidden;
+  position: relative;
+  width: 100%;
+}
+
+.landing-video-frame::before {
+  content: "";
+  display: block;
+  padding-top: 56.25%;
+}
+
+.landing-video-frame iframe {
+  border: 0;
+  height: 100%;
+  inset: 0;
+  position: absolute;
+  width: 100%;
+}
+
 .landing-visual img {
   background: #030611;
   border: 1px solid rgba(83, 105, 143, 0.36);
@@ -461,17 +489,17 @@ h3 {
 }
 
 .landing-market-preview b {
-  background: rgba(24, 215, 255, 0.1);
-  border: 1px solid rgba(24, 215, 255, 0.24);
+  background: rgba(18, 185, 129, 0.12);
+  border: 1px solid rgba(18, 185, 129, 0.3);
   border-radius: 8px;
-  color: #35ddff;
+  color: #30e1b0;
   padding: 10px;
 }
 
 .landing-market-preview b:last-child {
-  background: rgba(127, 92, 255, 0.12);
-  border-color: rgba(127, 92, 255, 0.28);
-  color: #a996ff;
+  background: rgba(239, 68, 68, 0.12);
+  border-color: rgba(239, 68, 68, 0.3);
+  color: #ff8a96;
 }
 
 .landing-strip {
@@ -492,7 +520,8 @@ h3 {
 
 .landing-strip strong {
   color: #ffffff;
-  font-size: 1.12rem;
+  font-size: clamp(1.08rem, 2.2vw, 1.72rem);
+  line-height: 1.05;
 }
 
 .landing-strip span {
@@ -501,8 +530,15 @@ h3 {
   font-weight: 760;
 }
 
+.landing-live-stats {
+  box-shadow: 0 22px 70px rgba(0, 0, 0, 0.2);
+  margin-top: -18px;
+  position: relative;
+  z-index: 2;
+}
+
 .landing-section {
-  padding: 84px 0 0;
+  padding: 76px 0 0;
 }
 
 .landing-section-head {
@@ -4903,7 +4939,11 @@ label {
 
 @media (max-width: 840px) {
   .landing-page {
-    padding: 14px;
+    padding: 12px;
+  }
+
+  .landing-nav {
+    padding: 10px;
   }
 
   .landing-nav,
@@ -4913,7 +4953,14 @@ label {
   }
 
   .landing-nav > div {
-    justify-content: flex-start;
+    display: grid;
+    gap: 6px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    justify-content: stretch;
+  }
+
+  .landing-nav a:not(.landing-brand) {
+    text-align: center;
   }
 
   .landing-theme-toggle {
@@ -4923,11 +4970,17 @@ label {
 
   .landing-hero {
     min-height: auto;
-    padding: 48px 0 28px;
+    padding: 40px 0 26px;
   }
 
   .landing-hero-copy h1 {
-    font-size: clamp(2.2rem, 12vw, 4.4rem);
+    font-size: clamp(2.35rem, 11vw, 4.4rem);
+    line-height: 0.98;
+  }
+
+  .landing-hero-copy > p:not(.landing-kicker) {
+    font-size: 1.02rem;
+    line-height: 1.58;
   }
 
   .landing-strip,
@@ -4938,6 +4991,17 @@ label {
   .docs-feature-table,
   .landing-market-preview div {
     grid-template-columns: 1fr;
+  }
+
+  .landing-actions {
+    align-items: stretch;
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .landing-primary,
+  .landing-secondary {
+    width: 100%;
   }
 
   .docs-flow-diagram,
@@ -4958,17 +5022,21 @@ label {
     height: 260px;
   }
 
+  .landing-video-card {
+    padding: 8px;
+  }
+
   .landing-dark-panel {
     margin-top: 48px;
     padding: 18px;
   }
 
   .landing-section {
-    padding-top: 54px;
+    padding-top: 48px;
   }
 
   .landing-cta {
-    padding-top: 54px;
+    padding-top: 48px;
   }
 
   .topbar,
