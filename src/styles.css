@@ -3649,22 +3649,26 @@ label {
 
 .market-intelligence-grid {
   display: grid;
-  gap: 10px;
+  align-items: stretch;
+  gap: 12px;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
 }
 
 .agent-panel,
-.evidence-panel,
-.top-traders-panel,
-.discussion-panel {
+.top-traders-panel {
   background: #ffffff;
   border: 1px solid #dfe6f1;
   border-radius: 8px;
   color: #172033;
   display: grid;
-  gap: 10px;
+  gap: 12px;
+  grid-template-rows: auto auto 1fr auto;
   min-width: 0;
-  padding: 12px;
+  padding: 14px;
+}
+
+.top-traders-panel {
+  grid-template-rows: auto 1fr;
 }
 
 .panel-heading {
@@ -3692,9 +3696,7 @@ label {
 
 .agent-result,
 .agent-checklist span,
-.evidence-list article,
-.top-trader-list article,
-.comment-list article {
+.top-trader-list article {
   background: #f8fafc;
   border: 1px solid #e5ebf4;
   border-radius: 8px;
@@ -3708,9 +3710,7 @@ label {
 
 .agent-result span,
 .agent-checklist span,
-.evidence-list small,
-.top-trader-list small,
-.comment-list small {
+.top-trader-list small {
   color: #667085;
   font-size: 0.72rem;
   font-weight: 820;
@@ -3721,9 +3721,7 @@ label {
   font-size: 1.3rem;
 }
 
-.agent-result p,
-.evidence-list p,
-.comment-list p {
+.agent-result p {
   color: #536178;
   line-height: 1.45;
   margin: 0;
@@ -3738,40 +3736,16 @@ label {
   padding: 8px;
 }
 
-.evidence-form,
-.comment-form {
+.top-trader-list {
   display: grid;
   gap: 8px;
+  align-content: start;
 }
 
-.evidence-list,
-.top-trader-list,
-.comment-list {
-  display: grid;
-  gap: 8px;
-}
-
-.evidence-list > span,
-.top-trader-list > span,
-.comment-list > span {
+.top-trader-list > span {
   color: #667085;
   font-size: 0.78rem;
   font-weight: 780;
-}
-
-.evidence-list article,
-.comment-list article {
-  display: grid;
-  gap: 5px;
-  padding: 10px;
-}
-
-.evidence-list article a {
-  color: #08768a;
-  font-size: 0.76rem;
-  font-weight: 900;
-  text-decoration: underline;
-  text-underline-offset: 3px;
 }
 
 .top-trader-list article {
@@ -4756,9 +4730,7 @@ label {
 [data-theme="dark"] .aura-formula-card,
 [data-theme="dark"] .onboarding-card,
 [data-theme="dark"] .agent-panel,
-[data-theme="dark"] .evidence-panel,
 [data-theme="dark"] .top-traders-panel,
-[data-theme="dark"] .discussion-panel,
 [data-theme="dark"] .aura-breakdown-card,
 [data-theme="dark"] .security-page article {
   background: rgba(12, 17, 31, 0.96);
@@ -4786,15 +4758,11 @@ label {
 [data-theme="dark"] .aura-formula-card p,
 [data-theme="dark"] .onboarding-card p,
 [data-theme="dark"] .agent-result p,
-[data-theme="dark"] .evidence-list p,
-[data-theme="dark"] .comment-list p,
 [data-theme="dark"] .security-page p,
 [data-theme="dark"] .security-page li,
 [data-theme="dark"] .agent-result span,
 [data-theme="dark"] .agent-checklist span,
-[data-theme="dark"] .evidence-list small,
 [data-theme="dark"] .top-trader-list small,
-[data-theme="dark"] .comment-list small,
 [data-theme="dark"] .aura-breakdown-grid span,
 [data-theme="dark"] .aura-breakdown-grid small {
   color: #9aa7bd;
@@ -4804,9 +4772,7 @@ label {
 [data-theme="dark"] .onboarding-steps span,
 [data-theme="dark"] .agent-result,
 [data-theme="dark"] .agent-checklist span,
-[data-theme="dark"] .evidence-list article,
 [data-theme="dark"] .top-trader-list article,
-[data-theme="dark"] .comment-list article,
 [data-theme="dark"] .aura-breakdown-grid div {
   background: #0b1020;
   border-color: #202a3f;

@@ -4549,8 +4549,6 @@ export default function App() {
     const creatorKey = selectedMarket.creator.toLowerCase();
     const isFollowingCreator = followedCreators.includes(creatorKey);
     const selectedEvidenceRows = marketEvidence[String(selectedMarket.id)] || [];
-    const selectedCommentRows = marketComments[String(selectedMarket.id)] || [];
-    const selectedEvidenceDraft = evidenceDrafts[selectedMarket.id] || { title: "", url: "", notes: "" };
     const hasWalletAccess = Boolean(account);
     const agentReport = resolutionReportFor(
       selectedMarket,
@@ -4890,157 +4888,60 @@ export default function App() {
 
         {hasWalletAccess ? (
           <section className="market-intelligence-grid">
-          <section className="agent-panel">
-            <div className="panel-heading">
-              <div>
-                <span className="section-label">Aura Agent</span>
-                <h3>Resolution assistant</h3>
+            <section className="agent-panel">
+              <div className="panel-heading">
+                <div>
+                  <span className="section-label">Aura Agent</span>
+                  <h3>Resolution assistant</h3>
+                </div>
+                <span className="agent-confidence">{agentReport.confidence}% confidence</span>
               </div>
-              <span className="agent-confidence">{agentReport.confidence}% confidence</span>
-            </div>
-            <div className="agent-result">
-              <span>Suggested outcome</span>
-              <strong>{agentReport.suggestedLabel}</strong>
-              <p>{agentReport.summary}</p>
-            </div>
-            <div className="agent-checklist">
-              {agentReport.checklist.map((item) => (
-                <span key={item}>{item}</span>
-              ))}
-            </div>
-            <button className="secondary" onClick={copyAgentReport} type="button">
-              Copy report
-            </button>
-          </section>
-
-          <section className="evidence-panel">
-            <div className="panel-heading">
-              <div>
-                <span className="section-label">Evidence</span>
-                <h3>Resolution sources</h3>
+              <div className="agent-result">
+                <span>Suggested outcome</span>
+                <strong>{agentReport.suggestedLabel}</strong>
+                <p>{agentReport.summary}</p>
               </div>
-              <span>{selectedEvidenceRows.length} saved</span>
-            </div>
-            <div className="evidence-form">
-              <input
-                placeholder="Source title"
-                value={selectedEvidenceDraft.title}
-                onChange={(event) =>
-                  setEvidenceDrafts((current) => ({
-                    ...current,
-                    [selectedMarket.id]: { ...selectedEvidenceDraft, title: event.target.value }
-                  }))
-                }
-              />
-              <input
-                placeholder="https:// source link"
-                value={selectedEvidenceDraft.url}
-                onChange={(event) =>
-                  setEvidenceDrafts((current) => ({
-                    ...current,
-                    [selectedMarket.id]: { ...selectedEvidenceDraft, url: event.target.value }
-                  }))
-                }
-              />
-              <textarea
-                placeholder="Notes for resolver and disputers"
-                rows={3}
-                value={selectedEvidenceDraft.notes}
-                onChange={(event) =>
-                  setEvidenceDrafts((current) => ({
-                    ...current,
-                    [selectedMarket.id]: { ...selectedEvidenceDraft, notes: event.target.value }
-                  }))
-                }
-              />
-              <button onClick={() => saveMarketEvidence(selectedMarket.id)} type="button">
-                Add evidence
+              <div className="agent-checklist">
+                {agentReport.checklist.map((item) => (
+                  <span key={item}>{item}</span>
+                ))}
+              </div>
+              <button className="secondary" onClick={copyAgentReport} type="button">
+                Copy report
               </button>
-            </div>
-            <div className="evidence-list">
-              {selectedEvidenceRows.length === 0 && <span>No evidence has been attached yet.</span>}
-              {selectedEvidenceRows.map((item) => (
-                <article key={item.id}>
-                  <strong>{item.title}</strong>
-                  <small>
-                    {item.addedBy === "Guest" ? "Guest" : displayNameForAddress(item.addedBy)} /{" "}
-                    {timeAgo(Math.floor(new Date(item.createdAt).getTime() / 1000), currentTime)}
-                  </small>
-                  {item.notes && <p>{item.notes}</p>}
-                  {item.url && (
-                    <a href={item.url} target="_blank" rel="noreferrer">
-                      Open source
-                    </a>
-                  )}
-                </article>
-              ))}
-            </div>
-          </section>
+            </section>
 
-          <section className="top-traders-panel">
-            <div className="panel-heading">
-              <div>
-                <span className="section-label">Top traders</span>
-                <h3>Copy trade setup</h3>
+            <section className="top-traders-panel">
+              <div className="panel-heading">
+                <div>
+                  <span className="section-label">Top traders</span>
+                  <h3>Copy trade setup</h3>
+                </div>
+                <span>{topTraderRows.length} wallets</span>
               </div>
-              <span>{topTraderRows.length} wallets</span>
-            </div>
-            <div className="top-trader-list">
-              {topTraderRows.length === 0 && <span>No trader activity indexed for this market yet.</span>}
-              {topTraderRows.map((trader, index) => (
-                <article key={trader.address}>
-                  <div>
-                    <strong>#{index + 1} {displayNameForAddress(trader.address)}</strong>
-                    <small>
-                      YES {formatUsdc(trader.yes)} / NO {formatUsdc(trader.no)}
-                    </small>
-                  </div>
-                  <span>{formatUsdc(trader.total)} USDC</span>
-                  <button className="secondary" onClick={() => copyTraderPosition(trader)} type="button">
-                    Copy
-                  </button>
-                </article>
-              ))}
-            </div>
-          </section>
-
-          <section className="discussion-panel">
-            <div className="panel-heading">
-              <div>
-                <span className="section-label">Discussion</span>
-                <h3>Market comments</h3>
+              <div className="top-trader-list">
+                {topTraderRows.length === 0 && <span>No trader activity indexed for this market yet.</span>}
+                {topTraderRows.map((trader, index) => (
+                  <article key={trader.address}>
+                    <div>
+                      <strong>#{index + 1} {displayNameForAddress(trader.address)}</strong>
+                      <small>
+                        YES {formatUsdc(trader.yes)} / NO {formatUsdc(trader.no)}
+                      </small>
+                    </div>
+                    <span>{formatUsdc(trader.total)} USDC</span>
+                    <button className="secondary" onClick={() => copyTraderPosition(trader)} type="button">
+                      Copy
+                    </button>
+                  </article>
+                ))}
               </div>
-              <span>{selectedCommentRows.length} comments</span>
-            </div>
-            <div className="comment-form">
-              <textarea
-                placeholder="Add context, a source, or your forecast..."
-                rows={3}
-                value={commentInputs[selectedMarket.id] || ""}
-                onChange={(event) =>
-                  setCommentInputs((current) => ({ ...current, [selectedMarket.id]: event.target.value }))
-                }
-              />
-              <button onClick={() => postMarketComment(selectedMarket.id)} type="button">
-                Post comment
-              </button>
-            </div>
-            <div className="comment-list">
-              {selectedCommentRows.length === 0 && <span>No comments yet.</span>}
-              {selectedCommentRows.map((comment) => (
-                <article key={comment.id}>
-                  <strong>{comment.author === "Guest" ? "Guest" : displayNameForAddress(comment.author)}</strong>
-                  <small>{timeAgo(Math.floor(new Date(comment.createdAt).getTime() / 1000), currentTime)}</small>
-                  <p>{comment.text}</p>
-                </article>
-              ))}
-            </div>
-          </section>
+            </section>
           </section>
         ) : (
           <section className="locked-market-tools">
             <strong>Wallet required for market tools</strong>
-            <span>Comments, resolution sources, evidence, copy trading, and resolver tools are available after wallet connection.</span>
+            <span>Aura Agent, copy trading, and resolver tools are available after wallet connection.</span>
           </section>
         )}
 
