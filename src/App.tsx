@@ -3467,7 +3467,7 @@ export default function App() {
     }
   }, [account, contractAddress, hasContract, marketLoadLimit, selectedMarketId]);
 
-  const runTransaction = async (action: () => Promise<Hash>, message: string) => {
+  const runTransaction = async (action: () => Promise<Hash>, message: string, refreshAfterConfirm = true) => {
     if (transactionLockRef.current) {
       setNotice("A wallet confirmation is already open. Confirm or reject it before sending another transaction.");
       return false;
@@ -3488,7 +3488,7 @@ export default function App() {
       }
       setNotice(`Transaction confirmed on Arc: ${shortHash(hash)}`, hash);
       void refreshWalletBalance();
-      void loadMarkets();
+      if (refreshAfterConfirm) void loadMarkets();
       return true;
     } catch (error) {
       setNotice(compactErrorMessage(error), submittedHash);
@@ -3593,10 +3593,47 @@ export default function App() {
             args: [BigInt(marketId), side],
             value
           }),
-        `Staking ${amount} USDC...`
+        `Staking ${amount} USDC...`,
+        false
       );
       if (completed) {
         const market = markets.find((item) => item.id === marketId);
+        const isNewParticipant = market ? market.yesPosition + market.noPosition === 0n : false;
+        const nowSeconds = Math.floor(Date.now() / 1000);
+        const isLiveMarket =
+          Boolean(market) && market?.outcome === Outcome.Unresolved && market.closeTime > nowSeconds;
+
+        setMarkets((current) =>
+          current.map((item) => {
+            if (item.id !== marketId) return item;
+            return {
+              ...item,
+              yesPool: side === Outcome.Yes ? item.yesPool + value : item.yesPool,
+              noPool: side === Outcome.No ? item.noPool + value : item.noPool,
+              traderCount: isNewParticipant ? item.traderCount + 1 : item.traderCount,
+              yesPosition: side === Outcome.Yes ? item.yesPosition + value : item.yesPosition,
+              noPosition: side === Outcome.No ? item.noPosition + value : item.noPosition
+            };
+          })
+        );
+        setProjectStats((current) =>
+          current
+            ? {
+                ...current,
+                totalVolume: current.totalVolume + value,
+                liveLiquidity: isLiveMarket ? current.liveLiquidity + value : current.liveLiquidity,
+                averageMarketVolume:
+                  current.totalMarkets > 0 ? (current.totalVolume + value) / BigInt(current.totalMarkets) : 0n,
+                participantEntries: isNewParticipant ? current.participantEntries + 1 : current.participantEntries,
+                knownPlayers:
+                  account &&
+                  !activities.some((activity) => activity.user.toLowerCase() === account.toLowerCase()) &&
+                  !markets.some((item) => item.creator.toLowerCase() === account.toLowerCase())
+                    ? current.knownPlayers + 1
+                    : current.knownPlayers
+              }
+            : current
+        );
         setActivities((current) => [
           {
             id: `local-${Date.now()}-${marketId}-${side}`,
@@ -3610,6 +3647,10 @@ export default function App() {
           ...current
         ].slice(0, 100));
         setStakeInputs((current) => ({ ...current, [marketId]: "" }));
+        window.setTimeout(() => {
+          silentLoadRef.current = true;
+          void loadMarkets();
+        }, 90_000);
       }
     } catch (error) {
       setNotice(compactErrorMessage(error));
