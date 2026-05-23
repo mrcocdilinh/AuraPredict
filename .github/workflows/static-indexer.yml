@@ -37,10 +37,10 @@ jobs:
 
       - name: Sync Arc events
         env:
-          VITE_PREDICTION_MARKET_ADDRESS: 0x834f1DACA2c49D0231a8e640eb667AE0E1319311
-          AURA_INDEXER_START_BLOCK: 43295581
-          AURA_INDEXER_CHUNK_SIZE: 9000
-          AURA_INDEXER_POLL_MS: 12000
+          VITE_PREDICTION_MARKET_ADDRESS: "0x834f1DACA2c49D0231a8e640eb667AE0E1319311"
+          AURA_INDEXER_START_BLOCK: "43295581"
+          AURA_INDEXER_CHUNK_SIZE: "9000"
+          AURA_INDEXER_POLL_MS: "12000"
         run: npm run indexer:once
 
       - run: npm run indexer:export-static -- static-index
