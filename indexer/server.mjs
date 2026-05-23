@@ -23,7 +23,8 @@ const RPC_URLS = (
   .split(",")
   .map((url) => url.trim())
   .filter(Boolean);
-const PORT = Number(process.env.AURA_INDEXER_PORT || 8787);
+const PORT = Number(process.env.PORT || process.env.AURA_INDEXER_PORT || 8787);
+const HOST = process.env.AURA_INDEXER_HOST || (process.env.PORT ? "0.0.0.0" : "127.0.0.1");
 const POLL_MS = Number(process.env.AURA_INDEXER_POLL_MS || 12_000);
 const START_BLOCK = BigInt(process.env.AURA_INDEXER_START_BLOCK || 0);
 const CHUNK_SIZE = BigInt(process.env.AURA_INDEXER_CHUNK_SIZE || 9_000);
@@ -782,8 +783,8 @@ async function main() {
   }
 
   const server = createServer(route);
-  server.listen(PORT, "127.0.0.1", () => {
-    console.log(`[indexer] AuraPredict indexer listening on http://127.0.0.1:${PORT}`);
+  server.listen(PORT, HOST, () => {
+    console.log(`[indexer] AuraPredict indexer listening on http://${HOST}:${PORT}`);
   });
 
   setInterval(() => {

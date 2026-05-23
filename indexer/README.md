@@ -16,7 +16,7 @@ One-time sync only:
 npm run indexer:once
 ```
 
-Default API:
+Default local API:
 
 ```text
 http://127.0.0.1:8787
@@ -29,6 +29,7 @@ The indexer reads the existing `VITE_PREDICTION_MARKET_ADDRESS` from `.env`. Opt
 ```bash
 VITE_AURA_INDEXER_URL=http://127.0.0.1:8787
 AURA_INDEXER_PORT=8787
+AURA_INDEXER_HOST=127.0.0.1
 AURA_INDEXER_START_BLOCK=0
 AURA_INDEXER_CHUNK_SIZE=9000
 ```
@@ -49,3 +50,41 @@ GET /api/sync
 ```
 
 The frontend uses `VITE_AURA_INDEXER_URL` when available and falls back to direct Arc RPC reads if the indexer is offline.
+
+## Public Deploy
+
+The production app at `https://app.aurapredict.xyz` needs a public indexer URL, not `127.0.0.1`.
+
+Recommended flow:
+
+1. Deploy this repo as a separate web service named `aurapredict-indexer`.
+2. Use Dockerfile: `Dockerfile.indexer`.
+3. Start command is already handled by Docker: `npm run indexer`.
+4. Set these environment variables on the indexer service:
+
+```bash
+VITE_PREDICTION_MARKET_ADDRESS=0x834f1DACA2c49D0231a8e640eb667AE0E1319311
+AURA_INDEXER_START_BLOCK=43295581
+AURA_INDEXER_CHUNK_SIZE=9000
+AURA_INDEXER_POLL_MS=12000
+```
+
+Most hosts set `PORT` automatically. The indexer listens on `0.0.0.0` when `PORT` is present.
+
+After the service is live, open:
+
+```text
+https://your-indexer-domain/health
+https://your-indexer-domain/api/stats
+```
+
+Then set this on the frontend deployment, for example in Vercel:
+
+```bash
+VITE_AURA_INDEXER_URL=https://your-indexer-domain
+VITE_PREDICTION_MARKET_START_BLOCK=43295581
+```
+
+Redeploy the frontend after changing env vars.
+
+For smooth production behavior, avoid free plans that sleep. If the host sleeps or has ephemeral storage, the indexer will recover by backfilling from `AURA_INDEXER_START_BLOCK`, but users may see slow data during cold starts.

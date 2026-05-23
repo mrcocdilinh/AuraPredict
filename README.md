@@ -56,6 +56,24 @@ VITE_AURA_INDEXER_URL=http://127.0.0.1:8787
 Doc file `DEPLOY_AURAPREDICT.md` neu ban muon dua code len GitHub va deploy len Vercel theo tung buoc.
 Doc them `indexer/README.md` neu ban muon chay backend/indexer rieng cho leaderboard, stats va history nhanh hon.
 
+## Production indexer
+
+De `https://app.aurapredict.xyz` chay muot nhu local, deploy `indexer/` thanh mot web service public rieng.
+
+- Dockerfile: `Dockerfile.indexer`
+- Render blueprint: `render.yaml`
+- Health check: `/health`
+- API stats: `/api/stats`
+
+Sau khi co URL public cua indexer, them env cho frontend production:
+
+```bash
+VITE_AURA_INDEXER_URL=https://your-indexer-domain
+VITE_PREDICTION_MARKET_START_BLOCK=43295581
+```
+
+Sau do redeploy frontend.
+
 ## Luu y an toan
 
 - Khong commit file `.env`.

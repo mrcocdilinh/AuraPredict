@@ -1,0 +1,12 @@
+.git
+node_modules
+dist
+artifacts
+cache
+.appdata
+.localappdata
+.npm-cache
+backups
+indexer/data/aurapredict-index.json
+*.log
+.env
