@@ -83,6 +83,7 @@ type LeaderboardMetric = "volume" | "winRate" | "pnl" | "auraPoints";
 type LeaderboardPeriod = "day" | "7d" | "30d" | "all";
 type MarketSectionKey = "fresh" | "hot" | "closing";
 type ThemeMode = "dark" | "light";
+type MarketViewMode = "grid" | "list";
 
 type LeaderboardRow = {
   address: string;
@@ -118,6 +119,11 @@ const EVENT_LOAD_CONCURRENCY = 2;
 const RPC_RETRY_ATTEMPTS = 2;
 const RPC_RETRY_DELAY_MS = 450;
 const RPC_CALL_STAGGER_MS = 40;
+const CHART_LEFT = 8;
+const CHART_RIGHT = 92;
+const CHART_TOP = 8;
+const CHART_BOTTOM = 54;
+const CHART_HEIGHT = CHART_BOTTOM - CHART_TOP;
 const WALLET_CONNECTED_KEY = "aurapredict.walletConnected";
 const DISMISSED_RESULT_KEY = "aurapredict.dismissedResultNotices";
 const THEME_KEY = "aurapredict.theme";
@@ -272,6 +278,25 @@ function formatUsdcInput(value: bigint) {
   return raw.includes(".") ? raw.replace(/0+$/, "").replace(/\.$/, "") : raw;
 }
 
+function transactionUrl(hash: Hash) {
+  return `${ARC_EXPLORER_URL}/tx/${hash}`;
+}
+
+function compactErrorMessage(error: unknown) {
+  const raw = errorMessage(error);
+  const firstLine = raw.split("\n").find(Boolean) || raw;
+  const lower = raw.toLowerCase();
+  if (lower.includes("user rejected") || lower.includes("user denied")) return "Transaction rejected in wallet.";
+  if (lower.includes("insufficient funds")) return "Insufficient USDC balance for this transaction.";
+  if (lower.includes("execution reverted")) {
+    return "Transaction reverted by the contract. Check market status, amount, wallet permission, or open the transaction on Arcscan.";
+  }
+  if (lower.includes("contract interaction failed")) {
+    return "Contract interaction failed. Check wallet balance, market status, contract address, or open the transaction details in your wallet.";
+  }
+  return firstLine.length > 220 ? `${firstLine.slice(0, 220)}...` : firstLine;
+}
+
 function parseUsdcInput(value: string) {
   const normalized = value.trim().replace(/,/g, ".");
   if (!normalized || Number(normalized) <= 0) return 0n;
@@ -327,6 +352,16 @@ function closeDate(value: number) {
     minute: "2-digit",
     hour12: false
   }).format(new Date(value * 1000)) + " UTC";
+}
+
+function chartTimeLabel(value: number, includeDate = false) {
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone: "UTC",
+    ...(includeDate ? { month: "short", day: "2-digit" } : {}),
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false
+  }).format(new Date(value * 1000));
 }
 
 function parseUtcDateTime(value: string) {
@@ -1121,10 +1156,12 @@ export default function App() {
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [lastDataRefresh, setLastDataRefresh] = useState<Date | null>(null);
-  const [notice, setNotice] = useState("");
+  const [notice, setNoticeText] = useState("");
+  const [noticeTxHash, setNoticeTxHash] = useState<Hash | "">("");
   const [transactionPending, setTransactionPending] = useState(false);
   const [stakeInputs, setStakeInputs] = useState<Record<number, string>>({});
   const [activeCategory, setActiveCategory] = useState("All");
+  const [marketViewMode, setMarketViewMode] = useState<MarketViewMode>("grid");
   const [view, setView] = useState<AppView>("markets");
   const [leaderboardMetric, setLeaderboardMetric] = useState<LeaderboardMetric>("volume");
   const [leaderboardPeriod, setLeaderboardPeriod] = useState<LeaderboardPeriod>("all");
@@ -1398,35 +1435,101 @@ export default function App() {
 
     let yesPool = 0n;
     let noPool = 0n;
-    const source =
-      selectedMarketActivities.length > 0
-        ? selectedMarketActivities
-        : [
-            {
-              id: `market-${selectedMarket.id}-current`,
-              user: selectedMarket.creator,
-              marketId: selectedMarket.id,
-              question: selectedMarket.question,
-              side: Outcome.Yes,
-              amount: selectedMarket.yesPool,
-              timestamp: selectedMarket.closeTime
-            }
-          ];
-
-    return source.map((activity, index) => {
+    const activityPoints = selectedMarketActivities.map((activity) => {
       if (activity.side === Outcome.Yes) yesPool += activity.amount;
       if (activity.side === Outcome.No) noPool += activity.amount;
       const total = yesPool + noPool;
       const yes = total > 0n ? percent(yesPool, total) : selectedMarketYesPercent;
-      const x = source.length <= 1 ? 8 + index * 84 : 8 + (index / (source.length - 1)) * 84;
 
       return {
+        timestamp: activity.timestamp || selectedMarket.createdAt || Math.min(nowSeconds, selectedMarket.closeTime),
+        yesPercent: yes,
+        noPercent: 100 - yes
+      };
+    });
+
+    const referenceEnd = Math.max(
+      selectedMarket.createdAt || 0,
+      Math.min(nowSeconds, selectedMarket.closeTime || nowSeconds)
+    );
+    const fallbackStart = selectedMarket.createdAt || Math.max(0, referenceEnd - 60 * 60);
+    const points =
+      activityPoints.length > 0
+        ? activityPoints
+        : [
+            { timestamp: fallbackStart, yesPercent: selectedMarketYesPercent, noPercent: selectedMarketNoPercent },
+            { timestamp: referenceEnd, yesPercent: selectedMarketYesPercent, noPercent: selectedMarketNoPercent }
+          ];
+    const last = points[points.length - 1];
+    if (
+      points.length > 0 &&
+      (Math.abs(last.yesPercent - selectedMarketYesPercent) > 0.1 || Math.abs(last.noPercent - selectedMarketNoPercent) > 0.1)
+    ) {
+      points.push({
+        timestamp: Math.max(referenceEnd, last.timestamp + 60),
+        yesPercent: selectedMarketYesPercent,
+        noPercent: selectedMarketNoPercent
+      });
+    }
+    if (points.length === 1) {
+      points.unshift({
+        timestamp: Math.max(0, points[0].timestamp - 60 * 30),
+        yesPercent: points[0].yesPercent,
+        noPercent: points[0].noPercent
+      });
+    }
+
+    const minTime = Math.min(...points.map((point) => point.timestamp));
+    const maxTime = Math.max(minTime + 60, ...points.map((point) => point.timestamp));
+    return points.map((point) => {
+      const x = CHART_LEFT + ((point.timestamp - minTime) / (maxTime - minTime)) * (CHART_RIGHT - CHART_LEFT);
+      return {
+        ...point,
         x,
-        yesY: 54 - yes * 0.42,
-        noY: 54 - (100 - yes) * 0.42
+        yesY: CHART_BOTTOM - (point.yesPercent / 100) * CHART_HEIGHT,
+        noY: CHART_BOTTOM - (point.noPercent / 100) * CHART_HEIGHT
       };
     });
   })();
+  const detailChartTicks = (() => {
+    if (detailChartRows.length === 0) return [];
+    const minTime = detailChartRows[0].timestamp;
+    const maxTime = detailChartRows[detailChartRows.length - 1].timestamp;
+    const range = Math.max(60, maxTime - minTime);
+    const includeDate = range >= 24 * 60 * 60;
+    return Array.from({ length: 5 }, (_, index) => {
+      const timestamp = Math.round(minTime + (range * index) / 4);
+      const x = CHART_LEFT + (index / 4) * (CHART_RIGHT - CHART_LEFT);
+      return { x, label: chartTimeLabel(timestamp, includeDate) };
+    });
+  })();
+  const relatedMarkets = selectedMarket
+    ? [...markets]
+        .filter((market) => market.id !== selectedMarket.id && (market.category || "Other") === (selectedMarket.category || "Other"))
+        .map((market) => {
+          const selectedTerms = new Set(
+            selectedMarket.question
+              .toLowerCase()
+              .split(/[^a-z0-9]+/)
+              .filter((term) => term.length > 3)
+          );
+          const overlap = market.question
+            .toLowerCase()
+            .split(/[^a-z0-9]+/)
+            .filter((term) => selectedTerms.has(term)).length;
+          const liveBonus = market.outcome === Outcome.Unresolved && market.closeTime > nowSeconds ? 4 : 0;
+          return { market, score: liveBonus + overlap * 3 + Math.min(8, market.traderCount) };
+        })
+        .sort((a, b) => {
+          if (b.score !== a.score) return b.score - a.score;
+          const bVolume = marketVolume(b.market);
+          const aVolume = marketVolume(a.market);
+          if (bVolume === aVolume) return b.market.id - a.market.id;
+          return bVolume > aVolume ? 1 : -1;
+        })
+        .slice(0, 4)
+        .map((item) => item.market)
+    : [];
   const normalizedSearch = searchQuery.trim().toLowerCase();
   const searchResults = normalizedSearch
     ? [...markets]
@@ -1477,12 +1580,13 @@ export default function App() {
     account && owner
       ? pendingResolutionMarkets.filter((market) => market.disputed && sameAddress(owner, account))
       : [];
-  const claimNotifications = account
+  const claimNotifications = account && isOwnProfile
     ? profileMarkets.filter(
         (market) => market.outcome !== Outcome.Unresolved && !market.claimed && market.potentialPayout > 0n
       )
     : [];
-  const resultNotifications = account
+  const claimableTotal = claimNotifications.reduce((sum, market) => sum + market.potentialPayout, 0n);
+  const resultNotifications = account && isOwnProfile
     ? profileMarkets.filter((market) => {
         const key = `${account.toLowerCase()}:result:${market.id}:${market.outcome}`;
         return (
@@ -1702,7 +1806,10 @@ export default function App() {
 
   useEffect(() => {
     if (!notice) return;
-    const timeout = window.setTimeout(() => setNotice(""), 5200);
+    const timeout = window.setTimeout(() => {
+      setNoticeText("");
+      setNoticeTxHash("");
+    }, 6200);
     return () => window.clearTimeout(timeout);
   }, [notice]);
 
@@ -1777,6 +1884,11 @@ export default function App() {
     (provider?: EthereumProvider | null) => getWalletClient(provider ?? selectedWalletProvider),
     [selectedWalletProvider]
   );
+
+  const setNotice = useCallback((message: string, txHash?: Hash) => {
+    setNoticeText(message);
+    setNoticeTxHash(txHash || "");
+  }, []);
 
   const switchToArc = useCallback(async (provider?: EthereumProvider | null) => {
     const injected = getInjectedProvider(provider ?? selectedWalletProvider);
@@ -2463,16 +2575,26 @@ export default function App() {
       return false;
     }
 
+    let submittedHash: Hash | undefined;
     transactionLockRef.current = true;
     setTransactionPending(true);
     try {
       setNotice(message);
       const hash = await action();
-      await getPublicClient().waitForTransactionReceipt({ hash });
-      setNotice(`Transaction finalized on Arc: ${shortHash(hash)}`);
+      submittedHash = hash;
+      setNotice(`Submitted on Arc: ${shortHash(hash)}. Waiting for confirmation...`, hash);
+      const receipt = await getPublicClient().waitForTransactionReceipt({ hash });
+      if (receipt.status !== "success") {
+        setNotice("Transaction reverted on Arc. Open the transaction to inspect the failure.", hash);
+        return false;
+      }
+      setNotice(`Transaction confirmed on Arc: ${shortHash(hash)}`, hash);
       void refreshWalletBalance();
       void loadMarkets();
       return true;
+    } catch (error) {
+      setNotice(compactErrorMessage(error), submittedHash);
+      return false;
     } finally {
       transactionLockRef.current = false;
       setTransactionPending(false);
@@ -2496,7 +2618,9 @@ export default function App() {
 
       let completed = false;
 
-      if (contractVersion === "legacy") {
+      const useLegacyCreate = contractVersion === "legacy" || (contractVersion === "unknown" && creatorBond === 0n);
+
+      if (useLegacyCreate) {
         const legacyCreateAbi = [
           {
             type: "function",
@@ -2545,48 +2669,52 @@ export default function App() {
       setView("markets");
       setActiveCategory("All");
     } catch (error) {
-      setNotice(errorMessage(error));
+      setNotice(compactErrorMessage(error));
     }
   };
 
   const placeBet = async (marketId: number, side: Outcome) => {
-    if (!account || !isAddress(account)) throw new Error("Connect wallet first.");
-    const amount = stakeInputs[marketId] || "";
-    const value = parseUsdcInput(amount);
-    if (value <= 0n) throw new Error("Enter a valid USDC amount.");
-    if (walletBalance > 0n && value > walletBalance) throw new Error("Stake amount is higher than your wallet USDC balance.");
+    try {
+      if (!account || !isAddress(account)) throw new Error("Connect wallet first.");
+      const amount = stakeInputs[marketId] || "";
+      const value = parseUsdcInput(amount);
+      if (value <= 0n) throw new Error("Enter a valid USDC amount.");
+      if (walletBalance > 0n && value > walletBalance) throw new Error("Stake amount is higher than your wallet USDC balance.");
 
-    await switchToArc();
-    const walletClient = getActiveWalletClient();
+      await switchToArc();
+      const walletClient = getActiveWalletClient();
 
-    const completed = await runTransaction(
-      () =>
-        walletClient.writeContract({
-          account: account as Address,
-          chain: arcTestnet,
-          address: contractAddress,
-          abi: arcPredictionMarketAbi,
-          functionName: "bet",
-          args: [BigInt(marketId), side],
-          value
-        }),
-      `Staking ${amount} USDC...`
-    );
-    if (completed) {
-      const market = markets.find((item) => item.id === marketId);
-      setActivities((current) => [
-        {
-          id: `local-${Date.now()}-${marketId}-${side}`,
-          user: account,
-          marketId,
-          question: market?.question ?? `Market #${marketId}`,
-          side,
-          amount: value,
-          timestamp: Math.floor(Date.now() / 1000)
-        },
-        ...current
-      ].slice(0, 100));
-      setStakeInputs((current) => ({ ...current, [marketId]: "" }));
+      const completed = await runTransaction(
+        () =>
+          walletClient.writeContract({
+            account: account as Address,
+            chain: arcTestnet,
+            address: contractAddress,
+            abi: arcPredictionMarketAbi,
+            functionName: "bet",
+            args: [BigInt(marketId), side],
+            value
+          }),
+        `Staking ${amount} USDC...`
+      );
+      if (completed) {
+        const market = markets.find((item) => item.id === marketId);
+        setActivities((current) => [
+          {
+            id: `local-${Date.now()}-${marketId}-${side}`,
+            user: account,
+            marketId,
+            question: market?.question ?? `Market #${marketId}`,
+            side,
+            amount: value,
+            timestamp: Math.floor(Date.now() / 1000)
+          },
+          ...current
+        ].slice(0, 100));
+        setStakeInputs((current) => ({ ...current, [marketId]: "" }));
+      }
+    } catch (error) {
+      setNotice(compactErrorMessage(error));
     }
   };
 
@@ -2698,6 +2826,36 @@ export default function App() {
         }),
       "Claiming payout..."
     );
+  };
+
+  const claimAll = async () => {
+    try {
+      if (!account || !isAddress(account)) throw new Error("Connect wallet first.");
+      if (claimNotifications.length === 0) {
+        setNotice("No claimable payouts right now.");
+        return;
+      }
+
+      await switchToArc();
+      const walletClient = getActiveWalletClient();
+      for (const [index, market] of claimNotifications.entries()) {
+        const completed = await runTransaction(
+          () =>
+            walletClient.writeContract({
+              account: account as Address,
+              chain: arcTestnet,
+              address: contractAddress,
+              abi: arcPredictionMarketAbi,
+              functionName: "claim",
+              args: [BigInt(market.id)]
+            }),
+          `Claiming payout ${index + 1}/${claimNotifications.length} from Market #${market.id}...`
+        );
+        if (!completed) break;
+      }
+    } catch (error) {
+      setNotice(compactErrorMessage(error));
+    }
   };
 
   const withdrawFees = async () => {
@@ -2863,7 +3021,7 @@ export default function App() {
   }, [loadMarkets]);
 
   const renderMarketCards = (items: MarketView[], emptyTitle: string, emptyText: string, resultSubject = "You") => (
-    <section className="market-grid">
+    <section className={marketViewMode === "list" ? "market-grid market-grid-list" : "market-grid"}>
       {items.length === 0 && (
         <div className="empty-state">
           <strong>{loading ? "Loading markets..." : emptyTitle}</strong>
@@ -3005,7 +3163,7 @@ export default function App() {
             <div className="trade-row" onClick={(event) => event.stopPropagation()}>
               <input
                 inputMode="decimal"
-                placeholder="USDC amount"
+                placeholder="Amount"
                 value={stakeInputs[market.id] || ""}
                 onChange={(event) =>
                   setStakeInputs((current) => ({ ...current, [market.id]: event.target.value }))
@@ -3163,17 +3321,12 @@ export default function App() {
     const balancePercent =
       walletBalance > 0n ? Math.min(100, Number((tradeAmount * 10000n) / walletBalance) / 100) : 0;
     const meta = categoryMeta(selectedMarket.category || "Other");
-    const chartRows =
-      detailChartRows.length > 1
-        ? detailChartRows
-        : [
-            { x: 8, yesY: 54 - 50 * 0.42, noY: 54 - 50 * 0.42 },
-            {
-              x: 92,
-              yesY: 54 - selectedMarketYesPercent * 0.42,
-              noY: 54 - selectedMarketNoPercent * 0.42
-            }
-          ];
+    const chartRows = detailChartRows;
+    const chartLinePoints = chartRows.map((point) => `${point.x},${point.yesY}`).join(" ");
+    const chartAreaPath =
+      chartRows.length > 0
+        ? `M${chartRows[0].x},${CHART_BOTTOM} L${chartLinePoints} L${chartRows[chartRows.length - 1].x},${CHART_BOTTOM} Z`
+        : "";
     const copyMarketLink = async () => {
       const url = `${window.location.origin}${window.location.pathname}?market=${selectedMarket.id}`;
       try {
@@ -3234,18 +3387,36 @@ export default function App() {
             <div className="detail-chart-header">
               <div>
                 <span className="section-label">Odds movement</span>
-                <h2>YES / NO price history</h2>
+                <h2>
+                  <b>YES {selectedMarketYesPercent.toFixed(0)}%</b>
+                  <span>Chance</span>
+                </h2>
               </div>
               <div className="chart-window-tabs">
-                <span>1H</span>
+                <span>1D</span>
+                <span>1W</span>
                 <strong>All</strong>
               </div>
             </div>
-            <svg className="detail-chart" viewBox="0 0 100 58" role="img" aria-label="Market odds chart">
-              <path className="edge-grid" d="M8 10H96 M8 28H96 M8 46H96" />
-              <polyline className="detail-yes-line" points={chartRows.map((point) => `${point.x},${point.yesY}`).join(" ")} />
-              <polyline className="detail-no-line" points={chartRows.map((point) => `${point.x},${point.noY}`).join(" ")} />
-            </svg>
+            <div className="chart-frame">
+              <svg className="detail-chart" viewBox="0 0 100 58" preserveAspectRatio="none" role="img" aria-label="Market odds chart">
+                <path className="edge-grid" d="M8 8H92 M8 31H92 M8 54H92" />
+                {chartAreaPath && <path className="detail-yes-area" d={chartAreaPath} />}
+                <polyline className="detail-yes-line" points={chartLinePoints} />
+              </svg>
+              <div className="chart-y-labels" aria-hidden="true">
+                <span>100%</span>
+                <span>50%</span>
+                <span>0%</span>
+              </div>
+            </div>
+            <div className="chart-time-row">
+                {detailChartTicks.map((tick) => (
+                  <span key={`${tick.x}-${tick.label}`}>
+                    {tick.label}
+                  </span>
+                ))}
+            </div>
             <div className="edge-legend">
               <span className="won">YES {selectedMarketYesPercent.toFixed(1)}%</span>
               <span className="lost">NO {selectedMarketNoPercent.toFixed(1)}%</span>
@@ -3269,34 +3440,23 @@ export default function App() {
                 {formatUsdc(walletBalance)} USDC
               </button>
             </div>
-            <div className="trade-row">
+            <div className="trade-input-row">
               <input
                 inputMode="decimal"
-                placeholder="USDC amount"
+                placeholder="Amount"
                 value={stakeInputs[selectedMarket.id] || ""}
                 onChange={(event) =>
                   setStakeInputs((current) => ({ ...current, [selectedMarket.id]: event.target.value }))
                 }
                 disabled={!canBet}
               />
-              <button className="yes-button" onClick={() => placeBet(selectedMarket.id, Outcome.Yes)} disabled={!canBet}>
-                <span>YES</span>
-                <small>{formatUsdc(selectedMarket.yesPool)} USDC</small>
-              </button>
-              <button className="no-button" onClick={() => placeBet(selectedMarket.id, Outcome.No)} disabled={!canBet}>
-                <span>NO</span>
-                <small>{formatUsdc(selectedMarket.noPool)} USDC</small>
-              </button>
             </div>
             <div className="stake-shortcuts">
-              {[25, 50, 100].map((value) => (
+              {[0, 25, 50, 100].map((value) => (
                 <button key={value} onClick={() => setStakeByPercent(selectedMarket.id, value)} disabled={!canBet || walletBalance <= 0n} type="button">
                   {value}%
                 </button>
               ))}
-              <button onClick={() => setStakeByPercent(selectedMarket.id, 100)} disabled={!canBet || walletBalance <= 0n} type="button">
-                Max
-              </button>
             </div>
             <label className="stake-slider">
               <span>{balancePercent.toFixed(0)}% of balance</span>
@@ -3310,6 +3470,16 @@ export default function App() {
                 disabled={!canBet || walletBalance <= 0n}
               />
             </label>
+            <div className="trade-side-buttons">
+              <button className="yes-button" onClick={() => placeBet(selectedMarket.id, Outcome.Yes)} disabled={!canBet}>
+                <span>YES {selectedMarketYesPercent.toFixed(0)}%</span>
+                <small>Buy YES</small>
+              </button>
+              <button className="no-button" onClick={() => placeBet(selectedMarket.id, Outcome.No)} disabled={!canBet}>
+                <span>NO {selectedMarketNoPercent.toFixed(0)}%</span>
+                <small>Buy NO</small>
+              </button>
+            </div>
             <div className="payout-preview">
               <div>
                 <span>YES payout if correct</span>
@@ -3403,6 +3573,45 @@ export default function App() {
             </div>
           ))}
         </section>
+
+        {relatedMarkets.length > 0 && (
+          <section className="related-market-section">
+            <div className="market-section-header">
+              <div className="market-section-title">
+                <span className="section-dot" />
+                <h3>Related {selectedMarket.category || "Other"} markets</h3>
+              </div>
+              <span>{relatedMarkets.length} suggestions</span>
+            </div>
+            <div className="related-market-grid">
+              {relatedMarkets.map((market) => {
+                const relatedTotal = marketVolume(market);
+                const relatedYes = percent(market.yesPool, relatedTotal);
+                const relatedMeta = categoryMeta(market.category || "Other");
+                return (
+                  <button
+                    className="related-market-card"
+                    key={market.id}
+                    onClick={() => openMarket(market.id)}
+                    type="button"
+                  >
+                    <span className={`category ${relatedMeta.className}`}>
+                      <CategoryIcon category={market.category || "Other"} />
+                      {market.category || "Other"}
+                    </span>
+                    <strong>{shortQuestion(market.question)}</strong>
+                    <div className="related-market-meter">
+                      <span style={{ width: `${relatedYes}%` }} />
+                    </div>
+                    <small>
+                      YES {relatedYes.toFixed(0)}% / {formatUsdc(relatedTotal)} USDC / {countdownText(market.closeTime, currentTime)}
+                    </small>
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+        )}
       </section>
     );
   };
@@ -3545,10 +3754,6 @@ export default function App() {
           </a>
           {account ? (
             <>
-              <button className="wallet-balance-pill" onClick={() => refreshWalletBalance()} type="button">
-                <span>USDC</span>
-                <strong>{formatUsdc(walletBalance)}</strong>
-              </button>
               <div className="notification-menu">
                 <button
                   className="notification-button"
@@ -3572,6 +3777,13 @@ export default function App() {
                     </div>
                     {notificationCount === 0 && (
                       <div className="notification-empty">No pending resolution or claim actions.</div>
+                    )}
+                    {claimNotifications.length > 1 && (
+                      <div className="notification-bulk-actions">
+                        <button onClick={claimAll} disabled={transactionPending} type="button">
+                          Claim all {formatUsdc(claimableTotal)} USDC
+                        </button>
+                      </div>
                     )}
                     {resolveNotifications.map((market) => (
                       <article className="notification-card" key={`resolve-${market.id}`}>
@@ -3651,8 +3863,13 @@ export default function App() {
                       <strong>{shortAddress(account)}</strong>
                     </div>
                     <div className="wallet-balance-row">
-                      <span>Available USDC</span>
-                      <strong>{formatUsdc(walletBalance)}</strong>
+                      <div>
+                        <span>Available USDC</span>
+                        <strong>{formatUsdc(walletBalance)}</strong>
+                      </div>
+                      <button className="wallet-refresh-button" onClick={() => refreshWalletBalance()} type="button">
+                        Refresh
+                      </button>
                     </div>
                     <button onClick={openProfile}>View Profile</button>
                     <button onClick={disconnectWallet}>Disconnect</button>
@@ -3668,7 +3885,16 @@ export default function App() {
         </div>
       </nav>
 
-      {notice && <div className="toast-notice">{notice}</div>}
+      {notice && (
+        <div className="toast-notice">
+          <span>{notice}</span>
+          {noticeTxHash && (
+            <a href={transactionUrl(noticeTxHash)} target="_blank" rel="noreferrer">
+              Arcscan
+            </a>
+          )}
+        </div>
+      )}
 
       <section className="activity-ticker" aria-label="Recent market activity">
         <div className="ticker-track">
@@ -3841,6 +4067,22 @@ export default function App() {
                   {category}
                 </button>
               ))}
+              <div className="view-mode-toggle" aria-label="Market view mode">
+                <button
+                  className={marketViewMode === "grid" ? "active" : ""}
+                  onClick={() => setMarketViewMode("grid")}
+                  type="button"
+                >
+                  Grid
+                </button>
+                <button
+                  className={marketViewMode === "list" ? "active" : ""}
+                  onClick={() => setMarketViewMode("list")}
+                  type="button"
+                >
+                  List
+                </button>
+              </div>
             </div>
           )}
 
@@ -3900,6 +4142,7 @@ export default function App() {
                     </div>
                     <div className="profile-chip-row">
                       <span>Arc Testnet</span>
+                      {isOwnProfile && <span>Balance {formatUsdc(walletBalance)} USDC</span>}
                       <span>{createdMarkets} created</span>
                       <span>{participatedProfileMarkets.length} participated</span>
                     </div>
@@ -3923,6 +4166,13 @@ export default function App() {
               </section>
 
               <section className="profile-stat-grid">
+                {isOwnProfile && (
+                  <article className="profile-stat-card profile-balance-card">
+                    <span>Available USDC</span>
+                    <strong>{formatUsdc(walletBalance)}</strong>
+                    <small>Arc Testnet wallet balance</small>
+                  </article>
+                )}
                 <article className="profile-stat-card">
                   <span>Your edge</span>
                   <strong className={displayedProfilePnl >= 0n ? "profile-positive" : "profile-negative"}>
@@ -3957,6 +4207,11 @@ export default function App() {
                       Realized PNL from settled markets. Current payout available: {formatUsdc(claimable)} USDC.
                     </span>
                   </div>
+                  {isOwnProfile && claimNotifications.length > 1 && (
+                    <button onClick={claimAll} disabled={transactionPending} type="button">
+                      Claim all {formatUsdc(claimableTotal)} USDC
+                    </button>
+                  )}
                 </div>
                 <div className="edge-chart-wrap">
                   <svg className="edge-chart" viewBox="0 0 100 58" role="img" aria-label="Profile edge chart">
