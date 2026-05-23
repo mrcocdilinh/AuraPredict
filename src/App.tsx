@@ -1185,6 +1185,7 @@ function LandingPage() {
     }
   });
   const [landingStats, setLandingStats] = useState<ProjectStats | null>(null);
+  const [demoOpen, setDemoOpen] = useState(false);
   const featureCards = [
     {
       title: "YES/NO markets",
@@ -1331,12 +1332,21 @@ function LandingPage() {
         </div>
         <aside className="landing-visual landing-video-card">
           <div className="landing-video-frame">
-            <iframe
-              src={DEMO_EMBED_URL}
-              title="AuraPredict demo video"
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-              allowFullScreen
-            />
+            {demoOpen ? (
+              <iframe
+                src={`${DEMO_EMBED_URL}?autoplay=1&rel=0&modestbranding=1`}
+                title="AuraPredict demo video"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                allowFullScreen
+              />
+            ) : (
+              <button className="landing-demo-cover" onClick={() => setDemoOpen(true)} type="button">
+                <img src="/aurapredict-logo.png" alt="" />
+                <span>Watch AuraPredict demo</span>
+                <strong>Preview the dapp flow without leaving the landing page.</strong>
+                <b>Play video</b>
+              </button>
+            )}
           </div>
           <div className="landing-market-preview">
             <span>Live market feel</span>
@@ -3618,7 +3628,10 @@ export default function App() {
     event.preventDefault();
     try {
       if (!account || !isAddress(account)) throw new Error("Connect wallet first.");
-      if (!createForm.question.trim()) throw new Error("Market question is required.");
+      const question = createForm.question.trim().replace(/\s+/g, " ");
+      const category = createForm.category.trim() || "Other";
+      if (!question) throw new Error("Market question is required.");
+      if (question.length < 8) throw new Error("Market question must be at least 8 characters.");
       if (!createForm.closeTime) throw new Error("Close time is required.");
       const closeTime = parseUtcDateTime(createForm.closeTime);
       const earliestCloseTime = BigInt(Math.floor(Date.now() / 1000) + 5 * 60);
@@ -3655,7 +3668,7 @@ export default function App() {
               address: contractAddress,
               abi: legacyCreateAbi,
               functionName: "createMarket",
-              args: [createForm.question.trim(), createForm.category.trim(), closeTime]
+              args: [question, category, closeTime]
             }),
           "Creating legacy market..."
         );
@@ -3668,7 +3681,7 @@ export default function App() {
               address: contractAddress,
               abi: arcPredictionMarketAbi,
               functionName: "createMarket",
-              args: [createForm.question.trim(), createForm.category.trim(), closeTime],
+              args: [question, category, closeTime],
               value: creatorBond
             }),
           `Creating market with ${formatUsdc(creatorBond)} USDC creator bond...`
@@ -3677,10 +3690,54 @@ export default function App() {
 
       if (!completed) return;
 
+      const optimisticMarket: MarketView = {
+        id: knownMarketCount,
+        question,
+        category,
+        createdAt: Math.floor(Date.now() / 1000),
+        closeTime: Number(closeTime),
+        creator: account,
+        resolver: account,
+        yesPool: 0n,
+        noPool: 0n,
+        traderCount: 0,
+        proposedOutcome: Outcome.Unresolved,
+        proposedAt: 0,
+        disputeDeadline: 0,
+        disputed: false,
+        disputer: "0x0000000000000000000000000000000000000000",
+        outcome: Outcome.Unresolved,
+        yesPosition: 0n,
+        noPosition: 0n,
+        claimed: false,
+        potentialPayout: 0n
+      };
+      setMarkets((current) =>
+        current.some((market) => market.question === question && sameAddress(market.creator, account))
+          ? current
+          : [optimisticMarket, ...current]
+      );
+      setKnownMarketCount((current) => Math.max(current + 1, optimisticMarket.id + 1));
+      setProjectStats((current) =>
+        current
+          ? {
+              ...current,
+              totalMarkets: current.totalMarkets + 1,
+              indexedMarkets: current.indexedMarkets + 1,
+              liveMarkets: current.liveMarkets + 1,
+              knownPlayers: Math.max(current.knownPlayers, uniquePlayerAddresses.size + 1)
+            }
+          : current
+      );
       setCreateForm({ question: "", category: "Crypto", closeTime: "" });
       setCreateModalOpen(false);
       setView("markets");
       setActiveCategory("All");
+      setNotice("Market created. It is shown locally now and will sync to the public indexer shortly.");
+      window.setTimeout(() => {
+        silentLoadRef.current = true;
+        void loadMarkets();
+      }, 90_000);
     } catch (error) {
       setNotice(compactErrorMessage(error));
     }
@@ -6458,6 +6515,7 @@ export default function App() {
                 value={createForm.question}
                 onChange={(event) => setCreateForm({ ...createForm, question: event.target.value })}
                 placeholder="Will Arc Testnet pass 1M transactions this week?"
+                minLength={8}
                 rows={4}
               />
             </label>
@@ -6487,6 +6545,7 @@ export default function App() {
             </div>
             <div className="resolver-note">
               Resolver is locked to the creator wallet: {account ? shortAddress(account) : "connect wallet first"}.
+              Question must be at least 8 characters.
               Market close time is saved in UTC and must be at least 5 minutes after the current UTC time.
               {contractVersion === "legacy"
                 ? " This legacy contract does not use creator bonds or dispute windows."
@@ -6496,7 +6555,7 @@ export default function App() {
               <button className="secondary" type="button" onClick={() => setCreateModalOpen(false)}>
                 Cancel
               </button>
-              <button disabled={!account || !hasContract || transactionPending} type="submit">
+              <button disabled={!account || !hasContract || transactionPending || createForm.question.trim().length < 8} type="submit">
                 {transactionPending ? "Waiting Wallet..." : "Launch Market"}
               </button>
             </div>
