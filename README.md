@@ -5,6 +5,7 @@ AuraPredict la dapp Prediction Market chay tren Arc Testnet. Du an gom:
 - Smart contract Solidity: `contracts/ArcPredictionMarket.sol`
 - Hardhat compile, test, deploy: `hardhat.config.cjs`, `scripts/deploy.js`
 - Frontend Vite React: `src/`
+- Local backend/indexer doc event Arc nhanh hon: `indexer/`
 - Huong dan tu dau, gom ca tao contract: `HUONG_DAN_TU_DAU_AURAPREDICT.md`
 - Huong dan deploy ngan gon: `DEPLOY_AURAPREDICT.md`
 
@@ -14,6 +15,7 @@ Tinh nang hien tai:
 - Market chia thanh Fresh, Hottest va Closing Soon.
 - Hottest sap xep theo so vi da tham gia, doc tu `traderCount` trong contract.
 - Thanh activity ticker doc event `BetPlaced` de hien nguoi choi vua stake YES/NO.
+- Frontend uu tien doc market, stats, leaderboard va history tu AuraPredict Indexer neu `VITE_AURA_INDEXER_URL` kha dung; neu khong co thi fallback ve Arc RPC nhu cu.
 - Contract thu phi protocol mac dinh 2% tren phan loi nhuan cua vi thang. Owner co the rut phi da tich luy.
 - Creator phai khoa creator bond khi tao market. Sau deadline, creator de xuat ket qua, nguoi choi co 12 gio dispute bang dispute bond. Neu co dispute, owner finalizes ket qua cuoi.
 
@@ -34,6 +36,7 @@ npm install
 copy .env.example .env
 npm run compile
 npm test
+npm run indexer
 npm run dev
 ```
 
@@ -47,9 +50,11 @@ Sau do dien dia chi contract vao:
 
 ```bash
 VITE_PREDICTION_MARKET_ADDRESS=0x...
+VITE_AURA_INDEXER_URL=http://127.0.0.1:8787
 ```
 
 Doc file `DEPLOY_AURAPREDICT.md` neu ban muon dua code len GitHub va deploy len Vercel theo tung buoc.
+Doc them `indexer/README.md` neu ban muon chay backend/indexer rieng cho leaderboard, stats va history nhanh hon.
 
 ## Luu y an toan
 

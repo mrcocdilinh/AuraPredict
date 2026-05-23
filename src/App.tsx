@@ -116,6 +116,36 @@ type ProjectStats = {
   knownPlayers: number;
 };
 
+type IndexedMarket = Omit<
+  MarketView,
+  "yesPool" | "noPool" | "yesPosition" | "noPosition" | "claimed" | "potentialPayout"
+> & {
+  yesPool: string;
+  noPool: string;
+  yesPosition?: string;
+  noPosition?: string;
+  claimed?: boolean;
+  potentialPayout?: string;
+};
+
+type IndexedActivity = Omit<ActivityItem, "amount" | "side"> & {
+  amount: string;
+  side: number;
+};
+
+type IndexedProjectStats = Omit<ProjectStats, "totalVolume" | "liveLiquidity" | "averageMarketVolume"> & {
+  totalVolume: string;
+  liveLiquidity: string;
+  averageMarketVolume: string;
+};
+
+type IndexedSnapshot = {
+  markets: MarketView[];
+  activities: ActivityItem[];
+  stats: ProjectStats | null;
+  total: number;
+};
+
 enum Outcome {
   Unresolved = 0,
   Yes = 1,
@@ -156,6 +186,9 @@ const LANDING_HOSTS = new Set(["aurapredict.xyz", "www.aurapredict.xyz"]);
 const APP_URL = "https://app.aurapredict.xyz";
 const X_URL = "https://x.com/AuraPredict";
 const DISCORD_URL = "https://discord.gg/3wTYhdsr";
+const INDEXER_URL = String(
+  import.meta.env.VITE_AURA_INDEXER_URL || (import.meta.env.DEV ? "http://127.0.0.1:8787" : "")
+).replace(/\/$/, "");
 const CATEGORY_META: Record<string, { label: string; className: string }> = {
   All: { label: "All", className: "category-all" },
   Crypto: { label: "Crypto", className: "category-crypto" },
@@ -283,6 +316,86 @@ function writeCachedMarkets(markets: MarketView[]) {
   } catch {
     // Cache is a best-effort UX optimization.
   }
+}
+
+function indexedMarketToView(market: IndexedMarket): MarketView {
+  return {
+    ...market,
+    category: market.category || "Other",
+    createdAt: Number(market.createdAt || 0),
+    closeTime: Number(market.closeTime || 0),
+    yesPool: BigInt(market.yesPool || "0"),
+    noPool: BigInt(market.noPool || "0"),
+    traderCount: Number(market.traderCount || 0),
+    proposedOutcome: Number(market.proposedOutcome || 0) as Outcome,
+    proposedAt: Number(market.proposedAt || 0),
+    disputeDeadline: Number(market.disputeDeadline || 0),
+    disputed: Boolean(market.disputed),
+    outcome: Number(market.outcome || 0) as Outcome,
+    yesPosition: BigInt(market.yesPosition || "0"),
+    noPosition: BigInt(market.noPosition || "0"),
+    claimed: false,
+    potentialPayout: BigInt(market.potentialPayout || "0")
+  };
+}
+
+function indexedStatsToProjectStats(stats: IndexedProjectStats): ProjectStats {
+  return {
+    ...stats,
+    totalVolume: BigInt(stats.totalVolume || "0"),
+    liveLiquidity: BigInt(stats.liveLiquidity || "0"),
+    averageMarketVolume: BigInt(stats.averageMarketVolume || "0")
+  };
+}
+
+function indexedActivityToItem(activity: IndexedActivity, marketsById: Map<number, MarketView>): ActivityItem {
+  return {
+    ...activity,
+    question: activity.question || marketsById.get(activity.marketId)?.question || `Market #${activity.marketId}`,
+    side: Number(activity.side || 0) as Outcome,
+    amount: BigInt(activity.amount || "0")
+  };
+}
+
+async function fetchIndexerJson<T>(path: string): Promise<T | null> {
+  if (!INDEXER_URL) return null;
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 3500);
+  try {
+    const response = await fetch(`${INDEXER_URL}${path}`, {
+      headers: { accept: "application/json" },
+      signal: controller.signal
+    });
+    if (!response.ok) return null;
+    return (await response.json()) as T;
+  } catch {
+    return null;
+  } finally {
+    window.clearTimeout(timeout);
+  }
+}
+
+async function loadIndexedSnapshot(): Promise<IndexedSnapshot | null> {
+  const [marketsResponse, activityResponse, statsResponse] = await Promise.all([
+    fetchIndexerJson<{ markets: IndexedMarket[]; total: number }>("/api/markets"),
+    fetchIndexerJson<{ activities: IndexedActivity[] }>("/api/activity?limit=2000"),
+    fetchIndexerJson<{ stats: IndexedProjectStats }>("/api/stats")
+  ]);
+
+  if (!marketsResponse?.markets?.length) return null;
+
+  const markets = marketsResponse.markets.map(indexedMarketToView).sort((a, b) => b.id - a.id);
+  const marketsById = new Map(markets.map((market) => [market.id, market]));
+  const activities = (activityResponse?.activities ?? [])
+    .map((activity) => indexedActivityToItem(activity, marketsById))
+    .sort((a, b) => b.timestamp - a.timestamp);
+
+  return {
+    markets,
+    activities,
+    stats: statsResponse?.stats ? indexedStatsToProjectStats(statsResponse.stats) : null,
+    total: marketsResponse.total || markets.length
+  };
 }
 
 function shortAddress(address: string) {
@@ -2419,6 +2532,78 @@ export default function App() {
       } catch {
         setProtocolFeeBps(0);
         setAccumulatedProtocolFees(0n);
+      }
+
+      const indexedSnapshot = await loadIndexedSnapshot();
+      if (indexedSnapshot) {
+        const indexedRows = indexedSnapshot.markets;
+        const indexedTotalCount = Math.max(totalMarketCount, indexedSnapshot.total, indexedRows.length);
+        setKnownMarketCount(indexedTotalCount);
+        setMarketLoadLimit((current) => Math.max(current, indexedTotalCount));
+        setMarkets((current) =>
+          indexedRows.map((market) => {
+            const currentMarket = current.find((item) => item.id === market.id);
+            return currentMarket
+              ? {
+                  ...market,
+                  yesPosition: currentMarket.yesPosition,
+                  noPosition: currentMarket.noPosition,
+                  claimed: currentMarket.claimed,
+                  potentialPayout: currentMarket.potentialPayout
+                }
+              : market;
+          })
+        );
+        setActivities(indexedSnapshot.activities);
+        if (indexedSnapshot.stats) setProjectStats(indexedSnapshot.stats);
+        writeCachedMarkets(indexedRows);
+
+        if (!isSilentLoad && account && isAddress(account) && indexedRows.length > 0) {
+          const positionRows = await mapWithConcurrency(
+            indexedRows,
+            MARKET_LOAD_CONCURRENCY,
+            async (market) => {
+              const position = await withRpcRetry(() => publicClient.readContract({
+                address: contractAddress,
+                abi: arcPredictionMarketAbi,
+                functionName: "positionOf",
+                args: [BigInt(market.id), account as Address]
+              }));
+              const yesPosition = position[0];
+              const noPosition = position[1];
+              const claimed = position[2];
+              let potentialPayout = 0n;
+
+              if (market.outcome !== Outcome.Unresolved && !claimed && (yesPosition > 0n || noPosition > 0n)) {
+                potentialPayout = await withRpcRetry(() => publicClient.readContract({
+                  address: contractAddress,
+                  abi: arcPredictionMarketAbi,
+                  functionName: "potentialPayout",
+                  args: [BigInt(market.id), account as Address]
+                }));
+              }
+
+              return {
+                id: market.id,
+                yesPosition,
+                noPosition,
+                claimed,
+                potentialPayout
+              };
+            }
+          );
+          const positionsByMarket = new Map(positionRows.map((position) => [position.id, position]));
+          setMarkets((current) =>
+            current.map((market) => {
+              const position = positionsByMarket.get(market.id);
+              return position ? { ...market, ...position } : market;
+            })
+          );
+        }
+
+        setLastDataRefresh(new Date());
+        if (!isSilentLoad) setLoading(false);
+        return;
       }
 
       let failedMarketLoads = 0;

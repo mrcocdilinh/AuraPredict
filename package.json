@@ -4,6 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "vite --host 127.0.0.1",
+    "indexer": "node indexer/server.mjs",
+    "indexer:once": "node indexer/server.mjs --once",
     "build": "tsc --noEmit && vite build",
     "compile": "hardhat compile",
     "test": "hardhat test",
