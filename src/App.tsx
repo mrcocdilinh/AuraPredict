@@ -141,6 +141,21 @@ type EvidenceDraft = {
   notes: string;
 };
 
+type SocialMarketResponse = {
+  comments?: MarketComment[];
+  evidence?: MarketEvidence[];
+};
+
+type SocialProfileResponse = {
+  profile?: {
+    address: string;
+    name?: string;
+    isPublic?: boolean;
+    joinedAt?: string;
+  } | null;
+  follows?: string[];
+};
+
 type AuraBreakdown = {
   items: Array<{ label: string; detail: string; value: number }>;
   total: number;
@@ -445,6 +460,24 @@ async function fetchIndexerJson<T>(path: string): Promise<T | null> {
     return null;
   } finally {
     window.clearTimeout(timeout);
+  }
+}
+
+async function postIndexerJson<T>(path: string, payload: unknown): Promise<T | null> {
+  if (!INDEXER_URL || INDEXER_URL.includes("github.io")) return null;
+  try {
+    const response = await fetch(`${INDEXER_URL}${path}`, {
+      method: "POST",
+      headers: {
+        accept: "application/json",
+        "content-type": "application/json"
+      },
+      body: JSON.stringify(payload)
+    });
+    if (!response.ok) return null;
+    return (await response.json()) as T;
+  } catch {
+    return null;
   }
 }
 
@@ -1151,7 +1184,7 @@ function LandingPage() {
     }
   ];
   const flow = ["Create a market", "Stake YES or NO", "Track odds", "Resolve result", "Claim payout"];
-  const architectureSteps = ["Wallet", "AuraPredict UI", "Arc RPC", "Prediction Market Contract", "Arcscan"];
+  const architectureSteps = ["Wallet", "AuraPredict UI", "AuraPredict Indexer", "Arc RPC fallback", "Prediction Market Contract", "Arcscan"];
   const settlementSteps = [
     "Market closes in UTC",
     "Creator proposes YES, NO, or Cancel",
@@ -1160,17 +1193,17 @@ function LandingPage() {
     "Winners claim payout"
   ];
   const dataFlow = [
-    "Frontend reads marketCount and latest markets",
-    "RPC fallback reduces public endpoint failures",
+    "The public indexer serves market lists, activity, stats, and leaderboard-ready history first",
+    "The frontend falls back to Arc RPC only if the indexer is unavailable",
     "Local cache keeps markets visible on reload",
-    "Wallet position and claim data load after markets",
-    "Leaderboards calculate from loaded trades and market state"
+    "Wallet-specific position and claim data still load from the contract",
+    "Leaderboards calculate from indexed trades and resolved market state"
   ];
   const roadmapItems = [
-    "Backend/indexer for full market history, search, profiles, and leaderboard speed",
-    "Resolution evidence fields for source links, notes, screenshots, and official references",
-    "AI-assisted result suggestions with human review and dispute protection",
-    "Oracle integration when Arc supports the right optimistic oracle or data providers"
+    "Move from scheduled static indexer exports to a low-latency public indexer service",
+    "Persist comments, follows, evidence links, and profile metadata beyond local browser storage",
+    "Expand AI-assisted result suggestions with richer source review and human dispute protection",
+    "Evaluate oracle integration when Arc supports the right optimistic oracle or data providers"
   ];
   const nextTheme = landingTheme === "dark" ? "light" : "dark";
 
@@ -1348,9 +1381,9 @@ function LandingPage() {
             <span className="docs-label">System architecture</span>
             <h3>How the app talks to Arc</h3>
             <p>
-              AuraPredict is currently a frontend-first dapp. It reads market state through Arc RPC
-              endpoints, sends wallet-signed transactions to the prediction market contract, and links
-              users to Arcscan for verification.
+              AuraPredict now reads shared market state from the public AuraPredict indexer first, then
+              falls back to Arc RPC when needed. Wallets still sign transactions directly against the
+              prediction market contract, and Arcscan remains the source for transaction verification.
             </p>
           </div>
           <div className="docs-flow-diagram" aria-label="AuraPredict architecture diagram">
@@ -1424,8 +1457,9 @@ function LandingPage() {
             <span className="docs-label">Roadmap</span>
             <h3>Path toward a production-grade prediction market</h3>
             <p>
-              The current dapp proves the market flow on Arc Testnet. The next major step is a real
-              backend/indexer so the frontend does not need to scan blockchain state directly for every user.
+              The current dapp proves the market flow on Arc Testnet with a public static indexer already
+              feeding market history, activity, stats, and leaderboards. The next major step is making that
+              data layer realtime and persistent for social features.
             </p>
           </div>
           <div className="docs-roadmap">
@@ -1508,6 +1542,7 @@ export default function App() {
   const [markets, setMarkets] = useState<MarketView[]>(() => readCachedMarkets());
   const [activities, setActivities] = useState<ActivityItem[]>([]);
   const [knownMarketCount, setKnownMarketCount] = useState(() => readCachedMarkets().length);
+  const [dataSource, setDataSource] = useState<"cache" | "indexer" | "rpc">("cache");
   const [marketLoadLimit, setMarketLoadLimit] = useState(MARKET_INITIAL_LOAD);
   const [loading, setLoading] = useState(false);
   const [connecting, setConnecting] = useState(false);
@@ -2322,6 +2357,47 @@ export default function App() {
   }, [marketEvidence]);
 
   useEffect(() => {
+    if (selectedMarketId === null) return;
+    let canceled = false;
+    fetchIndexerJson<SocialMarketResponse>(`/api/social/markets/${selectedMarketId}`).then((response) => {
+      if (canceled || !response) return;
+      if (response.comments) {
+        setMarketComments((current) => ({ ...current, [String(selectedMarketId)]: response.comments ?? [] }));
+      }
+      if (response.evidence) {
+        setMarketEvidence((current) => ({ ...current, [String(selectedMarketId)]: response.evidence ?? [] }));
+      }
+    });
+    return () => {
+      canceled = true;
+    };
+  }, [selectedMarketId]);
+
+  useEffect(() => {
+    if (!viewedProfileAddress || !isAddress(viewedProfileAddress)) return;
+    let canceled = false;
+    fetchIndexerJson<SocialProfileResponse>(`/api/social/profiles/${viewedProfileAddress}`).then((response) => {
+      if (canceled || !response) return;
+      const key = viewedProfileAddress.toLowerCase();
+      if (response.profile?.name) {
+        setProfileNames((current) => ({ ...current, [key]: response.profile?.name ?? current[key] }));
+      }
+      if (typeof response.profile?.isPublic === "boolean") {
+        setProfilePublicByAddress((current) => ({ ...current, [key]: response.profile?.isPublic ?? true }));
+      }
+      if (response.profile?.joinedAt) {
+        setProfileJoinedDates((current) => ({ ...current, [key]: response.profile?.joinedAt ?? current[key] }));
+      }
+      if (accountKey && key === accountKey && response.follows) {
+        setFollowedCreators(response.follows);
+      }
+    });
+    return () => {
+      canceled = true;
+    };
+  }, [accountKey, viewedProfileAddress]);
+
+  useEffect(() => {
     window.localStorage.setItem(ONBOARDING_DISMISSED_KEY, onboardingDismissed ? "true" : "false");
   }, [onboardingDismissed]);
 
@@ -2579,20 +2655,32 @@ export default function App() {
   }, [setNotice]);
 
   const toggleFollowCreator = useCallback(
-    (creator: string) => {
+    async (creator: string) => {
       if (!creator) return;
       const creatorKey = creator.toLowerCase();
       const isFollowing = followedCreators.includes(creatorKey);
+      const response = account
+        ? await postIndexerJson<{ following: boolean; follows: string[] }>(`/api/social/profiles/${account}/follows`, {
+            creator
+          })
+        : null;
+
+      if (response?.follows) {
+        setFollowedCreators(response.follows);
+        setNotice(response.following ? "Creator followed." : "Creator unfollowed.");
+        return;
+      }
+
       setFollowedCreators((current) =>
         isFollowing ? current.filter((address) => address !== creatorKey) : [...current, creatorKey]
       );
       setNotice(isFollowing ? "Creator unfollowed." : "Creator followed locally.");
     },
-    [followedCreators, setNotice]
+    [account, followedCreators, setNotice]
   );
 
   const postMarketComment = useCallback(
-    (marketId: number) => {
+    async (marketId: number) => {
       const text = (commentInputs[marketId] || "").trim().replace(/\s+/g, " ");
       if (text.length < 2) {
         setNotice("Enter a comment before posting.");
@@ -2600,6 +2688,17 @@ export default function App() {
       }
 
       const author = account || "Guest";
+      const response = await postIndexerJson<{ comment: MarketComment; comments: MarketComment[] }>(
+        `/api/social/markets/${marketId}/comments`,
+        { author, text }
+      );
+      if (response?.comments) {
+        setMarketComments((current) => ({ ...current, [String(marketId)]: response.comments }));
+        setCommentInputs((current) => ({ ...current, [marketId]: "" }));
+        setNotice("Comment posted.");
+        return;
+      }
+
       const comment: MarketComment = {
         id: `${marketId}-${Date.now()}`,
         marketId,
@@ -2619,7 +2718,7 @@ export default function App() {
   );
 
   const saveMarketEvidence = useCallback(
-    (marketId: number) => {
+    async (marketId: number) => {
       const draft = evidenceDrafts[marketId] || { title: "", url: "", notes: "" };
       const title = draft.title.trim().replace(/\s+/g, " ").slice(0, 90);
       const url = draft.url.trim();
@@ -2632,6 +2731,20 @@ export default function App() {
 
       if (url && !/^https?:\/\//i.test(url)) {
         setNotice("Evidence URL must start with http:// or https://.");
+        return;
+      }
+
+      const response = await postIndexerJson<{ evidence: MarketEvidence; evidenceRows: MarketEvidence[] }>(
+        `/api/social/markets/${marketId}/evidence`,
+        { title, url, notes, addedBy: account || "Guest" }
+      );
+      if (response?.evidenceRows) {
+        setMarketEvidence((current) => ({ ...current, [String(marketId)]: response.evidenceRows }));
+        setEvidenceDrafts((current) => ({
+          ...current,
+          [marketId]: { title: "", url: "", notes: "" }
+        }));
+        setNotice("Evidence saved.");
         return;
       }
 
@@ -2664,7 +2777,7 @@ export default function App() {
   }, []);
 
   const saveProfileName = useCallback(
-    (event: React.FormEvent) => {
+    async (event: React.FormEvent) => {
       event.preventDefault();
       if (!accountKey || !isOwnProfile) {
         setNotice("Connect wallet before setting a username.");
@@ -2680,12 +2793,16 @@ export default function App() {
       const next = { ...profileNames, [accountKey]: nextName };
       setProfileNames(next);
       window.localStorage.setItem(PROFILE_NAMES_KEY, JSON.stringify(next));
-      setNotice("Username saved for this wallet.");
+      const response = await postIndexerJson<{ profile: { name?: string; isPublic?: boolean } }>(
+        `/api/social/profiles/${account}`,
+        { name: nextName, isPublic: profilePublicByAddress[accountKey] !== false }
+      );
+      setNotice(response?.profile ? "Username saved." : "Username saved for this wallet.");
     },
-    [accountKey, isOwnProfile, profileNameInput, profileNames]
+    [account, accountKey, isOwnProfile, profileNameInput, profileNames, profilePublicByAddress]
   );
 
-  const toggleProfilePublic = useCallback(() => {
+  const toggleProfilePublic = useCallback(async () => {
     if (!accountKey || !isOwnProfile) {
       setNotice("Only the connected wallet can change profile visibility.");
       return;
@@ -2695,8 +2812,16 @@ export default function App() {
     const next = { ...profilePublicByAddress, [accountKey]: nextPublic };
     setProfilePublicByAddress(next);
     window.localStorage.setItem(PROFILE_PUBLIC_KEY, JSON.stringify(next));
-    setNotice(nextPublic ? "Profile is public." : "Profile is private. Share links are disabled.");
-  }, [accountKey, isOwnProfile, profilePublicByAddress]);
+    const response = await postIndexerJson<{ profile: { isPublic?: boolean } }>(`/api/social/profiles/${account}`, {
+      name: profileNames[accountKey] || "",
+      isPublic: nextPublic
+    });
+    setNotice(
+      nextPublic
+        ? response?.profile ? "Profile is public." : "Profile is public locally."
+        : response?.profile ? "Profile is private. Share links are disabled." : "Profile is private locally."
+    );
+  }, [account, accountKey, isOwnProfile, profileNames, profilePublicByAddress]);
 
   const copyProfileLink = useCallback(async () => {
     const shareAddress = viewedProfileAddress || account;
@@ -2903,6 +3028,7 @@ export default function App() {
         setActivities(indexedSnapshot.activities);
         if (indexedSnapshot.stats) setProjectStats(indexedSnapshot.stats);
         writeCachedMarkets(indexedRows);
+        setDataSource("indexer");
 
         if (!isSilentLoad && account && isAddress(account) && indexedRows.length > 0) {
           const positionRows = await mapWithConcurrency(
@@ -2953,6 +3079,7 @@ export default function App() {
       }
 
       let failedMarketLoads = 0;
+      setDataSource("rpc");
       const readMarketById = async (id: number, trackFailure: boolean) => {
         let marketData;
         let isLegacyMarket = false;
@@ -5067,7 +5194,9 @@ export default function App() {
               )}
               {knownMarketCount > 0 && view !== "market" && view !== "security" && (
                 <p className="data-scope-note">
-                  Showing {markets.length} loaded markets out of {knownMarketCount} total. Load more only when you need older markets to avoid Arc RPC rate limits.
+                  {dataSource === "indexer"
+                    ? `Showing ${markets.length} indexed markets out of ${knownMarketCount} total. Market history is loaded from the public AuraPredict indexer.`
+                    : `Showing ${markets.length} loaded markets out of ${knownMarketCount} total. Load more only when you need older markets to avoid Arc RPC rate limits.`}
                 </p>
               )}
             </div>

@@ -47,9 +47,16 @@ GET /api/activity?limit=50
 GET /api/leaderboard?period=all&metric=volume&limit=100
 GET /api/users/:address
 GET /api/sync
+GET /api/social/markets/:id
+POST /api/social/markets/:id/comments
+POST /api/social/markets/:id/evidence
+GET /api/social/profiles/:address
+POST /api/social/profiles/:address
+POST /api/social/profiles/:address/follows
 ```
 
 The frontend uses `VITE_AURA_INDEXER_URL` when available and falls back to direct Arc RPC reads if the indexer is offline.
+When `VITE_AURA_INDEXER_URL` points to a live web service, the frontend also persists comments, evidence, follows, and profile metadata through these social endpoints. Static GitHub Pages exports remain read-only, so the app falls back to browser-local storage for social actions on that setup.
 
 ## Public Deploy
 

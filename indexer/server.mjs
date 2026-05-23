@@ -146,6 +146,12 @@ function emptyState() {
     trades: [],
     claims: [],
     snapshots: [],
+    social: {
+      profiles: {},
+      follows: {},
+      comments: {},
+      evidence: {}
+    },
     stats: {
       totalMarkets: 0,
       indexedMarkets: 0,
@@ -575,6 +581,68 @@ function sortLeaderboard(rows, metric = "volume") {
   });
 }
 
+function socialState() {
+  if (!state.social) {
+    state.social = {
+      profiles: {},
+      follows: {},
+      comments: {},
+      evidence: {}
+    };
+  }
+  state.social.profiles ??= {};
+  state.social.follows ??= {};
+  state.social.comments ??= {};
+  state.social.evidence ??= {};
+  return state.social;
+}
+
+function readRequestBody(req) {
+  return new Promise((resolve, reject) => {
+    let body = "";
+    req.on("data", (chunk) => {
+      body += chunk;
+      if (body.length > 64_000) {
+        reject(new Error("Request body too large."));
+        req.destroy();
+      }
+    });
+    req.on("end", () => {
+      try {
+        resolve(body ? JSON.parse(body) : {});
+      } catch {
+        reject(new Error("Invalid JSON body."));
+      }
+    });
+    req.on("error", reject);
+  });
+}
+
+function cleanText(value, maxLength) {
+  return String(value ?? "").trim().replace(/\s+/g, " ").slice(0, maxLength);
+}
+
+function cleanAddress(value) {
+  const address = String(value ?? "").trim();
+  return isAddress(address) ? address : "";
+}
+
+function cleanUrl(value) {
+  const url = String(value ?? "").trim().slice(0, 500);
+  if (!url) return "";
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === "http:" || parsed.protocol === "https:" ? parsed.toString() : "";
+  } catch {
+    return "";
+  }
+}
+
+function appendSocialRow(collection, key, row, limit) {
+  const rows = Array.isArray(collection[key]) ? collection[key] : [];
+  collection[key] = [row, ...rows.filter((item) => item.id !== row.id)].slice(0, limit);
+}
+
 async function syncRange(fromBlock, toBlock) {
   const logs = [];
   for (const eventName of EVENT_NAMES) {
@@ -669,7 +737,7 @@ function json(res, status, payload) {
   res.writeHead(status, {
     "content-type": "application/json; charset=utf-8",
     "access-control-allow-origin": "*",
-    "access-control-allow-methods": "GET, OPTIONS",
+    "access-control-allow-methods": "GET, POST, OPTIONS",
     "access-control-allow-headers": "content-type"
   });
   res.end(body);
@@ -679,11 +747,11 @@ function notFound(res) {
   json(res, 404, { error: "Not found" });
 }
 
-function route(req, res) {
+async function route(req, res) {
   if (req.method === "OPTIONS") {
     res.writeHead(204, {
       "access-control-allow-origin": "*",
-      "access-control-allow-methods": "GET, OPTIONS",
+      "access-control-allow-methods": "GET, POST, OPTIONS",
       "access-control-allow-headers": "content-type"
     });
     res.end();
@@ -720,6 +788,113 @@ function route(req, res) {
     if (url.pathname === "/api/activity") {
       const limit = Number(url.searchParams.get("limit") || 50);
       json(res, 200, { activities: state.trades.slice().sort((a, b) => b.timestamp - a.timestamp).slice(0, limit) });
+      return;
+    }
+
+    if (segments[0] === "api" && segments[1] === "social") {
+      const social = socialState();
+
+      if (req.method === "GET" && segments[2] === "markets" && segments[3]) {
+        const marketId = String(Number(segments[3]));
+        json(res, 200, {
+          comments: social.comments[marketId] ?? [],
+          evidence: social.evidence[marketId] ?? [],
+          updatedAt: state.updatedAt
+        });
+        return;
+      }
+
+      if (req.method === "POST" && segments[2] === "markets" && segments[3] && segments[4] === "comments") {
+        const marketId = Number(segments[3]);
+        if (!Number.isInteger(marketId) || marketId < 0) return json(res, 400, { error: "Invalid market id." });
+        const body = await readRequestBody(req);
+        const text = cleanText(body.text, 420);
+        if (text.length < 2) return json(res, 400, { error: "Comment is too short." });
+        const author = cleanAddress(body.author) || "Guest";
+        const comment = {
+          id: `${marketId}-${Date.now()}`,
+          marketId,
+          author,
+          text,
+          createdAt: nowIso()
+        };
+        appendSocialRow(social.comments, String(marketId), comment, 80);
+        await saveState();
+        json(res, 201, { comment, comments: social.comments[String(marketId)] });
+        return;
+      }
+
+      if (req.method === "POST" && segments[2] === "markets" && segments[3] && segments[4] === "evidence") {
+        const marketId = Number(segments[3]);
+        if (!Number.isInteger(marketId) || marketId < 0) return json(res, 400, { error: "Invalid market id." });
+        const body = await readRequestBody(req);
+        const title = cleanText(body.title, 90) || "Evidence";
+        const notes = cleanText(body.notes, 520);
+        const sourceUrl = cleanUrl(body.url);
+        if (!title && !notes && !sourceUrl) return json(res, 400, { error: "Evidence is empty." });
+        if (body.url && !sourceUrl) return json(res, 400, { error: "Evidence URL must be http or https." });
+        const evidence = {
+          id: `${marketId}-${Date.now()}`,
+          marketId,
+          title,
+          url: sourceUrl,
+          notes,
+          addedBy: cleanAddress(body.addedBy) || "Guest",
+          createdAt: nowIso()
+        };
+        appendSocialRow(social.evidence, String(marketId), evidence, 40);
+        await saveState();
+        json(res, 201, { evidence, evidenceRows: social.evidence[String(marketId)] });
+        return;
+      }
+
+      if (req.method === "GET" && segments[2] === "profiles" && segments[3]) {
+        const address = cleanAddress(segments[3]);
+        if (!address) return json(res, 400, { error: "Invalid address." });
+        const key = address.toLowerCase();
+        json(res, 200, {
+          profile: social.profiles[key] ?? null,
+          follows: social.follows[key] ?? [],
+          updatedAt: state.updatedAt
+        });
+        return;
+      }
+
+      if (req.method === "POST" && segments[2] === "profiles" && segments[3]) {
+        const address = cleanAddress(segments[3]);
+        if (!address) return json(res, 400, { error: "Invalid address." });
+        const body = await readRequestBody(req);
+        const key = address.toLowerCase();
+        const current = social.profiles[key] ?? { address, joinedAt: nowIso() };
+        social.profiles[key] = {
+          ...current,
+          address,
+          name: cleanText(body.name, 24),
+          isPublic: body.isPublic !== false,
+          updatedAt: nowIso()
+        };
+        await saveState();
+        json(res, 200, { profile: social.profiles[key] });
+        return;
+      }
+
+      if (req.method === "POST" && segments[2] === "profiles" && segments[3] && segments[4] === "follows") {
+        const address = cleanAddress(segments[3]);
+        const creator = cleanAddress((await readRequestBody(req)).creator);
+        if (!address || !creator) return json(res, 400, { error: "Invalid address." });
+        const key = address.toLowerCase();
+        const creatorKey = creator.toLowerCase();
+        const rows = new Set(social.follows[key] ?? []);
+        const nextFollowing = !rows.has(creatorKey);
+        if (nextFollowing) rows.add(creatorKey);
+        else rows.delete(creatorKey);
+        social.follows[key] = [...rows];
+        await saveState();
+        json(res, 200, { following: nextFollowing, follows: social.follows[key] });
+        return;
+      }
+
+      notFound(res);
       return;
     }
 
