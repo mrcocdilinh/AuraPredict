@@ -97,6 +97,8 @@ type LeaderboardRow = {
   createdMarkets: number;
 };
 
+type UserRegistry = Record<string, { address: string; joinedAt: string }>;
+
 enum Outcome {
   Unresolved = 0,
   Yes = 1,
@@ -122,6 +124,7 @@ const THEME_KEY = "aurapredict.theme";
 const PROFILE_NAMES_KEY = "aurapredict.profileNames";
 const PROFILE_JOINED_KEY = "aurapredict.profileJoined";
 const PROFILE_PUBLIC_KEY = "aurapredict.profilePublic";
+const USER_REGISTRY_KEY = "aurapredict.userRegistry";
 const MARKET_CACHE_KEY = "aurapredict.marketCache";
 const MARKET_QUERY_KEY = "market";
 const PROFILE_QUERY_KEY = "profile";
@@ -264,6 +267,21 @@ function formatSignedUsdc(value: bigint) {
   return `${sign}${formatUsdc(absolute)}`;
 }
 
+function formatUsdcInput(value: bigint) {
+  const raw = formatUnits(value, ARC_NATIVE_USDC_DECIMALS);
+  return raw.includes(".") ? raw.replace(/0+$/, "").replace(/\.$/, "") : raw;
+}
+
+function parseUsdcInput(value: string) {
+  const normalized = value.trim().replace(/,/g, ".");
+  if (!normalized || Number(normalized) <= 0) return 0n;
+  try {
+    return parseUnits(normalized, ARC_NATIVE_USDC_DECIMALS);
+  } catch {
+    return 0n;
+  }
+}
+
 function marketVolume(market: MarketView) {
   return market.yesPool + market.noPool;
 }
@@ -271,6 +289,26 @@ function marketVolume(market: MarketView) {
 function percent(value: bigint, total: bigint) {
   if (total === 0n) return 50;
   return Number((value * 10000n) / total) / 100;
+}
+
+function betEstimate(market: MarketView, side: Outcome, amount: bigint, feeBps: number) {
+  if (amount <= 0n || (side !== Outcome.Yes && side !== Outcome.No)) {
+    return { payout: 0n, profit: 0n, pricePercent: side === Outcome.No ? 50 : 50 };
+  }
+
+  const sidePool = side === Outcome.Yes ? market.yesPool + amount : market.noPool + amount;
+  const totalAfter = marketVolume(market) + amount;
+  const grossPayout = sidePool > 0n ? (amount * totalAfter) / sidePool : 0n;
+  const profit = grossPayout > amount ? grossPayout - amount : 0n;
+  const fee = (profit * BigInt(feeBps)) / 10000n;
+  const payout = grossPayout - fee;
+  const pricePercent = percent(sidePool, totalAfter);
+
+  return {
+    payout,
+    profit: payout > amount ? payout - amount : 0n,
+    pricePercent
+  };
 }
 
 function outcomeLabel(outcome: Outcome) {
@@ -451,13 +489,14 @@ function auraPointsFor(
   createdMarkets: number,
   pnl: bigint
 ) {
+  const participationScore = 25;
   const volumeScore = Number(formatUnits(volume, ARC_NATIVE_USDC_DECIMALS)) * 10;
   const pnlScore = Math.max(0, Number(formatUnits(pnl, ARC_NATIVE_USDC_DECIMALS)) * 12);
   const winRate = resolvedMarkets > 0 ? (wonMarkets / resolvedMarkets) * 100 : 0;
 
   return Math.max(
     0,
-    Math.round(volumeScore + pnlScore + wonMarkets * 90 + resolvedMarkets * 18 + createdMarkets * 35 + winRate * 4)
+    Math.round(participationScore + volumeScore + pnlScore + wonMarkets * 90 + resolvedMarkets * 18 + createdMarkets * 35 + winRate * 4)
   );
 }
 
@@ -1066,6 +1105,7 @@ export default function App() {
   const [disputeWindow, setDisputeWindow] = useState(0);
   const [protocolFeeBps, setProtocolFeeBps] = useState(0);
   const [accumulatedProtocolFees, setAccumulatedProtocolFees] = useState<bigint>(0n);
+  const [walletBalance, setWalletBalance] = useState<bigint>(0n);
   const [markets, setMarkets] = useState<MarketView[]>(() => readCachedMarkets());
   const [activities, setActivities] = useState<ActivityItem[]>([]);
   const [knownMarketCount, setKnownMarketCount] = useState(() => readCachedMarkets().length);
@@ -1117,6 +1157,13 @@ export default function App() {
       return {};
     }
   });
+  const [userRegistry, setUserRegistry] = useState<UserRegistry>(() => {
+    try {
+      return JSON.parse(window.localStorage.getItem(USER_REGISTRY_KEY) || "{}") as UserRegistry;
+    } catch {
+      return {};
+    }
+  });
   const [theme, setTheme] = useState<ThemeMode>(() => {
     try {
       return window.localStorage.getItem(THEME_KEY) === "light" ? "light" : "dark";
@@ -1156,7 +1203,14 @@ export default function App() {
   const totalTradeVolume = activities.length > 0
     ? activities.reduce((sum, activity) => sum + activity.amount, 0n)
     : totalLiquidity;
-  const uniquePlayerCount = new Set(activities.map((activity) => activity.user.toLowerCase())).size;
+  const uniquePlayerAddresses = new Set<string>();
+  for (const activity of activities) uniquePlayerAddresses.add(activity.user.toLowerCase());
+  for (const user of Object.values(userRegistry)) uniquePlayerAddresses.add(user.address.toLowerCase());
+  for (const market of markets) {
+    if (market.creator) uniquePlayerAddresses.add(market.creator.toLowerCase());
+  }
+  if (account) uniquePlayerAddresses.add(account.toLowerCase());
+  const uniquePlayerCount = uniquePlayerAddresses.size;
   const participantEntries = markets.reduce((sum, market) => sum + market.traderCount, 0);
   const averageMarketVolume = markets.length > 0 ? totalTradeVolume / BigInt(markets.length) : 0n;
   const accountKey = account ? account.toLowerCase() : "";
@@ -1527,6 +1581,14 @@ export default function App() {
       row.positions.set(marketId, position);
     };
 
+    for (const user of Object.values(userRegistry)) {
+      getRow(user.address);
+    }
+
+    if (account && (!periodStart || Date.now() / 1000 >= periodStart)) {
+      getRow(account);
+    }
+
     for (const activity of activities) {
       if (activity.timestamp > 0 && activity.timestamp < periodStart) continue;
       const market = marketMap.get(activity.marketId);
@@ -1591,8 +1653,8 @@ export default function App() {
       };
     });
 
-    return output.filter((row) => row.volume > 0n || row.createdMarkets > 0 || row.resolvedMarkets > 0);
-  }, [account, activities, markets, protocolFeeBps]);
+    return output.filter((row) => row.volume > 0n || row.createdMarkets > 0 || row.resolvedMarkets > 0 || !!userRegistry[row.address.toLowerCase()]);
+  }, [account, activities, markets, protocolFeeBps, userRegistry]);
 
   const sortLeaderboardRows = useCallback((rows: LeaderboardRow[], metric: LeaderboardMetric) => {
     return [...rows]
@@ -1622,7 +1684,6 @@ export default function App() {
   const profileVolumeRows = useMemo(
     () =>
       sortLeaderboardRows(allTimePlayerRows, "volume")
-        .filter((row) => row.volume > 0n)
         .map((row) => [row.address.toLowerCase(), row.volume] as const),
     [allTimePlayerRows, sortLeaderboardRows]
   );
@@ -1737,6 +1798,41 @@ export default function App() {
     }
   }, [selectedWalletProvider]);
 
+  const registerUser = useCallback((address: string) => {
+    if (!address || !isAddress(address)) return;
+    const key = address.toLowerCase();
+    setUserRegistry((current) => {
+      if (current[key]) return current;
+      const next = { ...current, [key]: { address, joinedAt: new Date().toISOString() } };
+      window.localStorage.setItem(USER_REGISTRY_KEY, JSON.stringify(next));
+      return next;
+    });
+  }, []);
+
+  const refreshWalletBalance = useCallback(async (address = account) => {
+    if (!address || !isAddress(address)) {
+      setWalletBalance(0n);
+      return;
+    }
+
+    try {
+      const balance = await withRpcRetry(() => getPublicClient().getBalance({ address: address as Address }));
+      setWalletBalance(balance);
+    } catch {
+      setWalletBalance(0n);
+    }
+  }, [account]);
+
+  useEffect(() => {
+    if (!account) {
+      setWalletBalance(0n);
+      return;
+    }
+
+    registerUser(account);
+    void refreshWalletBalance(account);
+  }, [account, refreshWalletBalance, registerUser]);
+
   const connectWallet = useCallback(async (provider?: EthereumProvider | null) => {
     setNotice("");
     setConnecting(true);
@@ -1752,11 +1848,13 @@ export default function App() {
       throw new Error("No wallet account returned.");
     }
     setAccount(addresses[0]);
+    registerUser(addresses[0]);
+    void refreshWalletBalance(addresses[0]);
     setSelectedWalletProvider(providerToUse);
     window.localStorage.setItem(WALLET_CONNECTED_KEY, "true");
     setNotice("Wallet connected on Arc Testnet.");
     setConnecting(false);
-  }, [selectedWalletProvider, switchToArc]);
+  }, [registerUser, refreshWalletBalance, selectedWalletProvider, switchToArc]);
 
   const handleConnectWallet = useCallback(async (provider?: EthereumProvider | null) => {
     try {
@@ -1790,6 +1888,7 @@ export default function App() {
 
   const disconnectWallet = useCallback(async () => {
     setAccount("");
+    setWalletBalance(0n);
     setWalletMenuOpen(false);
     setNotificationMenuOpen(false);
     window.localStorage.removeItem(WALLET_CONNECTED_KEY);
@@ -1827,6 +1926,17 @@ export default function App() {
       return Math.min(knownMarketCount, current + MARKET_LOAD_STEP);
     });
   }, [knownMarketCount]);
+
+  const setStakeByPercent = useCallback((marketId: number, percentage: number) => {
+    if (walletBalance <= 0n) {
+      setStakeInputs((current) => ({ ...current, [marketId]: "" }));
+      return;
+    }
+
+    const clamped = Math.max(0, Math.min(100, percentage));
+    const value = (walletBalance * BigInt(Math.round(clamped * 100))) / 10000n;
+    setStakeInputs((current) => ({ ...current, [marketId]: value > 0n ? formatUsdcInput(value) : "" }));
+  }, [walletBalance]);
 
   const setThemeMode = useCallback((nextTheme: ThemeMode) => {
     setTheme(nextTheme);
@@ -2360,6 +2470,7 @@ export default function App() {
       const hash = await action();
       await getPublicClient().waitForTransactionReceipt({ hash });
       setNotice(`Transaction finalized on Arc: ${shortHash(hash)}`);
+      void refreshWalletBalance();
       void loadMarkets();
       return true;
     } finally {
@@ -2441,11 +2552,12 @@ export default function App() {
   const placeBet = async (marketId: number, side: Outcome) => {
     if (!account || !isAddress(account)) throw new Error("Connect wallet first.");
     const amount = stakeInputs[marketId] || "";
-    if (!amount || Number(amount) <= 0) throw new Error("Enter a valid USDC amount.");
+    const value = parseUsdcInput(amount);
+    if (value <= 0n) throw new Error("Enter a valid USDC amount.");
+    if (walletBalance > 0n && value > walletBalance) throw new Error("Stake amount is higher than your wallet USDC balance.");
 
     await switchToArc();
     const walletClient = getActiveWalletClient();
-    const value = parseUnits(amount, ARC_NATIVE_USDC_DECIMALS);
 
     const completed = await runTransaction(
       () =>
@@ -2614,9 +2726,12 @@ export default function App() {
       const next = Array.isArray(accounts) ? String(accounts[0] || "") : "";
       if (next) {
         window.localStorage.setItem(WALLET_CONNECTED_KEY, "true");
+        registerUser(next);
+        void refreshWalletBalance(next);
       } else {
         window.localStorage.removeItem(WALLET_CONNECTED_KEY);
         setWalletMenuOpen(false);
+        setWalletBalance(0n);
       }
       setAccount(next);
     };
@@ -2627,7 +2742,7 @@ export default function App() {
     return () => {
       window.ethereum?.removeListener?.("accountsChanged", handleAccounts);
     };
-  }, []);
+  }, [refreshWalletBalance, registerUser]);
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -2652,6 +2767,8 @@ export default function App() {
         const walletClient = getWalletClient(window.ethereum ?? null);
         const chainId = await walletClient.getChainId();
         setAccount(next);
+        registerUser(next);
+        void refreshWalletBalance(next);
         window.localStorage.setItem(WALLET_CONNECTED_KEY, "true");
 
         if (BigInt(chainId) !== ARC_CHAIN_ID_DECIMAL) {
@@ -2667,7 +2784,7 @@ export default function App() {
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [refreshWalletBalance, registerUser]);
 
   useEffect(() => {
     const syncRoute = () => {
@@ -2903,7 +3020,8 @@ export default function App() {
                 }}
                 disabled={!canBet}
               >
-                YES
+                <span>YES</span>
+                <small>{formatUsdc(market.yesPool)} USDC</small>
               </button>
               <button
                 className="no-button"
@@ -2913,7 +3031,8 @@ export default function App() {
                 }}
                 disabled={!canBet}
               >
-                NO
+                <span>NO</span>
+                <small>{formatUsdc(market.noPool)} USDC</small>
               </button>
             </div>
 
@@ -3038,6 +3157,11 @@ export default function App() {
       Date.now() / 1000 >= selectedMarket.closeTime &&
       [selectedMarket.resolver.toLowerCase(), owner.toLowerCase()].includes(account.toLowerCase());
     const canClaim = account && selectedMarket.potentialPayout > 0n && !selectedMarket.claimed;
+    const tradeAmount = parseUsdcInput(stakeInputs[selectedMarket.id] || "");
+    const yesEstimate = betEstimate(selectedMarket, Outcome.Yes, tradeAmount, protocolFeeBps);
+    const noEstimate = betEstimate(selectedMarket, Outcome.No, tradeAmount, protocolFeeBps);
+    const balancePercent =
+      walletBalance > 0n ? Math.min(100, Number((tradeAmount * 10000n) / walletBalance) / 100) : 0;
     const meta = categoryMeta(selectedMarket.category || "Other");
     const chartRows =
       detailChartRows.length > 1
@@ -3132,12 +3256,18 @@ export default function App() {
             <div className="detail-outcome-row">
               <span className="outcome-dot yes" />
               <strong>YES</strong>
-              <span>{selectedMarketYesPercent.toFixed(1)}%</span>
+              <span>{selectedMarketYesPercent.toFixed(1)}% / {formatUsdc(selectedMarket.yesPool)} USDC</span>
             </div>
             <div className="detail-outcome-row">
               <span className="outcome-dot no" />
               <strong>NO</strong>
-              <span>{selectedMarketNoPercent.toFixed(1)}%</span>
+              <span>{selectedMarketNoPercent.toFixed(1)}% / {formatUsdc(selectedMarket.noPool)} USDC</span>
+            </div>
+            <div className="trade-balance-line">
+              <span>Available</span>
+              <button onClick={() => refreshWalletBalance()} type="button">
+                {formatUsdc(walletBalance)} USDC
+              </button>
             </div>
             <div className="trade-row">
               <input
@@ -3150,11 +3280,47 @@ export default function App() {
                 disabled={!canBet}
               />
               <button className="yes-button" onClick={() => placeBet(selectedMarket.id, Outcome.Yes)} disabled={!canBet}>
-                YES
+                <span>YES</span>
+                <small>{formatUsdc(selectedMarket.yesPool)} USDC</small>
               </button>
               <button className="no-button" onClick={() => placeBet(selectedMarket.id, Outcome.No)} disabled={!canBet}>
-                NO
+                <span>NO</span>
+                <small>{formatUsdc(selectedMarket.noPool)} USDC</small>
               </button>
+            </div>
+            <div className="stake-shortcuts">
+              {[25, 50, 100].map((value) => (
+                <button key={value} onClick={() => setStakeByPercent(selectedMarket.id, value)} disabled={!canBet || walletBalance <= 0n} type="button">
+                  {value}%
+                </button>
+              ))}
+              <button onClick={() => setStakeByPercent(selectedMarket.id, 100)} disabled={!canBet || walletBalance <= 0n} type="button">
+                Max
+              </button>
+            </div>
+            <label className="stake-slider">
+              <span>{balancePercent.toFixed(0)}% of balance</span>
+              <input
+                max="100"
+                min="0"
+                step="1"
+                type="range"
+                value={balancePercent}
+                onChange={(event) => setStakeByPercent(selectedMarket.id, Number(event.target.value))}
+                disabled={!canBet || walletBalance <= 0n}
+              />
+            </label>
+            <div className="payout-preview">
+              <div>
+                <span>YES payout if correct</span>
+                <strong>{formatUsdc(yesEstimate.payout)} USDC</strong>
+                <small>Profit {formatUsdc(yesEstimate.profit)} / price {yesEstimate.pricePercent.toFixed(1)}%</small>
+              </div>
+              <div>
+                <span>NO payout if correct</span>
+                <strong>{formatUsdc(noEstimate.payout)} USDC</strong>
+                <small>Profit {formatUsdc(noEstimate.profit)} / price {noEstimate.pricePercent.toFixed(1)}%</small>
+              </div>
             </div>
             {account && (
               <div className="position-chip">
@@ -3379,6 +3545,10 @@ export default function App() {
           </a>
           {account ? (
             <>
+              <button className="wallet-balance-pill" onClick={() => refreshWalletBalance()} type="button">
+                <span>USDC</span>
+                <strong>{formatUsdc(walletBalance)}</strong>
+              </button>
               <div className="notification-menu">
                 <button
                   className="notification-button"
@@ -3479,6 +3649,10 @@ export default function App() {
                     <div className="wallet-dropdown-head">
                       <span>Connected wallet</span>
                       <strong>{shortAddress(account)}</strong>
+                    </div>
+                    <div className="wallet-balance-row">
+                      <span>Available USDC</span>
+                      <strong>{formatUsdc(walletBalance)}</strong>
                     </div>
                     <button onClick={openProfile}>View Profile</button>
                     <button onClick={disconnectWallet}>Disconnect</button>
