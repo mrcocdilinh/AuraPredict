@@ -1,0 +1,55 @@
+name: Publish static indexer
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "*/15 * * * *"
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: aurapredict-static-indexer
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Restore previous index state
+        run: |
+          mkdir -p indexer/data
+          curl -fsSL "https://mrcocdilinh.github.io/AuraPredict/state/aurapredict-index.json" -o indexer/data/aurapredict-index.json || true
+
+      - name: Sync Arc events
+        env:
+          VITE_PREDICTION_MARKET_ADDRESS: 0x834f1DACA2c49D0231a8e640eb667AE0E1319311
+          AURA_INDEXER_START_BLOCK: 43295581
+          AURA_INDEXER_CHUNK_SIZE: 9000
+          AURA_INDEXER_POLL_MS: 12000
+        run: npm run indexer:once
+
+      - run: npm run indexer:export-static -- static-index
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: static-index
+
+      - id: deployment
+        uses: actions/deploy-pages@v4

@@ -373,15 +373,22 @@ function indexedActivityToItem(activity: IndexedActivity, marketsById: Map<numbe
 
 async function fetchIndexerJson<T>(path: string): Promise<T | null> {
   if (!INDEXER_URL) return null;
+  const [route, query = ""] = path.split("?");
+  const urls = [
+    `${INDEXER_URL}${path}`,
+    `${INDEXER_URL}${route}.json${query ? `?${query}` : ""}`
+  ];
   const controller = new AbortController();
   const timeout = window.setTimeout(() => controller.abort(), 3500);
   try {
-    const response = await fetch(`${INDEXER_URL}${path}`, {
-      headers: { accept: "application/json" },
-      signal: controller.signal
-    });
-    if (!response.ok) return null;
-    return (await response.json()) as T;
+    for (const url of urls) {
+      const response = await fetch(url, {
+        headers: { accept: "application/json" },
+        signal: controller.signal
+      });
+      if (response.ok) return (await response.json()) as T;
+    }
+    return null;
   } catch {
     return null;
   } finally {

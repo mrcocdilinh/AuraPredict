@@ -55,6 +55,34 @@ The frontend uses `VITE_AURA_INDEXER_URL` when available and falls back to direc
 
 The production app at `https://app.aurapredict.xyz` needs a public indexer URL, not `127.0.0.1`.
 
+## Free No-Card Option: GitHub Pages Static Indexer
+
+This repo includes `.github/workflows/static-indexer.yml`.
+
+Steps:
+
+1. In GitHub, open `Settings` -> `Pages`.
+2. Set `Build and deployment` source to `GitHub Actions`.
+3. Open `Actions`.
+4. Run `Publish static indexer`.
+5. After it completes, test:
+
+```text
+https://mrcocdilinh.github.io/AuraPredict/api/stats.json
+https://mrcocdilinh.github.io/AuraPredict/api/markets.json
+```
+
+Then set the frontend production env:
+
+```bash
+VITE_AURA_INDEXER_URL=https://mrcocdilinh.github.io/AuraPredict
+VITE_PREDICTION_MARKET_START_BLOCK=43295581
+```
+
+This option is free and does not need a card. The tradeoff is that data refreshes on the GitHub Actions schedule, not instantly.
+
+## Web Service Option
+
 Recommended flow:
 
 1. Deploy this repo as a separate web service named `aurapredict-indexer`.

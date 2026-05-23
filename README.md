@@ -60,10 +60,38 @@ Doc them `indexer/README.md` neu ban muon chay backend/indexer rieng cho leaderb
 
 De `https://app.aurapredict.xyz` chay muot nhu local, deploy `indexer/` thanh mot web service public rieng.
 
+- No-card/free path: GitHub Actions publish static JSON to GitHub Pages via `.github/workflows/static-indexer.yml`.
 - Dockerfile: `Dockerfile.indexer`
 - Render blueprint: `render.yaml`
 - Health check: `/health`
 - API stats: `/api/stats`
+
+### GitHub Pages static indexer, khong can card
+
+1. Vao GitHub repo `mrcocdilinh/AuraPredict`.
+2. Vao `Settings` -> `Pages`.
+3. O `Build and deployment`, chon `Source: GitHub Actions`.
+4. Vao tab `Actions`.
+5. Chon workflow `Publish static indexer`.
+6. Bam `Run workflow`.
+7. Cho workflow chay xong.
+8. Mo URL:
+
+```text
+https://mrcocdilinh.github.io/AuraPredict/api/stats.json
+https://mrcocdilinh.github.io/AuraPredict/api/markets.json
+```
+
+Sau khi co data, them env cho frontend production tren Vercel:
+
+```bash
+VITE_AURA_INDEXER_URL=https://mrcocdilinh.github.io/AuraPredict
+VITE_PREDICTION_MARKET_START_BLOCK=43295581
+```
+
+Sau do redeploy frontend.
+
+Luu y: cach nay free va khong can card, nhung data cap nhat theo lich GitHub Actions, mac dinh moi 15 phut. Neu can realtime hon, dung web service indexer public.
 
 Sau khi co URL public cua indexer, them env cho frontend production:
 
