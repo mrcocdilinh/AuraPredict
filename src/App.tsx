@@ -248,6 +248,30 @@ const LANDING_HOSTS = new Set(["aurapredict.xyz", "www.aurapredict.xyz"]);
 const APP_URL = "https://app.aurapredict.xyz";
 const X_URL = "https://x.com/AuraPredict";
 const DISCORD_URL = "https://discord.gg/3wTYhdsr";
+const CURRENT_APP_URL =
+  typeof window !== "undefined" ? `${window.location.host}${window.location.pathname}${window.location.search}` : "app.aurapredict.xyz";
+const WALLET_DEEP_LINKS = [
+  {
+    name: "MetaMask",
+    detail: "Open AuraPredict in MetaMask mobile",
+    url: `https://metamask.app.link/dapp/${CURRENT_APP_URL}`
+  },
+  {
+    name: "Rainbow",
+    detail: "Open AuraPredict in Rainbow browser",
+    url: `https://rnbwapp.com/wc?uri=${encodeURIComponent(`https://${CURRENT_APP_URL}`)}`
+  },
+  {
+    name: "OKX Wallet",
+    detail: "Open with OKX wallet browser",
+    url: `okx://wallet/dapp/details?dappUrl=${encodeURIComponent(`https://${CURRENT_APP_URL}`)}`
+  },
+  {
+    name: "Zerion",
+    detail: "Open with Zerion mobile wallet",
+    url: `https://link.zerion.io/dapp/${CURRENT_APP_URL}`
+  }
+];
 const INDEXER_URL = String(
   import.meta.env.VITE_AURA_INDEXER_URL ||
     (import.meta.env.DEV ? "http://127.0.0.1:8787" : "https://mrcocdilinh.github.io/AuraPredict")
@@ -2560,6 +2584,10 @@ export default function App() {
       setNotice(`Connect failed: ${errorMessage(error)}`);
     }
   }, [connectWallet]);
+
+  const openMobileWallet = useCallback((url: string) => {
+    window.location.href = url;
+  }, []);
 
   const openWalletModal = useCallback(() => {
     setWalletMenuOpen(false);
@@ -6274,9 +6302,17 @@ export default function App() {
                 <button className="wallet-option disabled-wallet" type="button" disabled>
                   <span className="wallet-badge">W</span>
                   <strong>No wallet detected</strong>
-                  <small>Open AuraPredict inside Zerion, MetaMask, OKX, or another wallet browser.</small>
+                  <small>Use a wallet app below to open AuraPredict with an injected provider.</small>
                 </button>
               )}
+              <span className="wallet-group-label">Open on mobile</span>
+              {WALLET_DEEP_LINKS.map((wallet) => (
+                <button className="wallet-option mobile-wallet-option" key={wallet.name} type="button" onClick={() => openMobileWallet(wallet.url)}>
+                  <span className="wallet-badge">{wallet.name.slice(0, 1)}</span>
+                  <strong>{wallet.name}</strong>
+                  <small>{wallet.detail}</small>
+                </button>
+              ))}
               <span className="wallet-group-label">Recommended</span>
               {recommendedWallets.map((walletName) => {
                 const detected = walletOptions.find((wallet) =>
