@@ -199,7 +199,8 @@ const APP_URL = "https://app.aurapredict.xyz";
 const X_URL = "https://x.com/AuraPredict";
 const DISCORD_URL = "https://discord.gg/3wTYhdsr";
 const INDEXER_URL = String(
-  import.meta.env.VITE_AURA_INDEXER_URL || (import.meta.env.DEV ? "http://127.0.0.1:8787" : "")
+  import.meta.env.VITE_AURA_INDEXER_URL ||
+    (import.meta.env.DEV ? "http://127.0.0.1:8787" : "https://mrcocdilinh.github.io/AuraPredict")
 ).replace(/\/$/, "");
 const EVENT_START_BLOCK = BigInt(import.meta.env.VITE_PREDICTION_MARKET_START_BLOCK || "43295581");
 const EVENT_LOG_CHUNK_SIZE = 9_000n;
