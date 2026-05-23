@@ -78,9 +78,10 @@ type ActivityItem = {
   timestamp: number;
 };
 
-type AppView = "markets" | "ended" | "leaderboard" | "profile" | "collection" | "market";
+type AppView = "markets" | "ended" | "leaderboard" | "profile" | "collection" | "market" | "security";
 type LeaderboardMetric = "volume" | "winRate" | "pnl" | "auraPoints";
 type LeaderboardPeriod = "day" | "7d" | "30d" | "all";
+type LeaderboardTier = "all" | "bronze" | "silver" | "gold" | "diamond";
 type MarketSectionKey = "fresh" | "hot" | "closing";
 type ThemeMode = "dark" | "light";
 type MarketViewMode = "grid" | "list";
@@ -114,6 +115,36 @@ type ProjectStats = {
   averageMarketVolume: bigint;
   participantEntries: number;
   knownPlayers: number;
+};
+
+type MarketComment = {
+  id: string;
+  marketId: number;
+  author: string;
+  text: string;
+  createdAt: string;
+};
+
+type MarketEvidence = {
+  id: string;
+  marketId: number;
+  title: string;
+  url: string;
+  notes: string;
+  addedBy: string;
+  createdAt: string;
+};
+
+type EvidenceDraft = {
+  title: string;
+  url: string;
+  notes: string;
+};
+
+type AuraBreakdown = {
+  items: Array<{ label: string; detail: string; value: number }>;
+  total: number;
+  winRate: number;
 };
 
 type IndexedMarket = Omit<
@@ -191,6 +222,10 @@ const PROFILE_JOINED_KEY = "aurapredict.profileJoined";
 const PROFILE_PUBLIC_KEY = "aurapredict.profilePublic";
 const USER_REGISTRY_KEY = "aurapredict.userRegistry";
 const MARKET_CACHE_KEY = "aurapredict.marketCache";
+const FOLLOWED_CREATORS_KEY = "aurapredict.followedCreators";
+const MARKET_COMMENTS_KEY = "aurapredict.marketComments";
+const MARKET_EVIDENCE_KEY = "aurapredict.marketEvidence";
+const ONBOARDING_DISMISSED_KEY = "aurapredict.onboardingDismissed";
 const MARKET_QUERY_KEY = "market";
 const PROFILE_QUERY_KEY = "profile";
 const PROFILE_NAME_QUERY_KEY = "name";
@@ -225,6 +260,13 @@ const LEADERBOARD_METRICS: Array<{ value: LeaderboardMetric; label: string }> = 
   { value: "winRate", label: "Win rate" },
   { value: "pnl", label: "PNL" },
   { value: "auraPoints", label: "Aura points" }
+];
+const LEADERBOARD_TIERS: Array<{ value: LeaderboardTier; label: string; min: number; max?: number }> = [
+  { value: "all", label: "All tiers", min: 0 },
+  { value: "bronze", label: "Bronze", min: 0, max: 999 },
+  { value: "silver", label: "Silver", min: 1000, max: 2499 },
+  { value: "gold", label: "Gold", min: 2500, max: 4999 },
+  { value: "diamond", label: "Diamond", min: 5000 }
 ];
 const CHART_WINDOWS: Array<{ value: ChartWindowKey; label: string; seconds: number | null }> = [
   { value: "1h", label: "1H", seconds: 60 * 60 },
@@ -285,6 +327,15 @@ function getWalletClient(provider?: EthereumProvider | null) {
 
 function sleep(ms: number) {
   return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
+function readJsonStorage<T>(key: string, fallback: T) {
+  try {
+    const raw = window.localStorage.getItem(key);
+    return raw ? (JSON.parse(raw) as T) : fallback;
+  } catch {
+    return fallback;
+  }
 }
 
 function readCachedMarkets() {
@@ -718,6 +769,108 @@ function auraPointsFor(
   );
 }
 
+function auraBreakdownFor(
+  volume: bigint,
+  wonMarkets: number,
+  resolvedMarkets: number,
+  createdMarkets: number,
+  pnl: bigint
+): AuraBreakdown {
+  const volumeUsdc = Number(formatUnits(volume, ARC_NATIVE_USDC_DECIMALS));
+  const pnlUsdc = Number(formatUnits(pnl, ARC_NATIVE_USDC_DECIMALS));
+  const winRate = resolvedMarkets > 0 ? (wonMarkets / resolvedMarkets) * 100 : 0;
+  const items = [
+    { label: "Participation", detail: "Base score for active profiles", value: 25 },
+    { label: "Volume", detail: `${volumeUsdc.toFixed(2)} USDC x 10`, value: volumeUsdc * 10 },
+    { label: "Positive PNL", detail: `max(${pnlUsdc.toFixed(2)}, 0) x 12`, value: Math.max(0, pnlUsdc * 12) },
+    { label: "Winning markets", detail: `${wonMarkets} wins x 90`, value: wonMarkets * 90 },
+    { label: "Resolved markets", detail: `${resolvedMarkets} settled x 18`, value: resolvedMarkets * 18 },
+    { label: "Created markets", detail: `${createdMarkets} created x 35`, value: createdMarkets * 35 },
+    { label: "Accuracy", detail: `${winRate.toFixed(1)}% win rate x 4`, value: winRate * 4 }
+  ];
+
+  return {
+    items: items.map((item) => ({ ...item, value: Math.round(item.value) })),
+    total: auraPointsFor(volume, wonMarkets, resolvedMarkets, createdMarkets, pnl),
+    winRate
+  };
+}
+
+function reputationTierFor(points: number) {
+  return (
+    [...LEADERBOARD_TIERS]
+      .reverse()
+      .find((tier) => tier.value !== "all" && points >= tier.min) ?? LEADERBOARD_TIERS[1]
+  );
+}
+
+function rowMatchesTier(row: LeaderboardRow, tierValue: LeaderboardTier) {
+  if (tierValue === "all") return true;
+  const tier = LEADERBOARD_TIERS.find((item) => item.value === tierValue);
+  if (!tier) return true;
+  return row.auraPoints >= tier.min && (tier.max === undefined || row.auraPoints <= tier.max);
+}
+
+function reputationBadgesFor(row: LeaderboardRow) {
+  const volumeUsdc = Number(formatUnits(row.volume, ARC_NATIVE_USDC_DECIMALS));
+  const badges: string[] = [];
+
+  if (row.resolvedMarkets >= 3 && row.winRate >= 70) badges.push("Master Forecaster");
+  if (volumeUsdc >= 100) badges.push("High Volume");
+  if (row.pnl > 0n) badges.push("Positive Edge");
+  if (row.createdMarkets >= 3) badges.push("Market Maker");
+  if (row.resolvedMarkets >= 5) badges.push("Fast Resolver");
+  if (row.auraPoints >= 1000 && badges.length === 0) badges.push("Rising Trader");
+
+  return badges.slice(0, 3);
+}
+
+function resolutionReportFor(
+  market: MarketView,
+  evidenceRows: MarketEvidence[],
+  yesPercent: number,
+  noPercent: number
+) {
+  const evidenceText = evidenceRows
+    .map((item) => `${item.title} ${item.url} ${item.notes}`)
+    .join(" ")
+    .toLowerCase();
+  const yesWords = ["yes", "approved", "confirmed", "passed", "true", "happened", "won", "listed"];
+  const noWords = ["no", "rejected", "failed", "false", "not happened", "canceled", "cancelled", "lost"];
+  const yesHits = yesWords.filter((word) => evidenceText.includes(word)).length;
+  const noHits = noWords.filter((word) => evidenceText.includes(word)).length;
+  const poolLean = yesPercent >= noPercent ? Outcome.Yes : Outcome.No;
+  const suggestedOutcome =
+    evidenceRows.length === 0
+      ? poolLean
+      : yesHits > noHits
+        ? Outcome.Yes
+        : noHits > yesHits
+          ? Outcome.No
+          : poolLean;
+  const evidenceStrength = Math.min(28, evidenceRows.length * 9);
+  const signalSpread = Math.min(24, Math.abs(yesHits - noHits) * 8);
+  const marketSpread = Math.min(18, Math.abs(yesPercent - noPercent) / 2);
+  const confidence = Math.min(96, Math.round(44 + evidenceStrength + signalSpread + marketSpread));
+  const suggestedLabel =
+    suggestedOutcome === Outcome.Yes ? "YES" : suggestedOutcome === Outcome.No ? "NO" : outcomeLabel(suggestedOutcome);
+
+  return {
+    confidence,
+    suggestedOutcome,
+    suggestedLabel,
+    summary:
+      evidenceRows.length > 0
+        ? `Aura Agent reviewed ${evidenceRows.length} evidence item${evidenceRows.length > 1 ? "s" : ""} and leans ${suggestedLabel}.`
+        : `Aura Agent has no evidence yet, so it only uses current pool consensus and leans ${suggestedLabel}.`,
+    checklist: [
+      "Attach official source links before proposing a result.",
+      "Use screenshots only as supporting context, not the only source.",
+      "Let users dispute if the evidence is incomplete or ambiguous."
+    ]
+  };
+}
+
 function marketStatus(market: MarketView) {
   if (market.outcome !== Outcome.Unresolved) return outcomeLabel(market.outcome);
   if (market.disputed) return "Disputed";
@@ -978,7 +1131,7 @@ function LandingPage() {
     },
     {
       title: "Creator resolution",
-      text: "Market creators propose outcomes after close, with dispute and finalization flows built into the protocol."
+      text: "Market creators propose outcomes after close, with evidence, dispute protection, and Aura Agent review."
     },
     {
       title: "Profiles and reputation",
@@ -991,6 +1144,10 @@ function LandingPage() {
     {
       title: "Leaderboard",
       text: "Rank traders by volume, win rate, PNL, and Aura Points across 24H, 7D, 1M, and all-time views."
+    },
+    {
+      title: "Social forecasting",
+      text: "Follow creators, discuss markets, share to X, embed market links, and study top traders before staking."
     }
   ];
   const flow = ["Create a market", "Stake YES or NO", "Track odds", "Resolve result", "Claim payout"];
@@ -1055,10 +1212,10 @@ function LandingPage() {
       <section className="landing-hero" id="top">
         <div className="landing-hero-copy">
           <p className="landing-kicker">Arc Testnet prediction markets</p>
-          <h1>Predict the future. Build your onchain reputation.</h1>
+          <h1>Social prediction markets with onchain reputation.</h1>
           <p>
-            AuraPredict is a social prediction market on Arc Testnet where users create YES/NO markets,
-            stake native USDC, track live odds, resolve outcomes, claim payouts, and compete with Aura Points.
+            AuraPredict combines YES/NO markets, native Arc USDC staking, public evidence, Aura Agent
+            resolution support, trader profiles, and reputation badges in one forecasting app.
           </p>
           <div className="landing-actions">
             <a className="landing-primary" href={APP_URL}>
@@ -1070,8 +1227,8 @@ function LandingPage() {
           </div>
           <div className="landing-proof">
             <span>Native USDC</span>
-            <span>Profile reputation</span>
-            <span>Hourly UTC leaderboard</span>
+            <span>Aura Agent</span>
+            <span>Social reputation</span>
           </div>
         </div>
         <aside className="landing-visual">
@@ -1178,10 +1335,10 @@ function LandingPage() {
           </article>
           <article className="docs-card">
             <span className="docs-label">Resolution model</span>
-            <h3>Creator proposes, users can dispute</h3>
+            <h3>Evidence first, agent assisted</h3>
             <p>
-              Market creators propose the final result after close. A dispute window protects users
-              from incorrect reports before settlement becomes claimable.
+              Market creators propose the final result after close. Evidence links, notes, Aura Agent
+              summaries, and a dispute window help users review ambiguous outcomes before settlement.
             </p>
           </article>
         </div>
@@ -1375,6 +1532,8 @@ export default function App() {
   const [view, setView] = useState<AppView>("markets");
   const [leaderboardMetric, setLeaderboardMetric] = useState<LeaderboardMetric>("volume");
   const [leaderboardPeriod, setLeaderboardPeriod] = useState<LeaderboardPeriod>("all");
+  const [leaderboardCategory, setLeaderboardCategory] = useState("All");
+  const [leaderboardTier, setLeaderboardTier] = useState<LeaderboardTier>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [searchFocused, setSearchFocused] = useState(false);
   const [collectionView, setCollectionView] = useState<MarketSectionKey>("fresh");
@@ -1405,6 +1564,22 @@ export default function App() {
       return JSON.parse(window.localStorage.getItem(PROFILE_PUBLIC_KEY) || "{}") as Record<string, boolean>;
     } catch {
       return {};
+    }
+  });
+  const [followedCreators, setFollowedCreators] = useState<string[]>(() => readJsonStorage(FOLLOWED_CREATORS_KEY, []));
+  const [marketComments, setMarketComments] = useState<Record<string, MarketComment[]>>(() =>
+    readJsonStorage(MARKET_COMMENTS_KEY, {})
+  );
+  const [marketEvidence, setMarketEvidence] = useState<Record<string, MarketEvidence[]>>(() =>
+    readJsonStorage(MARKET_EVIDENCE_KEY, {})
+  );
+  const [commentInputs, setCommentInputs] = useState<Record<number, string>>({});
+  const [evidenceDrafts, setEvidenceDrafts] = useState<Record<number, EvidenceDraft>>({});
+  const [onboardingDismissed, setOnboardingDismissed] = useState(() => {
+    try {
+      return window.localStorage.getItem(ONBOARDING_DISMISSED_KEY) === "true";
+    } catch {
+      return false;
     }
   });
   const [userRegistry, setUserRegistry] = useState<UserRegistry>(() => {
@@ -1903,9 +2078,13 @@ export default function App() {
             ? "Leaderboard"
             : view === "profile"
               ? "Wallet profile"
-              : "Live markets";
-  const buildPlayerRows = useCallback((periodStart: number) => {
+              : view === "security"
+                ? "Security and audit"
+                : "Live markets";
+  const buildPlayerRows = useCallback((periodStart: number, category = "All") => {
     const marketMap = new Map(markets.map((market) => [market.id, market]));
+    const marketMatchesCategory = (market?: MarketView) =>
+      !market || category === "All" || (market.category || "Other").toLowerCase() === category.toLowerCase();
     const rows = new Map<
       string,
       {
@@ -1969,6 +2148,7 @@ export default function App() {
       if (activity.timestamp > 0 && activity.timestamp < periodStart) continue;
       const market = marketMap.get(activity.marketId);
       if (!market) continue;
+      if (!marketMatchesCategory(market)) continue;
 
       addPosition(activity.user, activity.marketId, activity.side, activity.amount);
       appliedUserMarkets.add(`${activity.user.toLowerCase()}:${activity.marketId}`);
@@ -1978,6 +2158,7 @@ export default function App() {
       const accountPositionKey = account.toLowerCase();
       for (const market of markets) {
         if (appliedUserMarkets.has(`${accountPositionKey}:${market.id}`)) continue;
+        if (!marketMatchesCategory(market)) continue;
 
         addPosition(account, market.id, Outcome.Yes, market.yesPosition);
         addPosition(account, market.id, Outcome.No, market.noPosition);
@@ -1986,6 +2167,7 @@ export default function App() {
 
     for (const market of markets) {
       if (periodStart > 0 && (market.createdAt === 0 || market.createdAt < periodStart)) continue;
+      if (!marketMatchesCategory(market)) continue;
       const creatorRow = getRow(market.creator);
       creatorRow.createdMarkets += 1;
     }
@@ -2029,7 +2211,13 @@ export default function App() {
       };
     });
 
-    return output.filter((row) => row.volume > 0n || row.createdMarkets > 0 || row.resolvedMarkets > 0 || !!userRegistry[row.address.toLowerCase()]);
+    return output.filter(
+      (row) =>
+        row.volume > 0n ||
+        row.createdMarkets > 0 ||
+        row.resolvedMarkets > 0 ||
+        (category === "All" && !!userRegistry[row.address.toLowerCase()])
+    );
   }, [account, activities, markets, protocolFeeBps, userRegistry]);
 
   const sortLeaderboardRows = useCallback((rows: LeaderboardRow[], metric: LeaderboardMetric) => {
@@ -2054,8 +2242,18 @@ export default function App() {
   const leaderboardRows = useMemo<LeaderboardRow[]>(() => {
     const period = LEADERBOARD_PERIODS.find((item) => item.value === leaderboardPeriod);
     const periodStart = period?.seconds ? leaderboardTimestamp - period.seconds : 0;
-    return sortLeaderboardRows(buildPlayerRows(periodStart), leaderboardMetric);
-  }, [buildPlayerRows, leaderboardMetric, leaderboardPeriod, leaderboardTimestamp, sortLeaderboardRows]);
+    return sortLeaderboardRows(buildPlayerRows(periodStart, leaderboardCategory), leaderboardMetric).filter((row) =>
+      rowMatchesTier(row, leaderboardTier)
+    );
+  }, [
+    buildPlayerRows,
+    leaderboardCategory,
+    leaderboardMetric,
+    leaderboardPeriod,
+    leaderboardTier,
+    leaderboardTimestamp,
+    sortLeaderboardRows
+  ]);
 
   const profileVolumeRows = useMemo(
     () =>
@@ -2075,6 +2273,27 @@ export default function App() {
   const displayedProfileWonCount = profileLeaderboardRow?.wonMarkets ?? profileWonCount;
   const displayedProfileWinRate = profileLeaderboardRow?.winRate ?? profileWinRate;
   const displayedProfileAuraScore = profileLeaderboardRow?.auraPoints ?? profileAuraScore;
+  const displayedProfileAuraBreakdown = auraBreakdownFor(
+    displayedProfileVolume,
+    displayedProfileWonCount,
+    displayedProfileResolvedCount,
+    createdMarkets,
+    displayedProfilePnl
+  );
+  const displayedProfileTier = reputationTierFor(displayedProfileAuraScore);
+  const displayedProfileBadgeRow: LeaderboardRow = profileLeaderboardRow ?? {
+    address: viewedProfileAddress || account || "0x0000000000000000000000000000000000000000",
+    volume: displayedProfileVolume,
+    stake: displayedProfileVolume,
+    payout: 0n,
+    pnl: displayedProfilePnl,
+    wonMarkets: displayedProfileWonCount,
+    resolvedMarkets: displayedProfileResolvedCount,
+    winRate: displayedProfileWinRate,
+    auraPoints: displayedProfileAuraScore,
+    createdMarkets
+  };
+  const displayedProfileBadges = reputationBadgesFor(displayedProfileBadgeRow);
 
   useEffect(() => {
     if (!notice) return;
@@ -2089,6 +2308,22 @@ export default function App() {
     document.documentElement.dataset.theme = theme;
     window.localStorage.setItem(THEME_KEY, theme);
   }, [theme]);
+
+  useEffect(() => {
+    window.localStorage.setItem(FOLLOWED_CREATORS_KEY, JSON.stringify(followedCreators));
+  }, [followedCreators]);
+
+  useEffect(() => {
+    window.localStorage.setItem(MARKET_COMMENTS_KEY, JSON.stringify(marketComments));
+  }, [marketComments]);
+
+  useEffect(() => {
+    window.localStorage.setItem(MARKET_EVIDENCE_KEY, JSON.stringify(marketEvidence));
+  }, [marketEvidence]);
+
+  useEffect(() => {
+    window.localStorage.setItem(ONBOARDING_DISMISSED_KEY, onboardingDismissed ? "true" : "false");
+  }, [onboardingDismissed]);
 
   useEffect(() => {
     if (!accountKey) {
@@ -2333,6 +2568,95 @@ export default function App() {
       return next;
     });
   }, []);
+
+  const copyTextToClipboard = useCallback(async (text: string, successMessage: string) => {
+    try {
+      await window.navigator.clipboard.writeText(text);
+      setNotice(successMessage);
+    } catch {
+      setNotice(text);
+    }
+  }, [setNotice]);
+
+  const toggleFollowCreator = useCallback(
+    (creator: string) => {
+      if (!creator) return;
+      const creatorKey = creator.toLowerCase();
+      const isFollowing = followedCreators.includes(creatorKey);
+      setFollowedCreators((current) =>
+        isFollowing ? current.filter((address) => address !== creatorKey) : [...current, creatorKey]
+      );
+      setNotice(isFollowing ? "Creator unfollowed." : "Creator followed locally.");
+    },
+    [followedCreators, setNotice]
+  );
+
+  const postMarketComment = useCallback(
+    (marketId: number) => {
+      const text = (commentInputs[marketId] || "").trim().replace(/\s+/g, " ");
+      if (text.length < 2) {
+        setNotice("Enter a comment before posting.");
+        return;
+      }
+
+      const author = account || "Guest";
+      const comment: MarketComment = {
+        id: `${marketId}-${Date.now()}`,
+        marketId,
+        author,
+        text: text.slice(0, 420),
+        createdAt: new Date().toISOString()
+      };
+
+      setMarketComments((current) => ({
+        ...current,
+        [String(marketId)]: [comment, ...(current[String(marketId)] || [])].slice(0, 80)
+      }));
+      setCommentInputs((current) => ({ ...current, [marketId]: "" }));
+      setNotice("Comment posted locally.");
+    },
+    [account, commentInputs, setNotice]
+  );
+
+  const saveMarketEvidence = useCallback(
+    (marketId: number) => {
+      const draft = evidenceDrafts[marketId] || { title: "", url: "", notes: "" };
+      const title = draft.title.trim().replace(/\s+/g, " ").slice(0, 90);
+      const url = draft.url.trim();
+      const notes = draft.notes.trim().replace(/\s+/g, " ").slice(0, 520);
+
+      if (!title && !url && !notes) {
+        setNotice("Add a source link, title, or note before saving evidence.");
+        return;
+      }
+
+      if (url && !/^https?:\/\//i.test(url)) {
+        setNotice("Evidence URL must start with http:// or https://.");
+        return;
+      }
+
+      const evidence: MarketEvidence = {
+        id: `${marketId}-${Date.now()}`,
+        marketId,
+        title: title || "Evidence",
+        url,
+        notes,
+        addedBy: account || "Guest",
+        createdAt: new Date().toISOString()
+      };
+
+      setMarketEvidence((current) => ({
+        ...current,
+        [String(marketId)]: [evidence, ...(current[String(marketId)] || [])].slice(0, 40)
+      }));
+      setEvidenceDrafts((current) => ({
+        ...current,
+        [marketId]: { title: "", url: "", notes: "" }
+      }));
+      setNotice("Evidence saved locally for this market.");
+    },
+    [account, evidenceDrafts, setNotice]
+  );
 
   const setThemeMode = useCallback((nextTheme: ThemeMode) => {
     setTheme(nextTheme);
@@ -3469,14 +3793,21 @@ export default function App() {
 
   const renderMarketCards = (items: MarketView[], emptyTitle: string, emptyText: string, resultSubject = "You") => (
     <section className={marketViewMode === "list" ? "market-grid market-grid-list" : "market-grid"}>
-      {items.length === 0 && (
+      {items.length === 0 &&
+        loading &&
+        Array.from({ length: marketViewMode === "list" ? 2 : 6 }, (_, index) => (
+          <article className="market-card market-card-skeleton" key={`market-skeleton-${index}`} aria-hidden="true">
+            <span />
+            <strong />
+            <div />
+            <div />
+            <div />
+          </article>
+        ))}
+      {items.length === 0 && !loading && (
         <div className="empty-state">
-          <strong>{loading ? "Loading markets..." : emptyTitle}</strong>
-          <span>
-            {loading
-              ? "Reading the latest Arc markets. Cached markets will appear instantly after the first successful load."
-              : emptyText}
-          </span>
+          <strong>{emptyTitle}</strong>
+          <span>{emptyText}</span>
         </div>
       )}
       {items.map((market) => {
@@ -3788,12 +4119,63 @@ export default function App() {
         : `Buy ${selectedSideLabel}`;
     const copyMarketLink = async () => {
       const url = `${window.location.origin}${window.location.pathname}?market=${selectedMarket.id}`;
-      try {
-        await window.navigator.clipboard.writeText(url);
-        setNotice("Market link copied.");
-      } catch {
-        setNotice(url);
-      }
+      await copyTextToClipboard(url, "Market link copied.");
+    };
+    const marketShareUrl = `${window.location.origin}${window.location.pathname}?market=${selectedMarket.id}`;
+    const marketEmbedCode = `<iframe src="${marketShareUrl}" title="AuraPredict Market ${selectedMarket.id}" width="100%" height="720"></iframe>`;
+    const shareMarketOnX = () => {
+      const tweet = new URL("https://x.com/intent/tweet");
+      tweet.searchParams.set("text", `${selectedMarket.question} | YES ${selectedMarketYesPercent.toFixed(0)}% / NO ${selectedMarketNoPercent.toFixed(0)}% on AuraPredict`);
+      tweet.searchParams.set("url", marketShareUrl);
+      window.open(tweet.toString(), "_blank", "noopener,noreferrer");
+    };
+    const creatorKey = selectedMarket.creator.toLowerCase();
+    const isFollowingCreator = followedCreators.includes(creatorKey);
+    const selectedEvidenceRows = marketEvidence[String(selectedMarket.id)] || [];
+    const selectedCommentRows = marketComments[String(selectedMarket.id)] || [];
+    const selectedEvidenceDraft = evidenceDrafts[selectedMarket.id] || { title: "", url: "", notes: "" };
+    const agentReport = resolutionReportFor(
+      selectedMarket,
+      selectedEvidenceRows,
+      selectedMarketYesPercent,
+      selectedMarketNoPercent
+    );
+    const topTraderRows = Array.from(
+      selectedMarketActivities.reduce(
+        (map, activity) => {
+          const key = activity.user.toLowerCase();
+          const row = map.get(key) ?? { address: activity.user, yes: 0n, no: 0n, total: 0n };
+          if (activity.side === Outcome.Yes) row.yes += activity.amount;
+          if (activity.side === Outcome.No) row.no += activity.amount;
+          row.total += activity.amount;
+          map.set(key, row);
+          return map;
+        },
+        new Map<string, { address: string; yes: bigint; no: bigint; total: bigint }>()
+      ).values()
+    )
+      .sort((a, b) => (b.total > a.total ? 1 : b.total < a.total ? -1 : 0))
+      .slice(0, 5);
+    const copyTraderPosition = (trader: { address: string; yes: bigint; no: bigint; total: bigint }) => {
+      const side = trader.no > trader.yes ? Outcome.No : Outcome.Yes;
+      const copyAmount = walletBalance > 0n && trader.total > walletBalance ? walletBalance : trader.total;
+      setSelectedTradeSides((current) => ({ ...current, [selectedMarket.id]: side }));
+      setStakeInputs((current) => ({
+        ...current,
+        [selectedMarket.id]: copyAmount > 0n ? formatUsdcInput(copyAmount) : ""
+      }));
+      setNotice(`Copied ${displayNameForAddress(trader.address)} ${side === Outcome.Yes ? "YES" : "NO"} setup.`);
+    };
+    const copyAgentReport = () => {
+      const report = [
+        `Aura Agent report for Market #${selectedMarket.id}`,
+        selectedMarket.question,
+        `Suggested outcome: ${agentReport.suggestedLabel}`,
+        `Confidence: ${agentReport.confidence}%`,
+        agentReport.summary,
+        ...selectedEvidenceRows.map((item, index) => `${index + 1}. ${item.title}${item.url ? ` - ${item.url}` : ""}`)
+      ].join("\n");
+      void copyTextToClipboard(report, "Aura Agent report copied.");
     };
 
     return (
@@ -3811,9 +4193,20 @@ export default function App() {
                 {selectedMarket.category || "Other"}
               </span>
               <h1>{selectedMarket.question}</h1>
+              <div className="market-share-actions">
+                <button className="secondary" onClick={() => toggleFollowCreator(selectedMarket.creator)} type="button">
+                  {isFollowingCreator ? "Following" : "Follow creator"}
+                </button>
+                <button className="secondary" onClick={shareMarketOnX} type="button">
+                  Share X
+                </button>
+                <button className="secondary" onClick={() => copyTextToClipboard(marketEmbedCode, "Embed code copied.")} type="button">
+                  Embed
+                </button>
+              </div>
             </div>
             <button className="secondary copy-market-button" onClick={copyMarketLink} type="button">
-              Copy
+              Copy link
             </button>
           </div>
 
@@ -4045,6 +4438,155 @@ export default function App() {
           </aside>
         </section>
 
+        <section className="market-intelligence-grid">
+          <section className="agent-panel">
+            <div className="panel-heading">
+              <div>
+                <span className="section-label">Aura Agent</span>
+                <h3>Resolution assistant</h3>
+              </div>
+              <span className="agent-confidence">{agentReport.confidence}% confidence</span>
+            </div>
+            <div className="agent-result">
+              <span>Suggested outcome</span>
+              <strong>{agentReport.suggestedLabel}</strong>
+              <p>{agentReport.summary}</p>
+            </div>
+            <div className="agent-checklist">
+              {agentReport.checklist.map((item) => (
+                <span key={item}>{item}</span>
+              ))}
+            </div>
+            <button className="secondary" onClick={copyAgentReport} type="button">
+              Copy report
+            </button>
+          </section>
+
+          <section className="evidence-panel">
+            <div className="panel-heading">
+              <div>
+                <span className="section-label">Evidence</span>
+                <h3>Resolution sources</h3>
+              </div>
+              <span>{selectedEvidenceRows.length} saved</span>
+            </div>
+            <div className="evidence-form">
+              <input
+                placeholder="Source title"
+                value={selectedEvidenceDraft.title}
+                onChange={(event) =>
+                  setEvidenceDrafts((current) => ({
+                    ...current,
+                    [selectedMarket.id]: { ...selectedEvidenceDraft, title: event.target.value }
+                  }))
+                }
+              />
+              <input
+                placeholder="https:// source link"
+                value={selectedEvidenceDraft.url}
+                onChange={(event) =>
+                  setEvidenceDrafts((current) => ({
+                    ...current,
+                    [selectedMarket.id]: { ...selectedEvidenceDraft, url: event.target.value }
+                  }))
+                }
+              />
+              <textarea
+                placeholder="Notes for resolver and disputers"
+                rows={3}
+                value={selectedEvidenceDraft.notes}
+                onChange={(event) =>
+                  setEvidenceDrafts((current) => ({
+                    ...current,
+                    [selectedMarket.id]: { ...selectedEvidenceDraft, notes: event.target.value }
+                  }))
+                }
+              />
+              <button onClick={() => saveMarketEvidence(selectedMarket.id)} type="button">
+                Add evidence
+              </button>
+            </div>
+            <div className="evidence-list">
+              {selectedEvidenceRows.length === 0 && <span>No evidence has been attached yet.</span>}
+              {selectedEvidenceRows.map((item) => (
+                <article key={item.id}>
+                  <strong>{item.title}</strong>
+                  <small>
+                    {item.addedBy === "Guest" ? "Guest" : displayNameForAddress(item.addedBy)} /{" "}
+                    {timeAgo(Math.floor(new Date(item.createdAt).getTime() / 1000), currentTime)}
+                  </small>
+                  {item.notes && <p>{item.notes}</p>}
+                  {item.url && (
+                    <a href={item.url} target="_blank" rel="noreferrer">
+                      Open source
+                    </a>
+                  )}
+                </article>
+              ))}
+            </div>
+          </section>
+
+          <section className="top-traders-panel">
+            <div className="panel-heading">
+              <div>
+                <span className="section-label">Top traders</span>
+                <h3>Copy trade setup</h3>
+              </div>
+              <span>{topTraderRows.length} wallets</span>
+            </div>
+            <div className="top-trader-list">
+              {topTraderRows.length === 0 && <span>No trader activity indexed for this market yet.</span>}
+              {topTraderRows.map((trader, index) => (
+                <article key={trader.address}>
+                  <div>
+                    <strong>#{index + 1} {displayNameForAddress(trader.address)}</strong>
+                    <small>
+                      YES {formatUsdc(trader.yes)} / NO {formatUsdc(trader.no)}
+                    </small>
+                  </div>
+                  <span>{formatUsdc(trader.total)} USDC</span>
+                  <button className="secondary" onClick={() => copyTraderPosition(trader)} type="button">
+                    Copy
+                  </button>
+                </article>
+              ))}
+            </div>
+          </section>
+
+          <section className="discussion-panel">
+            <div className="panel-heading">
+              <div>
+                <span className="section-label">Discussion</span>
+                <h3>Market comments</h3>
+              </div>
+              <span>{selectedCommentRows.length} comments</span>
+            </div>
+            <div className="comment-form">
+              <textarea
+                placeholder="Add context, a source, or your forecast..."
+                rows={3}
+                value={commentInputs[selectedMarket.id] || ""}
+                onChange={(event) =>
+                  setCommentInputs((current) => ({ ...current, [selectedMarket.id]: event.target.value }))
+                }
+              />
+              <button onClick={() => postMarketComment(selectedMarket.id)} type="button">
+                Post comment
+              </button>
+            </div>
+            <div className="comment-list">
+              {selectedCommentRows.length === 0 && <span>No comments yet.</span>}
+              {selectedCommentRows.map((comment) => (
+                <article key={comment.id}>
+                  <strong>{comment.author === "Guest" ? "Guest" : displayNameForAddress(comment.author)}</strong>
+                  <small>{timeAgo(Math.floor(new Date(comment.createdAt).getTime() / 1000), currentTime)}</small>
+                  <p>{comment.text}</p>
+                </article>
+              ))}
+            </div>
+          </section>
+        </section>
+
         <section className="market-timeline">
           {[
             { label: "Created", active: true, detail: `Market #${selectedMarket.id}` },
@@ -4147,6 +4689,17 @@ export default function App() {
               }}
             >
               Leaderboard
+            </button>
+            <button
+              className={view === "security" ? "tab active" : "tab"}
+              onClick={() => {
+                setSelectedMarketId(null);
+                setSelectedProfileAddress("");
+                updateMarketRoute(null);
+                setView("security");
+              }}
+            >
+              Security
             </button>
           </div>
           <div className="market-search">
@@ -4506,14 +5059,24 @@ export default function App() {
                   Last refresh: {lastRefreshText}.
                 </p>
               )}
-              {knownMarketCount > 0 && view !== "market" && (
+              {view === "security" && (
+                <p>
+                  AuraPredict is still a testnet MVP. This page keeps audit status, contract custody, resolution risk,
+                  and user safety notes visible before mainnet decisions.
+                </p>
+              )}
+              {knownMarketCount > 0 && view !== "market" && view !== "security" && (
                 <p className="data-scope-note">
                   Showing {markets.length} loaded markets out of {knownMarketCount} total. Load more only when you need older markets to avoid Arc RPC rate limits.
                 </p>
               )}
             </div>
             <div className="board-actions">
-              {view === "collection" || view === "market" ? (
+              {view === "security" ? (
+                <button className="secondary" onClick={backToMarkets} type="button">
+                  Back to markets
+                </button>
+              ) : view === "collection" || view === "market" ? (
                 <>
                   <button className="secondary" onClick={backToMarkets} type="button">
                     Back to markets
@@ -4543,7 +5106,7 @@ export default function App() {
             </div>
           </div>
 
-          {view !== "leaderboard" && view !== "profile" && view !== "market" && (
+          {view !== "leaderboard" && view !== "profile" && view !== "market" && view !== "security" && (
             <div className="category-row">
               {CATEGORIES.map((category) => (
                 <button
@@ -4700,6 +5263,15 @@ export default function App() {
                       <span>{createdMarkets} created</span>
                       <span>{participatedProfileMarkets.length} participated</span>
                     </div>
+                    <div className="badge-row profile-badge-row">
+                      <span className={`reputation-tier tier-${displayedProfileTier.value}`}>
+                        {displayedProfileTier.label}
+                      </span>
+                      {displayedProfileBadges.length === 0 && <span className="reputation-badge">New Forecaster</span>}
+                      {displayedProfileBadges.map((badge) => (
+                        <span className="reputation-badge" key={badge}>{badge}</span>
+                      ))}
+                    </div>
                   </div>
                 </div>
                 <div className="profile-actions">
@@ -4716,6 +5288,11 @@ export default function App() {
                   <button className="secondary" type="button" onClick={copyProfileLink} disabled={isOwnProfile && !isProfilePublic}>
                     Share profile
                   </button>
+                  {!isOwnProfile && viewedProfileAddress && (
+                    <button className="secondary" type="button" onClick={() => toggleFollowCreator(viewedProfileAddress)}>
+                      {followedCreators.includes(viewedProfileKey) ? "Following" : "Follow user"}
+                    </button>
+                  )}
                 </div>
               </section>
 
@@ -4751,6 +5328,27 @@ export default function App() {
                   <strong>{displayedProfileAuraScore.toLocaleString("en-US")}</strong>
                   <small>{displayedProfileWinRate.toFixed(1)}% win rate</small>
                 </article>
+              </section>
+
+              <section className="profile-edge-card aura-breakdown-card">
+                <div className="profile-section-title">
+                  <div>
+                    <h3>Aura Points breakdown</h3>
+                    <span>
+                      Public formula: volume, accuracy, realized edge, market creation, and settled history.
+                    </span>
+                  </div>
+                  <strong>{displayedProfileAuraBreakdown.total.toLocaleString("en-US")} points</strong>
+                </div>
+                <div className="aura-breakdown-grid">
+                  {displayedProfileAuraBreakdown.items.map((item) => (
+                    <div key={item.label}>
+                      <span>{item.label}</span>
+                      <strong>{item.value.toLocaleString("en-US")}</strong>
+                      <small>{item.detail}</small>
+                    </div>
+                  ))}
+                </div>
               </section>
 
               <section className="profile-edge-card">
@@ -5068,12 +5666,51 @@ export default function App() {
                     </button>
                   ))}
                 </div>
+                <div>
+                  {CATEGORIES.map((category) => (
+                    <button
+                      className={leaderboardCategory === category ? "category-pill active" : "category-pill"}
+                      key={`leaderboard-category-${category}`}
+                      onClick={() => setLeaderboardCategory(category)}
+                      type="button"
+                    >
+                      {category}
+                    </button>
+                  ))}
+                </div>
+                <div>
+                  {LEADERBOARD_TIERS.map((tier) => (
+                    <button
+                      className={leaderboardTier === tier.value ? "category-pill active" : "category-pill"}
+                      key={tier.value}
+                      onClick={() => setLeaderboardTier(tier.value)}
+                      type="button"
+                    >
+                      {tier.label}
+                    </button>
+                  ))}
+                </div>
               </div>
+
+              <section className="aura-formula-card">
+                <div>
+                  <span className="section-label">Aura Points formula</span>
+                  <h3>Base 25 + volume x10 + positive PNL x12 + wins x90 + settled x18 + created x35 + win rate x4.</h3>
+                  <p>Category and time filters recalculate the same formula for the selected leaderboard slice.</p>
+                </div>
+                <div className="aura-tier-strip">
+                  {LEADERBOARD_TIERS.filter((tier) => tier.value !== "all").map((tier) => (
+                    <span className={`reputation-tier tier-${tier.value}`} key={tier.value}>
+                      {tier.label} {tier.min.toLocaleString("en-US")}+
+                    </span>
+                  ))}
+                </div>
+              </section>
 
               <div className="leaderboard-table">
                 <div className="leaderboard-row leaderboard-head">
                   <span>Rank</span>
-                  <span>Wallet</span>
+                  <span>Wallet / badges</span>
                   <span>Volume</span>
                   <span>Win rate</span>
                   <span>PNL</span>
@@ -5085,21 +5722,71 @@ export default function App() {
                     <span>Rows appear after players stake on markets.</span>
                   </div>
                 )}
-                {leaderboardRows.map((row, index) => (
-                  <div className="leaderboard-row" key={row.address}>
-                    <span>#{index + 1}</span>
-                    <strong>{displayNameForAddress(row.address)}</strong>
-                    <span>{formatUsdc(row.volume)} USDC</span>
-                    <span>
-                      {row.winRate.toFixed(1)}% ({row.wonMarkets}/{row.resolvedMarkets})
-                    </span>
-                    <span className={row.pnl >= 0n ? "pnl-positive" : "pnl-negative"}>
-                      {formatSignedUsdc(row.pnl)} USDC
-                    </span>
-                    <span>{row.auraPoints.toLocaleString("en-US")}</span>
-                  </div>
-                ))}
+                {leaderboardRows.map((row, index) => {
+                  const tier = reputationTierFor(row.auraPoints);
+                  const badges = reputationBadgesFor(row);
+
+                  return (
+                    <div className="leaderboard-row" key={row.address}>
+                      <span>#{index + 1}</span>
+                      <div className="leaderboard-wallet">
+                        <strong>{displayNameForAddress(row.address)}</strong>
+                        <div className="badge-row">
+                          <span className={`reputation-tier tier-${tier.value}`}>{tier.label}</span>
+                          {badges.map((badge) => (
+                            <span className="reputation-badge" key={badge}>{badge}</span>
+                          ))}
+                        </div>
+                      </div>
+                      <span>{formatUsdc(row.volume)} USDC</span>
+                      <span>
+                        {row.winRate.toFixed(1)}% ({row.wonMarkets}/{row.resolvedMarkets})
+                      </span>
+                      <span className={row.pnl >= 0n ? "pnl-positive" : "pnl-negative"}>
+                        {formatSignedUsdc(row.pnl)} USDC
+                      </span>
+                      <span>{row.auraPoints.toLocaleString("en-US")}</span>
+                    </div>
+                  );
+                })}
               </div>
+            </section>
+          ) : view === "security" ? (
+            <section className="security-page">
+              <article>
+                <span className="section-label">Audit status</span>
+                <h3>Unaudited testnet contract</h3>
+                <p>
+                  AuraPredict is operating as an Arc Testnet MVP. Treat all market activity as testing until a formal
+                  smart contract audit, public findings, and mainnet deployment checklist are complete.
+                </p>
+              </article>
+              <article>
+                <span className="section-label">Contract custody</span>
+                <h3>Funds live in the prediction market contract</h3>
+                <p>
+                  The frontend does not custody user funds. Wallets sign contract transactions, and users should verify
+                  market creation, staking, resolution, and claim transactions on Arcscan.
+                </p>
+              </article>
+              <article>
+                <span className="section-label">Resolution risk</span>
+                <h3>Creator propose, evidence, dispute window</h3>
+                <p>
+                  Aura Agent evidence summaries are decision support only. Final settlement still follows the contract
+                  resolution flow, so ambiguous markets should include source links and remain open to dispute review.
+                </p>
+              </article>
+              <article>
+                <span className="section-label">User checklist</span>
+                <h3>Before staking</h3>
+                <ul>
+                  <li>Check close time, category, creator, and market wording.</li>
+                  <li>Use small testnet amounts and keep transaction links.</li>
+                  <li>Review evidence before accepting a proposed outcome.</li>
+                  <li>Do not treat Aura Agent output as a final oracle.</li>
+                </ul>
+              </article>
             </section>
           ) : view === "ended" ? (
             <section className="market-section">
@@ -5118,6 +5805,26 @@ export default function App() {
             </section>
           ) : (
             <section className="market-sections">
+              {!onboardingDismissed && (
+                <section className="onboarding-card">
+                  <div>
+                    <span className="section-label">Getting started</span>
+                    <h3>Predict, prove, and build Aura reputation.</h3>
+                    <p>
+                      Connect a wallet, open a market, choose YES or NO, then track your payout, evidence,
+                      badges, and leaderboard rank from your profile.
+                    </p>
+                  </div>
+                  <div className="onboarding-steps" aria-label="AuraPredict onboarding steps">
+                    {["Connect", "Pick side", "Stake USDC", "Track Aura"].map((step, index) => (
+                      <span key={step}>{index + 1}. {step}</span>
+                    ))}
+                  </div>
+                  <button className="secondary" onClick={() => setOnboardingDismissed(true)} type="button">
+                    Got it
+                  </button>
+                </section>
+              )}
               <section className="market-section section-fresh">
                 <div className="market-section-header">
                   <div className="market-section-title">
@@ -5277,6 +5984,25 @@ export default function App() {
             {account && owner && sameAddress(account, owner) && accumulatedProtocolFees > 0n && (
               <button onClick={withdrawFees}>Withdraw fees</button>
             )}
+          </section>
+          <section className="protocol-card security-card">
+            <span className="section-label">Security & audit</span>
+            <div>
+              <span>Status</span>
+              <strong>Testnet MVP / unaudited</strong>
+            </div>
+            <div>
+              <span>Custody</span>
+              <strong>Market contract only</strong>
+            </div>
+            <div>
+              <span>Resolution</span>
+              <strong>Creator propose + dispute window</strong>
+            </div>
+            <div>
+              <span>Public checks</span>
+              <strong>Verify every tx on Arcscan</strong>
+            </div>
           </section>
         </aside>
         )}
