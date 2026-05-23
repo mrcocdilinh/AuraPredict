@@ -1465,6 +1465,13 @@ export default function App() {
     second: "2-digit",
     hour12: false
   }).format(currentTime);
+  const formattedUtcDate = new Intl.DateTimeFormat("en-US", {
+    timeZone: "UTC",
+    weekday: "short",
+    month: "short",
+    day: "2-digit",
+    year: "numeric"
+  }).format(currentTime);
   const minimumCloseInput = useMemo(
     () => utcDateTimeInputValue(new Date(currentTime.getTime() + 6 * 60 * 1000)),
     [currentTime]
@@ -3941,7 +3948,10 @@ export default function App() {
           </div>
           <div className="clock-widget">
             <span>UTC</span>
-            <strong>{formattedClock}</strong>
+            <div>
+              <strong>{formattedClock}</strong>
+              <small>{formattedUtcDate}</small>
+            </div>
           </div>
         </div>
         <div className="wallet-panel">

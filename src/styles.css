@@ -1113,25 +1113,39 @@ h3 {
 
 .clock-widget {
   align-items: center;
-  background: #ffffff;
-  border: 1px solid #dfe6f1;
+  background: #f8fbff;
+  border: 1px solid #cfe7f4;
   border-radius: 8px;
   display: flex;
-  gap: 8px;
-  min-height: 40px;
-  padding: 0 12px;
+  gap: 9px;
+  min-height: 42px;
+  padding: 6px 12px;
 }
 
 .clock-widget span {
-  color: #667085;
+  color: #536178;
   font-size: 0.76rem;
   font-weight: 780;
+}
+
+.clock-widget div {
+  display: grid;
+  gap: 1px;
 }
 
 .clock-widget strong {
   color: #101827;
   font-variant-numeric: tabular-nums;
+  line-height: 1;
   min-width: 78px;
+}
+
+.clock-widget small {
+  color: #667085;
+  font-size: 0.68rem;
+  font-weight: 780;
+  line-height: 1.1;
+  white-space: nowrap;
 }
 
 .wallet-menu {
@@ -1712,24 +1726,24 @@ h3 {
 
 .view-mode-toggle {
   align-items: center;
-  background: #0b1020;
-  border: 1px solid #dfe6f1;
+  background: #eef8fd;
+  border: 1px solid #bfeaf8;
   border-radius: 8px;
   display: inline-flex;
   flex: 0 0 auto;
-  gap: 4px;
+  gap: 3px;
   margin-left: auto;
-  padding: 4px;
+  padding: 3px;
 }
 
 .view-mode-toggle button {
-  background: #ffffff;
-  border: 1px solid #dfe6f1;
+  background: transparent;
+  border: 1px solid transparent;
   box-shadow: none;
   color: #536178;
-  min-height: 34px;
+  min-height: 32px;
   padding: 0;
-  width: 34px;
+  width: 32px;
 }
 
 .view-mode-toggle svg {
@@ -1744,8 +1758,8 @@ h3 {
 
 .view-mode-toggle button.active,
 .view-mode-toggle button:hover:not(:disabled) {
-  background: #12b981;
-  border-color: #12b981;
+  background: #18d7ff;
+  border-color: #18d7ff;
   color: #06111e;
 }
 
@@ -2684,7 +2698,7 @@ label {
 
 .market-detail-view {
   display: grid;
-  gap: 16px;
+  gap: 10px;
 }
 
 .back-button {
@@ -2693,8 +2707,8 @@ label {
 
 .market-detail-hero {
   display: grid;
-  gap: 12px;
-  grid-template-columns: minmax(0, 1fr) 254px;
+  gap: 10px;
+  grid-template-columns: minmax(0, 1fr) 320px;
 }
 
 .detail-question-panel,
@@ -2714,9 +2728,9 @@ label {
     linear-gradient(90deg, rgba(8, 11, 25, 0.82), rgba(8, 11, 25, 0.42)),
     #080b19;
   display: grid;
-  min-height: 96px;
+  min-height: 126px;
   overflow: hidden;
-  padding: 14px;
+  padding: 12px;
   position: relative;
 }
 
@@ -2739,26 +2753,30 @@ label {
 
 .detail-question-panel h1 {
   color: #ffffff;
-  font-size: clamp(0.94rem, 0.95vw, 1.08rem);
+  font-size: clamp(0.88rem, 0.86vw, 1rem);
   line-height: 1.22;
-  margin: 8px 0 0;
+  margin: 7px 0 0;
   max-width: 620px;
 }
 
 .copy-market-button {
   position: absolute;
-  min-height: 32px;
-  padding: 0 10px;
-  right: 12px;
-  top: 12px;
+  min-height: 30px;
+  padding: 0 9px;
+  right: 10px;
+  top: 10px;
   z-index: 2;
 }
 
 .detail-summary-card,
 .detail-trade-card {
   display: grid;
-  gap: 8px;
-  padding: 12px;
+  gap: 6px;
+  padding: 8px;
+}
+
+.detail-summary-card {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .detail-summary-card div,
@@ -2768,16 +2786,20 @@ label {
   border: 1px solid #e5ebf4;
   border-radius: 8px;
   display: grid;
-  gap: 7px;
+  gap: 4px;
   grid-template-columns: 1fr auto;
-  padding: 9px 10px;
+  padding: 7px 8px;
+}
+
+.detail-summary-card div {
+  grid-template-columns: 1fr;
 }
 
 .detail-summary-card span,
 .detail-outcome-row span,
 .detail-chart-header span {
   color: #667085;
-  font-size: 0.76rem;
+  font-size: 0.7rem;
   font-weight: 850;
   text-transform: uppercase;
 }
@@ -2785,22 +2807,22 @@ label {
 .detail-summary-card strong,
 .detail-outcome-row strong {
   color: #101827;
-  font-size: 0.95rem;
+  font-size: 0.84rem;
   overflow-wrap: anywhere;
 }
 
 .detail-body-grid {
   align-items: start;
   display: grid;
-  gap: 12px;
+  gap: 10px;
   grid-template-columns: minmax(0, 1fr) 300px;
 }
 
 .detail-chart-card {
   align-self: start;
   display: grid;
-  gap: 9px;
-  padding: 13px;
+  gap: 7px;
+  padding: 10px;
 }
 
 .detail-chart-header {
@@ -2818,25 +2840,25 @@ label {
 
 .detail-chart-header h2 b {
   color: #12b981;
-  font-size: 1.35rem;
+  font-size: 1.16rem;
 }
 
 .detail-chart-header h2 span {
   color: #667085;
-  font-size: 0.9rem;
+  font-size: 0.8rem;
   font-weight: 760;
   text-transform: none;
 }
 
 .chart-window-tabs {
   align-items: center;
-  background: rgba(8, 13, 26, 0.78);
-  border: 1px solid rgba(83, 105, 143, 0.5);
+  background: rgba(8, 13, 26, 0.92);
+  border: 1px solid rgba(24, 215, 255, 0.22);
   border-radius: 999px;
   display: flex;
-  gap: 5px;
+  gap: 3px;
   overflow-x: auto;
-  padding: 4px;
+  padding: 3px;
 }
 
 .chart-window-tabs button {
@@ -2844,10 +2866,10 @@ label {
   border-radius: 999px;
   box-shadow: none;
   color: #aeb8c8;
-  font-size: 0.72rem;
+  font-size: 0.68rem;
   font-weight: 850;
-  min-height: 26px;
-  padding: 4px 8px;
+  min-height: 24px;
+  padding: 3px 7px;
 }
 
 .chart-window-tabs button.active,
@@ -2859,7 +2881,7 @@ label {
 .chart-frame {
   background: linear-gradient(180deg, rgba(24, 215, 255, 0.06), transparent);
   border-radius: 8px;
-  height: clamp(220px, 24vw, 300px);
+  height: clamp(160px, 18vw, 215px);
   overflow: hidden;
   position: relative;
   width: 100%;
@@ -2901,21 +2923,21 @@ label {
 }
 
 .chart-y-labels {
-  bottom: 12px;
+  bottom: 9px;
   color: #8b98ad;
   display: grid;
-  font-size: 0.72rem;
+  font-size: 0.68rem;
   font-weight: 850;
   justify-items: end;
   position: absolute;
-  right: 10px;
-  top: 22px;
+  right: 8px;
+  top: 18px;
 }
 
 .chart-time-row {
   color: #8b98ad;
   display: grid;
-  font-size: 0.72rem;
+  font-size: 0.68rem;
   font-weight: 850;
   grid-template-columns: repeat(5, minmax(0, 1fr));
   padding: 0 4px;
@@ -2933,10 +2955,10 @@ label {
   border-radius: 8px;
   color: #536178;
   display: flex;
-  font-size: 0.78rem;
+  font-size: 0.72rem;
   font-weight: 850;
   justify-content: space-between;
-  padding: 8px 9px;
+  padding: 6px 8px;
 }
 
 .trade-balance-line button {
@@ -2946,23 +2968,28 @@ label {
   box-shadow: none;
   color: #101827;
   font-weight: 900;
-  min-height: 30px;
-  padding: 0 9px;
+  min-height: 28px;
+  padding: 0 8px;
 }
 
 .trade-input-row {
   display: grid;
 }
 
+.detail-trade-card input {
+  min-height: 38px;
+  padding: 9px 10px;
+}
+
 .trade-side-buttons {
   display: grid;
-  gap: 8px;
+  gap: 6px;
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .trade-side-buttons button {
-  min-height: 46px;
-  padding: 8px;
+  min-height: 40px;
+  padding: 6px;
 }
 
 .trade-side-buttons button.active {
@@ -2971,7 +2998,7 @@ label {
 }
 
 .trade-side-buttons button span {
-  font-size: 0.94rem;
+  font-size: 0.86rem;
   line-height: 1;
 }
 
@@ -2985,7 +3012,7 @@ label {
 .trade-submit-button {
   background: #111827;
   color: #ffffff;
-  min-height: 40px;
+  min-height: 36px;
   width: 100%;
 }
 
@@ -2997,7 +3024,7 @@ label {
 
 .stake-shortcuts {
   display: grid;
-  gap: 7px;
+  gap: 6px;
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
@@ -3006,9 +3033,9 @@ label {
   border: 1px solid #e5ebf4;
   box-shadow: none;
   color: #45546c;
-  font-size: 0.78rem;
-  min-height: 34px;
-  padding: 0 8px;
+  font-size: 0.72rem;
+  min-height: 30px;
+  padding: 0 6px;
 }
 
 .stake-shortcuts button:hover:not(:disabled) {
@@ -3019,12 +3046,12 @@ label {
 
 .stake-slider {
   display: grid;
-  gap: 7px;
+  gap: 5px;
 }
 
 .stake-slider span {
   color: #667085;
-  font-size: 0.76rem;
+  font-size: 0.72rem;
   font-weight: 850;
 }
 
@@ -3035,7 +3062,7 @@ label {
 
 .payout-preview {
   display: grid;
-  gap: 8px;
+  gap: 6px;
 }
 
 .payout-preview-compact {
@@ -3049,8 +3076,8 @@ label {
   color: #667085;
   font-size: 0.76rem;
   font-weight: 780;
-  line-height: 1.4;
-  padding: 10px;
+  line-height: 1.3;
+  padding: 8px;
 }
 
 .payout-preview div {
@@ -3058,8 +3085,8 @@ label {
   border: 1px solid #e5ebf4;
   border-radius: 8px;
   display: grid;
-  gap: 4px;
-  padding: 10px;
+  gap: 3px;
+  padding: 8px;
 }
 
 .payout-preview span,
@@ -3914,20 +3941,20 @@ label {
 }
 
 [data-theme="dark"] .view-mode-toggle {
-  background: #080d1a;
-  border-color: #26334a;
+  background: #0b1020;
+  border-color: rgba(24, 215, 255, 0.26);
 }
 
 [data-theme="dark"] .view-mode-toggle button {
-  background: #0b1020;
-  border-color: #26334a;
-  color: #d8e1f0;
+  background: transparent;
+  border-color: transparent;
+  color: #9aa7bd;
 }
 
 [data-theme="dark"] .view-mode-toggle button.active,
 [data-theme="dark"] .view-mode-toggle button:hover:not(:disabled) {
-  background: #12b981;
-  border-color: #12b981;
+  background: #18d7ff;
+  border-color: #18d7ff;
   color: #06111e;
 }
 
@@ -4071,6 +4098,7 @@ label {
 [data-theme="dark"] .chart-window-tabs button,
 [data-theme="dark"] .chart-y-labels,
 [data-theme="dark"] .chart-time-row,
+[data-theme="dark"] .clock-widget small,
 [data-theme="dark"] .related-market-card small,
 [data-theme="dark"] .timeline-step,
 [data-theme="dark"] .timeline-step small {
@@ -4107,8 +4135,14 @@ label {
 }
 
 [data-theme="dark"] .chart-window-tabs {
-  background: #101a2e;
-  border-color: #31405d;
+  background: #0b1020;
+  border-color: rgba(24, 215, 255, 0.28);
+}
+
+[data-theme="dark"] .chart-window-tabs button {
+  background: transparent;
+  border-color: transparent;
+  color: #9aa7bd;
 }
 
 [data-theme="dark"] .stake-shortcuts button {
