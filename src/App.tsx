@@ -146,6 +146,18 @@ type IndexedSnapshot = {
   total: number;
 };
 
+type ContractEventRow = {
+  args: {
+    marketId?: bigint;
+    user?: Address;
+    side?: number;
+    amount?: bigint;
+  };
+  blockNumber?: bigint | null;
+  transactionHash?: Hash;
+  logIndex?: number;
+};
+
 enum Outcome {
   Unresolved = 0,
   Yes = 1,
@@ -189,6 +201,8 @@ const DISCORD_URL = "https://discord.gg/3wTYhdsr";
 const INDEXER_URL = String(
   import.meta.env.VITE_AURA_INDEXER_URL || (import.meta.env.DEV ? "http://127.0.0.1:8787" : "")
 ).replace(/\/$/, "");
+const EVENT_START_BLOCK = BigInt(import.meta.env.VITE_PREDICTION_MARKET_START_BLOCK || "43295581");
+const EVENT_LOG_CHUNK_SIZE = 9_000n;
 const CATEGORY_META: Record<string, { label: string; className: string }> = {
   All: { label: "All", className: "category-all" },
   Crypto: { label: "Crypto", className: "category-crypto" },
@@ -2761,6 +2775,25 @@ export default function App() {
         async (id) => readMarketById(id, false)
       );
       const projectMarkets = projectRows.flatMap((row) => row ? [row.market as MarketView] : []);
+      if (projectMarkets.length >= sortedRows.length) {
+        sortedRows = projectMarkets.sort((a, b) => b.id - a.id);
+        setMarketLoadLimit((current) => Math.max(current, sortedRows.length));
+        setMarkets((current) =>
+          sortedRows.map((market) => {
+            const currentMarket = current.find((item) => item.id === market.id);
+            return currentMarket
+              ? {
+                  ...market,
+                  yesPosition: currentMarket.yesPosition,
+                  noPosition: currentMarket.noPosition,
+                  claimed: currentMarket.claimed,
+                  potentialPayout: currentMarket.potentialPayout
+                }
+              : market;
+          })
+        );
+        writeCachedMarkets(sortedRows);
+      }
       if (projectMarkets.length > 0 || totalMarketCount === 0) {
         const statsNow = Math.floor(Date.now() / 1000);
         const projectTotalVolume = projectMarkets.reduce((sum, market) => sum + marketVolume(market), 0n);
@@ -2830,6 +2863,29 @@ export default function App() {
       }
 
       if (!isSilentLoad) try {
+        const getContractEventsChunked = async (eventName: "MarketCreated" | "BetPlaced") => {
+          const latestBlock = await withRpcRetry(() => publicClient.getBlockNumber());
+          const events: ContractEventRow[] = [];
+          let fromBlock = EVENT_START_BLOCK;
+
+          while (fromBlock <= latestBlock) {
+            const toBlock =
+              fromBlock + EVENT_LOG_CHUNK_SIZE - 1n > latestBlock ? latestBlock : fromBlock + EVENT_LOG_CHUNK_SIZE - 1n;
+            const rows = await withRpcRetry(() =>
+              publicClient.getContractEvents({
+                address: contractAddress,
+                abi: arcPredictionMarketAbi,
+                eventName,
+                fromBlock,
+                toBlock
+              })
+            );
+            events.push(...(rows as ContractEventRow[]));
+            fromBlock = toBlock + 1n;
+          }
+
+          return events;
+        };
         const blockTimestamps = new Map<bigint, number>();
         const getBlockTimestamp = async (blockNumber?: bigint | null) => {
           if (!blockNumber) return 0;
@@ -2840,23 +2896,12 @@ export default function App() {
           return blockTimestamps.get(blockNumber) ?? 0;
         };
         const [createdEvents, betEvents] = await Promise.all([
-          withRpcRetry(() => publicClient.getContractEvents({
-            address: contractAddress,
-            abi: arcPredictionMarketAbi,
-            eventName: "MarketCreated",
-            fromBlock: 0n,
-            toBlock: "latest"
-          })),
-          withRpcRetry(() => publicClient.getContractEvents({
-            address: contractAddress,
-            abi: arcPredictionMarketAbi,
-            eventName: "BetPlaced",
-            fromBlock: 0n,
-            toBlock: "latest"
-          }))
+          getContractEventsChunked("MarketCreated"),
+          getContractEventsChunked("BetPlaced")
         ]);
         const createdAtByMarket = new Map<number, number>();
-        const loadedMarketIds = new Set(sortedRows.map((market) => market.id));
+        const activityMarketRows = projectMarkets.length > 0 ? projectMarkets : sortedRows;
+        const loadedMarketIds = new Set(activityMarketRows.map((market) => market.id));
         const relevantCreatedEvents = createdEvents.filter((event) => {
           const args = event.args as { marketId?: bigint };
           return loadedMarketIds.has(Number(args.marketId ?? 0n));
@@ -2879,6 +2924,16 @@ export default function App() {
           ...market,
           createdAt: createdAtByMarket.get(market.id) ?? market.createdAt
         }));
+        if (projectMarkets.length > 0) {
+          const createdRows = sortedRows;
+          sortedRows = projectMarkets
+            .map((market) => ({
+              ...market,
+              createdAt: createdAtByMarket.get(market.id) ?? market.createdAt
+            }))
+            .sort((a, b) => b.id - a.id);
+          if (createdRows.length !== sortedRows.length) setMarketLoadLimit((current) => Math.max(current, sortedRows.length));
+        }
         writeCachedMarkets(sortedRows);
 
         const marketMap = new Map(sortedRows.map((market) => [market.id, market]));
