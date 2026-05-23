@@ -2121,6 +2121,7 @@ export default function App() {
             }
           ]
         : [];
+  const showMobileWalletLinks = walletOptions.length === 0;
   const recommendedWallets = ["Zerion", "MetaMask", "Rabby Wallet", "OKX Wallet", "Rainbow"];
   const leaderboardTimestamp = lastDataRefresh ? Math.floor(lastDataRefresh.getTime() / 1000) : nowSeconds;
   const lastRefreshText = lastDataRefresh
@@ -4330,6 +4331,7 @@ export default function App() {
     const selectedEvidenceRows = marketEvidence[String(selectedMarket.id)] || [];
     const selectedCommentRows = marketComments[String(selectedMarket.id)] || [];
     const selectedEvidenceDraft = evidenceDrafts[selectedMarket.id] || { title: "", url: "", notes: "" };
+    const hasWalletAccess = Boolean(account);
     const agentReport = resolutionReportFor(
       selectedMarket,
       selectedEvidenceRows,
@@ -4420,6 +4422,10 @@ export default function App() {
               <strong>{formatUsdc(totalPool)} USDC</strong>
             </div>
             <div>
+              <span>Participants</span>
+              <strong>{selectedMarket.traderCount}</strong>
+            </div>
+            <div>
               <span>Leading</span>
               <strong>{selectedMarketYesPercent >= selectedMarketNoPercent ? "YES" : "NO"}</strong>
             </div>
@@ -4484,7 +4490,8 @@ export default function App() {
             </div>
           </section>
 
-          <aside className="detail-trade-card">
+          {hasWalletAccess ? (
+            <aside className="detail-trade-card">
             <div className="detail-outcome-row">
               <span className="outcome-dot yes" />
               <strong>YES</strong>
@@ -4631,10 +4638,38 @@ export default function App() {
                 )}
               </div>
             )}
-          </aside>
+            </aside>
+          ) : (
+            <aside className="detail-public-card">
+              <span className="section-label">Public preview</span>
+              <h3>Connect wallet to interact</h3>
+              <div className="public-market-stats">
+                <div>
+                  <span>Volume</span>
+                  <strong>{formatUsdc(totalPool)} USDC</strong>
+                </div>
+                <div>
+                  <span>Participants</span>
+                  <strong>{selectedMarket.traderCount}</strong>
+                </div>
+                <div>
+                  <span>YES</span>
+                  <strong>{selectedMarketYesPercent.toFixed(1)}%</strong>
+                </div>
+                <div>
+                  <span>NO</span>
+                  <strong>{selectedMarketNoPercent.toFixed(1)}%</strong>
+                </div>
+              </div>
+              <button onClick={openWalletModal} disabled={connecting} type="button">
+                {connecting ? "Connecting..." : "Connect Wallet"}
+              </button>
+            </aside>
+          )}
         </section>
 
-        <section className="market-intelligence-grid">
+        {hasWalletAccess ? (
+          <section className="market-intelligence-grid">
           <section className="agent-panel">
             <div className="panel-heading">
               <div>
@@ -4781,9 +4816,16 @@ export default function App() {
               ))}
             </div>
           </section>
-        </section>
+          </section>
+        ) : (
+          <section className="locked-market-tools">
+            <strong>Wallet required for market tools</strong>
+            <span>Comments, resolution sources, evidence, copy trading, and resolver tools are available after wallet connection.</span>
+          </section>
+        )}
 
-        <section className="market-timeline">
+        {hasWalletAccess && (
+          <section className="market-timeline">
           {[
             { label: "Created", active: true, detail: `Market #${selectedMarket.id}` },
             { label: "Trading open", active: Date.now() / 1000 < selectedMarket.closeTime, detail: countdownText(selectedMarket.closeTime, currentTime) },
@@ -4797,9 +4839,10 @@ export default function App() {
               <small>{step.detail}</small>
             </div>
           ))}
-        </section>
+          </section>
+        )}
 
-        {relatedMarkets.length > 0 && (
+        {hasWalletAccess && relatedMarkets.length > 0 && (
           <section className="related-market-section">
             <div className="market-section-header">
               <div className="market-section-title">
@@ -6305,14 +6348,18 @@ export default function App() {
                   <small>Use a wallet app below to open AuraPredict with an injected provider.</small>
                 </button>
               )}
-              <span className="wallet-group-label">Open on mobile</span>
-              {WALLET_DEEP_LINKS.map((wallet) => (
-                <button className="wallet-option mobile-wallet-option" key={wallet.name} type="button" onClick={() => openMobileWallet(wallet.url)}>
-                  <span className="wallet-badge">{wallet.name.slice(0, 1)}</span>
-                  <strong>{wallet.name}</strong>
-                  <small>{wallet.detail}</small>
-                </button>
-              ))}
+              {showMobileWalletLinks && (
+                <>
+                  <span className="wallet-group-label">Open on mobile</span>
+                  {WALLET_DEEP_LINKS.map((wallet) => (
+                    <button className="wallet-option mobile-wallet-option" key={wallet.name} type="button" onClick={() => openMobileWallet(wallet.url)}>
+                      <span className="wallet-badge">{wallet.name.slice(0, 1)}</span>
+                      <strong>{wallet.name}</strong>
+                      <small>{wallet.detail}</small>
+                    </button>
+                  ))}
+                </>
+              )}
               <span className="wallet-group-label">Recommended</span>
               {recommendedWallets.map((walletName) => {
                 const detected = walletOptions.find((wallet) =>

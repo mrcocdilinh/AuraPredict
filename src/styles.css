@@ -1532,7 +1532,7 @@ h3 {
 }
 
 .hero-hot-meter span {
-  background: linear-gradient(90deg, #18d7ff, #7f5cff);
+  background: linear-gradient(90deg, #12b981, #ef4444);
   display: block;
   height: 100%;
 }
@@ -2443,7 +2443,7 @@ h3 {
 }
 
 .pool-bar span {
-  background: linear-gradient(90deg, #7f5cff, #18d7ff);
+  background: #12b981;
   display: block;
   height: 100%;
   transition: width 180ms ease;
@@ -2519,26 +2519,26 @@ textarea {
 }
 
 .yes-button {
-  background: #e7faff;
-  border: 1px solid #b4ecf8;
+  background: #e9fff8;
+  border: 1px solid #baf3df;
   box-shadow: none;
-  color: #08768a;
+  color: #087f5b;
 }
 
 .yes-button:hover:not(:disabled) {
-  background: #18d7ff;
-  color: #06111e;
+  background: #12b981;
+  color: #ffffff;
 }
 
 .no-button {
-  background: #f1edff;
-  border: 1px solid #d9ceff;
+  background: #fff0f2;
+  border: 1px solid #ffd0d6;
   box-shadow: none;
-  color: #6545c8;
+  color: #c92a3b;
 }
 
 .no-button:hover:not(:disabled) {
-  background: #7f5cff;
+  background: #ef4444;
   color: #ffffff;
 }
 
@@ -2916,6 +2916,7 @@ label {
 .detail-summary-card,
 .detail-chart-card,
 .detail-trade-card,
+.detail-public-card,
 .market-timeline {
   background: #ffffff;
   border: 1px solid #dfe6f1;
@@ -2984,7 +2985,8 @@ label {
 }
 
 .detail-summary-card,
-.detail-trade-card {
+.detail-trade-card,
+.detail-public-card {
   display: grid;
   gap: 6px;
   padding: 8px;
@@ -3126,11 +3128,11 @@ label {
 }
 
 .detail-no-area {
-  fill: rgba(47, 128, 237, 0.12);
+  fill: rgba(239, 68, 68, 0.12);
 }
 
 .detail-no-line {
-  stroke: #2f80ed;
+  stroke: #ef4444;
 }
 
 .secondary-line {
@@ -3327,7 +3329,51 @@ label {
 }
 
 .outcome-dot.no {
-  background: #2f80ed;
+  background: #ef4444;
+}
+
+.detail-public-card {
+  align-content: start;
+  gap: 10px;
+  padding: 12px;
+}
+
+.detail-public-card h3 {
+  font-size: 1rem;
+  margin: 0;
+}
+
+.public-market-stats {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.public-market-stats div,
+.locked-market-tools {
+  background: #f8fafc;
+  border: 1px solid #e5ebf4;
+  border-radius: 8px;
+  display: grid;
+  gap: 4px;
+  padding: 10px;
+}
+
+.public-market-stats span,
+.locked-market-tools span {
+  color: #667085;
+  font-size: 0.76rem;
+  font-weight: 820;
+}
+
+.public-market-stats strong,
+.locked-market-tools strong {
+  color: #101827;
+  font-size: 0.92rem;
+}
+
+.locked-market-tools {
+  padding: 14px;
 }
 
 .market-timeline {
@@ -4387,21 +4433,21 @@ label {
 }
 
 [data-theme="dark"] .yes-button {
-  background: rgba(24, 215, 255, 0.12);
-  border-color: rgba(24, 215, 255, 0.34);
-  color: #39dfff;
+  background: rgba(18, 185, 129, 0.12);
+  border-color: rgba(18, 185, 129, 0.34);
+  color: #30e1b0;
 }
 
 [data-theme="dark"] .no-button {
-  background: rgba(127, 92, 255, 0.16);
-  border-color: rgba(127, 92, 255, 0.36);
-  color: #ad98ff;
+  background: rgba(239, 68, 68, 0.14);
+  border-color: rgba(239, 68, 68, 0.36);
+  color: #ff8a96;
 }
 
 [data-theme="dark"] .yes-button:hover:not(:disabled),
 [data-theme="dark"] .no-button:hover:not(:disabled),
 [data-theme="dark"] .see-all-button:hover:not(:disabled) {
-  color: #06111e;
+  color: #ffffff;
 }
 
 [data-theme="dark"] .leaderboard-head {
@@ -4516,8 +4562,10 @@ label {
 [data-theme="dark"] .detail-summary-card,
 [data-theme="dark"] .detail-chart-card,
 [data-theme="dark"] .detail-trade-card,
+[data-theme="dark"] .detail-public-card,
 [data-theme="dark"] .market-timeline,
-[data-theme="dark"] .related-market-section {
+[data-theme="dark"] .related-market-section,
+[data-theme="dark"] .locked-market-tools {
   background: rgba(12, 17, 31, 0.96);
   border-color: #202a3f;
   color: #d8e1f0;
@@ -4534,6 +4582,8 @@ label {
 [data-theme="dark"] .profile-rank-grid strong,
 [data-theme="dark"] .detail-summary-card strong,
 [data-theme="dark"] .detail-outcome-row strong,
+[data-theme="dark"] .public-market-stats strong,
+[data-theme="dark"] .locked-market-tools strong,
 [data-theme="dark"] .timeline-step strong,
 [data-theme="dark"] .related-market-card strong {
   color: #f7f9ff;
@@ -4553,6 +4603,8 @@ label {
 [data-theme="dark"] .edge-legend,
 [data-theme="dark"] .detail-summary-card span,
 [data-theme="dark"] .detail-outcome-row span,
+[data-theme="dark"] .public-market-stats span,
+[data-theme="dark"] .locked-market-tools span,
 [data-theme="dark"] .detail-chart-header span,
 [data-theme="dark"] .chart-window-tabs button,
 [data-theme="dark"] .chart-y-labels,
@@ -4569,6 +4621,7 @@ label {
 [data-theme="dark"] .edge-chart-wrap,
 [data-theme="dark"] .detail-summary-card div,
 [data-theme="dark"] .detail-outcome-row,
+[data-theme="dark"] .public-market-stats div,
 [data-theme="dark"] .trade-balance-line,
 [data-theme="dark"] .chart-frame,
 [data-theme="dark"] .chart-window-tabs,
@@ -4943,12 +4996,13 @@ label {
   .topbar {
     align-items: stretch;
     gap: 10px;
-    padding: 10px;
+    padding: 12px;
     position: static;
   }
 
   .brand {
     gap: 8px;
+    justify-content: center;
   }
 
   .brand img {
@@ -4992,10 +5046,11 @@ label {
   }
 
   .clock-widget {
-    justify-content: flex-start;
-    max-width: 132px;
+    justify-content: center;
+    max-width: none;
     min-height: 38px;
     padding: 0 10px;
+    width: 100%;
   }
 
   .clock-widget strong {
@@ -5008,6 +5063,16 @@ label {
     grid-template-columns: 42px minmax(0, 1fr);
     justify-content: stretch;
     width: 100%;
+  }
+
+  .wallet-panel .theme-menu {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .wallet-panel > a {
+    grid-column: 2;
+    grid-row: 1;
   }
 
   .wallet-panel .wallet-menu {
@@ -5036,6 +5101,10 @@ label {
     min-height: 42px;
     padding: 0 10px;
     width: 100%;
+  }
+
+  .wallet-panel a {
+    text-align: center;
   }
 
   .wallet-panel > button {
