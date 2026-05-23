@@ -85,6 +85,8 @@ type MarketSectionKey = "fresh" | "hot" | "closing";
 type ThemeMode = "dark" | "light";
 type MarketViewMode = "grid" | "list";
 type ChartWindowKey = "1h" | "4h" | "8h" | "12h" | "1d" | "1w" | "1m" | "all";
+type MarketSortKey = "created" | "ending" | "volume" | "participants" | "yes" | "no";
+type SortDirection = "asc" | "desc";
 
 type LeaderboardRow = {
   address: string;
@@ -124,6 +126,7 @@ enum Outcome {
 const CONTRACT_ADDRESS = import.meta.env.VITE_PREDICTION_MARKET_ADDRESS || "";
 const CATEGORIES = ["All", "Crypto", "Macro", "Sports", "Politics", "Arc", "AI", "Other"];
 const SECTION_LIMIT = 6;
+const COLLECTION_PAGE_SIZE = 12;
 const PROFILE_PAGE_SIZE = 10;
 const LEADERBOARD_LIMIT = 100;
 const MARKET_INITIAL_LOAD = 24;
@@ -184,6 +187,14 @@ const CHART_WINDOWS: Array<{ value: ChartWindowKey; label: string; seconds: numb
   { value: "1w", label: "1W", seconds: 7 * 24 * 60 * 60 },
   { value: "1m", label: "1M", seconds: 30 * 24 * 60 * 60 },
   { value: "all", label: "ALL", seconds: null }
+];
+const MARKET_SORT_OPTIONS: Array<{ value: MarketSortKey; label: string }> = [
+  { value: "created", label: "Created time" },
+  { value: "ending", label: "Ending time" },
+  { value: "volume", label: "Volume" },
+  { value: "participants", label: "Participants" },
+  { value: "yes", label: "YES %" },
+  { value: "no", label: "NO %" }
 ];
 
 type CachedMarketView = Omit<
@@ -346,6 +357,11 @@ function marketVolume(market: MarketView) {
 function percent(value: bigint, total: bigint) {
   if (total === 0n) return 50;
   return Number((value * 10000n) / total) / 100;
+}
+
+function compareBigint(a: bigint, b: bigint) {
+  if (a === b) return 0;
+  return a > b ? 1 : -1;
 }
 
 function betEstimate(market: MarketView, side: Outcome, amount: bigint, feeBps: number) {
@@ -1227,6 +1243,9 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState("");
   const [searchFocused, setSearchFocused] = useState(false);
   const [collectionView, setCollectionView] = useState<MarketSectionKey>("fresh");
+  const [collectionSortKey, setCollectionSortKey] = useState<MarketSortKey>("created");
+  const [collectionSortDirection, setCollectionSortDirection] = useState<SortDirection>("desc");
+  const [collectionPage, setCollectionPage] = useState(1);
   const [selectedMarketId, setSelectedMarketId] = useState<number | null>(null);
   const [selectedProfileAddress, setSelectedProfileAddress] = useState("");
   const [profileHistoryPage, setProfileHistoryPage] = useState(1);
@@ -1475,12 +1494,40 @@ export default function App() {
     })
     .slice(0, 10);
   const heroHotLoop = heroHotMarkets.length > 0 ? [...heroHotMarkets, ...heroHotMarkets] : [];
-  const collectionMarkets =
+  const baseCollectionMarkets =
     collectionView === "hot"
       ? allHottestMarkets
       : collectionView === "closing"
         ? allClosingSoonMarkets
         : allFreshMarkets;
+  const collectionMarkets = [...baseCollectionMarkets].sort((a, b) => {
+    let result = 0;
+    if (collectionSortKey === "volume") {
+      result = compareBigint(marketVolume(a), marketVolume(b));
+    } else if (collectionSortKey === "participants") {
+      result = a.traderCount - b.traderCount;
+    } else if (collectionSortKey === "yes") {
+      result = percent(a.yesPool, marketVolume(a)) - percent(b.yesPool, marketVolume(b));
+    } else if (collectionSortKey === "no") {
+      result = percent(a.noPool, marketVolume(a)) - percent(b.noPool, marketVolume(b));
+    } else if (collectionSortKey === "ending") {
+      result = a.closeTime - b.closeTime;
+    } else {
+      result = (a.createdAt || a.id) - (b.createdAt || b.id);
+    }
+
+    if (result !== 0) return collectionSortDirection === "asc" ? result : -result;
+    return b.id - a.id;
+  });
+  const collectionPageCount = Math.max(1, Math.ceil(collectionMarkets.length / COLLECTION_PAGE_SIZE));
+  const safeCollectionPage = Math.min(collectionPage, collectionPageCount);
+  const collectionStartIndex = (safeCollectionPage - 1) * COLLECTION_PAGE_SIZE;
+  const paginatedCollectionMarkets = collectionMarkets.slice(
+    collectionStartIndex,
+    collectionStartIndex + COLLECTION_PAGE_SIZE
+  );
+  const collectionVisibleStart = collectionMarkets.length === 0 ? 0 : collectionStartIndex + 1;
+  const collectionVisibleEnd = Math.min(collectionStartIndex + paginatedCollectionMarkets.length, collectionMarkets.length);
   const collectionTitle =
     collectionView === "hot" ? "Hottest markets" : collectionView === "closing" ? "Closing soon" : "Fresh markets";
   const collectionDescription =
@@ -1489,9 +1536,10 @@ export default function App() {
       : collectionView === "closing"
         ? "All live markets sorted by nearest UTC close time."
         : "All live markets sorted by newest market first.";
-  const freshMarkets = allFreshMarkets.slice(0, SECTION_LIMIT);
-  const hottestMarkets = allHottestMarkets.slice(0, SECTION_LIMIT);
-  const closingSoonMarkets = allClosingSoonMarkets.slice(0, SECTION_LIMIT);
+  const homeSectionLimit = marketViewMode === "list" ? 3 : SECTION_LIMIT;
+  const freshMarkets = allFreshMarkets.slice(0, homeSectionLimit);
+  const hottestMarkets = allHottestMarkets.slice(0, homeSectionLimit);
+  const closingSoonMarkets = allClosingSoonMarkets.slice(0, homeSectionLimit);
   const selectedMarket = selectedMarketId === null ? undefined : markets.find((market) => market.id === selectedMarketId);
   const selectedMarketActivities = selectedMarket
     ? activities
@@ -2214,6 +2262,9 @@ export default function App() {
 
   const openCollection = useCallback((section: MarketSectionKey) => {
     setCollectionView(section);
+    setCollectionSortKey(section === "hot" ? "participants" : section === "closing" ? "ending" : "created");
+    setCollectionSortDirection(section === "closing" ? "asc" : "desc");
+    setCollectionPage(1);
     setSelectedMarketId(null);
     setSelectedProfileAddress("");
     updateMarketRoute(null);
@@ -3644,7 +3695,6 @@ export default function App() {
                 type="button"
               >
                 <span>YES {selectedMarketYesPercent.toFixed(0)}%</span>
-                <small>Select YES</small>
               </button>
               <button
                 className={selectedTradeSide === Outcome.No ? "no-button active" : "no-button"}
@@ -3653,7 +3703,6 @@ export default function App() {
                 type="button"
               >
                 <span>NO {selectedMarketNoPercent.toFixed(0)}%</span>
-                <small>Select NO</small>
               </button>
             </div>
             <button
@@ -4073,7 +4122,7 @@ export default function App() {
           <span>{notice}</span>
           {noticeTxHash && (
             <a href={transactionUrl(noticeTxHash)} target="_blank" rel="noreferrer">
-              Arcscan
+              View on explorer
             </a>
           )}
         </div>
@@ -4244,7 +4293,10 @@ export default function App() {
                     categoryMeta(category).className
                   }`}
                   key={category}
-                  onClick={() => setActiveCategory(category)}
+                  onClick={() => {
+                    setActiveCategory(category);
+                    setCollectionPage(1);
+                  }}
                 >
                   <CategoryIcon category={category} />
                   {category}
@@ -4289,16 +4341,75 @@ export default function App() {
                   <h3>{collectionTitle}</h3>
                 </div>
                 <div className="section-actions">
-                  <span>{collectionMarkets.length} markets</span>
+                  <span>
+                    {collectionVisibleStart}-{collectionVisibleEnd} of {collectionMarkets.length} markets
+                  </span>
                   <button className="see-all-button" onClick={backToMarkets} type="button">
                     Back
                   </button>
                 </div>
               </div>
+              <div className="collection-toolbar">
+                <label>
+                  <span>Sort by</span>
+                  <select
+                    value={collectionSortKey}
+                    onChange={(event) => {
+                      setCollectionSortKey(event.target.value as MarketSortKey);
+                      setCollectionPage(1);
+                    }}
+                  >
+                    {MARKET_SORT_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  <span>Order</span>
+                  <select
+                    value={collectionSortDirection}
+                    onChange={(event) => {
+                      setCollectionSortDirection(event.target.value as SortDirection);
+                      setCollectionPage(1);
+                    }}
+                  >
+                    <option value="desc">High to low</option>
+                    <option value="asc">Low to high</option>
+                  </select>
+                </label>
+                <div className="collection-page-summary">
+                  Page {safeCollectionPage} of {collectionPageCount}
+                </div>
+              </div>
               {renderMarketCards(
-                collectionMarkets,
+                paginatedCollectionMarkets,
                 `No ${collectionTitle.toLowerCase()}`,
                 "Markets matching this section and category will appear here."
+              )}
+              {collectionPageCount > 1 && (
+                <div className="pagination-row">
+                  <button
+                    className="secondary"
+                    disabled={safeCollectionPage <= 1}
+                    onClick={() => setCollectionPage((current) => Math.max(1, current - 1))}
+                    type="button"
+                  >
+                    Previous
+                  </button>
+                  <span>
+                    {collectionVisibleStart}-{collectionVisibleEnd} / {collectionMarkets.length}
+                  </span>
+                  <button
+                    className="secondary"
+                    disabled={safeCollectionPage >= collectionPageCount}
+                    onClick={() => setCollectionPage((current) => Math.min(collectionPageCount, current + 1))}
+                    type="button"
+                  >
+                    Next
+                  </button>
+                </div>
               )}
             </section>
           ) : view === "profile" ? (
@@ -4759,7 +4870,7 @@ export default function App() {
                     <span>
                       {freshMarkets.length} of {allFreshMarkets.length} markets
                     </span>
-                    {allFreshMarkets.length > SECTION_LIMIT && (
+                    {allFreshMarkets.length > homeSectionLimit && (
                       <button className="see-all-button" onClick={() => openCollection("fresh")} type="button">
                         See all
                       </button>
@@ -4783,7 +4894,7 @@ export default function App() {
                     <span>
                       {hottestMarkets.length} of {allHottestMarkets.length} by participants
                     </span>
-                    {allHottestMarkets.length > SECTION_LIMIT && (
+                    {allHottestMarkets.length > homeSectionLimit && (
                       <button className="see-all-button" onClick={() => openCollection("hot")} type="button">
                         See all
                       </button>
@@ -4807,7 +4918,7 @@ export default function App() {
                     <span>
                       {closingSoonMarkets.length} of {allClosingSoonMarkets.length} soonest
                     </span>
-                    {allClosingSoonMarkets.length > SECTION_LIMIT && (
+                    {allClosingSoonMarkets.length > homeSectionLimit && (
                       <button className="see-all-button" onClick={() => openCollection("closing")} type="button">
                         See all
                       </button>
