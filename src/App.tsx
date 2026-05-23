@@ -291,6 +291,8 @@ const CATEGORY_META: Record<string, { label: string; className: string }> = {
   AI: { label: "AI", className: "category-ai" },
   Other: { label: "Other", className: "category-other" }
 };
+const MARKET_IMAGE_CATEGORIES = ["crypto", "sports", "politics", "macro", "ai", "arc", "other"] as const;
+const MARKET_IMAGE_COUNT = 6;
 const LEADERBOARD_PERIODS: Array<{ value: LeaderboardPeriod; label: string; seconds: number | null }> = [
   { value: "day", label: "24H", seconds: 24 * 60 * 60 },
   { value: "7d", label: "7D", seconds: 7 * 24 * 60 * 60 },
@@ -1031,6 +1033,19 @@ function updateProfileRoute(address: string | null) {
 
 function categoryMeta(category: string) {
   return CATEGORY_META[category] ?? CATEGORY_META.Other;
+}
+
+function marketImageFor(market: Pick<MarketView, "id" | "category">) {
+  const rawCategory = (market.category || "Other").toLowerCase();
+  const category = MARKET_IMAGE_CATEGORIES.includes(rawCategory as (typeof MARKET_IMAGE_CATEGORIES)[number])
+    ? rawCategory
+    : "other";
+  const index = Math.abs(market.id % MARKET_IMAGE_COUNT) + 1;
+  return `/market-images/${category}-${index}.webp`;
+}
+
+function marketImageVariant(market: Pick<MarketView, "id">) {
+  return `market-image-variant-${Math.abs(market.id % 6)}`;
 }
 
 function CategoryIcon({ category }: { category: string }) {
@@ -4155,6 +4170,8 @@ export default function App() {
         const yesPercent = percent(market.yesPool, totalPool);
         const noPercent = 100 - yesPercent;
         const meta = categoryMeta(market.category || "Other");
+        const marketImage = marketImageFor(market);
+        const imageVariant = marketImageVariant(market);
         const walletResult = personalMarketResult(market, resultSubject);
         const canUseDisputeFlow = contractVersion !== "legacy";
         const canPropose =
@@ -4209,11 +4226,15 @@ export default function App() {
             role="button"
             tabIndex={0}
           >
-            <div className="market-topline">
+            <div className={`market-card-image ${imageVariant}`}>
+              <img src={marketImage} alt="" loading="lazy" />
               <span className={`category ${meta.className}`}>
                 <CategoryIcon category={market.category || "Other"} />
                 {market.category || "Other"}
               </span>
+            </div>
+            <div className="market-topline">
+              <span>Market #{market.id}</span>
               <div className="status-stack">
                 <span className={`status status-${market.outcome}`}>{marketStatus(market)}</span>
                 {market.outcome !== Outcome.Unresolved && (
@@ -4442,6 +4463,8 @@ export default function App() {
     const balancePercent =
       walletBalance > 0n ? Math.min(100, Number((tradeAmount * 10000n) / walletBalance) / 100) : 0;
     const meta = categoryMeta(selectedMarket.category || "Other");
+    const selectedMarketImage = marketImageFor(selectedMarket);
+    const selectedMarketImageVariant = marketImageVariant(selectedMarket);
     const chartRows = detailChartRows;
     const chartPrimaryPercent = selectedTradeSide === Outcome.No ? selectedMarketNoPercent : selectedMarketYesPercent;
     const chartPrimaryLabel = selectedTradeSide === Outcome.No ? "NO" : "YES";
@@ -4526,8 +4549,8 @@ export default function App() {
         </button>
 
         <section className="market-detail-hero">
-          <div className="detail-question-panel">
-            <img src="/aurapredict-logo.png" alt="" />
+          <div className={`detail-question-panel ${selectedMarketImageVariant}`}>
+            <img src={selectedMarketImage} alt="" />
             <div>
               <span className={`category ${meta.className}`}>
                 <CategoryIcon category={selectedMarket.category || "Other"} />
