@@ -1806,6 +1806,40 @@ h3 {
   text-underline-offset: 3px;
 }
 
+.app-update-notice {
+  align-items: center;
+  animation: toast-enter 180ms ease;
+  background: rgba(16, 24, 39, 0.97);
+  border: 1px solid rgba(18, 185, 129, 0.72);
+  border-radius: 8px;
+  box-shadow: 0 18px 44px rgba(17, 24, 39, 0.22);
+  color: #ffffff;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  max-width: min(420px, calc(100vw - 32px));
+  padding: 11px 13px;
+  position: fixed;
+  right: 24px;
+  top: 82px;
+  z-index: 90;
+}
+
+.app-update-notice span {
+  font-size: 0.86rem;
+  font-weight: 760;
+  line-height: 1.35;
+  min-width: 0;
+}
+
+.app-update-notice button {
+  border-radius: 7px;
+  font-size: 0.78rem;
+  min-height: 34px;
+  padding: 8px 12px;
+  white-space: nowrap;
+}
+
 @keyframes toast-enter {
   from {
     opacity: 0;
@@ -5241,6 +5275,12 @@ label {
   }
 
   .toast-notice {
+    left: 14px;
+    right: 14px;
+    top: 96px;
+  }
+
+  .app-update-notice {
     left: 14px;
     right: 14px;
     top: 96px;
