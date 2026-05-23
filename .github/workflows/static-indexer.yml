@@ -2,6 +2,8 @@ name: Publish static indexer
 
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
   schedule:
     - cron: "*/15 * * * *"
 
