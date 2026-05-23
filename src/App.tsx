@@ -76,9 +76,10 @@ type ActivityItem = {
   side: Outcome;
   amount: bigint;
   timestamp: number;
+  txHash?: Hash | string;
 };
 
-type AppView = "markets" | "ended" | "leaderboard" | "profile" | "collection" | "market" | "security";
+type AppView = "markets" | "ended" | "leaderboard" | "profile" | "collection" | "market" | "security" | "notifications";
 type LeaderboardMetric = "volume" | "winRate" | "pnl" | "auraPoints";
 type LeaderboardPeriod = "day" | "7d" | "30d" | "all";
 type LeaderboardTier = "all" | "bronze" | "silver" | "gold" | "diamond";
@@ -566,6 +567,10 @@ function formatUsdcInput(value: bigint) {
 
 function transactionUrl(hash: Hash) {
   return `${ARC_EXPLORER_URL}/tx/${hash}`;
+}
+
+function maybeTransactionUrl(hash?: string) {
+  return hash && /^0x[a-fA-F0-9]{64}$/.test(hash) ? `${ARC_EXPLORER_URL}/tx/${hash}` : "";
 }
 
 function compactErrorMessage(error: unknown) {
@@ -2138,6 +2143,8 @@ export default function App() {
             ? "Leaderboard"
             : view === "profile"
               ? "Wallet profile"
+              : view === "notifications"
+                ? "Notifications"
               : view === "security"
                 ? "Security and audit"
                 : "Live markets";
@@ -2423,6 +2430,41 @@ export default function App() {
   }, [accountKey, viewedProfileAddress]);
 
   useEffect(() => {
+    if (view !== "leaderboard" || leaderboardRows.length === 0) return;
+    let canceled = false;
+
+    async function loadLeaderboardNames() {
+      const rows = await Promise.all(
+        leaderboardRows.slice(0, 30).map(async (row) => {
+          const response = await fetchIndexerJson<SocialProfileResponse>(`/api/social/profiles/${row.address}`);
+          const name = response?.profile?.name?.trim();
+          return name ? ([row.address.toLowerCase(), name] as const) : null;
+        })
+      );
+      if (canceled) return;
+      const found = rows.filter(Boolean) as Array<readonly [string, string]>;
+      if (found.length === 0) return;
+      setProfileNames((current) => {
+        const next = { ...current };
+        let changed = false;
+        for (const [address, name] of found) {
+          if (next[address] === name) continue;
+          next[address] = name;
+          changed = true;
+        }
+        if (changed) window.localStorage.setItem(PROFILE_NAMES_KEY, JSON.stringify(next));
+        return changed ? next : current;
+      });
+    }
+
+    void loadLeaderboardNames();
+
+    return () => {
+      canceled = true;
+    };
+  }, [leaderboardRows, view]);
+
+  useEffect(() => {
     window.localStorage.setItem(ONBOARDING_DISMISSED_KEY, onboardingDismissed ? "true" : "false");
   }, [onboardingDismissed]);
 
@@ -2610,22 +2652,29 @@ export default function App() {
     setNotificationMenuOpen(false);
   }, [account]);
 
+  const openNotifications = useCallback(() => {
+    if (!account) {
+      setNotice("Connect wallet before opening notifications.");
+      return;
+    }
+
+    setSelectedMarketId(null);
+    setSelectedProfileAddress("");
+    updateMarketRoute(null);
+    setView("notifications");
+    setWalletMenuOpen(false);
+    setNotificationMenuOpen(false);
+  }, [account, setNotice]);
+
   const disconnectWallet = useCallback(async () => {
     setAccount("");
     setWalletBalance(0n);
+    setSelectedWalletProvider(null);
     setWalletMenuOpen(false);
     setNotificationMenuOpen(false);
+    setSelectedProfileAddress("");
     window.localStorage.removeItem(WALLET_CONNECTED_KEY);
     setNotice("Wallet disconnected in AuraPredict.");
-
-    try {
-      await window.ethereum?.request({
-        method: "wallet_revokePermissions",
-        params: [{ eth_accounts: {} }]
-      });
-    } catch {
-      // Some wallets do not support permission revocation from dapps.
-    }
   }, []);
 
   const dismissResultNotification = useCallback((market: MarketView) => {
@@ -5057,6 +5106,9 @@ export default function App() {
                       <span>Notifications</span>
                       <strong>{notificationCount} updates</strong>
                     </div>
+                    <button className="secondary notification-view-all" onClick={openNotifications} type="button">
+                      View all notifications
+                    </button>
                     {notificationCount === 0 && (
                       <div className="notification-empty">No pending resolution or claim actions.</div>
                     )}
@@ -5387,6 +5439,85 @@ export default function App() {
 
           {view === "market" ? (
             renderMarketDetail()
+          ) : view === "notifications" ? (
+            <section className="notifications-page">
+              <div className="notifications-page-head">
+                <div>
+                  <span className="section-label">Wallet actions</span>
+                  <h3>{notificationCount} pending notifications</h3>
+                </div>
+                {claimNotifications.length > 1 && (
+                  <button onClick={claimAll} disabled={transactionPending} type="button">
+                    Claim all {formatUsdc(claimableTotal)} USDC
+                  </button>
+                )}
+              </div>
+              {notificationCount === 0 && (
+                <div className="empty-state">
+                  <strong>No pending notifications</strong>
+                  <span>Claim, resolve, dispute, and result notices will appear here.</span>
+                </div>
+              )}
+              {resolveNotifications.map((market) => (
+                <article className="notification-card" key={`page-resolve-${market.id}`}>
+                  <span>Result needed</span>
+                  <strong>{shortQuestion(market.question)}</strong>
+                  <small>Closed {closeDate(market.closeTime)}. Creator bond stays locked during dispute window.</small>
+                  <div className="notification-actions">
+                    <button onClick={() => resolveMarket(market.id, Outcome.Yes)}>Propose YES</button>
+                    <button onClick={() => resolveMarket(market.id, Outcome.No)}>Propose NO</button>
+                    <button className="secondary" onClick={() => cancelMarket(market.id)}>Propose Cancel</button>
+                    <button className="secondary" onClick={() => openMarket(market.id)} type="button">View market</button>
+                  </div>
+                </article>
+              ))}
+              {finalizeNotifications.map((market) => (
+                <article className="notification-card" key={`page-finalize-${market.id}`}>
+                  <span>Ready to finalize</span>
+                  <strong>{shortQuestion(market.question)}</strong>
+                  <small>Proposed {outcomeLabel(market.proposedOutcome)}. No dispute was opened.</small>
+                  <div className="notification-actions">
+                    <button onClick={() => finalizeMarket(market.id)}>Finalize result</button>
+                    <button className="secondary" onClick={() => openMarket(market.id)} type="button">View market</button>
+                  </div>
+                </article>
+              ))}
+              {disputeReviewNotifications.map((market) => (
+                <article className="notification-card" key={`page-review-${market.id}`}>
+                  <span>Dispute review</span>
+                  <strong>{shortQuestion(market.question)}</strong>
+                  <small>Proposed {outcomeLabel(market.proposedOutcome)}. Disputer {displayNameForAddress(market.disputer)}.</small>
+                  <div className="notification-actions">
+                    <button onClick={() => finalizeDispute(market.id, Outcome.Yes)}>Final YES</button>
+                    <button onClick={() => finalizeDispute(market.id, Outcome.No)}>Final NO</button>
+                    <button className="secondary" onClick={() => finalizeDispute(market.id, Outcome.Canceled)}>Cancel</button>
+                    <button className="secondary" onClick={() => openMarket(market.id)} type="button">View market</button>
+                  </div>
+                </article>
+              ))}
+              {claimNotifications.map((market) => (
+                <article className="notification-card" key={`page-claim-${market.id}`}>
+                  <span>Claim available</span>
+                  <strong>{shortQuestion(market.question)}</strong>
+                  <small>{formatUsdc(market.potentialPayout)} USDC ready</small>
+                  <div className="notification-actions">
+                    <button onClick={() => claim(market.id)}>Claim payout</button>
+                    <button className="secondary" onClick={() => openMarket(market.id)} type="button">View market</button>
+                  </div>
+                </article>
+              ))}
+              {resultNotifications.map((market) => (
+                <article className="notification-card" key={`page-result-${market.id}`}>
+                  <span>Result posted</span>
+                  <strong>{shortQuestion(market.question)}</strong>
+                  <small>{outcomeLabel(market.outcome)}. No payout is available for this position.</small>
+                  <div className="notification-actions">
+                    <button className="secondary" onClick={() => dismissResultNotification(market)}>Dismiss</button>
+                    <button className="secondary" onClick={() => openMarket(market.id)} type="button">View market</button>
+                  </div>
+                </article>
+              ))}
+            </section>
           ) : view === "collection" ? (
             <section className={`market-section section-${collectionView}`}>
               <div className="market-section-header">
@@ -5678,6 +5809,10 @@ export default function App() {
                   </div>
                 )}
                 {paginatedParticipatedProfileMarkets.map((market) => {
+                  const marketActivityRows = activities.filter(
+                    (activity) => sameAddress(activity.user, viewedProfileKey) && activity.marketId === market.id
+                  );
+                  const firstTxUrl = maybeTransactionUrl(marketActivityRows[0]?.txHash);
                   const canUseDisputeFlow = contractVersion !== "legacy";
                   const canPropose =
                     isOwnProfile &&
@@ -5758,6 +5893,18 @@ export default function App() {
                           <strong>{claimStatus}</strong>
                         </div>
                       </div>
+                      <div className="history-tx-row">
+                        <button className="secondary" onClick={() => openMarket(market.id)} type="button">
+                          View market
+                        </button>
+                        {firstTxUrl ? (
+                          <a className="tx-link-button" href={firstTxUrl} target="_blank" rel="noreferrer">
+                            View tx
+                          </a>
+                        ) : (
+                          <span>No indexed tx yet</span>
+                        )}
+                      </div>
                       {(canPropose ||
                         canLegacyResolve ||
                         canFinalize ||
@@ -5812,6 +5959,11 @@ export default function App() {
                             <button onClick={() => claim(market.id)}>
                               Claim {formatUsdc(market.potentialPayout)} USDC
                             </button>
+                          )}
+                          {firstTxUrl && (
+                            <a className="tx-link-button" href={firstTxUrl} target="_blank" rel="noreferrer">
+                              Arcscan tx
+                            </a>
                           )}
                         </div>
                       )}
@@ -5966,12 +6118,14 @@ export default function App() {
                 {leaderboardRows.map((row, index) => {
                   const tier = reputationTierFor(row.auraPoints);
                   const badges = reputationBadgesFor(row);
+                  const profileName = displayNameForAddress(row.address);
 
                   return (
                     <div className="leaderboard-row" key={row.address}>
                       <span>#{index + 1}</span>
                       <div className="leaderboard-wallet">
-                        <strong>{displayNameForAddress(row.address)}</strong>
+                        <strong>{profileName}</strong>
+                        {profileName !== shortAddress(row.address) && <small>{shortAddress(row.address)}</small>}
                         <div className="badge-row">
                           <span className={`reputation-tier tier-${tier.value}`}>{tier.label}</span>
                           {badges.map((badge) => (
