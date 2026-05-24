@@ -646,6 +646,76 @@ function appendSocialRow(collection, key, row, limit) {
   collection[key] = [row, ...rows.filter((item) => item.id !== row.id)].slice(0, limit);
 }
 
+function tokenizeMarketText(value) {
+  const stopWords = new Set([
+    "will",
+    "the",
+    "and",
+    "or",
+    "yes",
+    "no",
+    "for",
+    "with",
+    "from",
+    "this",
+    "that",
+    "before",
+    "after",
+    "market"
+  ]);
+  return String(value || "")
+    .toLowerCase()
+    .replace(/[$,]/g, "")
+    .split(/[^a-z0-9]+/)
+    .filter((token) => token.length > 2 && !stopWords.has(token));
+}
+
+function textSimilarity(a, b) {
+  const left = new Set(tokenizeMarketText(a));
+  const right = new Set(tokenizeMarketText(b));
+  if (left.size === 0 || right.size === 0) return 0;
+  let overlap = 0;
+  for (const token of left) {
+    if (right.has(token)) overlap += 1;
+  }
+  return overlap / Math.max(left.size, right.size);
+}
+
+function findSimilarMarkets(idea, category) {
+  const normalizedCategory = String(category || "").toLowerCase();
+  const now = Math.floor(Date.now() / 1000);
+  return Object.values(state.markets)
+    .map((market) => {
+      const baseScore = textSimilarity(idea, market.question);
+      const categoryBonus =
+        normalizedCategory && normalizedCategory !== "other" && String(market.category || "").toLowerCase() === normalizedCategory
+          ? 0.12
+          : 0;
+      const liveBonus = market.outcome === Outcome.Unresolved && Number(market.closeTime) > now ? 0.08 : 0;
+      const similarity = Math.min(1, baseScore + categoryBonus + liveBonus);
+      return {
+        id: market.id,
+        question: market.question,
+        category: market.category || "Other",
+        closeTime: market.closeTime,
+        volume: (toBigint(market.yesPool) + toBigint(market.noPool)).toString(),
+        traderCount: market.traderCount,
+        similarity: Math.round(similarity * 100),
+        reason: similarity >= 0.72 ? "Likely duplicate or overlapping outcome." : "Shares terms or category with this idea."
+      };
+    })
+    .filter((market) => market.similarity >= 32)
+    .sort((a, b) => b.similarity - a.similarity || b.id - a.id)
+    .slice(0, 5);
+}
+
+function duplicateRiskFor(similarMarkets) {
+  const top = similarMarkets[0]?.similarity ?? 0;
+  if (top >= 72) return "HIGH";
+  if (top >= 48) return "MEDIUM";
+  return "LOW";
+}
+
 function extractJsonObject(text) {
   const raw = String(text || "").trim();
   if (!raw) throw new Error("AI returned an empty response.");
@@ -702,14 +772,17 @@ function marketDraftPrompt(body) {
   const idea = cleanText(body.idea || body.question, 900);
   const category = cleanText(body.category, 40) || "Other";
   const closeTime = cleanText(body.closeTime, 80);
+  const similarMarkets = findSimilarMarkets(idea, category);
   const now = nowIso();
   return {
     idea,
+    similarMarkets,
     prompt: [
       `Current UTC time: ${now}`,
       `User market idea: ${idea}`,
       `Preferred category: ${category}`,
       `Preferred close time: ${closeTime || "not provided"}`,
+      `Similar active/recent markets prefiltered by indexer: ${JSON.stringify(similarMarkets)}`,
       "Return JSON only with:",
       "{",
       '  "question": "clear binary question, 8-160 chars",',
@@ -718,10 +791,12 @@ function marketDraftPrompt(body) {
       '  "resolutionCriteria": "specific rules for YES/NO/Cancel",',
       '  "sources": ["credible source name or URL", "..."],',
       '  "clarityScore": 0-100,',
+      '  "duplicateRisk": "LOW|MEDIUM|HIGH",',
       '  "riskFlags": ["short issue labels"],',
       '  "creatorNote": "one short warning or guidance sentence"',
       "}",
-      "Use UTC. Avoid subjective criteria. If the market is ambiguous, rewrite it to be measurable."
+      "Use UTC. Avoid subjective criteria. If the market is ambiguous, rewrite it to be measurable.",
+      "If a similar market already covers the same outcome, set duplicateRisk HIGH and advise using the existing market."
     ].join("\n")
   };
 }
@@ -913,10 +988,19 @@ async function route(req, res) {
       ].join(" ");
 
       if (segments[2] === "market-draft") {
-        const { idea, prompt } = marketDraftPrompt(body);
+        const { idea, similarMarkets, prompt } = marketDraftPrompt(body);
         if (idea.length < 4) return json(res, 400, { error: "Market idea is too short." });
         const draft = await callGeminiJson(systemInstruction, prompt);
-        json(res, 200, { draft, provider: AI_PROVIDER, model: AI_MODEL, updatedAt: nowIso() });
+        json(res, 200, {
+          draft: {
+            ...draft,
+            duplicateRisk: draft.duplicateRisk || duplicateRiskFor(similarMarkets),
+            similarMarkets
+          },
+          provider: AI_PROVIDER,
+          model: AI_MODEL,
+          updatedAt: nowIso()
+        });
         return;
       }
 

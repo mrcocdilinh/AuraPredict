@@ -166,6 +166,17 @@ type AiMarketDraft = {
   resolutionCriteria?: string;
   sources?: string[];
   clarityScore?: number;
+  duplicateRisk?: "LOW" | "MEDIUM" | "HIGH";
+  similarMarkets?: Array<{
+    id: number;
+    question: string;
+    category: string;
+    closeTime: number;
+    volume: string;
+    traderCount: number;
+    similarity: number;
+    reason: string;
+  }>;
   riskFlags?: string[];
   creatorNote?: string;
 };
@@ -6920,11 +6931,33 @@ export default function App() {
                     <span className="section-label">Suggested market</span>
                     <h3>{aiMarketDraft.question || "Draft ready"}</h3>
                   </div>
-                  {typeof aiMarketDraft.clarityScore === "number" && (
-                    <span>{aiMarketDraft.clarityScore}% clarity</span>
-                  )}
+                  <div className="aura-draft-badges">
+                    {aiMarketDraft.duplicateRisk && <span className={`risk-${aiMarketDraft.duplicateRisk.toLowerCase()}`}>{aiMarketDraft.duplicateRisk} duplicate risk</span>}
+                    {typeof aiMarketDraft.clarityScore === "number" && <span>{aiMarketDraft.clarityScore}% clarity</span>}
+                  </div>
                 </div>
                 {aiMarketDraft.resolutionCriteria && <p>{aiMarketDraft.resolutionCriteria}</p>}
+                {aiMarketDraft.similarMarkets && aiMarketDraft.similarMarkets.length > 0 && (
+                  <div className="similar-market-list">
+                    <span className="section-label">Similar markets found</span>
+                    {aiMarketDraft.similarMarkets.map((market) => (
+                      <button
+                        className="similar-market-row"
+                        key={market.id}
+                        onClick={() => {
+                          setCreateModalOpen(false);
+                          openMarket(market.id);
+                        }}
+                        type="button"
+                      >
+                        <strong>#{market.id} {shortQuestion(market.question)}</strong>
+                        <small>
+                          {market.similarity}% similar / {market.traderCount} traders / {formatStatUsdc(BigInt(market.volume || "0"))} USDC
+                        </small>
+                      </button>
+                    ))}
+                  </div>
+                )}
                 {aiMarketDraft.sources && aiMarketDraft.sources.length > 0 && (
                   <div className="aura-draft-tags">
                     {aiMarketDraft.sources.slice(0, 4).map((source) => (
