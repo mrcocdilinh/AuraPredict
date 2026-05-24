@@ -191,6 +191,38 @@ type AiResolutionReport = {
   resolverAction?: string;
 };
 
+type AiResolutionReceipt = {
+  id?: string;
+  marketId: number;
+  generatedAt?: string;
+  provider?: string;
+  model?: string;
+  receiptHash?: string;
+  status?: string;
+  proposedOutcome?: string;
+  proposedOutcomeValue?: number;
+  txHash?: string;
+  error?: string;
+  consensus?: {
+    outcome?: string;
+    confidence?: number;
+    agreed?: number;
+    approved?: boolean;
+  };
+  reviews?: Array<{
+    outcome?: string;
+    confidence?: number;
+    reasoning?: string;
+    risks?: string[];
+    keyEvidence?: Array<{ title?: string; url?: string; finding?: string }>;
+  }>;
+  evidence?: MarketEvidence[];
+};
+
+type ResolutionReceiptResponse = {
+  receipt?: AiResolutionReceipt | null;
+};
+
 type AuraBreakdown = {
   items: Array<{ label: string; detail: string; value: number }>;
   total: number;
@@ -1978,6 +2010,7 @@ export default function App() {
   const [auraAskedForCreate, setAuraAskedForCreate] = useState(false);
   const [duplicateAcknowledged, setDuplicateAcknowledged] = useState(false);
   const [aiResolutionReports, setAiResolutionReports] = useState<Record<number, AiResolutionReport>>({});
+  const [aiResolutionReceipts, setAiResolutionReceipts] = useState<Record<string, AiResolutionReceipt | null>>({});
   const [onboardingDismissed, setOnboardingDismissed] = useState(() => {
     try {
       return window.localStorage.getItem(ONBOARDING_DISMISSED_KEY) === "true";
@@ -2736,6 +2769,10 @@ export default function App() {
       if (response.evidence) {
         setMarketEvidence((current) => ({ ...current, [String(selectedMarketId)]: response.evidence ?? [] }));
       }
+    });
+    fetchIndexerJson<ResolutionReceiptResponse>(`/api/resolutions/${selectedMarketId}`).then((response) => {
+      if (canceled || !response || !("receipt" in response)) return;
+      setAiResolutionReceipts((current) => ({ ...current, [String(selectedMarketId)]: response.receipt ?? null }));
     });
     return () => {
       canceled = true;
@@ -5049,6 +5086,7 @@ export default function App() {
       selectedMarketNoPercent
     );
     const aiResolutionReport = aiResolutionReports[selectedMarket.id];
+    const aiResolutionReceipt = aiResolutionReceipts[String(selectedMarket.id)];
     const displayedAgentLabel = aiResolutionReport?.suggestedOutcome || agentReport.suggestedLabel;
     const displayedAgentConfidence =
       typeof aiResolutionReport?.confidence === "number" ? aiResolutionReport.confidence : agentReport.confidence;
@@ -5431,6 +5469,50 @@ export default function App() {
                 Copy report
               </button>
             </section>
+
+            {aiResolutionReceipt && (
+              <section className="agent-panel">
+                <div className="panel-heading">
+                  <div>
+                    <span className="section-label">AI receipt</span>
+                    <h3>Resolver consensus</h3>
+                  </div>
+                  <span className="agent-confidence">
+                    {aiResolutionReceipt.consensus?.confidence ?? 0}% confidence
+                  </span>
+                </div>
+                <div className="agent-result">
+                  <span>Status</span>
+                  <strong>{aiResolutionReceipt.status || "pending"}</strong>
+                  <p>
+                    Consensus {aiResolutionReceipt.consensus?.outcome || aiResolutionReceipt.proposedOutcome || "not ready"}
+                    {typeof aiResolutionReceipt.consensus?.agreed === "number"
+                      ? ` from ${aiResolutionReceipt.consensus.agreed} AI reviewers.`
+                      : "."}
+                  </p>
+                  {aiResolutionReceipt.receiptHash && <p>Receipt hash {shortAddress(aiResolutionReceipt.receiptHash)}</p>}
+                  {aiResolutionReceipt.txHash && (
+                    <a href={`${ARC_EXPLORER_URL}/tx/${aiResolutionReceipt.txHash}`} target="_blank" rel="noreferrer">
+                      View resolver transaction
+                    </a>
+                  )}
+                  {aiResolutionReceipt.error && <p>{aiResolutionReceipt.error}</p>}
+                </div>
+                {aiResolutionReceipt.reviews && aiResolutionReceipt.reviews.length > 0 && (
+                  <div className="agent-evidence-list">
+                    {aiResolutionReceipt.reviews.slice(0, 3).map((review: NonNullable<AiResolutionReceipt["reviews"]>[number], index: number) => (
+                      <article key={`receipt-review-${selectedMarket.id}-${index}`}>
+                        <strong>
+                          {review.outcome || "Review"} {typeof review.confidence === "number" ? `${review.confidence}%` : ""}
+                        </strong>
+                        {review.reasoning && <p>{review.reasoning}</p>}
+                        {review.risks && review.risks.length > 0 && <small>{review.risks.slice(0, 2).join(" / ")}</small>}
+                      </article>
+                    ))}
+                  </div>
+                )}
+              </section>
+            )}
 
             <section className="top-traders-panel">
               <div className="panel-heading">

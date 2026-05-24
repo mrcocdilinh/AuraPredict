@@ -3,7 +3,8 @@ import { createServer } from "node:http";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { createPublicClient, fallback, formatUnits, http, isAddress } from "viem";
+import { createPublicClient, createWalletClient, fallback, formatUnits, http, isAddress, keccak256, stringToHex } from "viem";
+import { privateKeyToAccount } from "viem/accounts";
 import { arcPredictionMarketAbi } from "./arcPredictionMarketAbi.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -31,8 +32,22 @@ const CHUNK_SIZE = BigInt(process.env.AURA_INDEXER_CHUNK_SIZE || 9_000);
 const AI_PROVIDER = String(process.env.AI_PROVIDER || "").trim().toLowerCase();
 const GEMINI_API_KEY = String(process.env.GEMINI_API_KEY || "").trim();
 const AI_MODEL = String(process.env.AI_MODEL || "gemini-2.5-flash").trim();
+const RESOLUTION_ADMIN_TOKEN = String(process.env.AURA_RESOLUTION_ADMIN_TOKEN || "").trim();
+const RESOLUTION_AUTO_RUN = String(process.env.AURA_RESOLUTION_AUTO_RUN || "").trim() === "1";
+const RESOLUTION_AUTO_PROPOSE = String(process.env.AURA_RESOLUTION_AUTO_PROPOSE || "").trim() === "1";
+const RESOLVER_PRIVATE_KEY = String(process.env.AURA_RESOLVER_PRIVATE_KEY || "").trim();
+const RESOLUTION_MIN_CONFIDENCE = Number(process.env.AURA_RESOLUTION_MIN_CONFIDENCE || 72);
+const RESOLUTION_CONSENSUS_COUNT = Number(process.env.AURA_RESOLUTION_CONSENSUS_COUNT || 2);
 const USDC_DECIMALS = 18;
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
+const ARC_CHAIN = {
+  id: 5042002,
+  name: "Arc Testnet",
+  nativeCurrency: { name: "USDC", symbol: "USDC", decimals: 18 },
+  rpcUrls: {
+    default: { http: RPC_URLS }
+  }
+};
 const EVENT_NAMES = [
   "MarketCreated",
   "BetPlaced",
@@ -70,12 +85,47 @@ const Outcome = {
 };
 
 const client = createPublicClient({
+  chain: ARC_CHAIN,
   transport: fallback(RPC_URLS.map((url) => http(url, { retryCount: 1, retryDelay: 250, timeout: 10_000 })), {
     rank: false,
     retryCount: 2,
     retryDelay: 500
   })
 });
+const resolverAccount = RESOLVER_PRIVATE_KEY ? privateKeyToAccount(RESOLVER_PRIVATE_KEY) : null;
+const walletClient = resolverAccount
+  ? createWalletClient({
+      account: resolverAccount,
+      chain: ARC_CHAIN,
+      transport: http(RPC_URLS[0], { retryCount: 1, retryDelay: 250, timeout: 15_000 })
+    })
+  : null;
+const writeMarketAbi = [
+  {
+    type: "function",
+    name: "resolve",
+    stateMutability: "nonpayable",
+    inputs: [
+      { type: "uint256", name: "marketId" },
+      { type: "uint8", name: "outcome" }
+    ],
+    outputs: []
+  },
+  {
+    type: "function",
+    name: "cancel",
+    stateMutability: "nonpayable",
+    inputs: [{ type: "uint256", name: "marketId" }],
+    outputs: []
+  },
+  {
+    type: "function",
+    name: "finalize",
+    stateMutability: "nonpayable",
+    inputs: [{ type: "uint256", name: "marketId" }],
+    outputs: []
+  }
+];
 
 function nowIso() {
   return new Date().toISOString();
@@ -155,6 +205,7 @@ function emptyState() {
       comments: {},
       evidence: {}
     },
+    resolutions: {},
     stats: {
       totalMarkets: 0,
       indexedMarkets: 0,
@@ -646,6 +697,38 @@ function appendSocialRow(collection, key, row, limit) {
   collection[key] = [row, ...rows.filter((item) => item.id !== row.id)].slice(0, limit);
 }
 
+function resolutionState() {
+  state.resolutions ??= {};
+  return state.resolutions;
+}
+
+function adminAuthorized(req) {
+  if (!RESOLUTION_ADMIN_TOKEN) return false;
+  const header = String(req.headers.authorization || "");
+  const token = header.startsWith("Bearer ") ? header.slice(7).trim() : String(req.headers["x-aura-admin-token"] || "");
+  return token === RESOLUTION_ADMIN_TOKEN;
+}
+
+function outcomeName(outcome) {
+  if (outcome === Outcome.Yes || outcome === "YES") return "YES";
+  if (outcome === Outcome.No || outcome === "NO") return "NO";
+  if (outcome === Outcome.Canceled || outcome === "CANCEL" || outcome === "CANCELED") return "CANCEL";
+  return "INSUFFICIENT_EVIDENCE";
+}
+
+function outcomeValue(outcome) {
+  const normalized = outcomeName(outcome);
+  if (normalized === "YES") return Outcome.Yes;
+  if (normalized === "NO") return Outcome.No;
+  if (normalized === "CANCEL") return Outcome.Canceled;
+  return Outcome.Unresolved;
+}
+
+function receiptHashFor(receipt) {
+  const { receiptHash, txHash, status, error, ...decisionPayload } = receipt;
+  return keccak256(stringToHex(JSON.stringify(decisionPayload)));
+}
+
 function tokenizeMarketText(value) {
   const stopWords = new Set([
     "will",
@@ -926,6 +1009,174 @@ function resolutionPrompt(body) {
   ].join("\n");
 }
 
+function resolutionReviewerPrompt(market, evidenceRows, role) {
+  const evidence = evidenceRows.map((item) => ({
+    title: cleanText(item.title, 120),
+    url: cleanUrl(item.url),
+    notes: cleanText(item.notes || item.finding, 700),
+    createdAt: item.createdAt
+  }));
+  const criteria = cleanText(market.resolutionCriteria || "", 1000);
+  return [
+    `Current UTC time: ${nowIso()}`,
+    `Reviewer role: ${role}`,
+    `Market id: ${market.id}`,
+    `Question: ${cleanText(market.question, 260)}`,
+    `Category: ${cleanText(market.category, 40)}`,
+    `Close time unix: ${market.closeTime}`,
+    `Resolution criteria: ${criteria || "not provided"}`,
+    `Current pools: YES ${formatUnits(toBigint(market.yesPool), USDC_DECIMALS)} USDC / NO ${formatUnits(toBigint(market.noPool), USDC_DECIMALS)} USDC`,
+    `Evidence JSON: ${JSON.stringify(evidence)}`,
+    "Return JSON only with:",
+    "{",
+    '  "outcome": "YES|NO|CANCEL|INSUFFICIENT_EVIDENCE",',
+    '  "confidence": 0-100,',
+    '  "reasoning": "short evidence-based explanation",',
+    '  "keyEvidence": [{"title":"...", "url":"...", "finding":"..."}],',
+    '  "risks": ["specific dispute or ambiguity risk"]',
+    "}",
+    "Use only the supplied evidence and public facts that can be verified from URLs in the evidence list.",
+    "If the evidence is not enough to decide confidently, return INSUFFICIENT_EVIDENCE.",
+    "For price/date markets, require the source to match the metric and time window exactly."
+  ].join("\n");
+}
+
+function consensusFromReviews(reviews) {
+  const valid = reviews
+    .map((review) => ({
+      ...review,
+      outcome: outcomeName(review.outcome || review.suggestedOutcome),
+      confidence: Number(review.confidence || 0)
+    }))
+    .filter((review) => review.outcome !== "INSUFFICIENT_EVIDENCE");
+  const counts = new Map();
+  for (const review of valid) counts.set(review.outcome, (counts.get(review.outcome) || 0) + 1);
+  const winner = [...counts.entries()].sort((a, b) => b[1] - a[1])[0];
+  if (!winner) return { outcome: "INSUFFICIENT_EVIDENCE", confidence: 0, agreed: 0, approved: false };
+  const agreedReviews = valid.filter((review) => review.outcome === winner[0]);
+  const confidence = Math.round(agreedReviews.reduce((sum, review) => sum + review.confidence, 0) / agreedReviews.length);
+  return {
+    outcome: winner[0],
+    confidence,
+    agreed: winner[1],
+    approved: winner[1] >= RESOLUTION_CONSENSUS_COUNT && confidence >= RESOLUTION_MIN_CONFIDENCE
+  };
+}
+
+async function buildResolutionReceipt(marketId, options = {}) {
+  const market = state.markets[String(marketId)];
+  if (!market) throw new Error("Market not found.");
+  const now = Math.floor(Date.now() / 1000);
+  if (market.closeTime > now && !options.force) throw new Error("Market is still open.");
+  if (market.outcome !== Outcome.Unresolved && !options.force) throw new Error("Market is already resolved.");
+  if (market.proposedAt > 0 && !options.force) throw new Error("Market already has a proposed outcome.");
+
+  const social = socialState();
+  const evidenceRows = Array.isArray(options.evidence) && options.evidence.length > 0
+    ? options.evidence.slice(0, 10)
+    : (social.evidence[String(marketId)] || []).slice(0, 10);
+  const roles = [
+    "strict fact checker",
+    "skeptical dispute reviewer",
+    "market rules interpreter"
+  ];
+  const systemInstruction = [
+    "You are one reviewer in AuraPredict's AI resolution committee.",
+    "You do not control settlement by yourself.",
+    "You must be conservative, cite evidence, and return INSUFFICIENT_EVIDENCE when facts are unclear.",
+    "Return compact JSON only."
+  ].join(" ");
+
+  const reviews = [];
+  for (const role of roles) {
+    reviews.push(await callGeminiJson(systemInstruction, resolutionReviewerPrompt(market, evidenceRows, role)));
+  }
+
+  const consensus = consensusFromReviews(reviews);
+  const receipt = {
+    id: `${marketId}-${Date.now()}`,
+    version: 1,
+    marketId,
+    question: market.question,
+    category: market.category,
+    closeTime: market.closeTime,
+    generatedAt: nowIso(),
+    provider: AI_PROVIDER,
+    model: AI_MODEL,
+    minConfidence: RESOLUTION_MIN_CONFIDENCE,
+    consensusCount: RESOLUTION_CONSENSUS_COUNT,
+    consensus,
+    reviews,
+    evidence: evidenceRows,
+    proposedOutcome: consensus.approved ? consensus.outcome : "INSUFFICIENT_EVIDENCE",
+    proposedOutcomeValue: consensus.approved ? outcomeValue(consensus.outcome) : Outcome.Unresolved,
+    status: consensus.approved ? "ready" : "needs_review",
+    txHash: "",
+    error: ""
+  };
+  receipt.receiptHash = receiptHashFor(receipt);
+  resolutionState()[String(marketId)] = receipt;
+  await saveState();
+  return receipt;
+}
+
+async function proposeResolutionOnchain(receipt) {
+  if (!RESOLUTION_AUTO_PROPOSE) return { skipped: "AURA_RESOLUTION_AUTO_PROPOSE is not enabled." };
+  if (!walletClient || !resolverAccount) return { skipped: "AURA_RESOLVER_PRIVATE_KEY is not configured." };
+  if (receipt.status !== "ready" || receipt.proposedOutcomeValue === Outcome.Unresolved) {
+    return { skipped: "Receipt is not approved for on-chain proposal." };
+  }
+
+  const market = state.markets[String(receipt.marketId)];
+  if (!market) throw new Error("Market not found.");
+  const resolver = String(market.resolver || "").toLowerCase();
+  const owner = String(state.owner || "").toLowerCase();
+  const signer = resolverAccount.address.toLowerCase();
+  if (signer !== resolver && signer !== owner) {
+    throw new Error("Resolver key is not the market resolver or contract owner.");
+  }
+
+  const functionName = receipt.proposedOutcomeValue === Outcome.Canceled ? "cancel" : "resolve";
+  const args = functionName === "cancel" ? [BigInt(receipt.marketId)] : [BigInt(receipt.marketId), receipt.proposedOutcomeValue];
+  const txHash = await walletClient.writeContract({
+    address: CONTRACT_ADDRESS,
+    abi: writeMarketAbi,
+    functionName,
+    args
+  });
+  receipt.txHash = txHash;
+  receipt.status = "proposed";
+  resolutionState()[String(receipt.marketId)] = receipt;
+  await saveState();
+  return { txHash };
+}
+
+async function runAutoResolutionSweep() {
+  const now = Math.floor(Date.now() / 1000);
+  const candidates = Object.values(state.markets)
+    .filter((market) => market.outcome === Outcome.Unresolved)
+    .filter((market) => Number(market.closeTime || 0) > 0 && Number(market.closeTime) <= now)
+    .filter((market) => Number(market.proposedAt || 0) === 0)
+    .filter((market) => !state.resolutions?.[String(market.id)])
+    .slice(0, 3);
+
+  for (const market of candidates) {
+    try {
+      const receipt = await buildResolutionReceipt(market.id);
+      await proposeResolutionOnchain(receipt);
+    } catch (error) {
+      resolutionState()[String(market.id)] = {
+        ...(resolutionState()[String(market.id)] || {}),
+        marketId: market.id,
+        status: "error",
+        generatedAt: nowIso(),
+        error: error instanceof Error ? error.message : String(error)
+      };
+      await saveState();
+    }
+  }
+}
+
 async function syncRange(fromBlock, toBlock) {
   const logs = [];
   for (const eventName of EVENT_NAMES) {
@@ -997,6 +1248,9 @@ async function syncOnce() {
 
     await refreshContractState();
     computeStats();
+    if (RESOLUTION_AUTO_RUN) {
+      await runAutoResolutionSweep();
+    }
     state.updatedAt = nowIso();
     await saveState();
     return state;
@@ -1108,6 +1362,32 @@ async function route(req, res) {
       }
 
       return notFound(res);
+    }
+
+    if (segments[0] === "api" && segments[1] === "resolutions") {
+      const marketId = Number(segments[2]);
+      if (!Number.isInteger(marketId) || marketId < 0) return json(res, 400, { error: "Invalid market id." });
+
+      if (req.method === "GET" && segments.length === 3) {
+        const receipt = resolutionState()[String(marketId)] ?? null;
+        json(res, 200, { receipt, updatedAt: state.updatedAt });
+        return;
+      }
+
+      if (req.method === "POST" && segments[3] === "run") {
+        if (!adminAuthorized(req)) return json(res, 401, { error: "Unauthorized." });
+        const body = await readRequestBody(req);
+        const receipt = await buildResolutionReceipt(marketId, {
+          force: body.force === true,
+          evidence: Array.isArray(body.evidence) ? body.evidence : undefined
+        });
+        const proposal = body.propose === true ? await proposeResolutionOnchain(receipt) : { skipped: "Proposal not requested." };
+        json(res, 200, { receipt, proposal, updatedAt: nowIso() });
+        return;
+      }
+
+      notFound(res);
+      return;
     }
 
     if (segments[0] === "api" && segments[1] === "social") {

@@ -58,6 +58,57 @@ POST /api/social/profiles/:address/follows
 The frontend uses `VITE_AURA_INDEXER_URL` when available and falls back to direct Arc RPC reads if the indexer is offline.
 When `VITE_AURA_INDEXER_URL` points to a live web service, the frontend also persists comments, evidence, follows, and profile metadata through these social endpoints. Static GitHub Pages exports remain read-only, so the app falls back to browser-local storage for social actions on that setup.
 
+## AI Resolution V1
+
+AuraPredict V1 keeps the current contract and stores AI resolution receipts in the indexer state. The receipt is off-chain, public through the indexer API, and the contract still uses the existing creator/owner proposal, dispute window, finalization, and claim flow.
+
+Public read:
+
+```text
+GET /api/resolutions/:marketId
+```
+
+Admin run:
+
+```text
+POST /api/resolutions/:marketId/run
+Authorization: Bearer your_admin_token
+```
+
+Request body:
+
+```json
+{
+  "force": false,
+  "propose": false
+}
+```
+
+The indexer asks three AI reviewer roles for an evidence-based outcome, builds a consensus receipt, hashes the immutable decision payload, and stores it under `state.resolutions`. By default this only creates the receipt. It does not write on-chain unless `propose` is true and `AURA_RESOLUTION_AUTO_PROPOSE=1`.
+
+Required for AI receipts:
+
+```bash
+AI_PROVIDER=gemini
+GEMINI_API_KEY=your_gemini_key
+AI_MODEL=gemini-2.5-flash
+AURA_RESOLUTION_ADMIN_TOKEN=long_random_admin_token
+```
+
+Optional automation:
+
+```bash
+AURA_RESOLUTION_AUTO_RUN=1
+AURA_RESOLUTION_AUTO_PROPOSE=0
+AURA_RESOLVER_PRIVATE_KEY=0x...
+AURA_RESOLUTION_MIN_CONFIDENCE=72
+AURA_RESOLUTION_CONSENSUS_COUNT=2
+```
+
+Keep `AURA_RESOLUTION_AUTO_PROPOSE=0` until the resolver key and evidence policy are tested. If enabled, the private key must be the market resolver or contract owner, because the current contract only allows those roles to propose results.
+
+`POST /api/resolutions/:marketId/run` always requires `AURA_RESOLUTION_ADMIN_TOKEN`. If `AURA_RESOLUTION_AUTO_RUN=1`, the indexer only auto-generates the first receipt for each closed unresolved market; use the admin endpoint with `force: true` to rerun after adding better evidence.
+
 ## Public Deploy
 
 The production app at `https://app.aurapredict.xyz` needs a public indexer URL, not `127.0.0.1`.
