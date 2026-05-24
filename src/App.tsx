@@ -84,7 +84,6 @@ type ActivityItem = {
 type AppView = "markets" | "ended" | "leaderboard" | "profile" | "collection" | "market" | "security" | "notifications";
 type LeaderboardMetric = "volume" | "winRate" | "pnl" | "auraPoints";
 type LeaderboardPeriod = "day" | "7d" | "30d" | "all";
-type LeaderboardTier = "all" | "bronze" | "silver" | "gold" | "diamond";
 type MarketSectionKey = "fresh" | "hot" | "closing";
 type ThemeMode = "dark" | "light";
 type MarketViewMode = "grid" | "list";
@@ -345,13 +344,12 @@ const LEADERBOARD_METRICS: Array<{ value: LeaderboardMetric; label: string }> = 
   { value: "pnl", label: "PNL" },
   { value: "auraPoints", label: "Aura points" }
 ];
-const LEADERBOARD_TIERS: Array<{ value: LeaderboardTier; label: string; min: number; max?: number }> = [
-  { value: "all", label: "All tiers", min: 0 },
-  { value: "bronze", label: "Bronze", min: 0, max: 999 },
-  { value: "silver", label: "Silver", min: 1000, max: 2499 },
-  { value: "gold", label: "Gold", min: 2500, max: 4999 },
+const REPUTATION_TIERS = [
+  { value: "bronze", label: "Bronze", min: 0 },
+  { value: "silver", label: "Silver", min: 1000 },
+  { value: "gold", label: "Gold", min: 2500 },
   { value: "diamond", label: "Diamond", min: 5000 }
-];
+] as const;
 const CHART_WINDOWS: Array<{ value: ChartWindowKey; label: string; seconds: number | null }> = [
   { value: "1h", label: "1H", seconds: 60 * 60 },
   { value: "4h", label: "4H", seconds: 4 * 60 * 60 },
@@ -940,17 +938,10 @@ function auraBreakdownFor(
 
 function reputationTierFor(points: number) {
   return (
-    [...LEADERBOARD_TIERS]
+    [...REPUTATION_TIERS]
       .reverse()
-      .find((tier) => tier.value !== "all" && points >= tier.min) ?? LEADERBOARD_TIERS[1]
+      .find((tier) => points >= tier.min) ?? REPUTATION_TIERS[0]
   );
-}
-
-function rowMatchesTier(row: LeaderboardRow, tierValue: LeaderboardTier) {
-  if (tierValue === "all") return true;
-  const tier = LEADERBOARD_TIERS.find((item) => item.value === tierValue);
-  if (!tier) return true;
-  return row.auraPoints >= tier.min && (tier.max === undefined || row.auraPoints <= tier.max);
 }
 
 function reputationBadgesFor(row: LeaderboardRow) {
@@ -1319,14 +1310,14 @@ function LandingPage() {
     "Winners claim payout"
   ];
   const dataFlow = [
-    "Render indexer keeps markets, volume, participants, and activity close to realtime",
-    "Wallet actions still sign directly against the Arc contract",
-    "Arcscan keeps settlement and claim transactions verifiable"
+    "Live Render indexer now powers market history, volume, participants, activity, and leaderboards",
+    "Aura Agent drafts clearer markets, checks similar questions, and assists result research",
+    "Wallet actions still sign directly against the Arc contract, with Arcscan as the verification layer"
   ];
   const roadmapItems = [
-    "Tune frontend auto-refresh around the live indexer for faster cross-user updates",
-    "Persist follows and profile metadata beyond local browser storage",
-    "Expand Aura Agent result suggestions with richer source review and human dispute protection",
+    "Add websocket or event streaming for absolute realtime odds and cross-user updates",
+    "Persist social identity, comments, follows, evidence, and notifications beyond local browser storage",
+    "Move from AI-assisted resolution to a stronger oracle or dispute-backed resolver path",
     "Evaluate oracle integration when Arc supports the right optimistic oracle or data providers"
   ];
   const nextTheme = landingTheme === "dark" ? "light" : "dark";
@@ -1681,7 +1672,7 @@ function LandingPage() {
           </article>
           <article>
             <span>Future oracle path</span>
-            <strong>AI can assist result research, but final settlement should remain disputeable.</strong>
+            <strong>Aura Agent can assist result research, but final settlement still needs stronger oracle protection.</strong>
           </article>
         </div>
 
@@ -1690,9 +1681,9 @@ function LandingPage() {
             <span className="docs-label">Roadmap</span>
             <h3>Path toward a production-grade prediction market</h3>
             <p>
-              The current dapp proves the market flow on Arc Testnet with a live public indexer feeding
-              market history, activity, stats, and leaderboards. The next step is tightening refresh UX and
-              persistence around social identity.
+              AuraPredict now has a live public indexer, AI market drafting, duplicate-risk checks, comments,
+              evidence fields, profile reputation, and leaderboard metrics. The remaining gap is production-grade
+              realtime streaming, durable social data, and stronger oracle-backed settlement.
             </p>
           </div>
           <div className="docs-roadmap">
@@ -1860,7 +1851,6 @@ export default function App() {
   const [leaderboardMetric, setLeaderboardMetric] = useState<LeaderboardMetric>("volume");
   const [leaderboardPeriod, setLeaderboardPeriod] = useState<LeaderboardPeriod>("all");
   const [leaderboardCategory, setLeaderboardCategory] = useState("All");
-  const [leaderboardTier, setLeaderboardTier] = useState<LeaderboardTier>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [searchFocused, setSearchFocused] = useState(false);
   const [collectionView, setCollectionView] = useState<MarketSectionKey>("fresh");
@@ -1904,6 +1894,7 @@ export default function App() {
   const [evidenceDrafts, setEvidenceDrafts] = useState<Record<number, EvidenceDraft>>({});
   const [aiBusy, setAiBusy] = useState(false);
   const [aiMarketDraft, setAiMarketDraft] = useState<AiMarketDraft | null>(null);
+  const [auraAskedForCreate, setAuraAskedForCreate] = useState(false);
   const [duplicateAcknowledged, setDuplicateAcknowledged] = useState(false);
   const [aiResolutionReports, setAiResolutionReports] = useState<Record<number, AiResolutionReport>>({});
   const [onboardingDismissed, setOnboardingDismissed] = useState(() => {
@@ -2576,15 +2567,12 @@ export default function App() {
   const leaderboardRows = useMemo<LeaderboardRow[]>(() => {
     const period = LEADERBOARD_PERIODS.find((item) => item.value === leaderboardPeriod);
     const periodStart = period?.seconds ? leaderboardTimestamp - period.seconds : 0;
-    return sortLeaderboardRows(buildPlayerRows(periodStart, leaderboardCategory), leaderboardMetric).filter((row) =>
-      rowMatchesTier(row, leaderboardTier)
-    );
+    return sortLeaderboardRows(buildPlayerRows(periodStart, leaderboardCategory), leaderboardMetric);
   }, [
     buildPlayerRows,
     leaderboardCategory,
     leaderboardMetric,
     leaderboardPeriod,
-    leaderboardTier,
     leaderboardTimestamp,
     sortLeaderboardRows
   ]);
@@ -2956,6 +2944,9 @@ export default function App() {
   }, [account]);
 
   const openCreateMarket = useCallback(() => {
+    setAiMarketDraft(null);
+    setAuraAskedForCreate(false);
+    setDuplicateAcknowledged(false);
     setCreateModalOpen(true);
   }, []);
 
@@ -3123,6 +3114,9 @@ export default function App() {
       return;
     }
     setAiBusy(true);
+    setAuraAskedForCreate(true);
+    setAiMarketDraft(null);
+    setDuplicateAcknowledged(false);
     try {
       const response = await postIndexerJson<{ draft: AiMarketDraft }>("/api/ai/market-draft", {
         idea,
@@ -3976,6 +3970,7 @@ export default function App() {
       const category = createForm.category.trim() || "Other";
       if (!question) throw new Error("Market question is required.");
       if (question.length < 8) throw new Error("Market question must be at least 8 characters.");
+      if (!auraAskedForCreate) throw new Error("Ask Aura Agent once before launching. If Aura is unavailable, you can continue after the failed check.");
       if (!createForm.closeTime) throw new Error("Close time is required.");
       const closeTime = parseUtcDateTime(createForm.closeTime);
       const earliestCloseTime = BigInt(Math.floor(Date.now() / 1000) + 5 * 60);
@@ -4111,6 +4106,9 @@ export default function App() {
           : current
       );
       setCreateForm({ question: "", category: "Crypto", closeTime: "" });
+      setAiMarketDraft(null);
+      setAuraAskedForCreate(false);
+      setDuplicateAcknowledged(false);
       setCreateModalOpen(false);
       setView("markets");
       setActiveCategory("All");
@@ -5863,7 +5861,7 @@ export default function App() {
                   and user safety notes visible before mainnet decisions.
                 </p>
               )}
-              {knownMarketCount > 0 && view !== "market" && view !== "security" && (
+              {knownMarketCount > 0 && view !== "market" && view !== "security" && view !== "leaderboard" && (
                 <p className="data-scope-note">
                   {dataSource === "indexer"
                     ? `Showing ${markets.length} indexed markets out of ${knownMarketCount} total. Market history is loaded from the public AuraPredict indexer.`
@@ -5895,12 +5893,12 @@ export default function App() {
                   <button className="secondary" onClick={loadMarkets} disabled={loading || !hasContract}>
                     {loading ? "Refreshing..." : "Refresh"}
                   </button>
-                  {hasMoreMarkets && (
+                  {view !== "leaderboard" && hasMoreMarkets && (
                     <button className="secondary" onClick={() => loadMoreMarkets(false)} disabled={loading || !hasContract} type="button">
                       Load more
                     </button>
                   )}
-                  <button onClick={openCreateMarket}>Create Market</button>
+                  {view !== "ended" && view !== "leaderboard" && <button onClick={openCreateMarket}>Create Market</button>}
                 </>
               )}
             </div>
@@ -6585,19 +6583,6 @@ export default function App() {
                     </button>
                   ))}
                 </div>
-                <div className="leaderboard-control-group">
-                  <span>Tier</span>
-                  {LEADERBOARD_TIERS.map((tier) => (
-                    <button
-                      className={leaderboardTier === tier.value ? "category-pill active" : "category-pill"}
-                      key={tier.value}
-                      onClick={() => setLeaderboardTier(tier.value)}
-                      type="button"
-                    >
-                      {tier.label}
-                    </button>
-                  ))}
-                </div>
               </div>
 
               <section className="aura-formula-card">
@@ -6607,7 +6592,7 @@ export default function App() {
                   <p>Category and time filters recalculate the same formula for the selected leaderboard slice.</p>
                 </div>
                 <div className="aura-tier-strip">
-                  {LEADERBOARD_TIERS.filter((tier) => tier.value !== "all").map((tier) => (
+                  {REPUTATION_TIERS.map((tier) => (
                     <span className={`reputation-tier tier-${tier.value}`} key={tier.value}>
                       {tier.label} {tier.min.toLocaleString("en-US")}+
                     </span>
@@ -6937,6 +6922,7 @@ export default function App() {
                 onChange={(event) => {
                   setCreateForm({ ...createForm, question: event.target.value });
                   setAiMarketDraft(null);
+                  setAuraAskedForCreate(false);
                   setDuplicateAcknowledged(false);
                 }}
                 placeholder="Will Arc Testnet pass 1M transactions this week?"
@@ -7062,6 +7048,7 @@ export default function App() {
                   !hasContract ||
                   transactionPending ||
                   createForm.question.trim().length < 8 ||
+                  !auraAskedForCreate ||
                   (!!aiMarketDraft?.duplicateRisk && aiMarketDraft.duplicateRisk !== "LOW" && !duplicateAcknowledged)
                 }
                 type="submit"
@@ -7070,6 +7057,8 @@ export default function App() {
                   ? "Waiting Wallet..."
                   : aiMarketDraft?.duplicateRisk && aiMarketDraft.duplicateRisk !== "LOW"
                     ? "Create anyway"
+                    : !auraAskedForCreate
+                      ? "Ask Aura first"
                     : "Launch Market"}
               </button>
             </div>
