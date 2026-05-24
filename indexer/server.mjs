@@ -659,9 +659,15 @@ function tokenizeMarketText(value) {
     "from",
     "this",
     "that",
+    "any",
     "before",
     "after",
-    "market"
+    "market",
+    "markets",
+    "reach",
+    "reaches",
+    "record",
+    "records"
   ]);
   return String(value || "")
     .toLowerCase()
@@ -681,18 +687,82 @@ function textSimilarity(a, b) {
   return overlap / Math.max(left.size, right.size);
 }
 
+function normalizeMarketText(value) {
+  return String(value || "").toLowerCase().replace(/[$,]/g, "").replace(/\s+/g, " ").trim();
+}
+
+function extractMarketEntities(value) {
+  const normalized = normalizeMarketText(value);
+  const entities = new Set();
+  const knownEntities = [
+    "aurapredict",
+    "arc",
+    "solana",
+    "ethereum",
+    "bitcoin",
+    "circle",
+    "usdc",
+    "fifa",
+    "openai",
+    "gemini"
+  ];
+  for (const entity of knownEntities) {
+    if (normalized.includes(entity)) entities.add(entity);
+  }
+
+  const capitalized = String(value || "").match(/\b[A-Z][A-Za-z0-9]*(?:[ -][A-Z][A-Za-z0-9]*){0,3}\b/g) || [];
+  for (const item of capitalized) {
+    const cleaned = item.toLowerCase().trim();
+    if (cleaned.length > 2 && !["will", "yes", "no", "utc"].includes(cleaned)) entities.add(cleaned);
+  }
+  return entities;
+}
+
+function isBroadScopeMarket(value) {
+  const normalized = normalizeMarketText(value);
+  return /\b(any|all|one of|at least one)\b/.test(normalized) && /\b(dapp|app|project|protocol|team|market)\b/.test(normalized);
+}
+
+function hasSameConcreteEntity(left, right) {
+  const leftEntities = extractMarketEntities(left);
+  const rightEntities = extractMarketEntities(right);
+  for (const entity of leftEntities) {
+    if (rightEntities.has(entity)) return true;
+  }
+  return false;
+}
+
+function sharedMetricOnly(left, right) {
+  const leftText = normalizeMarketText(left);
+  const rightText = normalizeMarketText(right);
+  const metricWords = ["user", "users", "wallet", "wallets", "address", "addresses", "volume", "tvl", "trader", "traders"];
+  const sharesMetric = metricWords.some((word) => leftText.includes(word) && rightText.includes(word));
+  const leftNumbers = new Set(leftText.match(/\b\d+(?:k|m|b)?\b/g) || []);
+  const rightNumbers = new Set(rightText.match(/\b\d+(?:k|m|b)?\b/g) || []);
+  const sharesNumber = [...leftNumbers].some((number) => rightNumbers.has(number));
+  return sharesMetric || sharesNumber;
+}
+
 function findSimilarMarkets(idea, category) {
   const normalizedCategory = String(category || "").toLowerCase();
   const now = Math.floor(Date.now() / 1000);
   return Object.values(state.markets)
     .map((market) => {
       const baseScore = textSimilarity(idea, market.question);
+      const sameEntity = hasSameConcreteEntity(idea, market.question);
+      const broadScopeMismatch = isBroadScopeMarket(idea) !== isBroadScopeMarket(market.question);
+      const metricOnly = sharedMetricOnly(idea, market.question) && !sameEntity;
       const categoryBonus =
         normalizedCategory && normalizedCategory !== "other" && String(market.category || "").toLowerCase() === normalizedCategory
-          ? 0.12
+          ? sameEntity
+            ? 0.1
+            : 0.04
           : 0;
       const liveBonus = market.outcome === Outcome.Unresolved && Number(market.closeTime) > now ? 0.08 : 0;
-      const similarity = Math.min(1, baseScore + categoryBonus + liveBonus);
+      const entityBonus = sameEntity ? 0.22 : 0;
+      const mismatchPenalty = broadScopeMismatch ? 0.2 : 0;
+      const metricOnlyPenalty = metricOnly ? 0.16 : 0;
+      const similarity = Math.max(0, Math.min(1, baseScore + categoryBonus + liveBonus + entityBonus - mismatchPenalty - metricOnlyPenalty));
       return {
         id: market.id,
         question: market.question,
@@ -701,10 +771,15 @@ function findSimilarMarkets(idea, category) {
         volume: (toBigint(market.yesPool) + toBigint(market.noPool)).toString(),
         traderCount: market.traderCount,
         similarity: Math.round(similarity * 100),
-        reason: similarity >= 0.72 ? "Likely duplicate or overlapping outcome." : "Shares terms or category with this idea."
+        reason:
+          similarity >= 0.72
+            ? "Likely duplicate: same concrete subject and overlapping outcome."
+            : sameEntity
+              ? "Same concrete subject, but review deadline and criteria."
+              : "Related theme or metric only; not a duplicate by itself."
       };
     })
-    .filter((market) => market.similarity >= 32)
+    .filter((market) => market.similarity >= 28)
     .sort((a, b) => b.similarity - a.similarity || b.id - a.id)
     .slice(0, 5);
 }
@@ -796,7 +871,9 @@ function marketDraftPrompt(body) {
       '  "creatorNote": "one short warning or guidance sentence"',
       "}",
       "Use UTC. Avoid subjective criteria. If the market is ambiguous, rewrite it to be measurable.",
-      "If a similar market already covers the same outcome, set duplicateRisk HIGH and advise using the existing market."
+      "Only set duplicateRisk MEDIUM or HIGH when a similar market has the same concrete subject/entity and substantially overlapping outcome window.",
+      "Do not raise duplicateRisk just because two markets share a metric such as 10K users, active addresses, volume, or the same category.",
+      "Broad-scope markets such as 'any Arc dApp' are not duplicates of a named project market unless the named project already satisfies the same exact broad market outcome."
     ].join("\n")
   };
 }
