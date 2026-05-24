@@ -6,6 +6,7 @@ AuraPredict la dapp Prediction Market chay tren Arc Testnet. Du an gom:
 - Hardhat compile, test, deploy: `hardhat.config.cjs`, `scripts/deploy.js`
 - Frontend Vite React: `src/`
 - Local backend/indexer doc event Arc nhanh hon: `indexer/`
+- Static docs site cho `docs.aurapredict.xyz`: `docs/`
 - Huong dan tu dau, gom ca tao contract: `HUONG_DAN_TU_DAU_AURAPREDICT.md`
 - Huong dan deploy ngan gon: `DEPLOY_AURAPREDICT.md`
 
@@ -55,6 +56,12 @@ VITE_AURA_INDEXER_URL=http://127.0.0.1:8787
 
 Doc file `DEPLOY_AURAPREDICT.md` neu ban muon dua code len GitHub va deploy len Vercel theo tung buoc.
 Doc them `indexer/README.md` neu ban muon chay backend/indexer rieng cho leaderboard, stats va history nhanh hon.
+
+## Docs subdomain
+
+Thu muc `docs/` la static site rieng cho `docs.aurapredict.xyz`. Tren Vercel, tao mot project rieng tu cung repo nay, dat `Root Directory` la `docs`, framework `Other`, khong can build command, va them custom domain `docs.aurapredict.xyz`.
+
+Khong tro project app chinh sang `docs/`; app chinh van dung repo root cho `aurapredict.xyz`.
 
 ## Production indexer
 

@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="AuraPredict documentation for users, market creators, and operators on Arc Testnet."
+    />
+    <title>AuraPredict Docs</title>
+    <link rel="icon" href="./assets/favicon.ico" />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header class="docs-header">
+      <a class="brand" href="#top" aria-label="AuraPredict Docs home">
+        <img src="./assets/aurapredict-logo.png" alt="" />
+        <span>AuraPredict Docs</span>
+      </a>
+      <nav aria-label="Documentation">
+        <a href="#start">Start</a>
+        <a href="#markets">Markets</a>
+        <a href="#creators">Creators</a>
+        <a href="#operators">Operators</a>
+        <a href="#reference">Reference</a>
+      </nav>
+      <a class="app-link" href="https://aurapredict.xyz">Open app</a>
+    </header>
+
+    <main id="top">
+      <section class="hero">
+        <div>
+          <p class="eyebrow">Prediction markets on Arc Testnet</p>
+          <h1>Build, trade, and operate AuraPredict with confidence.</h1>
+          <p>
+            This documentation covers the live app, wallet setup, market creation,
+            resolution flow, indexer deployment, and production domain setup.
+          </p>
+          <div class="hero-actions">
+            <a class="primary-action" href="#start">Get started</a>
+            <a class="secondary-action" href="https://github.com/mrcocdilinh/AuraPredict">GitHub</a>
+          </div>
+        </div>
+        <aside class="network-panel" aria-label="Arc Testnet settings">
+          <span>Arc Testnet</span>
+          <dl>
+            <div>
+              <dt>Chain ID</dt>
+              <dd>5042002</dd>
+            </div>
+            <div>
+              <dt>RPC</dt>
+              <dd>https://rpc.testnet.arc.network</dd>
+            </div>
+            <div>
+              <dt>Explorer</dt>
+              <dd>https://testnet.arcscan.app</dd>
+            </div>
+            <div>
+              <dt>Gas token</dt>
+              <dd>Native USDC</dd>
+            </div>
+          </dl>
+        </aside>
+      </section>
+
+      <section class="quick-grid" aria-label="Documentation shortcuts">
+        <a href="#start">
+          <span>01</span>
+          <strong>Connect and trade</strong>
+          <small>Wallet, faucet, YES/NO positions, payouts.</small>
+        </a>
+        <a href="#creators">
+          <span>02</span>
+          <strong>Create markets</strong>
+          <small>Question quality, deadline, creator bond, resolution.</small>
+        </a>
+        <a href="#operators">
+          <span>03</span>
+          <strong>Deploy stack</strong>
+          <small>Contract, frontend, indexer, Vercel domains.</small>
+        </a>
+      </section>
+
+      <section id="start" class="docs-section">
+        <div class="section-label">Start</div>
+        <div class="section-body">
+          <h2>Use AuraPredict</h2>
+          <ol>
+            <li>Open <a href="https://aurapredict.xyz">aurapredict.xyz</a>.</li>
+            <li>Connect MetaMask, Rabby, or another EIP-1193 wallet.</li>
+            <li>Switch to Arc Testnet when prompted.</li>
+            <li>Fund the wallet with Arc Testnet USDC from the Circle faucet.</li>
+            <li>Choose a market, enter USDC amount, then stake YES or NO.</li>
+          </ol>
+          <div class="note">
+            AuraPredict is a testnet app. Do not use a wallet holding production funds.
+          </div>
+        </div>
+      </section>
+
+      <section id="markets" class="docs-section">
+        <div class="section-label">Markets</div>
+        <div class="section-body">
+          <h2>Market lifecycle</h2>
+          <div class="timeline">
+            <article>
+              <span>1</span>
+              <h3>Created</h3>
+              <p>A creator writes a binary question, chooses category and close time, then locks a creator bond.</p>
+            </article>
+            <article>
+              <span>2</span>
+              <h3>Trading open</h3>
+              <p>Traders stake native USDC on YES or NO. Odds update from pool balance and participation.</p>
+            </article>
+            <article>
+              <span>3</span>
+              <h3>Result proposed</h3>
+              <p>After close, the creator or owner proposes YES, NO, or Cancel according to the criteria.</p>
+            </article>
+            <article>
+              <span>4</span>
+              <h3>Dispute window</h3>
+              <p>Players can dispute a proposed result with a dispute bond before the deadline.</p>
+            </article>
+            <article>
+              <span>5</span>
+              <h3>Finalized</h3>
+              <p>Winners claim payouts. If the market is canceled, both sides can refund their stake.</p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section id="creators" class="docs-section">
+        <div class="section-label">Creators</div>
+        <div class="section-body">
+          <h2>Create better markets</h2>
+          <div class="two-column">
+            <div>
+              <h3>Question checklist</h3>
+              <ul>
+                <li>Use one clear YES/NO condition.</li>
+                <li>Include the exact end date or event boundary.</li>
+                <li>Define data sources before publishing.</li>
+                <li>Avoid subjective language such as "successful" or "major".</li>
+                <li>Check similar markets to avoid splitting liquidity.</li>
+              </ul>
+            </div>
+            <div>
+              <h3>Resolution checklist</h3>
+              <ul>
+                <li>Attach evidence links before proposing a result.</li>
+                <li>Use Cancel only when the question cannot be resolved fairly.</li>
+                <li>Wait for finality before telling users to claim.</li>
+                <li>Keep screenshots or official sources for disputed markets.</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="operators" class="docs-section">
+        <div class="section-label">Operators</div>
+        <div class="section-body">
+          <h2>Deploy production</h2>
+          <div class="command-block">
+            <span>Local checks</span>
+            <pre><code>npm install
+npm run compile
+npm test
+npm run build</code></pre>
+          </div>
+          <div class="two-column">
+            <div>
+              <h3>Frontend environment</h3>
+              <pre><code>VITE_PREDICTION_MARKET_ADDRESS=0x...
+VITE_AURA_INDEXER_URL=https://your-indexer-domain
+VITE_PREDICTION_MARKET_START_BLOCK=43295581</code></pre>
+            </div>
+            <div>
+              <h3>Docs subdomain</h3>
+              <p>
+                Create a separate Vercel project with root directory <code>docs</code>.
+                Add custom domain <code>docs.aurapredict.xyz</code> and point DNS to Vercel.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="reference" class="docs-section">
+        <div class="section-label">Reference</div>
+        <div class="section-body">
+          <h2>Useful links</h2>
+          <div class="reference-grid">
+            <a href="https://docs.arc.io/arc/references/rpc-endpoints">Arc RPC endpoints</a>
+            <a href="https://docs.arc.io/integrate/wallets">Add Arc to a wallet</a>
+            <a href="https://testnet.arcscan.app">Arc Testnet explorer</a>
+            <a href="https://faucet.circle.com">Circle faucet</a>
+            <a href="https://github.com/mrcocdilinh/AuraPredict">AuraPredict repository</a>
+            <a href="https://vercel.com/docs/domains/working-with-domains">Vercel domains</a>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <span>AuraPredict Docs</span>
+      <span>Testnet documentation for docs.aurapredict.xyz</span>
+    </footer>
+  </body>
+</html>
