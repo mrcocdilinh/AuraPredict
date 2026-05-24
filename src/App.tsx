@@ -1310,7 +1310,7 @@ function LandingPage() {
     }
   ];
   const flow = ["Create a market", "Stake YES or NO", "Track odds", "Resolve result", "Claim payout"];
-  const architectureSteps = ["Wallet", "AuraPredict UI", "Render Indexer", "Arc RPC fallback", "Prediction Market Contract", "Arcscan"];
+  const architectureSteps = ["Wallet", "AuraPredict UI", "Render Indexer", "Arc RPC", "Market Contract", "Arcscan"];
   const settlementSteps = [
     "Market closes in UTC",
     "Creator proposes YES, NO, or Cancel",
@@ -6548,7 +6548,8 @@ export default function App() {
           ) : view === "leaderboard" ? (
             <section className="leaderboard-panel">
               <div className="leaderboard-controls">
-                <div>
+                <div className="leaderboard-control-group">
+                  <span>Rank by</span>
                   {LEADERBOARD_METRICS.map((metric) => (
                     <button
                       className={leaderboardMetric === metric.value ? "category-pill active" : "category-pill"}
@@ -6559,7 +6560,8 @@ export default function App() {
                     </button>
                   ))}
                 </div>
-                <div>
+                <div className="leaderboard-control-group">
+                  <span>Period</span>
                   {LEADERBOARD_PERIODS.map((period) => (
                     <button
                       className={leaderboardPeriod === period.value ? "category-pill active" : "category-pill"}
@@ -6570,7 +6572,8 @@ export default function App() {
                     </button>
                   ))}
                 </div>
-                <div>
+                <div className="leaderboard-control-group leaderboard-control-wide">
+                  <span>Category</span>
                   {CATEGORIES.map((category) => (
                     <button
                       className={leaderboardCategory === category ? "category-pill active" : "category-pill"}
@@ -6582,7 +6585,8 @@ export default function App() {
                     </button>
                   ))}
                 </div>
-                <div>
+                <div className="leaderboard-control-group">
+                  <span>Tier</span>
                   {LEADERBOARD_TIERS.map((tier) => (
                     <button
                       className={leaderboardTier === tier.value ? "category-pill active" : "category-pill"}
@@ -6963,6 +6967,9 @@ export default function App() {
                   </div>
                 </div>
                 {aiMarketDraft.resolutionCriteria && <p>{aiMarketDraft.resolutionCriteria}</p>}
+                <button className="secondary" onClick={applyAuraMarketDraft} type="button">
+                  Apply suggestion
+                </button>
                 {aiMarketDraft.similarMarkets && aiMarketDraft.similarMarkets.length > 0 && (
                   <div className="similar-market-list">
                     <span className="section-label">Similar markets found</span>
@@ -6999,9 +7006,6 @@ export default function App() {
                   </div>
                 )}
                 {aiMarketDraft.creatorNote && <small>{aiMarketDraft.creatorNote}</small>}
-                <button className="secondary" onClick={applyAuraMarketDraft} type="button">
-                  Apply suggestion
-                </button>
               </div>
             )}
             <div className="modal-form-grid">
