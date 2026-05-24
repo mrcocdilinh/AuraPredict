@@ -14,7 +14,9 @@ import {
 } from "viem";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  ARC_CHAIN_ID_NUMBER,
   ARC_CHAIN_ID_DECIMAL,
+  ARC_RPC_URL,
   ARC_EXPLORER_URL,
   ARC_NATIVE_USDC_DECIMALS,
   ARC_RPC_URLS,
@@ -270,6 +272,7 @@ const CHART_TOP = 8;
 const CHART_BOTTOM = 54;
 const CHART_HEIGHT = CHART_BOTTOM - CHART_TOP;
 const WALLET_CONNECTED_KEY = "aurapredict.walletConnected";
+const WALLETCONNECT_PROJECT_ID = String(import.meta.env.VITE_WALLETCONNECT_PROJECT_ID || "").trim();
 const DISMISSED_RESULT_KEY = "aurapredict.dismissedResultNotices";
 const THEME_KEY = "aurapredict.theme";
 const PROFILE_NAMES_KEY = "aurapredict.profileNames";
@@ -296,8 +299,13 @@ const CURRENT_APP_URL =
 const WALLET_DEEP_LINKS = [
   {
     name: "MetaMask",
-    detail: "Open AuraPredict in MetaMask mobile",
+    detail: "Open AuraPredict inside MetaMask mobile browser",
     url: `https://metamask.app.link/dapp/${CURRENT_APP_URL}`
+  },
+  {
+    name: "Rabby",
+    detail: "Open AuraPredict inside Rabby mobile browser",
+    url: `https://rabby.io/dapp?url=${encodeURIComponent(`https://${CURRENT_APP_URL}`)}`
   },
   {
     name: "Rainbow",
@@ -406,6 +414,44 @@ function getWalletClient(provider?: EthereumProvider | null) {
     chain: arcTestnet,
     transport: custom(getInjectedProvider(provider) as never)
   });
+}
+
+let walletConnectProviderPromise: Promise<EthereumProvider> | null = null;
+
+async function getWalletConnectProvider() {
+  if (!WALLETCONNECT_PROJECT_ID) {
+    throw new Error("WalletConnect is not configured. Set VITE_WALLETCONNECT_PROJECT_ID in Vercel to connect from mobile Chrome.");
+  }
+
+  const { EthereumProvider: WalletConnectEthereumProvider } = await import("@walletconnect/ethereum-provider");
+
+  walletConnectProviderPromise ??= WalletConnectEthereumProvider.init({
+    projectId: WALLETCONNECT_PROJECT_ID,
+    optionalChains: [ARC_CHAIN_ID_NUMBER],
+    showQrModal: true,
+    rpcMap: {
+      [String(ARC_CHAIN_ID_NUMBER)]: ARC_RPC_URL
+    },
+    metadata: {
+      name: "AuraPredict",
+      description: "Prediction markets on Arc Testnet",
+      url: typeof window !== "undefined" ? window.location.origin : "https://app.aurapredict.xyz",
+      icons: [typeof window !== "undefined" ? `${window.location.origin}/aurapredict-logo.png` : "https://app.aurapredict.xyz/aurapredict-logo.png"]
+    },
+    methods: [
+      "eth_requestAccounts",
+      "eth_accounts",
+      "eth_sendTransaction",
+      "personal_sign",
+      "eth_signTypedData",
+      "eth_signTypedData_v4",
+      "wallet_switchEthereumChain",
+      "wallet_addEthereumChain"
+    ],
+    events: ["accountsChanged", "chainChanged", "disconnect", "connect"]
+  }) as Promise<EthereumProvider>;
+
+  return walletConnectProviderPromise;
 }
 
 function sleep(ms: number) {
@@ -2419,8 +2465,9 @@ export default function App() {
             }
           ]
         : [];
-  const showMobileWalletLinks = walletOptions.length === 0;
+  const showMobileWalletLinks = true;
   const recommendedWallets = ["Zerion", "MetaMask", "Rabby Wallet", "OKX Wallet", "Rainbow"];
+  const walletConnectReady = Boolean(WALLETCONNECT_PROJECT_ID);
   const leaderboardTimestamp = lastDataRefresh ? Math.floor(lastDataRefresh.getTime() / 1000) : nowSeconds;
   const lastRefreshText = lastDataRefresh
     ? `${lastDataRefresh.toLocaleTimeString("en-US", { timeZone: "UTC", hour12: false })} UTC`
@@ -2889,9 +2936,9 @@ export default function App() {
     setNotice("");
     setConnecting(true);
     const providerToUse = provider ?? selectedWalletProvider ?? window.ethereum ?? null;
-    await switchToArc(providerToUse);
     const walletClient = getWalletClient(providerToUse);
     const addresses = await walletClient.requestAddresses();
+    await switchToArc(providerToUse);
     const chainId = await walletClient.getChainId();
     if (BigInt(chainId) !== ARC_CHAIN_ID_DECIMAL) {
       throw new Error("Wallet is not on Arc Testnet.");
@@ -2915,6 +2962,19 @@ export default function App() {
     } catch (error) {
       setConnecting(false);
       setNotice(`Connect failed: ${errorMessage(error)}`);
+    }
+  }, [connectWallet]);
+
+  const handleWalletConnect = useCallback(async () => {
+    try {
+      setNotice("");
+      setConnecting(true);
+      const provider = await getWalletConnectProvider();
+      await connectWallet(provider);
+      setWalletModalOpen(false);
+    } catch (error) {
+      setConnecting(false);
+      setNotice(`WalletConnect failed: ${errorMessage(error)}`);
     }
   }, [connectWallet]);
 
@@ -7129,18 +7189,24 @@ export default function App() {
                   <small>Use a wallet app below to open AuraPredict with an injected provider.</small>
                 </button>
               )}
-              {showMobileWalletLinks && (
-                <>
-                  <span className="wallet-group-label">Open on mobile</span>
-                  {WALLET_DEEP_LINKS.map((wallet) => (
-                    <button className="wallet-option mobile-wallet-option" key={wallet.name} type="button" onClick={() => openMobileWallet(wallet.url)}>
-                      <span className="wallet-badge">{wallet.name.slice(0, 1)}</span>
-                      <strong>{wallet.name}</strong>
-                      <small>{wallet.detail}</small>
-                    </button>
-                  ))}
-                </>
-              )}
+              <span className="wallet-group-label">Connect from Chrome or desktop</span>
+              <button className="wallet-option" type="button" onClick={handleWalletConnect} disabled={connecting || !walletConnectReady}>
+                <span className="wallet-badge">W</span>
+                <strong>WalletConnect</strong>
+                <small>
+                  {walletConnectReady
+                    ? "Open MetaMask, Rabby, Zerion, OKX, or another WalletConnect wallet."
+                    : "Set VITE_WALLETCONNECT_PROJECT_ID in Vercel to enable this."}
+                </small>
+              </button>
+              <span className="wallet-group-label">Open in wallet browser</span>
+              {WALLET_DEEP_LINKS.map((wallet) => (
+                <button className="wallet-option mobile-wallet-option" key={wallet.name} type="button" onClick={() => openMobileWallet(wallet.url)}>
+                  <span className="wallet-badge">{wallet.name.slice(0, 1)}</span>
+                  <strong>{wallet.name}</strong>
+                  <small>{wallet.detail}</small>
+                </button>
+              ))}
               <span className="wallet-group-label">Recommended</span>
               {recommendedWallets.map((walletName) => {
                 const detected = walletOptions.find((wallet) =>

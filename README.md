@@ -52,10 +52,26 @@ Sau do dien dia chi contract vao:
 ```bash
 VITE_PREDICTION_MARKET_ADDRESS=0x...
 VITE_AURA_INDEXER_URL=http://127.0.0.1:8787
+VITE_WALLETCONNECT_PROJECT_ID=...
 ```
 
 Doc file `DEPLOY_AURAPREDICT.md` neu ban muon dua code len GitHub va deploy len Vercel theo tung buoc.
 Doc them `indexer/README.md` neu ban muon chay backend/indexer rieng cho leaderboard, stats va history nhanh hon.
+
+## Mobile wallet connect
+
+App ho tro 2 cach ket noi tren mobile:
+
+- Injected provider khi mo AuraPredict trong browser cua MetaMask, Rabby, Zerion, OKX.
+- WalletConnect khi mo bang Chrome/Safari mobile va muon nhay sang wallet app de approve.
+
+De bat WalletConnect tren production, tao project id tai WalletConnect Cloud va them env vao Vercel app project:
+
+```bash
+VITE_WALLETCONNECT_PROJECT_ID=your_project_id
+```
+
+Sau khi them env, redeploy frontend. Neu khong co bien nay, nut WalletConnect se hien huong dan cau hinh va cac nut deep link van mo dapp trong browser cua tung vi.
 
 ## Docs subdomain
 

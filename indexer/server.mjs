@@ -743,15 +743,31 @@ function sharedMetricOnly(left, right) {
   return sharesMetric || sharesNumber;
 }
 
+function subjectSpecificity(value) {
+  const normalized = normalizeMarketText(value);
+  if (isBroadScopeMarket(value)) return 0;
+  let score = 0;
+  if (extractMarketEntities(value).size > 0) score += 2;
+  if (/\b(official|specific|named|this)\b/.test(normalized)) score += 1;
+  if (/\b(any|all|one of|at least one|ecosystem|sector|category)\b/.test(normalized)) score -= 2;
+  return score;
+}
+
+function marketOverlapSignals(left, right) {
+  const sameEntity = hasSameConcreteEntity(left, right);
+  const broadScopeMismatch = isBroadScopeMarket(left) !== isBroadScopeMarket(right);
+  const metricOnly = sharedMetricOnly(left, right) && !sameEntity;
+  const specificityGap = Math.abs(subjectSpecificity(left) - subjectSpecificity(right));
+  return { sameEntity, broadScopeMismatch, metricOnly, specificityGap };
+}
+
 function findSimilarMarkets(idea, category) {
   const normalizedCategory = String(category || "").toLowerCase();
   const now = Math.floor(Date.now() / 1000);
   return Object.values(state.markets)
     .map((market) => {
       const baseScore = textSimilarity(idea, market.question);
-      const sameEntity = hasSameConcreteEntity(idea, market.question);
-      const broadScopeMismatch = isBroadScopeMarket(idea) !== isBroadScopeMarket(market.question);
-      const metricOnly = sharedMetricOnly(idea, market.question) && !sameEntity;
+      const { sameEntity, broadScopeMismatch, metricOnly, specificityGap } = marketOverlapSignals(idea, market.question);
       const categoryBonus =
         normalizedCategory && normalizedCategory !== "other" && String(market.category || "").toLowerCase() === normalizedCategory
           ? sameEntity
@@ -762,7 +778,11 @@ function findSimilarMarkets(idea, category) {
       const entityBonus = sameEntity ? 0.22 : 0;
       const mismatchPenalty = broadScopeMismatch ? 0.2 : 0;
       const metricOnlyPenalty = metricOnly ? 0.16 : 0;
-      const similarity = Math.max(0, Math.min(1, baseScore + categoryBonus + liveBonus + entityBonus - mismatchPenalty - metricOnlyPenalty));
+      const specificityPenalty = specificityGap >= 2 && !sameEntity ? 0.12 : 0;
+      const similarity = Math.max(
+        0,
+        Math.min(1, baseScore + categoryBonus + liveBonus + entityBonus - mismatchPenalty - metricOnlyPenalty - specificityPenalty)
+      );
       return {
         id: market.id,
         question: market.question,

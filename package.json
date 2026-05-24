@@ -13,6 +13,7 @@
     "deploy:arc": "hardhat run scripts/deploy.js --network arcTestnet"
   },
   "dependencies": {
+    "@walletconnect/ethereum-provider": "^2.23.9",
     "dotenv": "^16.4.7",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
