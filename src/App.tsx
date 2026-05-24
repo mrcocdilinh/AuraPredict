@@ -292,7 +292,7 @@ const SECTION_LIMIT = 6;
 const COLLECTION_PAGE_SIZE = 12;
 const PROFILE_PAGE_SIZE = 10;
 const LEADERBOARD_LIMIT = 100;
-const MARKET_INITIAL_LOAD = 24;
+const MARKET_INITIAL_LOAD = 9999;
 const MARKET_LOAD_STEP = 24;
 const MARKET_LOAD_CONCURRENCY = 4;
 const EVENT_LOAD_CONCURRENCY = 2;
@@ -373,6 +373,7 @@ const CATEGORY_META: Record<string, { label: string; className: string }> = {
   AI: { label: "AI", className: "category-ai" },
   Other: { label: "Other", className: "category-other" }
 };
+const CATEGORY_SET = new Set(CATEGORIES.filter((category) => category !== "All"));
 const MARKET_IMAGE_CATEGORIES = ["crypto", "sports", "politics", "macro", "ai", "arc", "other"] as const;
 const MARKET_IMAGE_COUNT = 6;
 const LEADERBOARD_PERIODS: Array<{ value: LeaderboardPeriod; label: string; seconds: number | null }> = [
@@ -548,9 +549,10 @@ function writeCachedMarkets(markets: MarketView[]) {
 }
 
 function indexedMarketToView(market: IndexedMarket): MarketView {
+  const normalizedCategory = normalizeCategory(market.category);
   return {
     ...market,
-    category: market.category || "Other",
+    category: normalizedCategory,
     createdAt: Number(market.createdAt || 0),
     closeTime: Number(market.closeTime || 0),
     yesPool: BigInt(market.yesPool || "0"),
@@ -566,6 +568,12 @@ function indexedMarketToView(market: IndexedMarket): MarketView {
     claimed: false,
     potentialPayout: BigInt(market.potentialPayout || "0")
   };
+}
+
+function normalizeCategory(category?: string) {
+  const value = String(category || "").trim();
+  if (!value) return "Other";
+  return CATEGORY_SET.has(value) ? value : "Other";
 }
 
 function indexedStatsToProjectStats(stats: IndexedProjectStats): ProjectStats {
@@ -2084,7 +2092,7 @@ export default function App() {
   );
   const endedMarkets = markets.filter((market) => market.outcome !== Outcome.Unresolved);
   const liveMarkets = activeMarkets.length;
-  const loadedScopeCount = knownMarketCount > 0 ? Math.min(marketLoadLimit, knownMarketCount) : markets.length;
+  const loadedScopeCount = markets.length;
   const hasMoreMarkets = knownMarketCount > loadedScopeCount;
   const totalLiquidity = markets.reduce((sum, market) => sum + marketVolume(market), 0n);
   const liveLiquidity = activeMarkets.reduce((sum, market) => sum + marketVolume(market), 0n);
@@ -3551,7 +3559,7 @@ export default function App() {
       ]);
 
       const totalMarketCount = Number(count);
-      const requestedMarketCount = Math.min(marketLoadLimit, totalMarketCount);
+      const requestedMarketCount = totalMarketCount;
       const latestMarketStart = Math.max(0, totalMarketCount - requestedMarketCount);
       const marketIdSet = new Set<number>();
 
@@ -3816,7 +3824,7 @@ export default function App() {
           market: {
             id,
             question,
-            category,
+            category: normalizeCategory(category),
             createdAt: 0,
             closeTime: Number(closeTime),
             creator,
@@ -4129,7 +4137,7 @@ export default function App() {
     } finally {
       if (!isSilentLoad) setLoading(false);
     }
-  }, [account, contractAddress, hasContract, marketLoadLimit, selectedMarketId]);
+  }, [account, contractAddress, hasContract, selectedMarketId]);
 
   const isMarketActionPending = (action: string, marketId: number) => Boolean(pendingMarketActions[`${action}:${marketId}`]);
   const setMarketActionPending = (action: string, marketId: number, pending: boolean) => {

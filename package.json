@@ -10,7 +10,9 @@
     "build": "tsc --noEmit && vite build",
     "compile": "hardhat compile",
     "test": "hardhat test",
-    "deploy:arc": "hardhat run scripts/deploy.js --network arcTestnet"
+    "deploy:arc": "hardhat run scripts/deploy.js --network arcTestnet",
+    "seed:markets": "hardhat run scripts/seed_markets.js --network arcTestnet",
+    "seed:markets:dry": "set DRY_RUN=1&& hardhat run scripts/seed_markets.js --network arcTestnet"
   },
   "dependencies": {
     "@walletconnect/ethereum-provider": "^2.23.9",
