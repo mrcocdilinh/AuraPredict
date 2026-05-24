@@ -5861,13 +5861,6 @@ export default function App() {
                   and user safety notes visible before mainnet decisions.
                 </p>
               )}
-              {knownMarketCount > 0 && view !== "market" && view !== "security" && view !== "leaderboard" && (
-                <p className="data-scope-note">
-                  {dataSource === "indexer"
-                    ? `Showing ${markets.length} indexed markets out of ${knownMarketCount} total. Market history is loaded from the public AuraPredict indexer.`
-                    : `Showing ${markets.length} loaded markets out of ${knownMarketCount} total. Load more only when you need older markets to avoid Arc RPC rate limits.`}
-                </p>
-              )}
             </div>
             <div className="board-actions">
               {view === "security" ? (
@@ -6936,7 +6929,7 @@ export default function App() {
                 <strong>Draft clear market terms before launch.</strong>
                 <small>AI can suggest a measurable question, UTC close time, sources, and risk flags. Review before signing.</small>
               </div>
-              <button className="secondary" disabled={aiBusy || createForm.question.trim().length < 4} onClick={askAuraForMarketDraft} type="button">
+              <button className="aura-ask-button" disabled={aiBusy || createForm.question.trim().length < 4} onClick={askAuraForMarketDraft} type="button">
                 {aiBusy ? "Aura thinking..." : "Ask Aura Agent"}
               </button>
             </div>
