@@ -2,13 +2,15 @@ import {
   createPublicClient,
   createWalletClient,
   custom,
+  decodeEventLog,
   fallback,
   formatUnits,
   http,
   isAddress,
   parseUnits,
   type Address,
-  type Hash
+  type Hash,
+  type TransactionReceipt
 } from "viem";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -1703,6 +1705,7 @@ export default function App() {
   const [notice, setNoticeText] = useState("");
   const [noticeTxHash, setNoticeTxHash] = useState<Hash | "">("");
   const [transactionPending, setTransactionPending] = useState(false);
+  const [pendingMarketActions, setPendingMarketActions] = useState<Record<string, boolean>>({});
   const [stakeInputs, setStakeInputs] = useState<Record<number, string>>({});
   const [selectedTradeSides, setSelectedTradeSides] = useState<Record<number, Outcome.Yes | Outcome.No>>({});
   const [activeCategory, setActiveCategory] = useState("All");
@@ -3406,15 +3409,31 @@ export default function App() {
       setMarkets((current) =>
         sortedRows.map((market) => {
           const currentMarket = current.find((item) => item.id === market.id);
-          return currentMarket
-            ? {
-                ...market,
-                yesPosition: currentMarket.yesPosition,
-                noPosition: currentMarket.noPosition,
-                claimed: currentMarket.claimed,
-                potentialPayout: currentMarket.potentialPayout
-              }
-            : market;
+          if (!currentMarket) return market;
+          const shouldPreserveLocalProposal =
+            currentMarket.outcome === Outcome.Unresolved &&
+            market.outcome === Outcome.Unresolved &&
+            currentMarket.proposedAt > market.proposedAt;
+          const shouldPreserveLocalResolution =
+            currentMarket.outcome !== Outcome.Unresolved && market.outcome === Outcome.Unresolved;
+
+          return {
+            ...market,
+            ...(shouldPreserveLocalProposal || shouldPreserveLocalResolution
+              ? {
+                  proposedOutcome: currentMarket.proposedOutcome,
+                  proposedAt: currentMarket.proposedAt,
+                  disputeDeadline: currentMarket.disputeDeadline,
+                  disputed: currentMarket.disputed,
+                  disputer: currentMarket.disputer,
+                  outcome: currentMarket.outcome
+                }
+              : {}),
+            yesPosition: currentMarket.yesPosition,
+            noPosition: currentMarket.noPosition,
+            claimed: currentMarket.claimed,
+            potentialPayout: currentMarket.potentialPayout
+          };
         })
       );
       setLastDataRefresh(new Date());
@@ -3661,7 +3680,53 @@ export default function App() {
     }
   }, [account, contractAddress, hasContract, marketLoadLimit, selectedMarketId]);
 
-  const runTransaction = async (action: () => Promise<Hash>, message: string, refreshAfterConfirm = true) => {
+  const isMarketActionPending = (action: string, marketId: number) => Boolean(pendingMarketActions[`${action}:${marketId}`]);
+  const setMarketActionPending = (action: string, marketId: number, pending: boolean) => {
+    setPendingMarketActions((current) => {
+      const key = `${action}:${marketId}`;
+      if (pending) return { ...current, [key]: true };
+      const next = { ...current };
+      delete next[key];
+      return next;
+    });
+  };
+  const markMarketResultProposed = (marketId: number, outcome: Outcome, disputeDeadline?: number) => {
+    const proposedAt = Math.floor(Date.now() / 1000);
+    setMarkets((current) =>
+      current.map((market) =>
+        market.id === marketId
+          ? {
+              ...market,
+              proposedOutcome: outcome,
+              proposedAt: market.proposedAt > 0 ? market.proposedAt : proposedAt,
+              disputeDeadline: disputeDeadline && disputeDeadline > 0 ? disputeDeadline : proposedAt + disputeWindow,
+              disputed: false
+            }
+          : market
+      )
+    );
+  };
+  const markMarketFinalized = (marketId: number, outcome: Outcome) => {
+    setMarkets((current) =>
+      current.map((market) =>
+        market.id === marketId
+          ? {
+              ...market,
+              outcome,
+              proposedOutcome: outcome,
+              proposedAt: market.proposedAt || Math.floor(Date.now() / 1000)
+            }
+          : market
+      )
+    );
+  };
+
+  const runTransaction = async (
+    action: () => Promise<Hash>,
+    message: string,
+    refreshAfterConfirm = true,
+    onConfirmed?: (receipt: TransactionReceipt) => void
+  ) => {
     if (transactionLockRef.current) {
       setNotice("A wallet confirmation is already open. Confirm or reject it before sending another transaction.");
       return false;
@@ -3681,6 +3746,7 @@ export default function App() {
         return false;
       }
       setNotice(`Transaction confirmed on Arc: ${shortHash(hash)}`, hash);
+      onConfirmed?.(receipt);
       void refreshWalletBalance();
       if (refreshAfterConfirm) void loadMarkets();
       return true;
@@ -3900,20 +3966,51 @@ export default function App() {
 
   const resolveMarket = async (marketId: number, outcome: Outcome) => {
     if (!account || !isAddress(account)) throw new Error("Connect wallet first.");
+    if (isMarketActionPending("resolve", marketId)) return;
     await switchToArc();
     const walletClient = getActiveWalletClient();
-    await runTransaction(
-      () =>
-        walletClient.writeContract({
-          account: account as Address,
-          chain: arcTestnet,
-          address: contractAddress,
-          abi: arcPredictionMarketAbi,
-          functionName: "resolve",
-          args: [BigInt(marketId), outcome]
-        }),
-      "Resolving market..."
-    );
+    setMarketActionPending("resolve", marketId, true);
+    try {
+      const success = await runTransaction(
+        () =>
+          walletClient.writeContract({
+            account: account as Address,
+            chain: arcTestnet,
+            address: contractAddress,
+            abi: arcPredictionMarketAbi,
+            functionName: "resolve",
+            args: [BigInt(marketId), outcome]
+          }),
+        "Proposing market result...",
+        true,
+        (receipt) => {
+          const proposedEvent = receipt.logs
+            .map((log) => {
+              try {
+                return decodeEventLog({
+                  abi: arcPredictionMarketAbi,
+                  data: log.data,
+                  topics: log.topics
+                });
+              } catch {
+                return null;
+              }
+            })
+            .find((event) => event?.eventName === "MarketResultProposed");
+          const args = proposedEvent?.args as
+            | { marketId?: bigint; outcome?: number; disputeDeadline?: bigint }
+            | undefined;
+          markMarketResultProposed(
+            Number(args?.marketId ?? BigInt(marketId)),
+            Number(args?.outcome ?? outcome) as Outcome,
+            Number(args?.disputeDeadline ?? 0n)
+          );
+        }
+      );
+      if (success) setNotificationMenuOpen(false);
+    } finally {
+      setMarketActionPending("resolve", marketId, false);
+    }
   };
 
   const disputeMarket = async (marketId: number) => {
@@ -3938,20 +4035,45 @@ export default function App() {
 
   const finalizeMarket = async (marketId: number) => {
     if (!account || !isAddress(account)) throw new Error("Connect wallet first.");
+    if (isMarketActionPending("finalize", marketId)) return;
     await switchToArc();
     const walletClient = getActiveWalletClient();
-    await runTransaction(
-      () =>
-        walletClient.writeContract({
-          account: account as Address,
-          chain: arcTestnet,
-          address: contractAddress,
-          abi: arcPredictionMarketAbi,
-          functionName: "finalize",
-          args: [BigInt(marketId)]
-        }),
-      "Finalizing market result..."
-    );
+    setMarketActionPending("finalize", marketId, true);
+    try {
+      const fallbackOutcome = markets.find((market) => market.id === marketId)?.proposedOutcome ?? Outcome.Unresolved;
+      await runTransaction(
+        () =>
+          walletClient.writeContract({
+            account: account as Address,
+            chain: arcTestnet,
+            address: contractAddress,
+            abi: arcPredictionMarketAbi,
+            functionName: "finalize",
+            args: [BigInt(marketId)]
+          }),
+        "Finalizing market result...",
+        true,
+        (receipt) => {
+          const resolvedEvent = receipt.logs
+            .map((log) => {
+              try {
+                return decodeEventLog({
+                  abi: arcPredictionMarketAbi,
+                  data: log.data,
+                  topics: log.topics
+                });
+              } catch {
+                return null;
+              }
+            })
+            .find((event) => event?.eventName === "MarketResolved");
+          const args = resolvedEvent?.args as { marketId?: bigint; outcome?: number } | undefined;
+          markMarketFinalized(Number(args?.marketId ?? BigInt(marketId)), Number(args?.outcome ?? fallbackOutcome) as Outcome);
+        }
+      );
+    } finally {
+      setMarketActionPending("finalize", marketId, false);
+    }
   };
 
   const finalizeDispute = async (marketId: number, outcome: Outcome) => {
@@ -3974,20 +4096,51 @@ export default function App() {
 
   const cancelMarket = async (marketId: number) => {
     if (!account || !isAddress(account)) throw new Error("Connect wallet first.");
+    if (isMarketActionPending("resolve", marketId)) return;
     await switchToArc();
     const walletClient = getActiveWalletClient();
-    await runTransaction(
-      () =>
-        walletClient.writeContract({
-          account: account as Address,
-          chain: arcTestnet,
-          address: contractAddress,
-          abi: arcPredictionMarketAbi,
-          functionName: "cancel",
-          args: [BigInt(marketId)]
-        }),
-      "Canceling market..."
-    );
+    setMarketActionPending("resolve", marketId, true);
+    try {
+      const success = await runTransaction(
+        () =>
+          walletClient.writeContract({
+            account: account as Address,
+            chain: arcTestnet,
+            address: contractAddress,
+            abi: arcPredictionMarketAbi,
+            functionName: "cancel",
+            args: [BigInt(marketId)]
+          }),
+        "Proposing market cancel...",
+        true,
+        (receipt) => {
+          const proposedEvent = receipt.logs
+            .map((log) => {
+              try {
+                return decodeEventLog({
+                  abi: arcPredictionMarketAbi,
+                  data: log.data,
+                  topics: log.topics
+                });
+              } catch {
+                return null;
+              }
+            })
+            .find((event) => event?.eventName === "MarketResultProposed");
+          const args = proposedEvent?.args as
+            | { marketId?: bigint; outcome?: number; disputeDeadline?: bigint }
+            | undefined;
+          markMarketResultProposed(
+            Number(args?.marketId ?? BigInt(marketId)),
+            Number(args?.outcome ?? Outcome.Canceled) as Outcome,
+            Number(args?.disputeDeadline ?? 0n)
+          );
+        }
+      );
+      if (success) setNotificationMenuOpen(false);
+    } finally {
+      setMarketActionPending("resolve", marketId, false);
+    }
   };
 
   const claim = async (marketId: number) => {
@@ -5198,10 +5351,14 @@ export default function App() {
                         <strong>{shortQuestion(market.question)}</strong>
                         <small>Closed {closeDate(market.closeTime)}. Creator bond stays locked during dispute window.</small>
                         <div className="notification-actions">
-                          <button onClick={() => resolveMarket(market.id, Outcome.Yes)}>Propose YES</button>
-                          <button onClick={() => resolveMarket(market.id, Outcome.No)}>Propose NO</button>
-                          <button className="secondary" onClick={() => cancelMarket(market.id)}>
-                            Propose Cancel
+                          <button disabled={transactionPending || isMarketActionPending("resolve", market.id)} onClick={() => resolveMarket(market.id, Outcome.Yes)}>
+                            Propose YES
+                          </button>
+                          <button disabled={transactionPending || isMarketActionPending("resolve", market.id)} onClick={() => resolveMarket(market.id, Outcome.No)}>
+                            Propose NO
+                          </button>
+                          <button className="secondary" disabled={transactionPending || isMarketActionPending("resolve", market.id)} onClick={() => cancelMarket(market.id)}>
+                            {isMarketActionPending("resolve", market.id) ? "Proposing..." : "Propose Cancel"}
                           </button>
                         </div>
                       </article>
@@ -5211,7 +5368,9 @@ export default function App() {
                         <span>Ready to finalize</span>
                         <strong>{shortQuestion(market.question)}</strong>
                         <small>Proposed {outcomeLabel(market.proposedOutcome)}. No dispute was opened.</small>
-                        <button onClick={() => finalizeMarket(market.id)}>Finalize result</button>
+                        <button disabled={transactionPending || isMarketActionPending("finalize", market.id)} onClick={() => finalizeMarket(market.id)}>
+                          {isMarketActionPending("finalize", market.id) ? "Finalizing..." : "Finalize result"}
+                        </button>
                       </article>
                     ))}
                     {disputeReviewNotifications.map((market) => (
@@ -5537,9 +5696,11 @@ export default function App() {
                   <strong>{shortQuestion(market.question)}</strong>
                   <small>Closed {closeDate(market.closeTime)}. Creator bond stays locked during dispute window.</small>
                   <div className="notification-actions">
-                    <button onClick={() => resolveMarket(market.id, Outcome.Yes)}>Propose YES</button>
-                    <button onClick={() => resolveMarket(market.id, Outcome.No)}>Propose NO</button>
-                    <button className="secondary" onClick={() => cancelMarket(market.id)}>Propose Cancel</button>
+                    <button disabled={transactionPending || isMarketActionPending("resolve", market.id)} onClick={() => resolveMarket(market.id, Outcome.Yes)}>Propose YES</button>
+                    <button disabled={transactionPending || isMarketActionPending("resolve", market.id)} onClick={() => resolveMarket(market.id, Outcome.No)}>Propose NO</button>
+                    <button className="secondary" disabled={transactionPending || isMarketActionPending("resolve", market.id)} onClick={() => cancelMarket(market.id)}>
+                      {isMarketActionPending("resolve", market.id) ? "Proposing..." : "Propose Cancel"}
+                    </button>
                     <button className="secondary" onClick={() => openMarket(market.id)} type="button">View market</button>
                   </div>
                 </article>
@@ -5550,7 +5711,9 @@ export default function App() {
                   <strong>{shortQuestion(market.question)}</strong>
                   <small>Proposed {outcomeLabel(market.proposedOutcome)}. No dispute was opened.</small>
                   <div className="notification-actions">
-                    <button onClick={() => finalizeMarket(market.id)}>Finalize result</button>
+                    <button disabled={transactionPending || isMarketActionPending("finalize", market.id)} onClick={() => finalizeMarket(market.id)}>
+                      {isMarketActionPending("finalize", market.id) ? "Finalizing..." : "Finalize result"}
+                    </button>
                     <button className="secondary" onClick={() => openMarket(market.id)} type="button">View market</button>
                   </div>
                 </article>
