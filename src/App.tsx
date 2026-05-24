@@ -1396,10 +1396,8 @@ function LandingPage() {
         <div>
           <a href="#features">Features</a>
           <a href="#how-it-works">How it works</a>
+          <a href="#demo">Demo</a>
           <a href="#docs">Docs</a>
-          <a href={DEMO_VIDEO_URL} target="_blank" rel="noreferrer">
-            Demo
-          </a>
           <a href={X_URL} target="_blank" rel="noreferrer">
             X
           </a>
@@ -1469,31 +1467,26 @@ function LandingPage() {
             <span>{pendingMarketsText} pending resolution</span>
           </div>
         </div>
-        <aside className="landing-visual landing-video-card">
-          <div className="landing-video-frame">
-            {demoOpen ? (
-              <iframe
-                src={`${DEMO_EMBED_URL}?autoplay=1&rel=0&modestbranding=1`}
-                title="AuraPredict demo video"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                allowFullScreen
-              />
-            ) : (
-              <button className="landing-demo-cover" onClick={() => setDemoOpen(true)} type="button">
-                <img src="/aurapredict-logo.png" alt="" />
-                <span>Watch AuraPredict demo</span>
-                <strong>Preview the dapp flow without leaving the landing page.</strong>
-                <b>Play video</b>
-              </button>
-            )}
+        <aside className="landing-network-panel" aria-label="Live AuraPredict network metrics">
+          <div>
+            <span>Live markets</span>
+            <strong>{liveMarketsText}</strong>
           </div>
-          <div className="landing-market-preview">
-            <span>Live market surface</span>
-            <strong>{heroMarketText} markets / {liveMarketsText} live / {knownPlayersText} known players</strong>
-            <div>
-              <b>YES 68%</b>
-              <b>NO 32%</b>
-            </div>
+          <div>
+            <span>Known players</span>
+            <strong>{knownPlayersText}</strong>
+          </div>
+          <div>
+            <span>Awaiting result</span>
+            <strong>{pendingMarketsText}</strong>
+          </div>
+          <div>
+            <span>Sync age</span>
+            <strong>{updatedText}</strong>
+          </div>
+          <div className="landing-network-wide">
+            <span>Realtime data path</span>
+            <strong>Render indexer to AuraPredict UI to wallet-signed Arc transactions</strong>
           </div>
         </aside>
       </section>
@@ -1524,6 +1517,36 @@ function LandingPage() {
               <p>{feature.text}</p>
             </article>
           ))}
+        </div>
+      </section>
+
+      <section className="landing-section landing-demo-section" id="demo">
+        <div className="landing-section-head">
+          <p className="landing-kicker">Demo</p>
+          <h2>Preview the dapp flow after the live network stats.</h2>
+          <p>
+            Watch the AuraPredict walkthrough, then launch the app to create markets, check Aura Agent duplicate
+            risk, stake YES/NO, and resolve outcomes on Arc Testnet.
+          </p>
+        </div>
+        <div className="landing-visual landing-video-card">
+          <div className="landing-video-frame">
+            {demoOpen ? (
+              <iframe
+                src={`${DEMO_EMBED_URL}?autoplay=1&rel=0&modestbranding=1`}
+                title="AuraPredict demo video"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                allowFullScreen
+              />
+            ) : (
+              <button className="landing-demo-cover" onClick={() => setDemoOpen(true)} type="button">
+                <img src="/aurapredict-logo.png" alt="" />
+                <span>Watch AuraPredict demo</span>
+                <strong>Preview the market creation, trading, profile, and resolution flow.</strong>
+                <b>Play video</b>
+              </button>
+            )}
+          </div>
         </div>
       </section>
 
@@ -1881,6 +1904,7 @@ export default function App() {
   const [evidenceDrafts, setEvidenceDrafts] = useState<Record<number, EvidenceDraft>>({});
   const [aiBusy, setAiBusy] = useState(false);
   const [aiMarketDraft, setAiMarketDraft] = useState<AiMarketDraft | null>(null);
+  const [duplicateAcknowledged, setDuplicateAcknowledged] = useState(false);
   const [aiResolutionReports, setAiResolutionReports] = useState<Record<number, AiResolutionReport>>({});
   const [onboardingDismissed, setOnboardingDismissed] = useState(() => {
     try {
@@ -3123,6 +3147,7 @@ export default function App() {
       category: aiMarketDraft.category && CATEGORIES.includes(aiMarketDraft.category) ? aiMarketDraft.category : current.category,
       closeTime: aiMarketDraft.closeTime || current.closeTime
     }));
+    setDuplicateAcknowledged(false);
     setNotice("Aura Agent draft applied. Review it before launching.");
   }, [aiMarketDraft, setNotice]);
 
@@ -6908,6 +6933,7 @@ export default function App() {
                 onChange={(event) => {
                   setCreateForm({ ...createForm, question: event.target.value });
                   setAiMarketDraft(null);
+                  setDuplicateAcknowledged(false);
                 }}
                 placeholder="Will Arc Testnet pass 1M transactions this week?"
                 minLength={8}
@@ -7010,12 +7036,37 @@ export default function App() {
                 ? " This legacy contract does not use creator bonds or dispute windows."
                 : ` Creating a market locks a ${formatUsdc(creatorBond)} USDC creator bond until the result is finalized.`}
             </div>
+            {aiMarketDraft?.duplicateRisk && aiMarketDraft.duplicateRisk !== "LOW" && (
+              <label className="duplicate-acknowledge">
+                <input
+                  checked={duplicateAcknowledged}
+                  onChange={(event) => setDuplicateAcknowledged(event.target.checked)}
+                  type="checkbox"
+                />
+                <span>
+                  I understand Aura Agent found similar markets and creating this one may split liquidity.
+                </span>
+              </label>
+            )}
             <div className="modal-actions">
               <button className="secondary" type="button" onClick={() => setCreateModalOpen(false)}>
                 Cancel
               </button>
-              <button disabled={!account || !hasContract || transactionPending || createForm.question.trim().length < 8} type="submit">
-                {transactionPending ? "Waiting Wallet..." : "Launch Market"}
+              <button
+                disabled={
+                  !account ||
+                  !hasContract ||
+                  transactionPending ||
+                  createForm.question.trim().length < 8 ||
+                  (!!aiMarketDraft?.duplicateRisk && aiMarketDraft.duplicateRisk !== "LOW" && !duplicateAcknowledged)
+                }
+                type="submit"
+              >
+                {transactionPending
+                  ? "Waiting Wallet..."
+                  : aiMarketDraft?.duplicateRisk && aiMarketDraft.duplicateRisk !== "LOW"
+                    ? "Create anyway"
+                    : "Launch Market"}
               </button>
             </div>
           </form>
