@@ -312,6 +312,7 @@ Authorization: Bearer your_admin_token</code></pre>
             fast read endpoints for stats, market rows, activity, leaderboard views, social data,
             and AI resolution receipts.
           </p>
+          <div class="note">Current production indexer endpoint: <code>https://aurapredict-indexer.onrender.com</code></div>
           <div class="flow-diagram" aria-label="AuraPredict data flow">
             <div>Wallet</div>
             <div>Frontend</div>
@@ -350,7 +351,7 @@ npm run build</code></pre>
             <article>
               <h3>Frontend environment</h3>
               <pre><code>VITE_PREDICTION_MARKET_ADDRESS=0x...
-VITE_AURA_INDEXER_URL=https://your-indexer-domain
+VITE_AURA_INDEXER_URL=https://aurapredict-indexer.onrender.com
 VITE_PREDICTION_MARKET_START_BLOCK=43295581
 VITE_WALLETCONNECT_PROJECT_ID=your_project_id</code></pre>
             </article>

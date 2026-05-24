@@ -357,7 +357,7 @@ const WALLET_DEEP_LINKS = [
 ];
 const INDEXER_URL = String(
   import.meta.env.VITE_AURA_INDEXER_URL ||
-    (import.meta.env.DEV ? "http://127.0.0.1:8787" : "https://mrcocdilinh.github.io/AuraPredict")
+    (import.meta.env.DEV ? "http://127.0.0.1:8787" : "https://aurapredict-indexer.onrender.com")
 ).replace(/\/$/, "");
 const EVENT_START_BLOCK = BigInt(import.meta.env.VITE_PREDICTION_MARKET_START_BLOCK || "43295581");
 const EVENT_LOG_CHUNK_SIZE = 9_000n;
