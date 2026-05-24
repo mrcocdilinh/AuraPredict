@@ -286,6 +286,7 @@ const PROFILE_QUERY_KEY = "profile";
 const PROFILE_NAME_QUERY_KEY = "name";
 const LANDING_HOSTS = new Set(["aurapredict.xyz", "www.aurapredict.xyz"]);
 const APP_URL = "https://app.aurapredict.xyz";
+const DOCS_URL = "https://docs.aurapredict.xyz";
 const X_URL = "https://x.com/AuraPredict";
 const DISCORD_URL = "https://discord.gg/3wTYhdsr";
 const DEMO_VIDEO_URL = "https://www.youtube.com/watch?v=tdYqpAIG82s";
@@ -1298,6 +1299,14 @@ function LandingPage() {
     {
       title: "Social forecasting",
       text: "Follow creators, share to X, embed market links, and study top traders before staking."
+    },
+    {
+      title: "Aura Agent",
+      text: "Use AI assistance to draft clearer markets, review duplicate risk, and prepare evidence before resolution."
+    },
+    {
+      title: "Live indexer",
+      text: "Read market history, activity, stats, and leaderboard data from the public indexer before falling back to Arc RPC."
     }
   ];
   const flow = ["Create a market", "Stake YES or NO", "Track odds", "Resolve result", "Claim payout"];
@@ -1388,7 +1397,7 @@ function LandingPage() {
           <a href="#features">Features</a>
           <a href="#how-it-works">How it works</a>
           <a href="#demo">Demo</a>
-          <a href="#docs">Docs</a>
+          <a href={DOCS_URL}>Docs</a>
           <a href={X_URL} target="_blank" rel="noreferrer">
             X
           </a>
@@ -1421,7 +1430,8 @@ function LandingPage() {
           </h1>
           <p>
             Trade YES/NO markets with native Arc USDC while a live Render indexer keeps market
-            history, volume, participants, and leaderboards fast enough for public forecasting.
+            history, volume, participants, leaderboards, comments, evidence, and profile reputation
+            fast enough for public forecasting.
           </p>
           <div className="landing-hero-ledger" aria-label="AuraPredict live indexer metrics">
             <div>
@@ -1445,11 +1455,11 @@ function LandingPage() {
             <a className="landing-primary" href={APP_URL}>
               Launch the App
             </a>
+            <a className="landing-secondary" href={DOCS_URL}>
+              Read Docs
+            </a>
             <a className="landing-secondary" href={DEMO_VIDEO_URL} target="_blank" rel="noreferrer">
               Watch Demo
-            </a>
-            <a className="landing-secondary" href={DISCORD_URL} target="_blank" rel="noreferrer">
-              Join Discord
             </a>
           </div>
           <div className="landing-proof">
@@ -1497,7 +1507,8 @@ function LandingPage() {
           <h2>Built for people who want their forecasts to compound into reputation.</h2>
           <p>
             The app keeps the trading surface simple while making evidence, profiles, and leaderboard
-            performance visible enough for social forecasting.
+            performance visible enough for social forecasting. AuraPredict combines onchain YES/NO
+            staking, an indexer-backed data layer, and AI-assisted market quality checks.
           </p>
         </div>
         <div className="landing-feature-grid">
@@ -1547,7 +1558,8 @@ function LandingPage() {
           <h2>From question to payout, every step is transparent.</h2>
           <p>
             A market starts as a clear YES/NO question. Users stake based on their conviction.
-            When the market closes, the result is proposed and finalized before winners claim directly from their wallet.
+            When the market closes, the creator proposes a result, users can dispute during the
+            window, and winners claim directly from their wallet after finalization.
           </p>
           <a className="landing-primary" href={APP_URL}>
             Launch the App
@@ -1569,9 +1581,17 @@ function LandingPage() {
           <h2>Transparent testnet mechanics without hiding the roadmap.</h2>
           <p>
             AuraPredict is live as an Arc Testnet MVP with a public Render indexer. The current product
-            proves market creation, staking, settlement, profiles, live stats, and public reputation while
-            wallet actions remain fully onchain.
+            proves market creation, staking, dispute-aware settlement, profiles, comments, evidence,
+            live stats, notifications, and public reputation while wallet actions remain fully onchain.
           </p>
+          <div className="landing-docs-actions">
+            <a className="landing-primary" href={DOCS_URL}>
+              Open Full Docs
+            </a>
+            <a className="landing-secondary" href="https://github.com/mrcocdilinh/AuraPredict" target="_blank" rel="noreferrer">
+              View GitHub
+            </a>
+          </div>
         </div>
 
         <div className="docs-summary-grid">
@@ -1597,6 +1617,14 @@ function LandingPage() {
             <p>
               Market creators propose the final result after close. A dispute window gives users time
               to challenge ambiguous outcomes before settlement and claims.
+            </p>
+          </article>
+          <article className="docs-card">
+            <span className="docs-label">AI layer</span>
+            <h3>Aura Agent assists, users decide</h3>
+            <p>
+              Aura Agent helps draft questions, score clarity, surface similar markets, and summarize
+              evidence. It does not replace wallet signatures or final settlement controls.
             </p>
           </article>
         </div>
@@ -1674,6 +1702,10 @@ function LandingPage() {
             <span>Future oracle path</span>
             <strong>Aura Agent can assist result research, but final settlement still needs stronger oracle protection.</strong>
           </article>
+          <article>
+            <span>Docs domain</span>
+            <strong>docs.aurapredict.xyz documents app usage, smart contract behavior, indexer setup, and deployment.</strong>
+          </article>
         </div>
 
         <div className="docs-diagram-panel docs-roadmap-panel">
@@ -1739,6 +1771,9 @@ function LandingPage() {
         <div className="landing-actions">
           <a className="landing-secondary" href={DEMO_VIDEO_URL} target="_blank" rel="noreferrer">
             View Demo
+          </a>
+          <a className="landing-secondary" href={DOCS_URL}>
+            Read Docs
           </a>
           <a className="landing-primary" href={APP_URL}>
             Enter Dapp

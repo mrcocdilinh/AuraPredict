@@ -5558,54 +5558,71 @@ label {
 
 @media (max-width: 840px) {
   .landing-page {
-    padding: 12px;
-  }
-
-  .landing-nav {
     padding: 10px;
   }
 
-  .landing-nav,
+  .landing-nav {
+    align-items: center;
+    gap: 10px;
+    padding: 10px;
+  }
+
   .landing-cta {
     align-items: stretch;
     display: grid;
   }
 
   .landing-nav > div {
-    display: grid;
+    display: flex;
+    flex: 1;
+    flex-wrap: nowrap;
     gap: 6px;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    justify-content: stretch;
+    justify-content: flex-end;
+    min-width: 0;
+    overflow-x: auto;
+    padding-bottom: 2px;
+    scrollbar-width: none;
+  }
+
+  .landing-nav > div::-webkit-scrollbar {
+    display: none;
   }
 
   .landing-nav a:not(.landing-brand) {
+    flex: 0 0 auto;
+    min-height: 36px;
+    padding: 9px 10px;
     text-align: center;
   }
 
   .landing-theme-toggle {
-    height: 38px;
-    width: 38px;
+    flex: 0 0 auto;
+    height: 36px;
+    width: 36px;
   }
 
   .landing-hero {
     min-height: auto;
-    padding: 40px 0 26px;
+    padding: 30px 0 22px;
   }
 
   .landing-hero-copy h1 {
-    font-size: clamp(2.15rem, 10vw, 4.2rem);
-    line-height: 0.98;
+    font-size: clamp(2.15rem, 8.4vw, 3.4rem);
+    line-height: 1.02;
+    max-width: 100%;
   }
 
   .landing-network-row {
     align-items: flex-start;
-    display: grid;
-    gap: 8px;
-    margin-bottom: 34px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 14px;
+    justify-content: flex-start;
+    margin-bottom: 24px;
   }
 
   .landing-hero-copy > p:not(.landing-kicker) {
-    font-size: 1.02rem;
+    font-size: 0.98rem;
     line-height: 1.58;
   }
 
@@ -5625,6 +5642,7 @@ label {
     align-items: stretch;
     display: grid;
     grid-template-columns: 1fr;
+    margin-top: 20px;
   }
 
   .landing-primary,
@@ -5670,7 +5688,7 @@ label {
   }
 
   .landing-section {
-    padding-top: 48px;
+    padding-top: 42px;
   }
 
   .landing-cta {
@@ -5782,15 +5800,20 @@ label {
     background: rgba(8, 11, 25, 0.96);
     border-radius: 0 0 8px 8px;
     border-width: 0 0 1px;
-    gap: 9px;
+    display: grid;
+    gap: 10px;
+    grid-template-columns: minmax(0, auto) minmax(132px, 1fr);
     margin: 0 -8px;
     padding: 10px 12px 12px;
     position: static;
   }
 
   .brand {
+    grid-column: 1;
+    grid-row: 1;
     gap: 8px;
     justify-content: flex-start;
+    min-width: 0;
   }
 
   .brand img {
@@ -5803,6 +5826,8 @@ label {
   }
 
   .topbar-center {
+    grid-column: 1 / -1;
+    grid-row: 2;
     display: grid;
     gap: 9px;
     width: 100%;
@@ -5860,16 +5885,17 @@ label {
   }
 
   .wallet-panel {
-    display: grid;
-    gap: 8px;
-    grid-template-columns: 42px minmax(0, 1fr);
-    justify-content: stretch;
+    display: flex;
+    gap: 6px;
+    grid-column: 2;
+    grid-row: 1;
+    justify-content: flex-end;
+    min-width: 0;
     width: 100%;
   }
 
   .wallet-panel .theme-menu {
-    grid-column: 1;
-    grid-row: 1;
+    display: none;
   }
 
   .wallet-panel > a {
@@ -5877,12 +5903,12 @@ label {
   }
 
   .wallet-panel .notification-menu {
-    grid-column: 1;
-    grid-row: 1;
+    flex: 0 0 auto;
   }
 
   .wallet-panel .wallet-menu {
-    grid-column: 1 / -1;
+    flex: 1 1 auto;
+    min-width: 0;
   }
 
   .wallet-balance-pill {
@@ -5890,23 +5916,18 @@ label {
     min-width: 0;
   }
 
-  .theme-menu {
-    display: none;
-  }
-
   .theme-trigger,
   .notification-button {
-    height: 42px;
-    width: 42px;
+    height: 38px;
+    width: 38px;
   }
 
   .wallet-panel a,
   .wallet-panel > button,
   .wallet-button {
-    font-size: 0.86rem;
-    min-height: 42px;
-    padding: 0 10px;
-    width: 100%;
+    font-size: 0.82rem;
+    min-height: 38px;
+    padding: 0 11px;
   }
 
   .wallet-panel a {
@@ -5914,8 +5935,11 @@ label {
   }
 
   .wallet-panel > button {
-    grid-column: 2;
-    grid-row: 1;
+    flex: 0 1 178px;
+    margin-left: auto;
+    max-width: 190px;
+    min-width: 132px;
+    width: auto;
   }
 
   .wallet-menu {
@@ -5925,6 +5949,7 @@ label {
   .wallet-button {
     justify-content: center;
     overflow: hidden;
+    width: 100%;
   }
 
   .wallet-button .chevron,
@@ -5957,11 +5982,12 @@ label {
 
   .hero-band {
     margin-top: 10px;
-    padding: 16px;
+    padding: 15px;
   }
 
   .hero-copy h1 {
-    font-size: clamp(1.9rem, 10vw, 2.7rem);
+    font-size: clamp(1.85rem, 8.5vw, 2.45rem);
+    line-height: 1.05;
   }
 
   .hero-copy p:not(.network-kicker) {
@@ -6220,5 +6246,43 @@ label {
   .history-tx-row button,
   .history-tx-row .tx-link-button {
     width: 100%;
+  }
+}
+
+@media (max-width: 520px) {
+  .landing-brand span {
+    font-size: 0.98rem;
+  }
+
+  .landing-brand img {
+    height: 34px;
+    width: 34px;
+  }
+
+  .landing-nav {
+    position: static;
+  }
+
+  .landing-enter-small {
+    min-width: 108px;
+  }
+
+  .landing-hero-copy h1 {
+    font-family:
+      Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-size: clamp(2rem, 9vw, 2.85rem);
+    font-weight: 950;
+  }
+
+  .landing-hero-ledger div,
+  .landing-strip div,
+  .landing-network-panel div {
+    padding: 13px;
+  }
+
+  .landing-section h2,
+  .landing-cta h2 {
+    font-size: clamp(1.75rem, 7.5vw, 2.45rem);
+    line-height: 1.08;
   }
 }

@@ -1,15 +1,21 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="dark">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta
       name="description"
-      content="AuraPredict documentation for users, market creators, and operators on Arc Testnet."
+      content="Complete AuraPredict documentation for users, creators, operators, and contributors."
     />
     <title>AuraPredict Docs</title>
     <link rel="icon" href="./assets/favicon.ico" />
     <link rel="stylesheet" href="./styles.css" />
+    <script>
+      const savedTheme = localStorage.getItem("aurapredict-docs-theme");
+      if (savedTheme === "light" || savedTheme === "dark") {
+        document.documentElement.dataset.theme = savedTheme;
+      }
+    </script>
   </head>
   <body>
     <header class="docs-header">
@@ -18,32 +24,43 @@
         <span>AuraPredict Docs</span>
       </a>
       <nav aria-label="Documentation">
-        <a href="#start">Start</a>
-        <a href="#markets">Markets</a>
+        <a href="#overview">Overview</a>
+        <a href="#users">Users</a>
         <a href="#creators">Creators</a>
-        <a href="#operators">Operators</a>
-        <a href="#reference">Reference</a>
+        <a href="#contract">Contract</a>
+        <a href="#indexer">Indexer</a>
+        <a href="#deploy">Deploy</a>
+        <a href="#security">Security</a>
       </nav>
-      <a class="app-link" href="https://aurapredict.xyz">Open app</a>
+      <div class="header-actions">
+        <button id="themeToggle" type="button" aria-label="Toggle theme">Light</button>
+        <a class="app-link" href="https://app.aurapredict.xyz">Open app</a>
+      </div>
     </header>
 
     <main id="top">
       <section class="hero">
         <div>
-          <p class="eyebrow">Prediction markets on Arc Testnet</p>
-          <h1>Build, trade, and operate AuraPredict with confidence.</h1>
+          <p class="eyebrow">Arc Testnet prediction market documentation</p>
+          <h1>Everything needed to use, deploy, and understand AuraPredict.</h1>
           <p>
-            This documentation covers the live app, wallet setup, market creation,
-            resolution flow, indexer deployment, and production domain setup.
+            AuraPredict is a YES/NO prediction market dapp on Arc Testnet. It combines native
+            Arc USDC staking, creator-led resolution, dispute protection, a public indexer,
+            wallet profiles, social forecasting, Aura Points, and Aura Agent assistance.
           </p>
           <div class="hero-actions">
-            <a class="primary-action" href="#start">Get started</a>
+            <a class="primary-action" href="#users">Start using</a>
+            <a class="secondary-action" href="#deploy">Deploy stack</a>
             <a class="secondary-action" href="https://github.com/mrcocdilinh/AuraPredict">GitHub</a>
           </div>
         </div>
         <aside class="network-panel" aria-label="Arc Testnet settings">
-          <span>Arc Testnet</span>
+          <span>Current network</span>
           <dl>
+            <div>
+              <dt>Chain</dt>
+              <dd>Arc Testnet</dd>
+            </div>
             <div>
               <dt>Chain ID</dt>
               <dd>5042002</dd>
@@ -65,98 +82,185 @@
       </section>
 
       <section class="quick-grid" aria-label="Documentation shortcuts">
-        <a href="#start">
+        <a href="#users">
           <span>01</span>
-          <strong>Connect and trade</strong>
-          <small>Wallet, faucet, YES/NO positions, payouts.</small>
+          <strong>Use the app</strong>
+          <small>Wallet setup, trading, profiles, notifications, claims.</small>
         </a>
         <a href="#creators">
           <span>02</span>
           <strong>Create markets</strong>
-          <small>Question quality, deadline, creator bond, resolution.</small>
+          <small>Question quality, duplicate checks, evidence, resolution.</small>
         </a>
         <a href="#operators">
           <span>03</span>
-          <strong>Deploy stack</strong>
-          <small>Contract, frontend, indexer, Vercel domains.</small>
+          <strong>Operate production</strong>
+          <small>Contract, indexer, Vercel, domains, environment variables.</small>
         </a>
       </section>
 
-      <section id="start" class="docs-section">
-        <div class="section-label">Start</div>
+      <section id="overview" class="docs-section">
+        <div class="section-label">Overview</div>
         <div class="section-body">
-          <h2>Use AuraPredict</h2>
-          <ol>
-            <li>Open <a href="https://aurapredict.xyz">aurapredict.xyz</a>.</li>
-            <li>Connect MetaMask, Rabby, or another EIP-1193 wallet.</li>
-            <li>Switch to Arc Testnet when prompted.</li>
-            <li>Fund the wallet with Arc Testnet USDC from the Circle faucet.</li>
-            <li>Choose a market, enter USDC amount, then stake YES or NO.</li>
-          </ol>
-          <div class="note">
-            AuraPredict is a testnet app. Do not use a wallet holding production funds.
+          <h2>What AuraPredict is</h2>
+          <p>
+            AuraPredict is a testnet prediction market venue for binary questions. Traders stake
+            Arc native USDC on YES or NO, creators resolve markets after close, and winners claim
+            payout from the contract. The product is designed to make public forecasting measurable:
+            every wallet can build history, PNL, win rate, Aura Points, and creator reputation.
+          </p>
+          <div class="feature-grid">
+            <article>
+              <h3>Onchain trading</h3>
+              <p>Market creation, staking, resolution, dispute, cancel, and claim are contract interactions.</p>
+            </article>
+            <article>
+              <h3>Fast read layer</h3>
+              <p>The indexer reads Arc events and exposes market stats, activity, history, and leaderboard data.</p>
+            </article>
+            <article>
+              <h3>Social layer</h3>
+              <p>Profiles, comments, evidence links, follows, share links, and reputation make forecasting public.</p>
+            </article>
+            <article>
+              <h3>Aura Agent</h3>
+              <p>AI assists with market drafting, duplicate-risk review, and resolution evidence summaries.</p>
+            </article>
           </div>
         </div>
       </section>
 
-      <section id="markets" class="docs-section">
-        <div class="section-label">Markets</div>
+      <section id="users" class="docs-section">
+        <div class="section-label">Users</div>
         <div class="section-body">
-          <h2>Market lifecycle</h2>
-          <div class="timeline">
+          <h2>Use AuraPredict</h2>
+          <ol>
+            <li>Open <a href="https://app.aurapredict.xyz">app.aurapredict.xyz</a>.</li>
+            <li>Connect MetaMask, Rabby, OKX, Zerion, or another injected EVM wallet.</li>
+            <li>Switch to Arc Testnet when prompted, or add the network manually with the settings above.</li>
+            <li>Fund the wallet with Arc Testnet USDC from the Circle faucet.</li>
+            <li>Open a market, choose YES or NO, enter the USDC amount, confirm the wallet transaction.</li>
+            <li>Track the market in your profile. If your position wins after finalization, claim payout.</li>
+          </ol>
+          <div class="two-column">
             <article>
-              <span>1</span>
-              <h3>Created</h3>
-              <p>A creator writes a binary question, chooses category and close time, then locks a creator bond.</p>
+              <h3>Profile data</h3>
+              <ul>
+                <li>Wallet display name and public profile link.</li>
+                <li>Available USDC balance on Arc Testnet.</li>
+                <li>Markets participated and markets created.</li>
+                <li>Resolved wins, losses, PNL, win streak, and claimable payout.</li>
+              </ul>
             </article>
             <article>
-              <span>2</span>
-              <h3>Trading open</h3>
-              <p>Traders stake native USDC on YES or NO. Odds update from pool balance and participation.</p>
-            </article>
-            <article>
-              <span>3</span>
-              <h3>Result proposed</h3>
-              <p>After close, the creator or owner proposes YES, NO, or Cancel according to the criteria.</p>
-            </article>
-            <article>
-              <span>4</span>
-              <h3>Dispute window</h3>
-              <p>Players can dispute a proposed result with a dispute bond before the deadline.</p>
-            </article>
-            <article>
-              <span>5</span>
-              <h3>Finalized</h3>
-              <p>Winners claim payouts. If the market is canceled, both sides can refund their stake.</p>
+              <h3>Notifications</h3>
+              <ul>
+                <li>Markets that need creator resolution.</li>
+                <li>Results ready to finalize.</li>
+                <li>Claims available after settlement.</li>
+                <li>Transaction confirmation links to Arcscan.</li>
+              </ul>
             </article>
           </div>
+          <div class="note">Use a testnet-only wallet. AuraPredict is not a mainnet financial product.</div>
         </div>
       </section>
 
       <section id="creators" class="docs-section">
         <div class="section-label">Creators</div>
         <div class="section-body">
-          <h2>Create better markets</h2>
+          <h2>Create clear markets</h2>
           <div class="two-column">
-            <div>
+            <article>
               <h3>Question checklist</h3>
               <ul>
-                <li>Use one clear YES/NO condition.</li>
-                <li>Include the exact end date or event boundary.</li>
-                <li>Define data sources before publishing.</li>
-                <li>Avoid subjective language such as "successful" or "major".</li>
-                <li>Check similar markets to avoid splitting liquidity.</li>
+                <li>Use one clear YES/NO outcome.</li>
+                <li>Include exact event boundary and UTC close time.</li>
+                <li>Define acceptable sources before launch.</li>
+                <li>Avoid subjective words such as successful, major, best, or viral.</li>
+                <li>Review duplicate-risk suggestions before publishing.</li>
               </ul>
-            </div>
-            <div>
+            </article>
+            <article>
               <h3>Resolution checklist</h3>
               <ul>
                 <li>Attach evidence links before proposing a result.</li>
-                <li>Use Cancel only when the question cannot be resolved fairly.</li>
-                <li>Wait for finality before telling users to claim.</li>
-                <li>Keep screenshots or official sources for disputed markets.</li>
+                <li>Use Cancel only when the market cannot be fairly resolved.</li>
+                <li>Wait through the dispute window before treating the result as final.</li>
+                <li>Keep official sources and screenshots for contested results.</li>
               </ul>
-            </div>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section id="contract" class="docs-section">
+        <div class="section-label">Contract</div>
+        <div class="section-body">
+          <h2>Smart contract behavior</h2>
+          <div class="timeline">
+            <article>
+              <span>1</span>
+              <h3>Create</h3>
+              <p>Creator opens a market, sets category and close time, and locks the creator bond.</p>
+            </article>
+            <article>
+              <span>2</span>
+              <h3>Trade</h3>
+              <p>Users stake native USDC on YES or NO before the market close time.</p>
+            </article>
+            <article>
+              <span>3</span>
+              <h3>Propose</h3>
+              <p>Creator or owner proposes YES, NO, or Cancel after the close time.</p>
+            </article>
+            <article>
+              <span>4</span>
+              <h3>Dispute</h3>
+              <p>Users can dispute a proposed outcome during the dispute window with a dispute bond.</p>
+            </article>
+            <article>
+              <span>5</span>
+              <h3>Claim</h3>
+              <p>After finalization, winners claim payout or both sides refund if canceled.</p>
+            </article>
+          </div>
+          <div class="reference-table">
+            <article><span>Contract</span><strong>contracts/ArcPredictionMarket.sol</strong></article>
+            <article><span>ABI</span><strong>src/contracts/arcPredictionMarketAbi.ts</strong></article>
+            <article><span>Tests</span><strong>test/ArcPredictionMarket.js</strong></article>
+            <article><span>Deploy script</span><strong>scripts/deploy.js</strong></article>
+          </div>
+        </div>
+      </section>
+
+      <section id="indexer" class="docs-section">
+        <div class="section-label">Indexer</div>
+        <div class="section-body">
+          <h2>Indexer and data flow</h2>
+          <p>
+            The frontend can read directly from Arc RPC, but production UX is smoother with the
+            AuraPredict indexer. The indexer reads contract events, stores JSON snapshots, and serves
+            fast read endpoints for stats, market rows, activity, and leaderboard views.
+          </p>
+          <div class="flow-diagram" aria-label="AuraPredict data flow">
+            <div>Wallet</div>
+            <div>Frontend</div>
+            <div>Indexer</div>
+            <div>Arc RPC</div>
+            <div>Contract</div>
+            <div>Arcscan</div>
+          </div>
+          <div class="command-block">
+            <span>Run locally</span>
+            <pre><code>npm run indexer
+npm run dev</code></pre>
+          </div>
+          <div class="reference-table">
+            <article><span>Health</span><strong>/health</strong></article>
+            <article><span>Stats</span><strong>/api/stats</strong></article>
+            <article><span>Markets</span><strong>/api/markets</strong></article>
+            <article><span>Activity</span><strong>/api/activity</strong></article>
           </div>
         </div>
       </section>
@@ -164,28 +268,91 @@
       <section id="operators" class="docs-section">
         <div class="section-label">Operators</div>
         <div class="section-body">
-          <h2>Deploy production</h2>
+          <h2>Local development</h2>
           <div class="command-block">
-            <span>Local checks</span>
+            <span>Project checks</span>
             <pre><code>npm install
 npm run compile
 npm test
 npm run build</code></pre>
           </div>
           <div class="two-column">
-            <div>
+            <article>
               <h3>Frontend environment</h3>
               <pre><code>VITE_PREDICTION_MARKET_ADDRESS=0x...
 VITE_AURA_INDEXER_URL=https://your-indexer-domain
 VITE_PREDICTION_MARKET_START_BLOCK=43295581</code></pre>
-            </div>
-            <div>
-              <h3>Docs subdomain</h3>
-              <p>
-                Create a separate Vercel project with root directory <code>docs</code>.
-                Add custom domain <code>docs.aurapredict.xyz</code> and point DNS to Vercel.
-              </p>
-            </div>
+            </article>
+            <article>
+              <h3>Contract deployment</h3>
+              <pre><code>PRIVATE_KEY=0x...
+ARC_RPC_URL=https://rpc.testnet.arc.network
+npm run deploy:arc</code></pre>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section id="deploy" class="docs-section">
+        <div class="section-label">Deploy</div>
+        <div class="section-body">
+          <h2>Domains and Vercel projects</h2>
+          <p>
+            AuraPredict uses one GitHub repo but should use separate Vercel projects when deploying
+            different roots. The app project deploys the repo root. The docs project deploys the
+            <code>docs</code> folder.
+          </p>
+          <div class="reference-table domain-table">
+            <article><span>Main site</span><strong>aurapredict.xyz -> app project, repo root</strong></article>
+            <article><span>App site</span><strong>app.aurapredict.xyz -> app project, repo root</strong></article>
+            <article><span>Docs site</span><strong>docs.aurapredict.xyz -> docs project, root directory docs</strong></article>
+          </div>
+          <div class="two-column">
+            <article>
+              <h3>Docs Vercel project</h3>
+              <ul>
+                <li>Import the same GitHub repo.</li>
+                <li>Set Root Directory to <code>docs</code>.</li>
+                <li>Use Framework Preset <code>Other</code>.</li>
+                <li>Use Output Directory <code>.</code>.</li>
+                <li>Add domain <code>docs.aurapredict.xyz</code>.</li>
+              </ul>
+            </article>
+            <article>
+              <h3>DNS record</h3>
+              <pre><code>Type: CNAME
+Name: docs
+Value: cname.vercel-dns.com</code></pre>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section id="security" class="docs-section">
+        <div class="section-label">Security</div>
+        <div class="section-body">
+          <h2>Security model and limitations</h2>
+          <div class="feature-grid">
+            <article>
+              <h3>Wallet custody</h3>
+              <p>AuraPredict never receives private keys. Every transaction is confirmed in the user's wallet.</p>
+            </article>
+            <article>
+              <h3>Testnet only</h3>
+              <p>The current deployment is for Arc Testnet validation and should not be treated as audited mainnet infrastructure.</p>
+            </article>
+            <article>
+              <h3>AI limitation</h3>
+              <p>Aura Agent assists research and drafting. It is not an oracle and does not finalize markets by itself.</p>
+            </article>
+            <article>
+              <h3>Resolution risk</h3>
+              <p>Creator-led resolution requires clear criteria, evidence, and dispute review to avoid ambiguous settlement.</p>
+            </article>
+          </div>
+          <div class="note">
+            Before mainnet, AuraPredict needs deeper contract review, durable social data storage,
+            stronger oracle/dispute design, and operational monitoring.
           </div>
         </div>
       </section>
@@ -195,12 +362,15 @@ VITE_PREDICTION_MARKET_START_BLOCK=43295581</code></pre>
         <div class="section-body">
           <h2>Useful links</h2>
           <div class="reference-grid">
+            <a href="https://aurapredict.xyz">AuraPredict landing</a>
+            <a href="https://app.aurapredict.xyz">AuraPredict app</a>
+            <a href="https://github.com/mrcocdilinh/AuraPredict">GitHub repository</a>
             <a href="https://docs.arc.io/arc/references/rpc-endpoints">Arc RPC endpoints</a>
             <a href="https://docs.arc.io/integrate/wallets">Add Arc to a wallet</a>
             <a href="https://testnet.arcscan.app">Arc Testnet explorer</a>
             <a href="https://faucet.circle.com">Circle faucet</a>
-            <a href="https://github.com/mrcocdilinh/AuraPredict">AuraPredict repository</a>
             <a href="https://vercel.com/docs/domains/working-with-domains">Vercel domains</a>
+            <a href="https://vercel.com/docs/projects/environment-variables">Vercel environment variables</a>
           </div>
         </div>
       </section>
@@ -208,7 +378,21 @@ VITE_PREDICTION_MARKET_START_BLOCK=43295581</code></pre>
 
     <footer>
       <span>AuraPredict Docs</span>
-      <span>Testnet documentation for docs.aurapredict.xyz</span>
+      <span>docs.aurapredict.xyz</span>
     </footer>
+
+    <script>
+      const button = document.getElementById("themeToggle");
+      const setButtonLabel = () => {
+        button.textContent = document.documentElement.dataset.theme === "dark" ? "Light" : "Dark";
+      };
+      setButtonLabel();
+      button.addEventListener("click", () => {
+        const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+        document.documentElement.dataset.theme = next;
+        localStorage.setItem("aurapredict-docs-theme", next);
+        setButtonLabel();
+      });
+    </script>
   </body>
 </html>
