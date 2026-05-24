@@ -1360,7 +1360,7 @@ function LandingPage() {
     },
     {
       title: "Creator resolution",
-      text: "Market creators propose outcomes after close, with dispute protection and transparent finalization."
+      text: "Market creators propose outcomes after close, with dispute protection, transparent finalization, and optional AI receipts."
     },
     {
       title: "Profiles and reputation",
@@ -1380,7 +1380,11 @@ function LandingPage() {
     },
     {
       title: "Aura Agent",
-      text: "Use AI assistance to draft clearer markets, review duplicate risk, and prepare evidence before resolution."
+      text: "Use AI assistance to draft clearer markets, review duplicate risk, summarize evidence, and calculate off-chain resolution receipts."
+    },
+    {
+      title: "AI resolution receipts",
+      text: "The indexer can run three AI reviewer roles, publish a hashed consensus receipt, and keep settlement on the current contract."
     },
     {
       title: "Live indexer",
@@ -1391,20 +1395,22 @@ function LandingPage() {
   const architectureSteps = ["Wallet", "AuraPredict UI", "Render Indexer", "Arc RPC", "Market Contract", "Arcscan"];
   const settlementSteps = [
     "Market closes in UTC",
-    "Creator proposes YES, NO, or Cancel",
+    "Indexer can create an AI receipt",
+    "Creator or owner proposes YES, NO, or Cancel",
     "Dispute window stays open",
     "Final outcome is locked",
     "Winners claim payout"
   ];
   const dataFlow = [
     "Live Render indexer now powers market history, volume, participants, activity, and leaderboards",
-    "Aura Agent drafts clearer markets, checks similar questions, and assists result research",
+    "Aura Agent drafts clearer markets, checks similar questions, and produces AI resolution receipts from evidence",
+    "Resolution receipts stay off-chain unless the resolver or owner signs the normal contract proposal",
     "Wallet actions still sign directly against the Arc contract, with Arcscan as the verification layer"
   ];
   const roadmapItems = [
     "Add websocket or event streaming for absolute realtime odds and cross-user updates",
+    "Harden AI receipt review with better evidence policy, audit logs, and operator dashboards",
     "Persist social identity, comments, follows, evidence, and notifications beyond local browser storage",
-    "Move from AI-assisted resolution to a stronger oracle or dispute-backed resolver path",
     "Evaluate oracle integration when Arc supports the right optimistic oracle or data providers"
   ];
   const nextTheme = landingTheme === "dark" ? "light" : "dark";
@@ -1508,8 +1514,8 @@ function LandingPage() {
           </h1>
           <p>
             Trade YES/NO markets with native Arc USDC while a live Render indexer keeps market
-            history, volume, participants, leaderboards, comments, evidence, and profile reputation
-            fast enough for public forecasting.
+            history, volume, participants, leaderboards, comments, evidence, AI resolution receipts,
+            and profile reputation fast enough for public forecasting.
           </p>
           <div className="landing-hero-ledger" aria-label="AuraPredict live indexer metrics">
             <div>
@@ -1542,6 +1548,7 @@ function LandingPage() {
           </div>
           <div className="landing-proof">
             <span>{indexerIsRealtime ? "Render indexer live" : "Indexer fallback active"}</span>
+            <span>AI receipts off-chain</span>
             <span>{updatedText}</span>
             <span>{pendingMarketsText} pending resolution</span>
           </div>
@@ -1586,7 +1593,8 @@ function LandingPage() {
           <p>
             The app keeps the trading surface simple while making evidence, profiles, and leaderboard
             performance visible enough for social forecasting. AuraPredict combines onchain YES/NO
-            staking, an indexer-backed data layer, and AI-assisted market quality checks.
+            staking, an indexer-backed data layer, AI-assisted market quality checks, and AI resolution
+            receipts that do not require a contract change.
           </p>
         </div>
         <div className="landing-feature-grid">
@@ -1636,7 +1644,8 @@ function LandingPage() {
           <h2>From question to payout, every step is transparent.</h2>
           <p>
             A market starts as a clear YES/NO question. Users stake based on their conviction.
-            When the market closes, the creator proposes a result, users can dispute during the
+            When the market closes, the indexer can create an AI receipt from evidence, the creator
+            or owner proposes the result through the existing contract, users can dispute during the
             window, and winners claim directly from their wallet after finalization.
           </p>
           <a className="landing-primary" href={APP_URL}>
@@ -1660,7 +1669,8 @@ function LandingPage() {
           <p>
             AuraPredict is live as an Arc Testnet MVP with a public Render indexer. The current product
             proves market creation, staking, dispute-aware settlement, profiles, comments, evidence,
-            live stats, notifications, and public reputation while wallet actions remain fully onchain.
+            AI resolution receipts, live stats, notifications, and public reputation while wallet
+            actions remain fully onchain.
           </p>
           <div className="landing-docs-actions">
             <a className="landing-primary" href={DOCS_URL}>
@@ -1691,18 +1701,18 @@ function LandingPage() {
           </article>
           <article className="docs-card">
             <span className="docs-label">Resolution model</span>
-            <h3>Creator proposed, dispute protected</h3>
+            <h3>AI assisted, contract settled</h3>
             <p>
-              Market creators propose the final result after close. A dispute window gives users time
-              to challenge ambiguous outcomes before settlement and claims.
+              The indexer can calculate a suggested outcome with AI reviewers, but the creator or owner
+              still signs the normal contract proposal and users keep the dispute window.
             </p>
           </article>
           <article className="docs-card">
             <span className="docs-label">AI layer</span>
-            <h3>Aura Agent assists, users decide</h3>
+            <h3>Aura Agent plus receipts</h3>
             <p>
-              Aura Agent helps draft questions, score clarity, surface similar markets, and summarize
-              evidence. It does not replace wallet signatures or final settlement controls.
+              Aura Agent helps draft questions, score clarity, surface similar markets, summarize
+              evidence, and publish hashed resolution receipts for market outcome review.
             </p>
           </article>
         </div>
@@ -1712,8 +1722,9 @@ function LandingPage() {
             <span className="docs-label">System architecture</span>
             <h3>Live indexer, wallet signed</h3>
             <p>
-              The public app reads the Render indexer first for low-latency market state. Wallets still
-              sign transactions against the prediction market contract, and Arcscan remains the verification layer.
+              The public app reads the Render indexer first for low-latency market state, social data,
+              and AI receipts. Wallets still sign transactions against the prediction market contract,
+              and Arcscan remains the verification layer.
             </p>
           </div>
           <div className="docs-flow-diagram" aria-label="AuraPredict architecture diagram">
@@ -1766,7 +1777,11 @@ function LandingPage() {
           </article>
           <article>
             <span>Settlement</span>
-            <strong>Finalized outcomes unlock claimable payouts for winning positions.</strong>
+            <strong>AI receipts can support the result, but finalized outcomes still unlock payouts through the contract.</strong>
+          </article>
+          <article>
+            <span>AI resolution</span>
+            <strong>Three reviewer roles produce a consensus, confidence score, evidence notes, risks, and receipt hash.</strong>
           </article>
           <article>
             <span>Profiles</span>
@@ -1777,8 +1792,8 @@ function LandingPage() {
             <strong>Ranks users by volume, win rate, PNL, and Aura Points.</strong>
           </article>
           <article>
-            <span>Future oracle path</span>
-            <strong>Aura Agent can assist result research, but final settlement still needs stronger oracle protection.</strong>
+            <span>Admin controls</span>
+            <strong>AI runs require an admin token; optional auto-propose requires a resolver or owner private key.</strong>
           </article>
           <article>
             <span>Docs domain</span>
@@ -1792,8 +1807,8 @@ function LandingPage() {
             <h3>Path toward a production-grade prediction market</h3>
             <p>
               AuraPredict now has a live public indexer, AI market drafting, duplicate-risk checks, comments,
-              evidence fields, profile reputation, and leaderboard metrics. The remaining gap is production-grade
-              realtime streaming, durable social data, and stronger oracle-backed settlement.
+              evidence fields, AI resolution receipts, profile reputation, and leaderboard metrics. The remaining
+              gap is production-grade realtime streaming, durable social data, and stronger oracle-backed settlement.
             </p>
           </div>
           <div className="docs-roadmap">
@@ -1810,8 +1825,8 @@ function LandingPage() {
           <strong>Important note</strong>
           <p>
             AuraPredict is currently a testnet dapp. It is not financial advice and the current market
-            resolution flow is not fully automated by AI or an external oracle. The safest near-term
-            design is AI-assisted research plus human proposal, evidence, and user dispute.
+            resolution flow uses AI as an off-chain decision aid, not a trustless oracle. The safest
+            near-term design is AI receipt generation plus human proposal, evidence, and user dispute.
           </p>
         </div>
       </section>

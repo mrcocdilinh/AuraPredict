@@ -46,7 +46,8 @@
           <p>
             AuraPredict is a YES/NO prediction market dapp on Arc Testnet. It combines native
             Arc USDC staking, creator-led resolution, dispute protection, a public indexer,
-            wallet profiles, social forecasting, Aura Points, and Aura Agent assistance.
+            wallet profiles, social forecasting, Aura Points, and AI resolution receipts that
+            help calculate market outcomes without changing the contract.
           </p>
           <div class="hero-actions">
             <a class="primary-action" href="#users">Start using</a>
@@ -97,6 +98,11 @@
           <strong>Operate production</strong>
           <small>Contract, indexer, Vercel, domains, environment variables.</small>
         </a>
+        <a href="#ai-resolution">
+          <span>04</span>
+          <strong>AI resolution</strong>
+          <small>Off-chain receipts, admin runs, optional resolver proposal.</small>
+        </a>
       </section>
 
       <section id="overview" class="docs-section">
@@ -124,7 +130,11 @@
             </article>
             <article>
               <h3>Aura Agent</h3>
-              <p>AI assists with market drafting, duplicate-risk review, and resolution evidence summaries.</p>
+              <p>AI drafts markets, checks duplicate risk, summarizes evidence, and creates resolution receipts.</p>
+            </article>
+            <article>
+              <h3>AI receipts</h3>
+              <p>The indexer can calculate a proposed outcome off-chain while contract settlement stays unchanged.</p>
             </article>
           </div>
         </div>
@@ -185,6 +195,7 @@
               <h3>Resolution checklist</h3>
               <ul>
                 <li>Attach evidence links before proposing a result.</li>
+                <li>Run AI resolution when evidence is ready to create an auditable off-chain receipt.</li>
                 <li>Use Cancel only when the market cannot be fairly resolved.</li>
                 <li>Wait through the dispute window before treating the result as final.</li>
                 <li>Keep official sources and screenshots for contested results.</li>
@@ -212,7 +223,7 @@
             <article>
               <span>3</span>
               <h3>Propose</h3>
-              <p>Creator or owner proposes YES, NO, or Cancel after the close time.</p>
+              <p>Creator or owner proposes YES, NO, or Cancel after the close time, optionally using an AI receipt as decision support.</p>
             </article>
             <article>
               <span>4</span>
@@ -234,6 +245,63 @@
         </div>
       </section>
 
+      <section id="ai-resolution" class="docs-section">
+        <div class="section-label">AI resolution</div>
+        <div class="section-body">
+          <h2>AI outcome calculation without changing the contract</h2>
+          <p>
+            AuraPredict V1 keeps the current Solidity contract unchanged. The indexer runs an
+            off-chain AI review committee, stores a public resolution receipt, and leaves final
+            settlement to the existing resolver, owner, dispute, finalize, and claim flow.
+          </p>
+          <div class="timeline">
+            <article>
+              <span>1</span>
+              <h3>Collect evidence</h3>
+              <p>Creators and users attach source links, notes, and resolution context to the market.</p>
+            </article>
+            <article>
+              <span>2</span>
+              <h3>Run reviewers</h3>
+              <p>The indexer asks three AI reviewer roles to return YES, NO, Cancel, or insufficient evidence.</p>
+            </article>
+            <article>
+              <span>3</span>
+              <h3>Create receipt</h3>
+              <p>The consensus, confidence, reasoning, risks, evidence, and immutable decision hash are stored off-chain.</p>
+            </article>
+            <article>
+              <span>4</span>
+              <h3>Propose result</h3>
+              <p>An admin can review the receipt, then the resolver or owner signs the normal contract transaction.</p>
+            </article>
+          </div>
+          <div class="two-column">
+            <article>
+              <h3>Public read endpoint</h3>
+              <pre><code>GET /api/resolutions/:marketId</code></pre>
+              <p>The app uses this endpoint to show the AI receipt panel on a market detail page.</p>
+            </article>
+            <article>
+              <h3>Admin run endpoint</h3>
+              <pre><code>POST /api/resolutions/:marketId/run
+Authorization: Bearer your_admin_token</code></pre>
+              <p>Admin runs require <code>AURA_RESOLUTION_ADMIN_TOKEN</code>. Use <code>force: true</code> only when rerunning after better evidence.</p>
+            </article>
+          </div>
+          <div class="reference-table">
+            <article><span>AI provider</span><strong>AI_PROVIDER=gemini and GEMINI_API_KEY</strong></article>
+            <article><span>Manual mode</span><strong>Receipt only; human reviews and signs the result proposal.</strong></article>
+            <article><span>Auto-run</span><strong>AURA_RESOLUTION_AUTO_RUN=1 creates the first receipt for closed unresolved markets.</strong></article>
+            <article><span>Auto-propose</span><strong>AURA_RESOLUTION_AUTO_PROPOSE=1 requires a resolver or owner private key.</strong></article>
+          </div>
+          <div class="note">
+            AI receipts are decision support, not an oracle. The contract still controls settlement,
+            users can still dispute, and private resolver keys must stay outside GitHub and Vercel logs.
+          </div>
+        </div>
+      </section>
+
       <section id="indexer" class="docs-section">
         <div class="section-label">Indexer</div>
         <div class="section-body">
@@ -241,7 +309,8 @@
           <p>
             The frontend can read directly from Arc RPC, but production UX is smoother with the
             AuraPredict indexer. The indexer reads contract events, stores JSON snapshots, and serves
-            fast read endpoints for stats, market rows, activity, and leaderboard views.
+            fast read endpoints for stats, market rows, activity, leaderboard views, social data,
+            and AI resolution receipts.
           </p>
           <div class="flow-diagram" aria-label="AuraPredict data flow">
             <div>Wallet</div>
@@ -261,6 +330,7 @@ npm run dev</code></pre>
             <article><span>Stats</span><strong>/api/stats</strong></article>
             <article><span>Markets</span><strong>/api/markets</strong></article>
             <article><span>Activity</span><strong>/api/activity</strong></article>
+            <article><span>AI receipts</span><strong>/api/resolutions/:marketId</strong></article>
           </div>
         </div>
       </section>
@@ -285,11 +355,19 @@ VITE_PREDICTION_MARKET_START_BLOCK=43295581
 VITE_WALLETCONNECT_PROJECT_ID=your_project_id</code></pre>
             </article>
             <article>
-              <h3>Contract deployment</h3>
-              <pre><code>PRIVATE_KEY=0x...
+              <h3>Indexer AI resolution</h3>
+              <pre><code>AI_PROVIDER=gemini
+GEMINI_API_KEY=your_gemini_key
+AURA_RESOLUTION_ADMIN_TOKEN=long_random_token
+AURA_RESOLUTION_AUTO_RUN=0
+AURA_RESOLUTION_AUTO_PROPOSE=0</code></pre>
+            </article>
+          </div>
+          <div class="command-block">
+            <span>Contract deployment</span>
+            <pre><code>PRIVATE_KEY=0x...
 ARC_RPC_URL=https://rpc.testnet.arc.network
 npm run deploy:arc</code></pre>
-            </article>
           </div>
         </div>
       </section>
@@ -344,11 +422,15 @@ Value: cname.vercel-dns.com</code></pre>
             </article>
             <article>
               <h3>AI limitation</h3>
-              <p>Aura Agent assists research and drafting. It is not an oracle and does not finalize markets by itself.</p>
+              <p>Aura Agent and AI receipts assist research and outcome calculation. They are not a trustless oracle.</p>
             </article>
             <article>
               <h3>Resolution risk</h3>
               <p>Creator-led resolution requires clear criteria, evidence, and dispute review to avoid ambiguous settlement.</p>
+            </article>
+            <article>
+              <h3>Admin keys</h3>
+              <p>AI run tokens, Gemini keys, and optional resolver private keys must stay in private deployment secrets.</p>
             </article>
           </div>
           <div class="note">
