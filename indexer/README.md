@@ -91,7 +91,9 @@ Required for AI receipts:
 ```bash
 AI_PROVIDER=gemini
 GEMINI_API_KEY=your_gemini_key
+GEMINI_API_KEYS=gemini_key_1,gemini_key_2,gemini_key_3
 AI_MODEL=gemini-2.5-flash
+GEMINI_RATE_LIMIT_COOLDOWN_MS=120000
 AURA_RESOLUTION_ADMIN_TOKEN=long_random_admin_token
 ```
 
@@ -114,7 +116,7 @@ AURA_RESOLUTION_CONSENSUS_COUNT=2
 ```
 
 Keep `AURA_RESOLUTION_AUTO_PROPOSE=0` until the resolver key and evidence policy are tested. If enabled, the private key must be the market resolver, contract owner, or configured `resolutionAuthority`.
-When Gemini returns `429` (rate limit) or transient `5xx`, the indexer automatically falls back to the configured provider if available.
+When Gemini returns `429` (rate limit), the indexer puts that key on cooldown and rotates to the next key in `GEMINI_API_KEYS`. If all Gemini keys are cooling down or Gemini returns transient `5xx`, the indexer falls back to the configured provider if available.
 
 `POST /api/resolutions/:marketId/run` always requires `AURA_RESOLUTION_ADMIN_TOKEN`. If `AURA_RESOLUTION_AUTO_RUN=1`, the indexer only auto-generates the first receipt for each closed unresolved market; use the admin endpoint with `force: true` to rerun after adding better evidence.
 

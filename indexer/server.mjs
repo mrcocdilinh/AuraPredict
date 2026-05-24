@@ -32,6 +32,10 @@ const CHUNK_SIZE = BigInt(process.env.AURA_INDEXER_CHUNK_SIZE || 9_000);
 const AI_PROVIDER = String(process.env.AI_PROVIDER || "").trim().toLowerCase();
 const AI_FALLBACK_PROVIDER = String(process.env.AI_FALLBACK_PROVIDER || "").trim().toLowerCase();
 const GEMINI_API_KEY = String(process.env.GEMINI_API_KEY || "").trim();
+const GEMINI_API_KEYS = String(process.env.GEMINI_API_KEYS || "")
+  .split(",")
+  .map((key) => key.trim())
+  .filter(Boolean);
 const OPENAI_API_KEY = String(process.env.OPENAI_API_KEY || "").trim();
 const AI_MODEL = String(process.env.AI_MODEL || "gemini-2.5-flash").trim();
 const OPENAI_MODEL = String(process.env.OPENAI_MODEL || "gpt-4o-mini").trim();
@@ -132,6 +136,11 @@ const writeMarketAbi = [
     outputs: []
   }
 ];
+const GEMINI_RATE_LIMIT_COOLDOWN_MS = Number(process.env.GEMINI_RATE_LIMIT_COOLDOWN_MS || 120_000);
+const geminiKeyState = {
+  cursor: 0,
+  cooldownUntilByKey: new Map()
+};
 
 function nowIso() {
   return new Date().toISOString();
@@ -956,6 +965,31 @@ function extractJsonObject(text) {
   }
 }
 
+function configuredGeminiKeys() {
+  const unique = new Set();
+  for (const key of GEMINI_API_KEYS) unique.add(key);
+  if (GEMINI_API_KEY) unique.add(GEMINI_API_KEY);
+  return [...unique];
+}
+
+function nextGeminiKey() {
+  const keys = configuredGeminiKeys();
+  if (keys.length === 0) return null;
+  const now = Date.now();
+  for (let attempt = 0; attempt < keys.length; attempt += 1) {
+    const index = (geminiKeyState.cursor + attempt) % keys.length;
+    const key = keys[index];
+    const cooldownUntil = geminiKeyState.cooldownUntilByKey.get(key) || 0;
+    if (cooldownUntil <= now) {
+      geminiKeyState.cursor = (index + 1) % keys.length;
+      return key;
+    }
+  }
+  const fallbackIndex = geminiKeyState.cursor % keys.length;
+  geminiKeyState.cursor = (fallbackIndex + 1) % keys.length;
+  return keys[fallbackIndex];
+}
+
 class AiProviderError extends Error {
   constructor(message, options = {}) {
     super(message);
@@ -968,7 +1002,8 @@ class AiProviderError extends Error {
 
 function configuredProviders() {
   const providers = [];
-  const requested = AI_PROVIDER || (GEMINI_API_KEY ? "gemini" : OPENAI_API_KEY ? "openai" : "");
+  const hasGemini = configuredGeminiKeys().length > 0;
+  const requested = AI_PROVIDER || (hasGemini ? "gemini" : OPENAI_API_KEY ? "openai" : "");
   const fallback = AI_FALLBACK_PROVIDER;
   if (requested) providers.push(requested);
   if (fallback && fallback !== requested) providers.push(fallback);
@@ -982,8 +1017,9 @@ function providerModel(provider) {
 }
 
 async function callGeminiJson(systemInstruction, prompt) {
-  if (!GEMINI_API_KEY) {
-    throw new AiProviderError("Gemini is not configured. Set GEMINI_API_KEY.", {
+  const apiKey = nextGeminiKey();
+  if (!apiKey) {
+    throw new AiProviderError("Gemini is not configured. Set GEMINI_API_KEY or GEMINI_API_KEYS.", {
       provider: "gemini",
       retryable: false
     });
@@ -995,7 +1031,7 @@ async function callGeminiJson(systemInstruction, prompt) {
       method: "POST",
       headers: {
         "content-type": "application/json",
-        "x-goog-api-key": GEMINI_API_KEY
+        "x-goog-api-key": apiKey
       },
       body: JSON.stringify({
         systemInstruction: {
@@ -1017,6 +1053,9 @@ async function callGeminiJson(systemInstruction, prompt) {
 
   const body = await response.json().catch(() => ({}));
   if (!response.ok) {
+    if (response.status === 429) {
+      geminiKeyState.cooldownUntilByKey.set(apiKey, Date.now() + GEMINI_RATE_LIMIT_COOLDOWN_MS);
+    }
     throw new AiProviderError(body?.error?.message || `Gemini request failed with status ${response.status}.`, {
       provider: "gemini",
       status: response.status,
@@ -1079,7 +1118,7 @@ async function callAiJson(systemInstruction, prompt) {
   const providers = configuredProviders();
   if (providers.length === 0) {
     throw new Error(
-      "Aura Agent is not configured. Set AI_PROVIDER=gemini with GEMINI_API_KEY, or AI_PROVIDER=openai with OPENAI_API_KEY."
+      "Aura Agent is not configured. Set AI_PROVIDER=gemini with GEMINI_API_KEY or GEMINI_API_KEYS, or AI_PROVIDER=openai with OPENAI_API_KEY."
     );
   }
 
