@@ -469,6 +469,42 @@ function indexedActivityToItem(activity: IndexedActivity, marketsById: Map<numbe
   };
 }
 
+function mergeMarketState(incoming: MarketView, current?: MarketView) {
+  if (!current) return incoming;
+  const shouldPreserveLocalProposal =
+    current.outcome === Outcome.Unresolved &&
+    incoming.outcome === Outcome.Unresolved &&
+    current.proposedAt > incoming.proposedAt;
+  const shouldPreserveLocalResolution =
+    current.outcome !== Outcome.Unresolved && incoming.outcome === Outcome.Unresolved;
+
+  return {
+    ...incoming,
+    ...(shouldPreserveLocalProposal || shouldPreserveLocalResolution
+      ? {
+          proposedOutcome: current.proposedOutcome,
+          proposedAt: current.proposedAt,
+          disputeDeadline: current.disputeDeadline,
+          disputed: current.disputed,
+          disputer: current.disputer,
+          outcome: current.outcome
+        }
+      : {}),
+    yesPosition: current.yesPosition,
+    noPosition: current.noPosition,
+    claimed: current.claimed,
+    potentialPayout: current.potentialPayout
+  };
+}
+
+function mergeMarketRows(incomingRows: MarketView[], currentRows: MarketView[], totalMarketCount: number) {
+  const incomingIds = new Set(incomingRows.map((market) => market.id));
+  const currentById = new Map(currentRows.map((market) => [market.id, market]));
+  const mergedRows = incomingRows.map((market) => mergeMarketState(market, currentById.get(market.id)));
+  const localOnlyRows = currentRows.filter((market) => !incomingIds.has(market.id) && market.id < totalMarketCount);
+  return [...mergedRows, ...localOnlyRows].sort((a, b) => b.id - a.id);
+}
+
 async function fetchIndexerJson<T>(path: string): Promise<T | null> {
   if (!INDEXER_URL) return null;
   const [route, query = ""] = path.split("?");
@@ -3208,23 +3244,25 @@ export default function App() {
         const indexedTotalCount = Math.max(totalMarketCount, indexedSnapshot.total, indexedRows.length);
         setKnownMarketCount(indexedTotalCount);
         setMarketLoadLimit((current) => Math.max(current, indexedTotalCount));
-        setMarkets((current) =>
-          indexedRows.map((market) => {
-            const currentMarket = current.find((item) => item.id === market.id);
-            return currentMarket
-              ? {
-                  ...market,
-                  yesPosition: currentMarket.yesPosition,
-                  noPosition: currentMarket.noPosition,
-                  claimed: currentMarket.claimed,
-                  potentialPayout: currentMarket.potentialPayout
-                }
-              : market;
-          })
-        );
+        const mergedIndexedRows = mergeMarketRows(indexedRows, markets, indexedTotalCount);
+        setMarkets((current) => mergeMarketRows(indexedRows, current, indexedTotalCount));
         setActivities(indexedSnapshot.activities);
-        if (indexedSnapshot.stats) setProjectStats(indexedSnapshot.stats);
-        writeCachedMarkets(indexedRows);
+        if (indexedSnapshot.stats) {
+          setProjectStats({
+            ...indexedSnapshot.stats,
+            totalMarkets: Math.max(indexedSnapshot.stats.totalMarkets, indexedTotalCount),
+            indexedMarkets: Math.max(indexedSnapshot.stats.indexedMarkets, mergedIndexedRows.length),
+            liveMarkets: Math.max(
+              indexedSnapshot.stats.liveMarkets,
+              mergedIndexedRows.filter((market) => market.outcome === Outcome.Unresolved && market.closeTime > nowSeconds).length
+            ),
+            pendingMarkets: Math.max(
+              indexedSnapshot.stats.pendingMarkets,
+              mergedIndexedRows.filter((market) => market.outcome === Outcome.Unresolved && market.closeTime <= nowSeconds).length
+            )
+          });
+        }
+        writeCachedMarkets(mergedIndexedRows);
         setDataSource("indexer");
 
         if (!isSilentLoad && account && isAddress(account) && indexedRows.length > 0) {
@@ -3778,6 +3816,7 @@ export default function App() {
       const walletClient = getActiveWalletClient();
 
       let completed = false;
+      let createdMarketId: number | null = null;
 
       const useLegacyCreate = contractVersion === "legacy" || (contractVersion === "unknown" && creatorBond === 0n);
 
@@ -3805,7 +3844,25 @@ export default function App() {
               functionName: "createMarket",
               args: [question, category, closeTime]
             }),
-          "Creating legacy market..."
+          "Creating legacy market...",
+          true,
+          (receipt) => {
+            const createdEvent = receipt.logs
+              .map((log) => {
+                try {
+                  return decodeEventLog({
+                    abi: arcPredictionMarketAbi,
+                    data: log.data,
+                    topics: log.topics
+                  });
+                } catch {
+                  return null;
+                }
+              })
+              .find((event) => event?.eventName === "MarketCreated");
+            const args = createdEvent?.args as { marketId?: bigint } | undefined;
+            if (args?.marketId !== undefined) createdMarketId = Number(args.marketId);
+          }
         );
       } else {
         completed = await runTransaction(
@@ -3819,14 +3876,32 @@ export default function App() {
               args: [question, category, closeTime],
               value: creatorBond
             }),
-          `Creating market with ${formatUsdc(creatorBond)} USDC creator bond...`
+          `Creating market with ${formatUsdc(creatorBond)} USDC creator bond...`,
+          true,
+          (receipt) => {
+            const createdEvent = receipt.logs
+              .map((log) => {
+                try {
+                  return decodeEventLog({
+                    abi: arcPredictionMarketAbi,
+                    data: log.data,
+                    topics: log.topics
+                  });
+                } catch {
+                  return null;
+                }
+              })
+              .find((event) => event?.eventName === "MarketCreated");
+            const args = createdEvent?.args as { marketId?: bigint } | undefined;
+            if (args?.marketId !== undefined) createdMarketId = Number(args.marketId);
+          }
         );
       }
 
       if (!completed) return;
 
       const optimisticMarket: MarketView = {
-        id: knownMarketCount,
+        id: createdMarketId ?? knownMarketCount,
         question,
         category,
         createdAt: Math.floor(Date.now() / 1000),
@@ -3848,7 +3923,7 @@ export default function App() {
         potentialPayout: 0n
       };
       setMarkets((current) =>
-        current.some((market) => market.question === question && sameAddress(market.creator, account))
+        current.some((market) => market.id === optimisticMarket.id || (market.question === question && sameAddress(market.creator, account)))
           ? current
           : [optimisticMarket, ...current]
       );
