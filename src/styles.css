@@ -129,9 +129,15 @@ h3 {
 
 .landing-page {
   background:
+    linear-gradient(180deg, rgba(5, 7, 17, 0.78), rgba(5, 7, 17, 0.96)),
+    linear-gradient(90deg, rgba(5, 7, 17, 0.95), rgba(5, 7, 17, 0.28), rgba(5, 7, 17, 0.92)),
     radial-gradient(circle at 82% 12%, rgba(24, 215, 255, 0.18), transparent 30%),
     radial-gradient(circle at 18% 10%, rgba(127, 92, 255, 0.18), transparent 28%),
+    url("/market-images/crypto-1.webp"),
     #050711;
+  background-attachment: fixed;
+  background-position: center;
+  background-size: cover;
   color: #eef6ff;
   min-height: 100vh;
   overflow: hidden;
@@ -242,9 +248,15 @@ h3 {
 
 .landing-light {
   background:
+    linear-gradient(180deg, rgba(247, 251, 255, 0.88), rgba(247, 251, 255, 0.96)),
+    linear-gradient(90deg, rgba(247, 251, 255, 0.94), rgba(247, 251, 255, 0.45), rgba(247, 251, 255, 0.92)),
     radial-gradient(circle at 82% 12%, rgba(24, 215, 255, 0.16), transparent 30%),
     radial-gradient(circle at 18% 10%, rgba(127, 92, 255, 0.12), transparent 28%),
+    url("/market-images/crypto-1.webp"),
     #f7fbff;
+  background-attachment: fixed;
+  background-position: center;
+  background-size: cover;
   color: #111827;
 }
 
@@ -297,6 +309,19 @@ h3 {
   color: #536178;
 }
 
+.landing-light .landing-network-row {
+  color: #172033;
+}
+
+.landing-light .landing-hero-ledger div {
+  background: rgba(255, 255, 255, 0.78);
+  border-color: rgba(130, 148, 178, 0.34);
+}
+
+.landing-light .landing-hero-ledger strong {
+  color: #101827;
+}
+
 .landing-light .landing-secondary,
 .landing-light .landing-proof span {
   background: #ffffff;
@@ -322,6 +347,32 @@ h3 {
   grid-template-columns: minmax(0, 0.95fr) minmax(440px, 1.05fr);
   min-height: calc(100vh - 120px);
   padding: 72px 0 48px;
+  position: relative;
+}
+
+.landing-hero::before,
+.landing-hero::after {
+  content: "";
+  pointer-events: none;
+  position: absolute;
+}
+
+.landing-hero::before {
+  border-left: 2px solid rgba(24, 215, 255, 0.52);
+  border-top: 2px solid rgba(24, 215, 255, 0.52);
+  height: 28px;
+  left: 0;
+  top: 42px;
+  width: 28px;
+}
+
+.landing-hero::after {
+  border-bottom: 2px solid rgba(24, 215, 255, 0.42);
+  border-right: 2px solid rgba(24, 215, 255, 0.42);
+  bottom: 24px;
+  height: 28px;
+  right: 0;
+  width: 28px;
 }
 
 .landing-hero-copy h1,
@@ -332,10 +383,18 @@ h3 {
 }
 
 .landing-hero-copy h1 {
-  font-size: clamp(2.8rem, 6.4vw, 6.8rem);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: clamp(3rem, 7.2vw, 7.3rem);
+  font-weight: 950;
   line-height: 0.95;
   margin-bottom: 22px;
-  max-width: 900px;
+  max-width: 1040px;
+  text-wrap: balance;
+}
+
+.landing-hero-copy h1 span {
+  color: #18d7ff;
+  text-shadow: 0 0 34px rgba(24, 215, 255, 0.42);
 }
 
 .landing-hero-copy p:not(.landing-kicker),
@@ -354,6 +413,33 @@ h3 {
   max-width: 720px;
 }
 
+.landing-network-row {
+  align-items: center;
+  color: #d8e7fb;
+  display: flex;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 0.92rem;
+  font-weight: 900;
+  gap: 16px;
+  justify-content: space-between;
+  letter-spacing: 0.08em;
+  margin-bottom: 72px;
+  text-transform: uppercase;
+}
+
+.landing-network-row span::before,
+.landing-network-row strong::before {
+  color: #18d7ff;
+  content: "::";
+  margin-right: 8px;
+}
+
+.landing-network-row strong {
+  color: #18d7ff;
+  font-size: 0.84rem;
+  font-weight: 900;
+}
+
 .landing-kicker {
   color: #18d7ff;
   font-size: 0.8rem;
@@ -366,6 +452,38 @@ h3 {
 .landing-actions {
   gap: 12px;
   margin-top: 28px;
+}
+
+.landing-hero-ledger {
+  display: grid;
+  gap: 1px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-top: 28px;
+  max-width: 900px;
+  overflow: hidden;
+}
+
+.landing-hero-ledger div {
+  background: rgba(3, 6, 17, 0.62);
+  border: 1px solid rgba(24, 215, 255, 0.16);
+  display: grid;
+  gap: 6px;
+  padding: 13px;
+}
+
+.landing-hero-ledger span {
+  color: #7f93ad;
+  font-size: 0.72rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.landing-hero-ledger strong {
+  color: #ffffff;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: clamp(0.95rem, 1.6vw, 1.2rem);
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .landing-primary,
@@ -413,7 +531,7 @@ h3 {
 
 .landing-visual {
   background:
-    linear-gradient(180deg, rgba(14, 21, 40, 0.92), rgba(8, 12, 24, 0.92)),
+    linear-gradient(180deg, rgba(14, 21, 40, 0.74), rgba(8, 12, 24, 0.88)),
     #080b19;
   border: 1px solid rgba(83, 105, 143, 0.36);
   border-radius: 8px;
@@ -425,6 +543,7 @@ h3 {
 
 .landing-video-card {
   gap: 14px;
+  opacity: 0.92;
   padding: 12px;
 }
 
@@ -5115,8 +5234,15 @@ label {
   }
 
   .landing-hero-copy h1 {
-    font-size: clamp(2.35rem, 11vw, 4.4rem);
+    font-size: clamp(2.15rem, 10vw, 4.2rem);
     line-height: 0.98;
+  }
+
+  .landing-network-row {
+    align-items: flex-start;
+    display: grid;
+    gap: 8px;
+    margin-bottom: 34px;
   }
 
   .landing-hero-copy > p:not(.landing-kicker) {
@@ -5125,6 +5251,7 @@ label {
   }
 
   .landing-strip,
+  .landing-hero-ledger,
   .landing-feature-grid,
   .landing-benefit-grid,
   .docs-summary-grid,

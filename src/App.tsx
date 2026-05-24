@@ -195,6 +195,13 @@ type IndexedSnapshot = {
   total: number;
 };
 
+type LandingHealth = {
+  ok: boolean;
+  updatedAt?: string | null;
+  lastIndexedBlock?: string;
+  marketCount?: number;
+};
+
 type ContractEventRow = {
   args: {
     marketId?: bigint;
@@ -1238,7 +1245,9 @@ function LandingPage() {
     }
   });
   const [landingStats, setLandingStats] = useState<ProjectStats | null>(null);
+  const [landingHealth, setLandingHealth] = useState<LandingHealth | null>(null);
   const [demoOpen, setDemoOpen] = useState(false);
+  const indexerIsRealtime = INDEXER_URL && !INDEXER_URL.includes("github.io");
   const featureCards = [
     {
       title: "YES/NO markets",
@@ -1250,7 +1259,7 @@ function LandingPage() {
     },
     {
       title: "Creator resolution",
-      text: "Market creators propose outcomes after close, with evidence, dispute protection, and Aura Agent review."
+      text: "Market creators propose outcomes after close, with dispute protection and transparent finalization."
     },
     {
       title: "Profiles and reputation",
@@ -1266,11 +1275,11 @@ function LandingPage() {
     },
     {
       title: "Social forecasting",
-      text: "Follow creators, discuss markets, share to X, embed market links, and study top traders before staking."
+      text: "Follow creators, share to X, embed market links, and study top traders before staking."
     }
   ];
   const flow = ["Create a market", "Stake YES or NO", "Track odds", "Resolve result", "Claim payout"];
-  const architectureSteps = ["Wallet", "AuraPredict UI", "AuraPredict Indexer", "Arc RPC fallback", "Prediction Market Contract", "Arcscan"];
+  const architectureSteps = ["Wallet", "AuraPredict UI", "Render Indexer", "Arc RPC fallback", "Prediction Market Contract", "Arcscan"];
   const settlementSteps = [
     "Market closes in UTC",
     "Creator proposes YES, NO, or Cancel",
@@ -1279,32 +1288,45 @@ function LandingPage() {
     "Winners claim payout"
   ];
   const dataFlow = [
-    "Indexer-first market stats keep the public app quick to scan",
+    "Render indexer keeps markets, volume, participants, and activity close to realtime",
     "Wallet actions still sign directly against the Arc contract",
     "Arcscan keeps settlement and claim transactions verifiable"
   ];
   const roadmapItems = [
-    "Move from scheduled static indexer exports to a low-latency public indexer service",
-    "Persist comments, follows, evidence links, and profile metadata beyond local browser storage",
-    "Expand AI-assisted result suggestions with richer source review and human dispute protection",
+    "Tune frontend auto-refresh around the live indexer for faster cross-user updates",
+    "Persist follows and profile metadata beyond local browser storage",
+    "Expand Aura Agent result suggestions with richer source review and human dispute protection",
     "Evaluate oracle integration when Arc supports the right optimistic oracle or data providers"
   ];
   const nextTheme = landingTheme === "dark" ? "light" : "dark";
+  const heroMarketCount = landingHealth?.marketCount ?? landingStats?.totalMarkets ?? 0;
+  const heroMarketText = heroMarketCount > 0 ? heroMarketCount.toLocaleString("en-US") : "--";
+  const indexedVolumeText = landingStats ? `${formatStatUsdc(landingStats.totalVolume)} USDC` : "--";
+  const participantsText = landingStats ? landingStats.participantEntries.toLocaleString("en-US") : "--";
+  const knownPlayersText = landingStats ? landingStats.knownPlayers.toLocaleString("en-US") : "--";
+  const liveMarketsText = landingStats ? landingStats.liveMarkets.toLocaleString("en-US") : "--";
+  const pendingMarketsText = landingStats ? landingStats.pendingMarkets.toLocaleString("en-US") : "--";
+  const indexedBlockText = landingHealth?.lastIndexedBlock
+    ? Number(landingHealth.lastIndexedBlock).toLocaleString("en-US")
+    : "--";
+  const updatedText = landingHealth?.updatedAt
+    ? `${timeAgo(Math.floor(new Date(landingHealth.updatedAt).getTime() / 1000), new Date())} synced`
+    : "syncing";
   const liveMetricCards = [
     {
-      value: landingStats ? landingStats.totalMarkets.toLocaleString("en-US") : "--",
+      value: heroMarketText,
       label: "Markets created"
     },
     {
-      value: landingStats ? `${formatStatUsdc(landingStats.totalVolume)} USDC` : "--",
+      value: indexedVolumeText,
       label: "Indexed volume"
     },
     {
-      value: landingStats ? landingStats.knownPlayers.toLocaleString("en-US") : "--",
-      label: "Known players"
+      value: participantsText,
+      label: "Participant entries"
     },
     {
-      value: landingStats ? landingStats.liveMarkets.toLocaleString("en-US") : "--",
+      value: liveMarketsText,
       label: "Live markets"
     }
   ];
@@ -1315,12 +1337,20 @@ function LandingPage() {
 
   useEffect(() => {
     let canceled = false;
-    fetchIndexerJson<{ stats: IndexedProjectStats }>("/api/stats").then((response) => {
-      if (canceled || !response?.stats) return;
-      setLandingStats(indexedStatsToProjectStats(response.stats));
-    });
+    const loadLandingData = async () => {
+      const [statsResponse, healthResponse] = await Promise.all([
+        fetchIndexerJson<{ stats: IndexedProjectStats }>("/api/stats"),
+        fetchIndexerJson<LandingHealth>("/health")
+      ]);
+      if (canceled) return;
+      if (statsResponse?.stats) setLandingStats(indexedStatsToProjectStats(statsResponse.stats));
+      if (healthResponse?.ok) setLandingHealth(healthResponse);
+    };
+    void loadLandingData();
+    const interval = window.setInterval(loadLandingData, 15_000);
     return () => {
       canceled = true;
+      window.clearInterval(interval);
     };
   }, []);
 
@@ -1361,12 +1391,36 @@ function LandingPage() {
 
       <section className="landing-hero" id="top">
         <div className="landing-hero-copy">
+          <div className="landing-network-row">
+            <span>AuraPredict</span>
+            <strong>{indexerIsRealtime ? "Network :: Live" : "Network :: Indexed"}</strong>
+          </div>
           <p className="landing-kicker">Arc Testnet prediction markets</p>
-          <h1>A social forecasting arena for Arc.</h1>
+          <h1>
+            <span>{heroMarketText}</span> prediction markets indexed.
+          </h1>
           <p>
-            Trade YES/NO markets with native Arc USDC, build a public forecasting profile, and turn
-            every prediction into visible Aura reputation.
+            Trade YES/NO markets with native Arc USDC while a live Render indexer keeps market
+            history, volume, participants, and leaderboards fast enough for public forecasting.
           </p>
+          <div className="landing-hero-ledger" aria-label="AuraPredict live indexer metrics">
+            <div>
+              <span>Total volume</span>
+              <strong>{indexedVolumeText}</strong>
+            </div>
+            <div>
+              <span>Participant entries</span>
+              <strong>{participantsText}</strong>
+            </div>
+            <div>
+              <span>Known players</span>
+              <strong>{knownPlayersText}</strong>
+            </div>
+            <div>
+              <span>Last indexed block</span>
+              <strong>{indexedBlockText}</strong>
+            </div>
+          </div>
           <div className="landing-actions">
             <a className="landing-primary" href={APP_URL}>
               Launch the App
@@ -1379,9 +1433,9 @@ function LandingPage() {
             </a>
           </div>
           <div className="landing-proof">
-            <span>Arc native USDC</span>
-            <span>Aura Points</span>
-            <span>Evidence-based resolution</span>
+            <span>{indexerIsRealtime ? "Render indexer live" : "Indexer fallback active"}</span>
+            <span>{updatedText}</span>
+            <span>{pendingMarketsText} pending resolution</span>
           </div>
         </div>
         <aside className="landing-visual landing-video-card">
@@ -1403,8 +1457,8 @@ function LandingPage() {
             )}
           </div>
           <div className="landing-market-preview">
-            <span>Live market feel</span>
-            <strong>Stake on outcomes, follow odds, attach evidence, and build reputation.</strong>
+            <span>Live market surface</span>
+            <strong>{heroMarketText} markets / {liveMarketsText} live / {knownPlayersText} known players</strong>
             <div>
               <b>YES 68%</b>
               <b>NO 32%</b>
@@ -1469,9 +1523,9 @@ function LandingPage() {
           <p className="landing-kicker">Project docs</p>
           <h2>Transparent testnet mechanics without hiding the roadmap.</h2>
           <p>
-            AuraPredict is live as an Arc Testnet MVP. The current product proves market creation,
-            staking, settlement, profiles, and public reputation while the data layer moves toward
-            realtime persistence.
+            AuraPredict is live as an Arc Testnet MVP with a public Render indexer. The current product
+            proves market creation, staking, settlement, profiles, live stats, and public reputation while
+            wallet actions remain fully onchain.
           </p>
         </div>
 
@@ -1494,10 +1548,10 @@ function LandingPage() {
           </article>
           <article className="docs-card">
             <span className="docs-label">Resolution model</span>
-            <h3>Evidence first, agent assisted</h3>
+            <h3>Creator proposed, dispute protected</h3>
             <p>
-              Market creators propose the final result after close. Evidence links, notes, Aura Agent
-              summaries, and a dispute window help users review ambiguous outcomes before settlement.
+              Market creators propose the final result after close. A dispute window gives users time
+              to challenge ambiguous outcomes before settlement and claims.
             </p>
           </article>
         </div>
@@ -1505,10 +1559,10 @@ function LandingPage() {
         <div className="docs-diagram-panel">
           <div>
             <span className="docs-label">System architecture</span>
-            <h3>Indexer first, wallet signed</h3>
+            <h3>Live indexer, wallet signed</h3>
             <p>
-              The public app reads indexed market state first for speed. Wallets still sign transactions
-              against the prediction market contract, and Arcscan remains the verification layer.
+              The public app reads the Render indexer first for low-latency market state. Wallets still
+              sign transactions against the prediction market contract, and Arcscan remains the verification layer.
             </p>
           </div>
           <div className="docs-flow-diagram" aria-label="AuraPredict architecture diagram">
@@ -1582,9 +1636,9 @@ function LandingPage() {
             <span className="docs-label">Roadmap</span>
             <h3>Path toward a production-grade prediction market</h3>
             <p>
-              The current dapp proves the market flow on Arc Testnet with a public static indexer already
-              feeding market history, activity, stats, and leaderboards. The next major step is making that
-              data layer realtime and persistent for social features.
+              The current dapp proves the market flow on Arc Testnet with a live public indexer feeding
+              market history, activity, stats, and leaderboards. The next step is tightening refresh UX and
+              persistence around social identity.
             </p>
           </div>
           <div className="docs-roadmap">
