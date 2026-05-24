@@ -43,6 +43,14 @@ export const arcPredictionMarketAbi = [
   },
   {
     type: "event",
+    name: "MarketResultProposer",
+    inputs: [
+      { type: "uint256", name: "marketId", indexed: true },
+      { type: "address", name: "proposer", indexed: true }
+    ]
+  },
+  {
+    type: "event",
     name: "MarketDisputed",
     inputs: [
       { type: "uint256", name: "marketId", indexed: true },
@@ -69,6 +77,15 @@ export const arcPredictionMarketAbi = [
   },
   {
     type: "event",
+    name: "DisputeCanceledByTimeout",
+    inputs: [
+      { type: "uint256", name: "marketId", indexed: true },
+      { type: "address", name: "creator", indexed: true },
+      { type: "address", name: "disputer", indexed: true }
+    ]
+  },
+  {
+    type: "event",
     name: "ProtocolFeeUpdated",
     inputs: [
       { type: "uint256", name: "previousFeeBps", indexed: false },
@@ -84,11 +101,58 @@ export const arcPredictionMarketAbi = [
     ]
   },
   {
+    type: "event",
+    name: "MarketCreationFeeUpdated",
+    inputs: [
+      { type: "uint256", name: "previousFee", indexed: false },
+      { type: "uint256", name: "newFee", indexed: false }
+    ]
+  },
+  {
+    type: "event",
+    name: "DisputeGracePeriodUpdated",
+    inputs: [
+      { type: "uint256", name: "previousGracePeriod", indexed: false },
+      { type: "uint256", name: "newGracePeriod", indexed: false }
+    ]
+  },
+  {
+    type: "event",
+    name: "ResolutionAuthorityUpdated",
+    inputs: [
+      { type: "address", name: "previousAuthority", indexed: true },
+      { type: "address", name: "newAuthority", indexed: true }
+    ]
+  },
+  {
+    type: "event",
+    name: "MarketCreationFeeCollected",
+    inputs: [
+      { type: "uint256", name: "marketId", indexed: true },
+      { type: "address", name: "creator", indexed: true },
+      { type: "uint256", name: "fee", indexed: false }
+    ]
+  },
+  {
     type: "function",
     name: "owner",
     stateMutability: "view",
     inputs: [],
     outputs: [{ type: "address" }]
+  },
+  {
+    type: "function",
+    name: "resolutionAuthority",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ type: "address" }]
+  },
+  {
+    type: "function",
+    name: "CONTRACT_VERSION",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ type: "string" }]
   },
   {
     type: "function",
@@ -127,6 +191,13 @@ export const arcPredictionMarketAbi = [
   },
   {
     type: "function",
+    name: "disputeGracePeriod",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ type: "uint256" }]
+  },
+  {
+    type: "function",
     name: "protocolFeeBps",
     stateMutability: "view",
     inputs: [],
@@ -141,9 +212,37 @@ export const arcPredictionMarketAbi = [
   },
   {
     type: "function",
+    name: "marketCreationFee",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ type: "uint256" }]
+  },
+  {
+    type: "function",
     name: "setProtocolFeeBps",
     stateMutability: "nonpayable",
     inputs: [{ type: "uint256", name: "newFeeBps" }],
+    outputs: []
+  },
+  {
+    type: "function",
+    name: "setMarketCreationFee",
+    stateMutability: "nonpayable",
+    inputs: [{ type: "uint256", name: "newFee" }],
+    outputs: []
+  },
+  {
+    type: "function",
+    name: "setDisputeGracePeriod",
+    stateMutability: "nonpayable",
+    inputs: [{ type: "uint256", name: "newGracePeriod" }],
+    outputs: []
+  },
+  {
+    type: "function",
+    name: "setResolutionAuthority",
+    stateMutability: "nonpayable",
+    inputs: [{ type: "address", name: "newAuthority" }],
     outputs: []
   },
   {
@@ -204,6 +303,13 @@ export const arcPredictionMarketAbi = [
   {
     type: "function",
     name: "finalize",
+    stateMutability: "nonpayable",
+    inputs: [{ type: "uint256", name: "marketId" }],
+    outputs: []
+  },
+  {
+    type: "function",
+    name: "cancelStaleDispute",
     stateMutability: "nonpayable",
     inputs: [{ type: "uint256", name: "marketId" }],
     outputs: []

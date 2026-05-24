@@ -45,9 +45,10 @@
           <h1>Everything needed to use, deploy, and understand AuraPredict.</h1>
           <p>
             AuraPredict is a YES/NO prediction market dapp on Arc Testnet. It combines native
-            Arc USDC staking, creator-led resolution, dispute protection, a public indexer,
-            wallet profiles, social forecasting, Aura Points, and AI resolution receipts that
-            help calculate market outcomes without changing the contract.
+            Arc USDC staking, creator-led resolution with a future oracle/committee hook,
+            dispute protection, protocol fees, a public Render indexer, wallet profiles,
+            searchable bet history, Aura Points, and AI resolution receipts that help
+            calculate market outcomes while settlement stays onchain.
           </p>
           <div class="hero-actions">
             <a class="primary-action" href="#users">Start using</a>
@@ -118,11 +119,11 @@
           <div class="feature-grid">
             <article>
               <h3>Onchain trading</h3>
-              <p>Market creation, staking, resolution, dispute, cancel, and claim are contract interactions.</p>
+              <p>Market creation, staking, resolution, dispute, stale-dispute cancel, and claim are contract interactions.</p>
             </article>
             <article>
               <h3>Fast read layer</h3>
-              <p>The indexer reads Arc events and exposes market stats, activity, history, and leaderboard data.</p>
+              <p>The indexer reads Arc events and exposes market stats, activity, wallet-searchable history, and leaderboard data.</p>
             </article>
             <article>
               <h3>Social layer</h3>
@@ -167,6 +168,7 @@
               <ul>
                 <li>Markets that need creator resolution.</li>
                 <li>Results ready to finalize.</li>
+                <li>Stale disputes that can be canceled to refund both sides.</li>
                 <li>Claims available after settlement.</li>
                 <li>Transaction confirmation links to Arcscan.</li>
               </ul>
@@ -213,7 +215,7 @@
             <article>
               <span>1</span>
               <h3>Create</h3>
-              <p>Creator opens a market, sets category and close time, and locks the creator bond.</p>
+              <p>Creator opens a market, sets category and close time, locks the creator bond, and pays any configured creation fee.</p>
             </article>
             <article>
               <span>2</span>
@@ -223,15 +225,20 @@
             <article>
               <span>3</span>
               <h3>Propose</h3>
-              <p>Creator or owner proposes YES, NO, or Cancel after the close time, optionally using an AI receipt as decision support.</p>
+              <p>Creator, owner, or the configured resolution authority proposes YES, NO, or Cancel after close, optionally using an AI receipt.</p>
             </article>
             <article>
               <span>4</span>
               <h3>Dispute</h3>
-              <p>Users can dispute a proposed outcome during the dispute window with a dispute bond.</p>
+              <p>Only users with a position in that market can dispute during the dispute window with a dispute bond.</p>
             </article>
             <article>
               <span>5</span>
+              <h3>Stale dispute</h3>
+              <p>If a dispute is not finalized after the grace period, anyone can cancel it and refund users.</p>
+            </article>
+            <article>
+              <span>6</span>
               <h3>Claim</h3>
               <p>After finalization, winners claim payout or both sides refund if canceled.</p>
             </article>
@@ -241,6 +248,7 @@
             <article><span>ABI</span><strong>src/contracts/arcPredictionMarketAbi.ts</strong></article>
             <article><span>Tests</span><strong>test/ArcPredictionMarket.js</strong></article>
             <article><span>Deploy script</span><strong>scripts/deploy.js</strong></article>
+            <article><span>V2 hooks</span><strong>resolutionAuthority, marketCreationFee, cancelStaleDispute</strong></article>
           </div>
         </div>
       </section>
@@ -250,9 +258,9 @@
         <div class="section-body">
           <h2>AI outcome calculation without changing the contract</h2>
           <p>
-            AuraPredict V1 keeps the current Solidity contract unchanged. The indexer runs an
-            off-chain AI review committee, stores a public resolution receipt, and leaves final
-            settlement to the existing resolver, owner, dispute, finalize, and claim flow.
+            AuraPredict V2 keeps AI calculation off-chain. The indexer runs an AI review
+            committee, stores a public resolution receipt, and leaves final settlement to
+            the creator, owner, or future resolution authority flow on the contract.
           </p>
           <div class="timeline">
             <article>
@@ -273,7 +281,7 @@
             <article>
               <span>4</span>
               <h3>Propose result</h3>
-              <p>An admin can review the receipt, then the resolver or owner signs the normal contract transaction.</p>
+              <p>An admin can review the receipt, then the resolver, owner, or configured authority signs the normal contract transaction.</p>
             </article>
           </div>
           <div class="two-column">
@@ -293,11 +301,12 @@ Authorization: Bearer your_admin_token</code></pre>
             <article><span>AI provider</span><strong>AI_PROVIDER=gemini and GEMINI_API_KEY</strong></article>
             <article><span>Manual mode</span><strong>Receipt only; human reviews and signs the result proposal.</strong></article>
             <article><span>Auto-run</span><strong>AURA_RESOLUTION_AUTO_RUN=1 creates the first receipt for closed unresolved markets.</strong></article>
-            <article><span>Auto-propose</span><strong>AURA_RESOLUTION_AUTO_PROPOSE=1 requires a resolver or owner private key.</strong></article>
+            <article><span>Auto-propose</span><strong>AURA_RESOLUTION_AUTO_PROPOSE=1 requires a resolver, owner, or authority private key.</strong></article>
           </div>
           <div class="note">
-            AI receipts are decision support, not an oracle. The contract still controls settlement,
-            users can still dispute, and private resolver keys must stay outside GitHub and Vercel logs.
+            AI receipts are decision support, not a trustless oracle. The contract still controls
+            settlement, users can still dispute, and private resolver or authority keys must stay
+            outside GitHub and Vercel logs.
           </div>
         </div>
       </section>
@@ -332,6 +341,7 @@ npm run dev</code></pre>
             <article><span>Markets</span><strong>/api/markets</strong></article>
             <article><span>Activity</span><strong>/api/activity</strong></article>
             <article><span>AI receipts</span><strong>/api/resolutions/:marketId</strong></article>
+            <article><span>Market history</span><strong>/api/markets/:marketId returns trades for wallet search</strong></article>
           </div>
         </div>
       </section>
@@ -427,7 +437,7 @@ Value: cname.vercel-dns.com</code></pre>
             </article>
             <article>
               <h3>Resolution risk</h3>
-              <p>Creator-led resolution requires clear criteria, evidence, and dispute review to avoid ambiguous settlement.</p>
+              <p>Creator or authority-led resolution requires clear criteria, evidence, and dispute review to avoid ambiguous settlement.</p>
             </article>
             <article>
               <h3>Admin keys</h3>

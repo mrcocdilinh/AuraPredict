@@ -10,7 +10,7 @@ const Outcome = {
 
 describe("ArcPredictionMarket", function () {
   async function deployFixture() {
-    const [owner, resolver, alice, bob] = await ethers.getSigners();
+    const [owner, resolver, alice, bob, committee] = await ethers.getSigners();
     const minStake = ethers.parseUnits("0.1", 18);
     const factory = await ethers.getContractFactory("ArcPredictionMarket");
     const market = await factory.deploy(minStake);
@@ -18,7 +18,7 @@ describe("ArcPredictionMarket", function () {
     const creatorBond = await market.creatorBond();
     const disputeBond = await market.disputeBond();
     const disputeWindow = Number(await market.disputeWindow());
-    return { market, owner, resolver, alice, bob, creatorBond, disputeBond, disputeWindow };
+    return { market, owner, resolver, alice, bob, committee, creatorBond, disputeBond, disputeWindow };
   }
 
   async function latestTimestamp() {
@@ -86,6 +86,27 @@ describe("ArcPredictionMarket", function () {
     assert.equal(after + gasPaid - before, ethers.parseUnits("0.04", 18));
   });
 
+  it("collects a configurable market creation fee for protocol revenue", async function () {
+    const { market, owner, resolver, creatorBond } = await deployFixture();
+    const closeTime = (await latestTimestamp()) + 3600;
+    const creationFee = ethers.parseUnits("0.02", 18);
+
+    await market.setMarketCreationFee(creationFee);
+    await market.connect(resolver).createMarket("Will creation fees accrue immediately?", "Arc", closeTime, {
+      value: creatorBond + creationFee
+    });
+
+    assert.equal(await market.accumulatedProtocolFees(), creationFee);
+
+    const before = await ethers.provider.getBalance(owner.address);
+    const tx = await market.withdrawProtocolFees(owner.address, 0);
+    const receipt = await tx.wait();
+    const gasPaid = receipt.gasUsed * receipt.gasPrice;
+    const after = await ethers.provider.getBalance(owner.address);
+
+    assert.equal(after + gasPaid - before, creationFee);
+  });
+
   it("refunds both sides when a market is canceled", async function () {
     const { market, resolver, alice, creatorBond, disputeWindow } = await deployFixture();
     const closeTime = (await latestTimestamp()) + 3600;
@@ -122,5 +143,70 @@ describe("ArcPredictionMarket", function () {
     const after = await ethers.provider.getBalance(alice.address);
 
     assert.equal(after - before, creatorBond + disputeBond);
+  });
+
+  it("only lets a market participant dispute a proposed result", async function () {
+    const { market, resolver, alice, bob, creatorBond, disputeBond } = await deployFixture();
+    const closeTime = (await latestTimestamp()) + 3600;
+
+    await market.connect(resolver).createMarket("Will non participants be blocked from disputes?", "Test", closeTime, {
+      value: creatorBond
+    });
+    await market.connect(alice).bet(0, Outcome.Yes, { value: ethers.parseUnits("1", 18) });
+
+    await increaseTime(3601);
+    await market.connect(resolver).resolve(0, Outcome.Yes);
+
+    await assert.rejects(
+      market.connect(bob).dispute(0, { value: disputeBond }),
+      /NoPosition/
+    );
+  });
+
+  it("lets a future oracle or committee authority propose and finalize disputed results", async function () {
+    const { market, resolver, alice, bob, committee, creatorBond, disputeBond } = await deployFixture();
+    const closeTime = (await latestTimestamp()) + 3600;
+
+    await market.setResolutionAuthority(committee.address);
+    await market.connect(resolver).createMarket("Can committee authority resolve markets later?", "Arc", closeTime, {
+      value: creatorBond
+    });
+    await market.connect(alice).bet(0, Outcome.Yes, { value: ethers.parseUnits("1", 18) });
+    await market.connect(bob).bet(0, Outcome.No, { value: ethers.parseUnits("1", 18) });
+
+    await increaseTime(3601);
+    await market.connect(committee).resolve(0, Outcome.No);
+    await market.connect(alice).dispute(0, { value: disputeBond });
+
+    const before = await ethers.provider.getBalance(alice.address);
+    await market.connect(committee).finalizeDispute(0, Outcome.Yes);
+    const after = await ethers.provider.getBalance(alice.address);
+
+    assert.equal(after - before, creatorBond + disputeBond);
+  });
+
+  it("cancels stale disputes if the resolution authority does not act", async function () {
+    const { market, resolver, alice, bob, creatorBond, disputeBond, disputeWindow } = await deployFixture();
+    const closeTime = (await latestTimestamp()) + 3600;
+    const gracePeriod = 3600;
+    const stake = ethers.parseUnits("1", 18);
+
+    await market.setDisputeGracePeriod(gracePeriod);
+    await market.connect(resolver).createMarket("Will a stale dispute fail closed to refunds?", "Test", closeTime, {
+      value: creatorBond
+    });
+    await market.connect(alice).bet(0, Outcome.Yes, { value: stake });
+    await market.connect(bob).bet(0, Outcome.No, { value: stake });
+
+    await increaseTime(3601);
+    await market.connect(resolver).resolve(0, Outcome.No);
+    await market.connect(alice).dispute(0, { value: disputeBond });
+    await increaseTime(disputeWindow + gracePeriod + 1);
+    await market.connect(bob).cancelStaleDispute(0);
+
+    const marketRow = await market.getMarket(0);
+    assert.equal(Number(marketRow[13]), Outcome.Canceled);
+    assert.equal(await market.potentialPayout(0, alice.address), stake);
+    assert.equal(await market.potentialPayout(0, bob.address), stake);
   });
 });

@@ -52,9 +52,12 @@ const EVENT_NAMES = [
   "MarketCreated",
   "BetPlaced",
   "MarketResultProposed",
+  "MarketResultProposer",
   "MarketDisputed",
   "MarketResolved",
   "DisputeFinalized",
+  "DisputeCanceledByTimeout",
+  "MarketCreationFeeCollected",
   "Claimed"
 ];
 const legacyGetMarketAbi = [
@@ -188,11 +191,15 @@ function emptyState() {
     lastIndexedBlock: START_BLOCK > 0n ? (START_BLOCK - 1n).toString() : "0",
     updatedAt: null,
     owner: ZERO_ADDRESS,
+    contractVersion: "unknown",
+    resolutionAuthority: ZERO_ADDRESS,
     minStake: "0",
     creatorBond: "0",
     disputeBond: "0",
     disputeWindow: 0,
+    disputeGracePeriod: 0,
     protocolFeeBps: 0,
+    marketCreationFee: "0",
     accumulatedProtocolFees: "0",
     marketCount: 0,
     markets: {},
@@ -269,6 +276,7 @@ function ensureMarket(marketId) {
       proposedOutcome: Outcome.Unresolved,
       proposedAt: 0,
       disputeDeadline: 0,
+      proposedBy: ZERO_ADDRESS,
       disputed: false,
       disputer: ZERO_ADDRESS,
       outcome: Outcome.Unresolved,
@@ -354,6 +362,13 @@ async function processEvent(eventName, log) {
     return;
   }
 
+  if (eventName === "MarketResultProposer") {
+    const market = ensureMarket(Number(args.marketId ?? 0n));
+    market.proposedBy = args.proposer ?? ZERO_ADDRESS;
+    market.updatedTxHash = txHash;
+    return;
+  }
+
   if (eventName === "MarketDisputed") {
     const market = ensureMarket(Number(args.marketId ?? 0n));
     market.disputed = true;
@@ -377,6 +392,20 @@ async function processEvent(eventName, log) {
     market.resolvedAt = timestamp;
     market.updatedTxHash = txHash;
     addSnapshot(market, timestamp, txHash, logIndex);
+    return;
+  }
+
+  if (eventName === "DisputeCanceledByTimeout") {
+    const market = ensureMarket(Number(args.marketId ?? 0n));
+    market.outcome = Outcome.Canceled;
+    market.resolvedAt = timestamp;
+    market.updatedTxHash = txHash;
+    addSnapshot(market, timestamp, txHash, logIndex);
+    return;
+  }
+
+  if (eventName === "MarketCreationFeeCollected") {
+    state.accumulatedProtocolFees = toAmount(toBigint(state.accumulatedProtocolFees) + toBigint(args.fee));
     return;
   }
 
@@ -485,6 +514,24 @@ async function refreshContractState() {
     state.disputeWindow = 0;
     state.protocolFeeBps = 0;
     state.accumulatedProtocolFees = "0";
+  }
+
+  try {
+    const [contractVersion, resolutionAuthority, disputeGracePeriod, marketCreationFee] = await Promise.all([
+      readContract("CONTRACT_VERSION"),
+      readContract("resolutionAuthority"),
+      readContract("disputeGracePeriod"),
+      readContract("marketCreationFee")
+    ]);
+    state.contractVersion = String(contractVersion || "unknown");
+    state.resolutionAuthority = resolutionAuthority || state.owner;
+    state.disputeGracePeriod = Number(disputeGracePeriod);
+    state.marketCreationFee = toAmount(marketCreationFee);
+  } catch {
+    state.contractVersion = state.creatorBond === "0" ? "legacy" : "dispute";
+    state.resolutionAuthority = state.owner;
+    state.disputeGracePeriod = 0;
+    state.marketCreationFee = "0";
   }
 
   const markets = await Promise.all(
@@ -1318,7 +1365,23 @@ async function route(req, res) {
     }
 
     if (url.pathname === "/api/stats") {
-      json(res, 200, { stats: state.stats, updatedAt: state.updatedAt, lastIndexedBlock: state.lastIndexedBlock });
+      json(res, 200, {
+        stats: state.stats,
+        contract: {
+          version: state.contractVersion,
+          owner: state.owner,
+          resolutionAuthority: state.resolutionAuthority,
+          creatorBond: state.creatorBond,
+          disputeBond: state.disputeBond,
+          disputeWindow: state.disputeWindow,
+          disputeGracePeriod: state.disputeGracePeriod,
+          protocolFeeBps: state.protocolFeeBps,
+          marketCreationFee: state.marketCreationFee,
+          accumulatedProtocolFees: state.accumulatedProtocolFees
+        },
+        updatedAt: state.updatedAt,
+        lastIndexedBlock: state.lastIndexedBlock
+      });
       return;
     }
 

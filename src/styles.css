@@ -3893,7 +3893,8 @@ label {
 }
 
 .agent-panel,
-.top-traders-panel {
+.top-traders-panel,
+.market-history-panel {
   background: #ffffff;
   border: 1px solid #dfe6f1;
   border-radius: 8px;
@@ -3907,6 +3908,13 @@ label {
 
 .top-traders-panel {
   grid-template-rows: auto 1fr;
+}
+
+.market-history-panel {
+  display: grid;
+  gap: 12px;
+  margin-top: 12px;
+  padding: 14px;
 }
 
 .panel-heading {
@@ -4176,6 +4184,114 @@ label {
 .top-trader-list button {
   min-height: 30px;
   padding: 0 10px;
+}
+
+.market-history-heading {
+  align-items: center;
+}
+
+.wallet-history-search,
+.ended-search {
+  align-items: center;
+  background: #f8fafc;
+  border: 1px solid #dfe6f1;
+  border-radius: 8px;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 18px minmax(0, 1fr);
+  min-height: 38px;
+  min-width: min(260px, 100%);
+  padding: 0 10px;
+}
+
+.wallet-history-search .search-icon,
+.ended-search .search-icon {
+  stroke: #667085;
+}
+
+.wallet-history-search input,
+.ended-search input {
+  background: transparent;
+  border: 0;
+  color: #101827;
+  font: inherit;
+  min-width: 0;
+  outline: 0;
+  width: 100%;
+}
+
+.market-history-list {
+  display: grid;
+  gap: 8px;
+  max-height: 420px;
+  overflow: auto;
+  padding-right: 2px;
+}
+
+.market-history-list > span {
+  color: #667085;
+  font-size: 0.78rem;
+  font-weight: 780;
+}
+
+.market-history-list article {
+  align-items: center;
+  background: #f8fafc;
+  border: 1px solid #e5ebf4;
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
+  padding: 10px;
+}
+
+.market-history-list article div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.market-history-list article strong {
+  color: #101827;
+  font-size: 0.85rem;
+  min-width: 0;
+}
+
+.market-history-list article small {
+  color: #667085;
+  font-size: 0.74rem;
+  font-weight: 760;
+}
+
+.history-side {
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 950;
+  padding: 5px 8px;
+}
+
+.history-side.yes {
+  background: #e6fbf2;
+  color: #047857;
+}
+
+.history-side.no {
+  background: #fff1f2;
+  color: #be123c;
+}
+
+.market-history-list a {
+  color: #08768a;
+  font-size: 0.76rem;
+  font-weight: 900;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.ended-search-actions {
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 .related-market-section {
@@ -5146,6 +5262,7 @@ label {
 [data-theme="dark"] .onboarding-card,
 [data-theme="dark"] .agent-panel,
 [data-theme="dark"] .top-traders-panel,
+[data-theme="dark"] .market-history-panel,
 [data-theme="dark"] .aura-breakdown-card,
 [data-theme="dark"] .security-page article {
   background: rgba(12, 17, 31, 0.96);
@@ -5164,6 +5281,7 @@ label {
 [data-theme="dark"] .panel-heading h3,
 [data-theme="dark"] .agent-result strong,
 [data-theme="dark"] .top-trader-list article > span,
+[data-theme="dark"] .market-history-list article strong,
 [data-theme="dark"] .aura-breakdown-grid strong,
 [data-theme="dark"] .leaderboard-wallet strong,
 [data-theme="dark"] .security-page h3 {
@@ -5178,6 +5296,8 @@ label {
 [data-theme="dark"] .agent-result span,
 [data-theme="dark"] .agent-checklist span,
 [data-theme="dark"] .top-trader-list small,
+[data-theme="dark"] .market-history-list article small,
+[data-theme="dark"] .market-history-list > span,
 [data-theme="dark"] .aura-breakdown-grid span,
 [data-theme="dark"] .aura-breakdown-grid small {
   color: #9aa7bd;
@@ -5191,9 +5311,26 @@ label {
 [data-theme="dark"] .aura-agent-create-panel,
 [data-theme="dark"] .aura-draft-card,
 [data-theme="dark"] .top-trader-list article,
+[data-theme="dark"] .market-history-list article,
 [data-theme="dark"] .aura-breakdown-grid div {
   background: #0b1020;
   border-color: #202a3f;
+}
+
+[data-theme="dark"] .wallet-history-search,
+[data-theme="dark"] .ended-search {
+  background: #0b1020;
+  border-color: #202a3f;
+}
+
+[data-theme="dark"] .wallet-history-search input,
+[data-theme="dark"] .ended-search input {
+  color: #f7f9ff;
+}
+
+[data-theme="dark"] .wallet-history-search .search-icon,
+[data-theme="dark"] .ended-search .search-icon {
+  stroke: #9aa7bd;
 }
 
 [data-theme="dark"] .agent-evidence-list strong,
@@ -5775,8 +5912,22 @@ label {
   }
 
   .onboarding-steps,
-  .top-trader-list article {
+  .top-trader-list article,
+  .market-history-list article {
     grid-template-columns: 1fr;
+  }
+
+  .market-history-heading,
+  .ended-search-actions {
+    align-items: stretch;
+    display: grid;
+    justify-content: stretch;
+  }
+
+  .wallet-history-search,
+  .ended-search {
+    min-width: 0;
+    width: 100%;
   }
 
   .wallet-list-panel {

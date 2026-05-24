@@ -35,6 +35,7 @@ contract ArcPredictionMarket {
 
     error NotOwner();
     error NotResolver();
+    error NotResolutionAuthority();
     error MarketNotFound();
     error InvalidOutcome();
     error MarketClosed();
@@ -47,10 +48,12 @@ contract ArcPredictionMarket {
     error InvalidFee();
     error ZeroRecipient();
     error InvalidBond();
+    error NoPosition();
     error ResultAlreadyProposed();
     error ResultNotProposed();
     error DisputeWindowOpen();
     error DisputeWindowClosed();
+    error DisputeGracePeriodOpen();
     error AlreadyDisputed();
     error DisputedMarket();
 
@@ -58,13 +61,17 @@ contract ArcPredictionMarket {
     uint256 private constant REENTRANCY_LOCKED = 2;
     uint256 public constant BPS = 10_000;
     uint256 public constant MAX_PROTOCOL_FEE_BPS = 500;
+    string public constant CONTRACT_VERSION = "AURAPREDICT_V2";
 
     address public owner;
+    address public resolutionAuthority;
     uint256 public immutable minStake;
     uint256 public immutable creatorBond;
     uint256 public immutable disputeBond;
     uint256 public immutable disputeWindow;
+    uint256 public disputeGracePeriod = 72 hours;
     uint256 public protocolFeeBps = 200;
+    uint256 public marketCreationFee;
     uint256 public accumulatedProtocolFees;
     uint256 public marketCount;
 
@@ -91,15 +98,26 @@ contract ArcPredictionMarket {
     );
     event MarketResolved(uint256 indexed marketId, Outcome outcome);
     event MarketResultProposed(uint256 indexed marketId, Outcome outcome, uint256 disputeDeadline);
+    event MarketResultProposer(uint256 indexed marketId, address indexed proposer);
     event MarketDisputed(uint256 indexed marketId, address indexed disputer, Outcome proposedOutcome);
+    event DisputeCanceledByTimeout(uint256 indexed marketId, address indexed creator, address indexed disputer);
     event DisputeFinalized(uint256 indexed marketId, Outcome finalOutcome, address indexed bondRecipient);
     event Claimed(uint256 indexed marketId, address indexed user, uint256 payout);
     event ProtocolFeeUpdated(uint256 previousFeeBps, uint256 newFeeBps);
+    event MarketCreationFeeUpdated(uint256 previousFee, uint256 newFee);
+    event DisputeGracePeriodUpdated(uint256 previousGracePeriod, uint256 newGracePeriod);
+    event ResolutionAuthorityUpdated(address indexed previousAuthority, address indexed newAuthority);
+    event MarketCreationFeeCollected(uint256 indexed marketId, address indexed creator, uint256 fee);
     event ProtocolFeeCollected(uint256 indexed marketId, address indexed user, uint256 fee);
     event ProtocolFeesWithdrawn(address indexed recipient, uint256 amount);
 
     modifier onlyOwner() {
         if (msg.sender != owner) revert NotOwner();
+        _;
+    }
+
+    modifier onlyResolutionAuthority() {
+        if (msg.sender != owner && msg.sender != resolutionAuthority) revert NotResolutionAuthority();
         _;
     }
 
@@ -112,23 +130,47 @@ contract ArcPredictionMarket {
 
     constructor(uint256 _minStake) {
         owner = msg.sender;
+        resolutionAuthority = msg.sender;
         minStake = _minStake;
         creatorBond = _minStake * 10;
         disputeBond = _minStake * 10;
         disputeWindow = 12 hours;
         emit OwnershipTransferred(address(0), msg.sender);
+        emit ResolutionAuthorityUpdated(address(0), msg.sender);
     }
 
     function transferOwnership(address newOwner) external onlyOwner {
         require(newOwner != address(0), "ZERO_OWNER");
-        emit OwnershipTransferred(owner, newOwner);
+        address previousOwner = owner;
+        emit OwnershipTransferred(previousOwner, newOwner);
         owner = newOwner;
+        if (resolutionAuthority == previousOwner) {
+            emit ResolutionAuthorityUpdated(previousOwner, newOwner);
+            resolutionAuthority = newOwner;
+        }
     }
 
     function setProtocolFeeBps(uint256 newFeeBps) external onlyOwner {
         if (newFeeBps > MAX_PROTOCOL_FEE_BPS) revert InvalidFee();
         emit ProtocolFeeUpdated(protocolFeeBps, newFeeBps);
         protocolFeeBps = newFeeBps;
+    }
+
+    function setMarketCreationFee(uint256 newFee) external onlyOwner {
+        emit MarketCreationFeeUpdated(marketCreationFee, newFee);
+        marketCreationFee = newFee;
+    }
+
+    function setDisputeGracePeriod(uint256 newGracePeriod) external onlyOwner {
+        require(newGracePeriod >= 1 hours && newGracePeriod <= 30 days, "BAD_GRACE_PERIOD");
+        emit DisputeGracePeriodUpdated(disputeGracePeriod, newGracePeriod);
+        disputeGracePeriod = newGracePeriod;
+    }
+
+    function setResolutionAuthority(address newAuthority) external onlyOwner {
+        if (newAuthority == address(0)) revert ZeroRecipient();
+        emit ResolutionAuthorityUpdated(resolutionAuthority, newAuthority);
+        resolutionAuthority = newAuthority;
     }
 
     function withdrawProtocolFees(address payable recipient, uint256 amount) external onlyOwner nonReentrant {
@@ -150,7 +192,7 @@ contract ArcPredictionMarket {
     ) external payable returns (uint256 marketId) {
         require(bytes(question).length >= 8, "QUESTION_TOO_SHORT");
         require(closeTime > block.timestamp + 5 minutes, "CLOSE_TIME_TOO_SOON");
-        if (msg.value != creatorBond) revert InvalidBond();
+        if (msg.value != creatorBond + marketCreationFee) revert InvalidBond();
 
         marketId = marketCount;
         marketCount += 1;
@@ -171,6 +213,11 @@ contract ArcPredictionMarket {
             outcome: Outcome.Unresolved,
             exists: true
         });
+
+        if (marketCreationFee > 0) {
+            accumulatedProtocolFees += marketCreationFee;
+            emit MarketCreationFeeCollected(marketId, msg.sender, marketCreationFee);
+        }
 
         emit MarketCreated(marketId, question, category, closeTime, msg.sender, msg.sender);
     }
@@ -201,7 +248,7 @@ contract ArcPredictionMarket {
 
     function resolve(uint256 marketId, Outcome outcome) external {
         Market storage market = _market(marketId);
-        if (msg.sender != market.resolver && msg.sender != owner) revert NotResolver();
+        if (!_canProposeResult(market)) revert NotResolver();
         if (market.outcome != Outcome.Unresolved) revert AlreadyResolved();
         if (block.timestamp < market.closeTime) revert MarketStillOpen();
         if (market.proposedAt != 0) revert ResultAlreadyProposed();
@@ -216,11 +263,12 @@ contract ArcPredictionMarket {
         market.proposedAt = block.timestamp;
 
         emit MarketResultProposed(marketId, outcome, block.timestamp + disputeWindow);
+        emit MarketResultProposer(marketId, msg.sender);
     }
 
     function cancel(uint256 marketId) external {
         Market storage market = _market(marketId);
-        if (msg.sender != market.resolver && msg.sender != owner) revert NotResolver();
+        if (!_canProposeResult(market)) revert NotResolver();
         if (market.outcome != Outcome.Unresolved) revert AlreadyResolved();
         if (block.timestamp < market.closeTime) revert MarketStillOpen();
         if (market.proposedAt != 0) revert ResultAlreadyProposed();
@@ -229,6 +277,7 @@ contract ArcPredictionMarket {
         market.proposedAt = block.timestamp;
 
         emit MarketResultProposed(marketId, Outcome.Canceled, block.timestamp + disputeWindow);
+        emit MarketResultProposer(marketId, msg.sender);
     }
 
     function dispute(uint256 marketId) external payable {
@@ -238,6 +287,8 @@ contract ArcPredictionMarket {
         if (block.timestamp >= market.proposedAt + disputeWindow) revert DisputeWindowClosed();
         if (market.disputed) revert AlreadyDisputed();
         if (msg.value != disputeBond) revert InvalidBond();
+        Position storage position = positions[marketId][msg.sender];
+        if (position.yes + position.no == 0) revert NoPosition();
 
         market.disputed = true;
         market.disputer = msg.sender;
@@ -256,7 +307,7 @@ contract ArcPredictionMarket {
         _sendValue(payable(market.creator), creatorBond);
     }
 
-    function finalizeDispute(uint256 marketId, Outcome finalOutcome) external onlyOwner nonReentrant {
+    function finalizeDispute(uint256 marketId, Outcome finalOutcome) external onlyResolutionAuthority nonReentrant {
         Market storage market = _market(marketId);
         if (market.outcome != Outcome.Unresolved) revert AlreadyResolved();
         if (!market.disputed) revert DisputedMarket();
@@ -272,6 +323,21 @@ contract ArcPredictionMarket {
         _sendValue(bondRecipient, creatorBond + disputeBond);
 
         emit DisputeFinalized(marketId, finalOutcome, bondRecipient);
+    }
+
+    function cancelStaleDispute(uint256 marketId) external nonReentrant {
+        Market storage market = _market(marketId);
+        if (market.outcome != Outcome.Unresolved) revert AlreadyResolved();
+        if (!market.disputed) revert DisputedMarket();
+        if (block.timestamp < market.proposedAt + disputeWindow + disputeGracePeriod) {
+            revert DisputeGracePeriodOpen();
+        }
+
+        _finalizeMarket(marketId, market, Outcome.Canceled);
+        _sendValue(payable(market.creator), creatorBond);
+        _sendValue(payable(market.disputer), disputeBond);
+
+        emit DisputeCanceledByTimeout(marketId, market.creator, market.disputer);
     }
 
     function claim(uint256 marketId) external nonReentrant returns (uint256 payout) {
@@ -361,6 +427,10 @@ contract ArcPredictionMarket {
     function _market(uint256 marketId) private view returns (Market storage market) {
         market = markets[marketId];
         if (!market.exists) revert MarketNotFound();
+    }
+
+    function _canProposeResult(Market storage market) private view returns (bool) {
+        return msg.sender == market.resolver || msg.sender == owner || msg.sender == resolutionAuthority;
     }
 
     function _finalizeMarket(uint256 marketId, Market storage market, Outcome finalOutcome) private {

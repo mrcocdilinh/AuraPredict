@@ -58,9 +58,9 @@ POST /api/social/profiles/:address/follows
 The frontend uses `VITE_AURA_INDEXER_URL` when available and falls back to direct Arc RPC reads if the indexer is offline.
 When `VITE_AURA_INDEXER_URL` points to a live web service, the frontend also persists comments, evidence, follows, and profile metadata through these social endpoints. Static GitHub Pages exports remain read-only, so the app falls back to browser-local storage for social actions on that setup.
 
-## AI Resolution V1
+## AI Resolution V2
 
-AuraPredict V1 keeps the current contract and stores AI resolution receipts in the indexer state. The receipt is off-chain, public through the indexer API, and the contract still uses the existing creator/owner proposal, dispute window, finalization, and claim flow.
+AuraPredict V2 keeps AI calculation off-chain and stores AI resolution receipts in the indexer state. The receipt is public through the indexer API, while the contract still controls proposal, dispute window, finalization, stale-dispute cancel, and claim flow. The default proposer remains the creator or owner, and the contract now has `resolutionAuthority` so a later oracle or committee wallet can be used without replacing the app flow.
 
 Public read:
 
@@ -105,7 +105,7 @@ AURA_RESOLUTION_MIN_CONFIDENCE=72
 AURA_RESOLUTION_CONSENSUS_COUNT=2
 ```
 
-Keep `AURA_RESOLUTION_AUTO_PROPOSE=0` until the resolver key and evidence policy are tested. If enabled, the private key must be the market resolver or contract owner, because the current contract only allows those roles to propose results.
+Keep `AURA_RESOLUTION_AUTO_PROPOSE=0` until the resolver key and evidence policy are tested. If enabled, the private key must be the market resolver, contract owner, or configured `resolutionAuthority`.
 
 `POST /api/resolutions/:marketId/run` always requires `AURA_RESOLUTION_ADMIN_TOKEN`. If `AURA_RESOLUTION_AUTO_RUN=1`, the indexer only auto-generates the first receipt for each closed unresolved market; use the admin endpoint with `force: true` to rerun after adding better evidence.
 

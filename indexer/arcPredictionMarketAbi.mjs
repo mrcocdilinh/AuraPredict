@@ -34,6 +34,14 @@ export const arcPredictionMarketAbi = [
   },
   {
     type: "event",
+    name: "MarketResultProposer",
+    inputs: [
+      { type: "uint256", name: "marketId", indexed: true },
+      { type: "address", name: "proposer", indexed: true }
+    ]
+  },
+  {
+    type: "event",
     name: "MarketDisputed",
     inputs: [
       { type: "uint256", name: "marketId", indexed: true },
@@ -60,6 +68,24 @@ export const arcPredictionMarketAbi = [
   },
   {
     type: "event",
+    name: "DisputeCanceledByTimeout",
+    inputs: [
+      { type: "uint256", name: "marketId", indexed: true },
+      { type: "address", name: "creator", indexed: true },
+      { type: "address", name: "disputer", indexed: true }
+    ]
+  },
+  {
+    type: "event",
+    name: "MarketCreationFeeCollected",
+    inputs: [
+      { type: "uint256", name: "marketId", indexed: true },
+      { type: "address", name: "creator", indexed: true },
+      { type: "uint256", name: "fee", indexed: false }
+    ]
+  },
+  {
+    type: "event",
     name: "Claimed",
     inputs: [
       { type: "uint256", name: "marketId", indexed: true },
@@ -73,6 +99,20 @@ export const arcPredictionMarketAbi = [
     stateMutability: "view",
     inputs: [],
     outputs: [{ type: "address" }]
+  },
+  {
+    type: "function",
+    name: "resolutionAuthority",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ type: "address" }]
+  },
+  {
+    type: "function",
+    name: "CONTRACT_VERSION",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ type: "string" }]
   },
   {
     type: "function",
@@ -111,7 +151,21 @@ export const arcPredictionMarketAbi = [
   },
   {
     type: "function",
+    name: "disputeGracePeriod",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ type: "uint256" }]
+  },
+  {
+    type: "function",
     name: "protocolFeeBps",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ type: "uint256" }]
+  },
+  {
+    type: "function",
+    name: "marketCreationFee",
     stateMutability: "view",
     inputs: [],
     outputs: [{ type: "uint256" }]

@@ -27,6 +27,7 @@ import { arcPredictionMarketAbi } from "./contracts/arcPredictionMarketAbi";
 
 type EthereumProvider = {
   request: (args: { method: string; params?: unknown[] }) => Promise<unknown>;
+  disconnect?: () => Promise<void> | void;
   on?: (event: string, handler: (...args: unknown[]) => void) => void;
   removeListener?: (event: string, handler: (...args: unknown[]) => void) => void;
 };
@@ -70,7 +71,7 @@ type MarketView = {
   potentialPayout: bigint;
 };
 
-type MarketContractVersion = "unknown" | "legacy" | "dispute";
+type MarketContractVersion = "unknown" | "legacy" | "dispute" | "v2";
 
 type ActivityItem = {
   id: string;
@@ -304,6 +305,7 @@ const CHART_TOP = 8;
 const CHART_BOTTOM = 54;
 const CHART_HEIGHT = CHART_BOTTOM - CHART_TOP;
 const WALLET_CONNECTED_KEY = "aurapredict.walletConnected";
+const WALLET_DISCONNECTED_KEY = "aurapredict.walletDisconnected";
 const WALLETCONNECT_PROJECT_ID = String(import.meta.env.VITE_WALLETCONNECT_PROJECT_ID || "").trim();
 const DISMISSED_RESULT_KEY = "aurapredict.dismissedResultNotices";
 const THEME_KEY = "aurapredict.theme";
@@ -1359,8 +1361,12 @@ function LandingPage() {
       text: "Stake directly with native USDC on Arc Testnet and keep every position transparent onchain."
     },
     {
-      title: "Creator resolution",
-      text: "Market creators propose outcomes after close, with dispute protection, transparent finalization, and optional AI receipts."
+      title: "Resolution authority",
+      text: "Creators still resolve by default, while the v2 contract can later point result handling to an oracle or committee wallet."
+    },
+    {
+      title: "Protocol revenue",
+      text: "Configurable creation fees and winner-profit fees accrue onchain for the owner to withdraw transparently."
     },
     {
       title: "Profiles and reputation",
@@ -1388,7 +1394,7 @@ function LandingPage() {
     },
     {
       title: "Live indexer",
-      text: "Read market history, activity, stats, and leaderboard data from the public indexer before falling back to Arc RPC."
+      text: "Read market history, wallet-searchable bet activity, stats, and leaderboard data from the Render indexer before falling back to Arc RPC."
     }
   ];
   const flow = ["Create a market", "Stake YES or NO", "Track odds", "Resolve result", "Claim payout"];
@@ -1396,15 +1402,16 @@ function LandingPage() {
   const settlementSteps = [
     "Market closes in UTC",
     "Indexer can create an AI receipt",
-    "Creator or owner proposes YES, NO, or Cancel",
+    "Creator, owner, or resolution authority proposes YES, NO, or Cancel",
     "Dispute window stays open",
+    "Stale disputes can be canceled to refund users",
     "Final outcome is locked",
     "Winners claim payout"
   ];
   const dataFlow = [
     "Live Render indexer now powers market history, volume, participants, activity, and leaderboards",
     "Aura Agent drafts clearer markets, checks similar questions, and produces AI resolution receipts from evidence",
-    "Resolution receipts stay off-chain unless the resolver or owner signs the normal contract proposal",
+    "Resolution receipts stay off-chain unless the resolver, owner, or future authority signs the normal contract proposal",
     "Wallet actions still sign directly against the Arc contract, with Arcscan as the verification layer"
   ];
   const roadmapItems = [
@@ -1942,11 +1949,14 @@ export default function App() {
   const [account, setAccount] = useState("");
   const [owner, setOwner] = useState("");
   const [contractVersion, setContractVersion] = useState<MarketContractVersion>("unknown");
+  const [resolutionAuthority, setResolutionAuthority] = useState("");
   const [minStake, setMinStake] = useState<bigint>(0n);
   const [creatorBond, setCreatorBond] = useState<bigint>(0n);
   const [disputeBond, setDisputeBond] = useState<bigint>(0n);
   const [disputeWindow, setDisputeWindow] = useState(0);
+  const [disputeGracePeriod, setDisputeGracePeriod] = useState(0);
   const [protocolFeeBps, setProtocolFeeBps] = useState(0);
+  const [marketCreationFee, setMarketCreationFee] = useState<bigint>(0n);
   const [accumulatedProtocolFees, setAccumulatedProtocolFees] = useState<bigint>(0n);
   const [walletBalance, setWalletBalance] = useState<bigint>(0n);
   const [markets, setMarkets] = useState<MarketView[]>(() => readCachedMarkets());
@@ -1980,6 +1990,8 @@ export default function App() {
   const [leaderboardPeriod, setLeaderboardPeriod] = useState<LeaderboardPeriod>("all");
   const [leaderboardCategory, setLeaderboardCategory] = useState("All");
   const [searchQuery, setSearchQuery] = useState("");
+  const [endedSearchQuery, setEndedSearchQuery] = useState("");
+  const [marketWalletSearch, setMarketWalletSearch] = useState("");
   const [searchFocused, setSearchFocused] = useState(false);
   const [collectionView, setCollectionView] = useState<MarketSectionKey>("fresh");
   const [collectionSortKey, setCollectionSortKey] = useState<MarketSortKey>("created");
@@ -2218,7 +2230,25 @@ export default function App() {
     return (market.category || "Other").toLowerCase() === activeCategory.toLowerCase();
   };
   const filteredMarkets = activeMarkets.filter(categoryMatches);
-  const filteredEndedMarkets = endedMarkets.filter(categoryMatches);
+  const normalizedEndedSearch = endedSearchQuery.trim().toLowerCase();
+  const filteredEndedMarkets = endedMarkets
+    .filter(categoryMatches)
+    .filter((market) => {
+      if (!normalizedEndedSearch) return true;
+      const searchable = [
+        market.question,
+        market.category || "Other",
+        `market ${market.id}`,
+        `#${market.id}`,
+        market.creator,
+        market.resolver,
+        outcomeLabel(market.outcome),
+        marketStatus(market)
+      ]
+        .join(" ")
+        .toLowerCase();
+      return searchable.includes(normalizedEndedSearch);
+    });
   const formattedClock = new Intl.DateTimeFormat("en-US", {
     timeZone: "UTC",
     hour: "2-digit",
@@ -2462,7 +2492,9 @@ export default function App() {
     ? pendingResolutionMarkets.filter(
         (market) =>
           market.proposedAt === 0 &&
-          (sameAddress(market.resolver, account) || (!!owner && sameAddress(owner, account)))
+          (sameAddress(market.resolver, account) ||
+            (!!owner && sameAddress(owner, account)) ||
+            (!!resolutionAuthority && sameAddress(resolutionAuthority, account)))
       )
     : [];
   const finalizeNotifications = account
@@ -2470,14 +2502,36 @@ export default function App() {
         (market) =>
           market.proposedAt > 0 &&
           !market.disputed &&
+          market.disputeDeadline > 0 &&
           market.disputeDeadline <= nowSeconds &&
-          (sameAddress(market.resolver, account) || (!!owner && sameAddress(owner, account)))
+          (sameAddress(market.resolver, account) ||
+            (!!owner && sameAddress(owner, account)) ||
+            (!!resolutionAuthority && sameAddress(resolutionAuthority, account)))
       )
     : [];
   const disputeReviewNotifications =
-    account && owner
-      ? pendingResolutionMarkets.filter((market) => market.disputed && sameAddress(owner, account))
+    account && (owner || resolutionAuthority)
+      ? pendingResolutionMarkets.filter(
+          (market) =>
+            market.disputed &&
+            !(
+              market.disputeDeadline > 0 &&
+              disputeGracePeriod > 0 &&
+              market.disputeDeadline + disputeGracePeriod <= nowSeconds
+            ) &&
+            ((!!owner && sameAddress(owner, account)) ||
+              (!!resolutionAuthority && sameAddress(resolutionAuthority, account)))
+        )
       : [];
+  const staleDisputeNotifications = account
+    ? pendingResolutionMarkets.filter(
+        (market) =>
+          market.disputed &&
+          market.disputeDeadline > 0 &&
+          disputeGracePeriod > 0 &&
+          market.disputeDeadline + disputeGracePeriod <= nowSeconds
+      )
+    : [];
   const claimNotifications = account && isOwnProfile
     ? profileMarkets.filter(
         (market) => market.outcome !== Outcome.Unresolved && !market.claimed && market.potentialPayout > 0n
@@ -2500,6 +2554,7 @@ export default function App() {
     resolveNotifications.length +
     finalizeNotifications.length +
     disputeReviewNotifications.length +
+    staleDisputeNotifications.length +
     claimNotifications.length +
     resultNotifications.length;
   const walletOptions =
@@ -3003,6 +3058,7 @@ export default function App() {
     void refreshWalletBalance(addresses[0]);
     setSelectedWalletProvider(providerToUse);
     window.localStorage.setItem(WALLET_CONNECTED_KEY, "true");
+    window.localStorage.removeItem(WALLET_DISCONNECTED_KEY);
     setNotice("Wallet connected on Arc Testnet.");
     setConnecting(false);
   }, [registerUser, refreshWalletBalance, selectedWalletProvider, switchToArc]);
@@ -3069,6 +3125,12 @@ export default function App() {
   }, [account, setNotice]);
 
   const disconnectWallet = useCallback(async () => {
+    const providerToDisconnect = selectedWalletProvider;
+    try {
+      await providerToDisconnect?.disconnect?.();
+    } catch {
+      // Injected wallets usually do not expose disconnect; local session state is still cleared below.
+    }
     setAccount("");
     setWalletBalance(0n);
     setSelectedWalletProvider(null);
@@ -3076,8 +3138,9 @@ export default function App() {
     setNotificationMenuOpen(false);
     setSelectedProfileAddress("");
     window.localStorage.removeItem(WALLET_CONNECTED_KEY);
+    window.localStorage.setItem(WALLET_DISCONNECTED_KEY, "true");
     setNotice("Wallet disconnected in AuraPredict.");
-  }, []);
+  }, [selectedWalletProvider]);
 
   const dismissResultNotification = useCallback((market: MarketView) => {
     if (!account) return;
@@ -3414,6 +3477,7 @@ export default function App() {
     updateMarketRoute(marketId);
     setView("market");
     setSearchQuery("");
+    setMarketWalletSearch("");
     setSearchFocused(false);
     setWalletMenuOpen(false);
     setNotificationMenuOpen(false);
@@ -3450,6 +3514,7 @@ export default function App() {
       setView("market");
       setActiveCategory("All");
       setSearchQuery("");
+      setMarketWalletSearch("");
       setSearchFocused(false);
       setWalletMenuOpen(false);
       setNotificationMenuOpen(false);
@@ -3501,6 +3566,7 @@ export default function App() {
       const marketIds = Array.from(marketIdSet).sort((a, b) => a - b);
       setKnownMarketCount(totalMarketCount);
       setOwner(contractOwner);
+      setResolutionAuthority((current) => current || contractOwner);
       setMinStake(contractMinStake);
       try {
         const [contractCreatorBond, contractDisputeBond, contractDisputeWindow] = await Promise.all([
@@ -3528,7 +3594,42 @@ export default function App() {
         setCreatorBond(0n);
         setDisputeBond(0n);
         setDisputeWindow(0);
+        setDisputeGracePeriod(0);
+        setMarketCreationFee(0n);
         setContractVersion("legacy");
+      }
+      try {
+        const [contractVersionName, contractResolutionAuthority, contractDisputeGracePeriod, contractMarketCreationFee] =
+          await Promise.all([
+            withRpcRetry(() => publicClient.readContract({
+              address: contractAddress,
+              abi: arcPredictionMarketAbi,
+              functionName: "CONTRACT_VERSION"
+            })),
+            withRpcRetry(() => publicClient.readContract({
+              address: contractAddress,
+              abi: arcPredictionMarketAbi,
+              functionName: "resolutionAuthority"
+            })),
+            withRpcRetry(() => publicClient.readContract({
+              address: contractAddress,
+              abi: arcPredictionMarketAbi,
+              functionName: "disputeGracePeriod"
+            })),
+            withRpcRetry(() => publicClient.readContract({
+              address: contractAddress,
+              abi: arcPredictionMarketAbi,
+              functionName: "marketCreationFee"
+            }))
+          ]);
+        setContractVersion(String(contractVersionName) === "AURAPREDICT_V2" ? "v2" : "dispute");
+        setResolutionAuthority(contractResolutionAuthority);
+        setDisputeGracePeriod(Number(contractDisputeGracePeriod));
+        setMarketCreationFee(contractMarketCreationFee);
+      } catch {
+        setResolutionAuthority(contractOwner);
+        setDisputeGracePeriod(0);
+        setMarketCreationFee(0n);
       }
       try {
         const [feeBps, protocolFees] = await Promise.all([
@@ -4178,6 +4279,7 @@ export default function App() {
           }
         );
       } else {
+        const createCost = creatorBond + marketCreationFee;
         completed = await runTransaction(
           () =>
             walletClient.writeContract({
@@ -4187,9 +4289,11 @@ export default function App() {
               abi: arcPredictionMarketAbi,
               functionName: "createMarket",
               args: [question, category, closeTime],
-              value: creatorBond
+              value: createCost
             }),
-          `Creating market with ${formatUsdc(creatorBond)} USDC creator bond...`,
+          marketCreationFee > 0n
+            ? `Creating market with ${formatUsdc(creatorBond)} USDC bond and ${formatUsdc(marketCreationFee)} USDC creation fee...`
+            : `Creating market with ${formatUsdc(creatorBond)} USDC creator bond...`,
           true,
           (receipt) => {
             const createdEvent = receipt.logs
@@ -4468,7 +4572,7 @@ export default function App() {
   };
 
   const finalizeDispute = async (marketId: number, outcome: Outcome) => {
-    if (!account || !isAddress(account)) throw new Error("Connect owner wallet first.");
+    if (!account || !isAddress(account)) throw new Error("Connect resolution authority wallet first.");
     await switchToArc();
     const walletClient = getActiveWalletClient();
     await runTransaction(
@@ -4483,6 +4587,48 @@ export default function App() {
         }),
       "Finalizing disputed market..."
     );
+  };
+
+  const cancelStaleDispute = async (marketId: number) => {
+    if (!account || !isAddress(account)) throw new Error("Connect wallet first.");
+    if (isMarketActionPending("stale-dispute", marketId)) return;
+    await switchToArc();
+    const walletClient = getActiveWalletClient();
+    setMarketActionPending("stale-dispute", marketId, true);
+    try {
+      await runTransaction(
+        () =>
+          walletClient.writeContract({
+            account: account as Address,
+            chain: arcTestnet,
+            address: contractAddress,
+            abi: arcPredictionMarketAbi,
+            functionName: "cancelStaleDispute",
+            args: [BigInt(marketId)]
+          }),
+        `Canceling stale dispute for Market #${marketId}...`,
+        true,
+        (receipt) => {
+          const resolvedEvent = receipt.logs
+            .map((log) => {
+              try {
+                return decodeEventLog({
+                  abi: arcPredictionMarketAbi,
+                  data: log.data,
+                  topics: log.topics
+                });
+              } catch {
+                return null;
+              }
+            })
+            .find((event) => event?.eventName === "MarketResolved");
+          const args = resolvedEvent?.args as { marketId?: bigint; outcome?: number } | undefined;
+          markMarketFinalized(Number(args?.marketId ?? BigInt(marketId)), Number(args?.outcome ?? Outcome.Canceled) as Outcome);
+        }
+      );
+    } finally {
+      setMarketActionPending("stale-dispute", marketId, false);
+    }
   };
 
   const cancelMarket = async (marketId: number) => {
@@ -4607,15 +4753,23 @@ export default function App() {
     const handleAccounts = (accounts: unknown) => {
       const next = Array.isArray(accounts) ? String(accounts[0] || "") : "";
       if (next) {
-        window.localStorage.setItem(WALLET_CONNECTED_KEY, "true");
+        const remembered = window.localStorage.getItem(WALLET_CONNECTED_KEY) === "true";
+        if (!remembered) {
+          setAccount("");
+          setWalletBalance(0n);
+          setWalletMenuOpen(false);
+          return;
+        }
         registerUser(next);
         void refreshWalletBalance(next);
+        setAccount(next);
       } else {
         window.localStorage.removeItem(WALLET_CONNECTED_KEY);
+        window.localStorage.setItem(WALLET_DISCONNECTED_KEY, "true");
         setWalletMenuOpen(false);
         setWalletBalance(0n);
+        setAccount("");
       }
-      setAccount(next);
     };
 
     window.ethereum.on?.("accountsChanged", handleAccounts);
@@ -4641,6 +4795,10 @@ export default function App() {
 
     async function restoreWallet() {
       try {
+        const remembered = window.localStorage.getItem(WALLET_CONNECTED_KEY) === "true";
+        const manuallyDisconnected = window.localStorage.getItem(WALLET_DISCONNECTED_KEY) === "true";
+        if (!remembered || manuallyDisconnected) return;
+
         const accounts = await getInjectedProvider().request({ method: "eth_accounts" });
         const next = Array.isArray(accounts) ? String(accounts[0] || "") : "";
         if (!mounted || !next) return;
@@ -4652,6 +4810,7 @@ export default function App() {
         registerUser(next);
         void refreshWalletBalance(next);
         window.localStorage.setItem(WALLET_CONNECTED_KEY, "true");
+        window.localStorage.removeItem(WALLET_DISCONNECTED_KEY);
 
         if (BigInt(chainId) !== ARC_CHAIN_ID_DECIMAL) {
           setNotice("Wallet remembered. Switch MetaMask to Arc Testnet to continue.");
@@ -4778,7 +4937,9 @@ export default function App() {
           market.outcome === Outcome.Unresolved &&
           market.proposedAt === 0 &&
           Date.now() / 1000 >= market.closeTime &&
-          [market.resolver.toLowerCase(), owner.toLowerCase()].includes(account.toLowerCase());
+          (sameAddress(market.resolver, account) ||
+            (!!owner && sameAddress(owner, account)) ||
+            (!!resolutionAuthority && sameAddress(resolutionAuthority, account)));
         const canBet =
           account &&
           market.outcome === Outcome.Unresolved &&
@@ -4790,21 +4951,32 @@ export default function App() {
           market.outcome === Outcome.Unresolved &&
           market.proposedAt > 0 &&
           !market.disputed &&
+          market.disputeDeadline > 0 &&
           Date.now() / 1000 < market.disputeDeadline &&
           hasUserPosition(market);
         const canFinalize =
           canUseDisputeFlow &&
+          account &&
           market.outcome === Outcome.Unresolved &&
           market.proposedAt > 0 &&
           !market.disputed &&
+          market.disputeDeadline > 0 &&
           Date.now() / 1000 >= market.disputeDeadline;
         const canFinalizeDispute =
           canUseDisputeFlow &&
           account &&
-          owner &&
           market.outcome === Outcome.Unresolved &&
           market.disputed &&
-          sameAddress(account, owner);
+          ((!!owner && sameAddress(account, owner)) ||
+            (!!resolutionAuthority && sameAddress(account, resolutionAuthority)));
+        const canCancelStaleDispute =
+          canUseDisputeFlow &&
+          account &&
+          market.outcome === Outcome.Unresolved &&
+          market.disputed &&
+          market.disputeDeadline > 0 &&
+          disputeGracePeriod > 0 &&
+          Date.now() / 1000 >= market.disputeDeadline + disputeGracePeriod;
         const canClaim = account && market.potentialPayout > 0n && !market.claimed;
         const canLegacyResolve =
           contractVersion === "legacy" &&
@@ -4931,7 +5103,7 @@ export default function App() {
               </button>
             </div>
 
-            {(canPropose || canLegacyResolve || canDispute || canFinalize || canFinalizeDispute || canClaim) && (
+            {(canPropose || canLegacyResolve || canDispute || canFinalize || canFinalizeDispute || canCancelStaleDispute || canClaim) && (
               <div className="settlement-row" onClick={(event) => event.stopPropagation()}>
                 {canLegacyResolve && (
                   <>
@@ -4982,6 +5154,11 @@ export default function App() {
                     </button>
                   </>
                 )}
+                {canCancelStaleDispute && (
+                  <button className="secondary" onClick={() => cancelStaleDispute(market.id)}>
+                    Cancel stale dispute
+                  </button>
+                )}
                 {canClaim && (
                   <button onClick={() => claim(market.id)}>
                     Claim {formatUsdc(market.potentialPayout)} USDC
@@ -5023,28 +5200,41 @@ export default function App() {
       selectedMarket.outcome === Outcome.Unresolved &&
       selectedMarket.proposedAt === 0 &&
       Date.now() / 1000 >= selectedMarket.closeTime &&
-      [selectedMarket.resolver.toLowerCase(), owner.toLowerCase()].includes(account.toLowerCase());
+      (sameAddress(selectedMarket.resolver, account) ||
+        (!!owner && sameAddress(owner, account)) ||
+        (!!resolutionAuthority && sameAddress(resolutionAuthority, account)));
     const canDispute =
       canUseDisputeFlow &&
       account &&
       selectedMarket.outcome === Outcome.Unresolved &&
       selectedMarket.proposedAt > 0 &&
       !selectedMarket.disputed &&
+      selectedMarket.disputeDeadline > 0 &&
       Date.now() / 1000 < selectedMarket.disputeDeadline &&
       hasUserPosition(selectedMarket);
     const canFinalize =
       canUseDisputeFlow &&
+      account &&
       selectedMarket.outcome === Outcome.Unresolved &&
       selectedMarket.proposedAt > 0 &&
       !selectedMarket.disputed &&
+      selectedMarket.disputeDeadline > 0 &&
       Date.now() / 1000 >= selectedMarket.disputeDeadline;
     const canFinalizeDispute =
       canUseDisputeFlow &&
       account &&
-      owner &&
       selectedMarket.outcome === Outcome.Unresolved &&
       selectedMarket.disputed &&
-      sameAddress(account, owner);
+      ((!!owner && sameAddress(account, owner)) ||
+        (!!resolutionAuthority && sameAddress(account, resolutionAuthority)));
+    const canCancelStaleDispute =
+      canUseDisputeFlow &&
+      account &&
+      selectedMarket.outcome === Outcome.Unresolved &&
+      selectedMarket.disputed &&
+      selectedMarket.disputeDeadline > 0 &&
+      disputeGracePeriod > 0 &&
+      Date.now() / 1000 >= selectedMarket.disputeDeadline + disputeGracePeriod;
     const canLegacyResolve =
       contractVersion === "legacy" &&
       account &&
@@ -5126,6 +5316,22 @@ export default function App() {
     )
       .sort((a, b) => (b.total > a.total ? 1 : b.total < a.total ? -1 : 0))
       .slice(0, 5);
+    const marketWalletQuery = marketWalletSearch.trim().toLowerCase();
+    const marketHistoryRows = [...selectedMarketActivities]
+      .sort((a, b) => b.timestamp - a.timestamp)
+      .filter((activity) => {
+        if (!marketWalletQuery) return true;
+        const searchable = [
+          activity.user,
+          shortAddress(activity.user),
+          displayNameForAddress(activity.user),
+          activity.side === Outcome.Yes ? "yes" : "no",
+          formatUsdc(activity.amount)
+        ]
+          .join(" ")
+          .toLowerCase();
+        return searchable.includes(marketWalletQuery);
+      });
     const copyTraderPosition = (trader: { address: string; yes: bigint; no: bigint; total: bigint }) => {
       const side = trader.no > trader.yes ? Outcome.No : Outcome.Yes;
       const copyAmount = walletBalance > 0n && trader.total > walletBalance ? walletBalance : trader.total;
@@ -5353,7 +5559,7 @@ export default function App() {
                 Your position: YES {formatUsdc(selectedMarket.yesPosition)} / NO {formatUsdc(selectedMarket.noPosition)}
               </div>
             )}
-            {(canLegacyResolve || canPropose || canDispute || canFinalize || canFinalizeDispute || canClaim) && (
+            {(canLegacyResolve || canPropose || canDispute || canFinalize || canFinalizeDispute || canCancelStaleDispute || canClaim) && (
               <div className="settlement-row">
                 {canLegacyResolve && (
                   <>
@@ -5403,6 +5609,11 @@ export default function App() {
                       Final Cancel
                     </button>
                   </>
+                )}
+                {canCancelStaleDispute && (
+                  <button className="secondary" onClick={() => cancelStaleDispute(selectedMarket.id)}>
+                    Cancel stale dispute
+                  </button>
                 )}
                 {canClaim && (
                   <button onClick={() => claim(selectedMarket.id)}>
@@ -5562,6 +5773,53 @@ export default function App() {
             <span>Aura Agent, copy trading, and resolver tools are available after wallet connection.</span>
           </section>
         )}
+
+        <section className="market-history-panel">
+          <div className="panel-heading market-history-heading">
+            <div>
+              <span className="section-label">Player history</span>
+              <h3>Market #{selectedMarket.id} bets</h3>
+            </div>
+            <label className="wallet-history-search">
+              <svg className="search-icon" viewBox="0 0 24 24" aria-hidden="true">
+                <circle cx="11" cy="11" r="7" />
+                <path d="m16 16 4 4" />
+              </svg>
+              <input
+                aria-label="Search wallet in this market"
+                placeholder="Search wallet"
+                value={marketWalletSearch}
+                onChange={(event) => setMarketWalletSearch(event.target.value)}
+              />
+            </label>
+          </div>
+          <div className="market-history-list">
+            {marketHistoryRows.length === 0 && (
+              <span>
+                {selectedMarketActivities.length === 0
+                  ? "No indexed bets for this market yet."
+                  : "No wallet matches this search."}
+              </span>
+            )}
+            {marketHistoryRows.map((activity) => (
+              <article key={activity.id}>
+                <div>
+                  <strong>{displayNameForAddress(activity.user)}</strong>
+                  <small>{shortAddress(activity.user)} / {closeDate(activity.timestamp)}</small>
+                </div>
+                <span className={activity.side === Outcome.Yes ? "history-side yes" : "history-side no"}>
+                  {activity.side === Outcome.Yes ? "YES" : "NO"}
+                </span>
+                <strong>{formatUsdc(activity.amount)} USDC</strong>
+                {activity.txHash && (
+                  <a href={`${ARC_EXPLORER_URL}/tx/${activity.txHash}`} target="_blank" rel="noreferrer">
+                    Tx
+                  </a>
+                )}
+              </article>
+            ))}
+          </div>
+        </section>
 
         {hasWalletAccess && (
           <section className="market-timeline">
@@ -5834,7 +6092,7 @@ export default function App() {
                         <strong>{shortQuestion(market.question)}</strong>
                         <small>Proposed {outcomeLabel(market.proposedOutcome)}. No dispute was opened.</small>
                         <button disabled={transactionPending || isMarketActionPending("finalize", market.id)} onClick={() => finalizeMarket(market.id)}>
-                          {isMarketActionPending("finalize", market.id) ? "Finalizing..." : "Finalize result"}
+                          {isMarketActionPending("finalize", market.id) ? `Finalizing #${market.id}...` : `Finalize #${market.id}`}
                         </button>
                       </article>
                     ))}
@@ -5852,6 +6110,20 @@ export default function App() {
                             Cancel
                           </button>
                         </div>
+                      </article>
+                    ))}
+                    {staleDisputeNotifications.map((market) => (
+                      <article className="notification-card" key={`stale-${market.id}`}>
+                        <span>Stale dispute</span>
+                        <strong>{shortQuestion(market.question)}</strong>
+                        <small>Resolution authority did not finalize after the grace period. Cancel refunds both sides.</small>
+                        <button
+                          className="secondary"
+                          disabled={transactionPending || isMarketActionPending("stale-dispute", market.id)}
+                          onClick={() => cancelStaleDispute(market.id)}
+                        >
+                          {isMarketActionPending("stale-dispute", market.id) ? `Canceling #${market.id}...` : `Cancel stale #${market.id}`}
+                        </button>
                       </article>
                     ))}
                     {claimNotifications.map((market) => (
@@ -6170,7 +6442,7 @@ export default function App() {
                   <small>Proposed {outcomeLabel(market.proposedOutcome)}. No dispute was opened.</small>
                   <div className="notification-actions">
                     <button disabled={transactionPending || isMarketActionPending("finalize", market.id)} onClick={() => finalizeMarket(market.id)}>
-                      {isMarketActionPending("finalize", market.id) ? "Finalizing..." : "Finalize result"}
+                      {isMarketActionPending("finalize", market.id) ? `Finalizing #${market.id}...` : `Finalize #${market.id}`}
                     </button>
                     <button className="secondary" onClick={() => openMarket(market.id)} type="button">View market</button>
                   </div>
@@ -6185,6 +6457,23 @@ export default function App() {
                     <button onClick={() => finalizeDispute(market.id, Outcome.Yes)}>Final YES</button>
                     <button onClick={() => finalizeDispute(market.id, Outcome.No)}>Final NO</button>
                     <button className="secondary" onClick={() => finalizeDispute(market.id, Outcome.Canceled)}>Cancel</button>
+                    <button className="secondary" onClick={() => openMarket(market.id)} type="button">View market</button>
+                  </div>
+                </article>
+              ))}
+              {staleDisputeNotifications.map((market) => (
+                <article className="notification-card" key={`page-stale-${market.id}`}>
+                  <span>Stale dispute</span>
+                  <strong>{shortQuestion(market.question)}</strong>
+                  <small>Resolution authority did not finalize after the grace period. Cancel refunds both sides.</small>
+                  <div className="notification-actions">
+                    <button
+                      className="secondary"
+                      disabled={transactionPending || isMarketActionPending("stale-dispute", market.id)}
+                      onClick={() => cancelStaleDispute(market.id)}
+                    >
+                      {isMarketActionPending("stale-dispute", market.id) ? `Canceling #${market.id}...` : `Cancel stale #${market.id}`}
+                    </button>
                     <button className="secondary" onClick={() => openMarket(market.id)} type="button">View market</button>
                   </div>
                 </article>
@@ -6515,22 +6804,34 @@ export default function App() {
                     market.outcome === Outcome.Unresolved &&
                     market.proposedAt === 0 &&
                     Date.now() / 1000 >= market.closeTime &&
-                    [market.resolver.toLowerCase(), owner.toLowerCase()].includes(account.toLowerCase());
+                    (sameAddress(market.resolver, account) ||
+                      (!!owner && sameAddress(owner, account)) ||
+                      (!!resolutionAuthority && sameAddress(resolutionAuthority, account)));
                   const canFinalize =
                     isOwnProfile &&
                     canUseDisputeFlow &&
                     market.outcome === Outcome.Unresolved &&
                     market.proposedAt > 0 &&
                     !market.disputed &&
+                    market.disputeDeadline > 0 &&
                     Date.now() / 1000 >= market.disputeDeadline;
                   const canFinalizeDispute =
                     isOwnProfile &&
                     canUseDisputeFlow &&
                     account &&
-                    owner &&
                     market.outcome === Outcome.Unresolved &&
                     market.disputed &&
-                    sameAddress(account, owner);
+                    ((!!owner && sameAddress(account, owner)) ||
+                      (!!resolutionAuthority && sameAddress(account, resolutionAuthority)));
+                  const canCancelStaleDispute =
+                    isOwnProfile &&
+                    canUseDisputeFlow &&
+                    account &&
+                    market.outcome === Outcome.Unresolved &&
+                    market.disputed &&
+                    market.disputeDeadline > 0 &&
+                    disputeGracePeriod > 0 &&
+                    Date.now() / 1000 >= market.disputeDeadline + disputeGracePeriod;
                   const canLegacyResolve =
                     isOwnProfile &&
                     contractVersion === "legacy" &&
@@ -6603,6 +6904,7 @@ export default function App() {
                         canLegacyResolve ||
                         canFinalize ||
                         canFinalizeDispute ||
+                        canCancelStaleDispute ||
                         (isOwnProfile && market.potentialPayout > 0n && !market.claimed)) && (
                         <div className="settlement-row">
                           {canLegacyResolve && (
@@ -6648,6 +6950,11 @@ export default function App() {
                                 Final Cancel
                               </button>
                             </>
+                          )}
+                          {canCancelStaleDispute && (
+                            <button className="secondary" onClick={() => cancelStaleDispute(market.id)}>
+                              Cancel stale dispute
+                            </button>
                           )}
                           {isOwnProfile && market.potentialPayout > 0n && !market.claimed && (
                             <button onClick={() => claim(market.id)}>
@@ -6875,7 +7182,21 @@ export default function App() {
                   <span className="section-dot closing" />
                   <h3>Resolved and canceled</h3>
                 </div>
-                <span>{filteredEndedMarkets.length} markets</span>
+                <div className="section-actions ended-search-actions">
+                  <label className="ended-search">
+                    <svg className="search-icon" viewBox="0 0 24 24" aria-hidden="true">
+                      <circle cx="11" cy="11" r="7" />
+                      <path d="m16 16 4 4" />
+                    </svg>
+                    <input
+                      aria-label="Search ended markets"
+                      placeholder="Search ended"
+                      value={endedSearchQuery}
+                      onChange={(event) => setEndedSearchQuery(event.target.value)}
+                    />
+                  </label>
+                  <span>{filteredEndedMarkets.length} markets</span>
+                </div>
               </div>
               {renderMarketCards(
                 filteredEndedMarkets,
@@ -7038,8 +7359,16 @@ export default function App() {
               <strong>{owner ? shortAddress(owner) : "..."}</strong>
             </div>
             <div>
+              <span>Resolution authority</span>
+              <strong>{resolutionAuthority ? shortAddress(resolutionAuthority) : owner ? shortAddress(owner) : "..."}</strong>
+            </div>
+            <div>
               <span>Min stake</span>
               <strong>{formatUsdc(minStake)} USDC</strong>
+            </div>
+            <div>
+              <span>Creation fee</span>
+              <strong>{formatUsdc(marketCreationFee)} USDC</strong>
             </div>
             <div>
               <span>Creator bond</span>
@@ -7052,6 +7381,10 @@ export default function App() {
             <div>
               <span>Dispute window</span>
               <strong>{Math.round(disputeWindow / 3600)} hours</strong>
+            </div>
+            <div>
+              <span>Stale dispute grace</span>
+              <strong>{disputeGracePeriod > 0 ? `${Math.round(disputeGracePeriod / 3600)} hours` : "Not available"}</strong>
             </div>
             <div>
               <span>Project fee</span>
@@ -7205,11 +7538,14 @@ export default function App() {
             </div>
             <div className="resolver-note">
               Resolver is locked to the creator wallet: {account ? shortAddress(account) : "connect wallet first"}.
+              Resolution authority can later be moved to an oracle or committee wallet without changing market cards.
               Question must be at least 8 characters.
               Market close time is saved in UTC and must be at least 5 minutes after the current UTC time.
               {contractVersion === "legacy"
                 ? " This legacy contract does not use creator bonds or dispute windows."
-                : ` Creating a market locks a ${formatUsdc(creatorBond)} USDC creator bond until the result is finalized.`}
+                : marketCreationFee > 0n
+                  ? ` Creating a market costs ${formatUsdc(creatorBond + marketCreationFee)} USDC total: ${formatUsdc(creatorBond)} bond plus ${formatUsdc(marketCreationFee)} creation fee.`
+                  : ` Creating a market locks a ${formatUsdc(creatorBond)} USDC creator bond until the result is finalized.`}
             </div>
             {aiMarketDraft?.duplicateRisk && aiMarketDraft.duplicateRisk !== "LOW" && (
               <label className="duplicate-acknowledge">

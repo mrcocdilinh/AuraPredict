@@ -18,7 +18,10 @@ Tinh nang hien tai:
 - Thanh activity ticker doc event `BetPlaced` de hien nguoi choi vua stake YES/NO.
 - Frontend uu tien doc market, stats, leaderboard va history tu AuraPredict Indexer neu `VITE_AURA_INDEXER_URL` kha dung; neu khong co thi fallback ve Arc RPC nhu cu.
 - Contract thu phi protocol mac dinh 2% tren phan loi nhuan cua vi thang. Owner co the rut phi da tich luy.
-- Creator phai khoa creator bond khi tao market. Sau deadline, creator de xuat ket qua, nguoi choi co 12 gio dispute bang dispute bond. Neu co dispute, owner finalizes ket qua cuoi.
+- Contract v2 co them `marketCreationFee` de thu phi tao market ngay khi creator launch market.
+- Creator phai khoa creator bond khi tao market. Sau deadline, creator, owner, hoac `resolutionAuthority` de xuat ket qua. Mac dinh authority la owner, nhung sau nay co the chuyen sang oracle/committee wallet ma khong doi flow UI.
+- Nguoi choi chi duoc dispute neu da co position trong market do. Neu dispute bi treo qua grace period, bat ky ai cung co the goi `cancelStaleDispute` de cancel market va refund nguoi choi.
+- Tung market co lich su bet va o tim kiem vi rieng; tab Ended cung co tim kiem rieng cho market da ket thuc.
 
 ## Arc Testnet
 
@@ -130,4 +133,5 @@ Sau do redeploy frontend.
 - Khong commit file `.env`.
 - Khong dua `PRIVATE_KEY` len GitHub hoac Vercel.
 - Contract hien la ban MVP testnet, chua audit.
-- Resolver luon la vi tao market. Neu ban dang dung contract cu, hay deploy lai contract moi va cap nhat `VITE_PREDICTION_MARKET_ADDRESS`, vi ABI hien co them `traderCount`, event `BetPlaced`, creator bond, dispute flow, va phi protocol.
+- Resolver mac dinh la vi tao market, nhung contract v2 co `resolutionAuthority` de sau nay chuyen sang oracle/committee.
+- Neu ban dang dung contract cu, hay deploy lai contract moi va cap nhat `VITE_PREDICTION_MARKET_ADDRESS`, vi ABI hien co them `CONTRACT_VERSION`, creation fee, authority hook, stale-dispute cancel, `traderCount`, event `BetPlaced`, creator bond, dispute flow, va phi protocol.
