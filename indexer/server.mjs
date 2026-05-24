@@ -28,6 +28,9 @@ const HOST = process.env.AURA_INDEXER_HOST || (process.env.PORT ? "0.0.0.0" : "1
 const POLL_MS = Number(process.env.AURA_INDEXER_POLL_MS || 12_000);
 const START_BLOCK = BigInt(process.env.AURA_INDEXER_START_BLOCK || 0);
 const CHUNK_SIZE = BigInt(process.env.AURA_INDEXER_CHUNK_SIZE || 9_000);
+const AI_PROVIDER = String(process.env.AI_PROVIDER || "").trim().toLowerCase();
+const GEMINI_API_KEY = String(process.env.GEMINI_API_KEY || "").trim();
+const AI_MODEL = String(process.env.AI_MODEL || "gemini-2.5-flash").trim();
 const USDC_DECIMALS = 18;
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 const EVENT_NAMES = [
@@ -643,6 +646,114 @@ function appendSocialRow(collection, key, row, limit) {
   collection[key] = [row, ...rows.filter((item) => item.id !== row.id)].slice(0, limit);
 }
 
+function extractJsonObject(text) {
+  const raw = String(text || "").trim();
+  if (!raw) throw new Error("AI returned an empty response.");
+  try {
+    return JSON.parse(raw);
+  } catch {
+    const match = raw.match(/\{[\s\S]*\}/);
+    if (!match) throw new Error("AI response did not contain JSON.");
+    return JSON.parse(match[0]);
+  }
+}
+
+async function callGeminiJson(systemInstruction, prompt) {
+  if (AI_PROVIDER !== "gemini" || !GEMINI_API_KEY) {
+    throw new Error("Aura Agent is not configured. Set AI_PROVIDER=gemini and GEMINI_API_KEY on Render.");
+  }
+
+  const response = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(AI_MODEL)}:generateContent`,
+    {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-goog-api-key": GEMINI_API_KEY
+      },
+      body: JSON.stringify({
+        systemInstruction: {
+          parts: [{ text: systemInstruction }]
+        },
+        contents: [
+          {
+            role: "user",
+            parts: [{ text: prompt }]
+          }
+        ],
+        generationConfig: {
+          temperature: 0.2,
+          responseMimeType: "application/json"
+        }
+      })
+    }
+  );
+
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(body?.error?.message || `Gemini request failed with status ${response.status}.`);
+  }
+
+  const text = body?.candidates?.[0]?.content?.parts?.map((part) => part.text || "").join("\n") || "";
+  return extractJsonObject(text);
+}
+
+function marketDraftPrompt(body) {
+  const idea = cleanText(body.idea || body.question, 900);
+  const category = cleanText(body.category, 40) || "Other";
+  const closeTime = cleanText(body.closeTime, 80);
+  const now = nowIso();
+  return {
+    idea,
+    prompt: [
+      `Current UTC time: ${now}`,
+      `User market idea: ${idea}`,
+      `Preferred category: ${category}`,
+      `Preferred close time: ${closeTime || "not provided"}`,
+      "Return JSON only with:",
+      "{",
+      '  "question": "clear binary question, 8-160 chars",',
+      '  "category": "Crypto|Macro|Sports|Politics|Arc|AI|Other",',
+      '  "closeTime": "YYYY-MM-DDTHH:mm",',
+      '  "resolutionCriteria": "specific rules for YES/NO/Cancel",',
+      '  "sources": ["credible source name or URL", "..."],',
+      '  "clarityScore": 0-100,',
+      '  "riskFlags": ["short issue labels"],',
+      '  "creatorNote": "one short warning or guidance sentence"',
+      "}",
+      "Use UTC. Avoid subjective criteria. If the market is ambiguous, rewrite it to be measurable."
+    ].join("\n")
+  };
+}
+
+function resolutionPrompt(body) {
+  const marketId = Number(body.marketId);
+  const market = Number.isInteger(marketId) ? state.markets[String(marketId)] : null;
+  const evidence = Array.isArray(body.evidence) ? body.evidence.slice(0, 8) : [];
+  const criteria = cleanText(body.resolutionCriteria, 1000);
+  const question = cleanText(body.question || market?.question, 260);
+  return [
+    `Current UTC time: ${nowIso()}`,
+    `Market id: ${Number.isInteger(marketId) ? marketId : "unknown"}`,
+    `Question: ${question}`,
+    `Category: ${cleanText(body.category || market?.category, 40)}`,
+    `Close time unix: ${body.closeTime || market?.closeTime || "unknown"}`,
+    `Resolution criteria: ${criteria || "not provided"}`,
+    `Current pools: YES ${market?.yesPool || "unknown"} / NO ${market?.noPool || "unknown"}`,
+    `Evidence JSON: ${JSON.stringify(evidence)}`,
+    "Return JSON only with:",
+    "{",
+    '  "suggestedOutcome": "YES|NO|CANCEL|INSUFFICIENT_EVIDENCE",',
+    '  "confidence": 0-100,',
+    '  "summary": "short evidence-based explanation",',
+    '  "evidence": [{"title":"...", "url":"...", "finding":"..."}],',
+    '  "disputeRisks": ["..."],',
+    '  "resolverAction": "what the creator/admin should do next"',
+    "}",
+    "Do not invent facts. If evidence is missing or sources are not enough, return INSUFFICIENT_EVIDENCE."
+  ].join("\n");
+}
+
 async function syncRange(fromBlock, toBlock) {
   const logs = [];
   for (const eventName of EVENT_NAMES) {
@@ -789,6 +900,33 @@ async function route(req, res) {
       const limit = Number(url.searchParams.get("limit") || 50);
       json(res, 200, { activities: state.trades.slice().sort((a, b) => b.timestamp - a.timestamp).slice(0, limit) });
       return;
+    }
+
+    if (segments[0] === "api" && segments[1] === "ai") {
+      if (req.method !== "POST") return notFound(res);
+      const body = await readRequestBody(req);
+      const systemInstruction = [
+        "You are Aura Agent, an AI assistant for an Arc Testnet prediction market dapp.",
+        "You help create clear binary markets and draft evidence-based resolution reports.",
+        "You are not an oracle. You must avoid fabricating facts and must flag insufficient evidence.",
+        "Always return valid compact JSON only."
+      ].join(" ");
+
+      if (segments[2] === "market-draft") {
+        const { idea, prompt } = marketDraftPrompt(body);
+        if (idea.length < 4) return json(res, 400, { error: "Market idea is too short." });
+        const draft = await callGeminiJson(systemInstruction, prompt);
+        json(res, 200, { draft, provider: AI_PROVIDER, model: AI_MODEL, updatedAt: nowIso() });
+        return;
+      }
+
+      if (segments[2] === "resolution-report") {
+        const report = await callGeminiJson(systemInstruction, resolutionPrompt(body));
+        json(res, 200, { report, provider: AI_PROVIDER, model: AI_MODEL, updatedAt: nowIso() });
+        return;
+      }
+
+      return notFound(res);
     }
 
     if (segments[0] === "api" && segments[1] === "social") {

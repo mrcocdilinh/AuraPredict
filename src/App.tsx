@@ -159,6 +159,26 @@ type SocialProfileResponse = {
   follows?: string[];
 };
 
+type AiMarketDraft = {
+  question?: string;
+  category?: string;
+  closeTime?: string;
+  resolutionCriteria?: string;
+  sources?: string[];
+  clarityScore?: number;
+  riskFlags?: string[];
+  creatorNote?: string;
+};
+
+type AiResolutionReport = {
+  suggestedOutcome?: string;
+  confidence?: number;
+  summary?: string;
+  evidence?: Array<{ title?: string; url?: string; finding?: string }>;
+  disputeRisks?: string[];
+  resolverAction?: string;
+};
+
 type AuraBreakdown = {
   items: Array<{ label: string; detail: string; value: number }>;
   total: number;
@@ -1848,6 +1868,9 @@ export default function App() {
   );
   const [commentInputs, setCommentInputs] = useState<Record<number, string>>({});
   const [evidenceDrafts, setEvidenceDrafts] = useState<Record<number, EvidenceDraft>>({});
+  const [aiBusy, setAiBusy] = useState(false);
+  const [aiMarketDraft, setAiMarketDraft] = useState<AiMarketDraft | null>(null);
+  const [aiResolutionReports, setAiResolutionReports] = useState<Record<number, AiResolutionReport>>({});
   const [onboardingDismissed, setOnboardingDismissed] = useState(() => {
     try {
       return window.localStorage.getItem(ONBOARDING_DISMISSED_KEY) === "true";
@@ -3056,6 +3079,64 @@ export default function App() {
       setNotice("Evidence saved locally for this market.");
     },
     [account, evidenceDrafts, setNotice]
+  );
+
+  const askAuraForMarketDraft = useCallback(async () => {
+    const idea = createForm.question.trim();
+    if (idea.length < 4) {
+      setNotice("Describe the market idea before asking Aura Agent.");
+      return;
+    }
+    setAiBusy(true);
+    try {
+      const response = await postIndexerJson<{ draft: AiMarketDraft }>("/api/ai/market-draft", {
+        idea,
+        category: createForm.category,
+        closeTime: createForm.closeTime
+      });
+      if (!response?.draft) throw new Error("Aura Agent did not return a draft.");
+      setAiMarketDraft(response.draft);
+      setNotice("Aura Agent drafted clearer market terms.");
+    } catch (error) {
+      setNotice(`Aura Agent unavailable: ${compactErrorMessage(error)}`);
+    } finally {
+      setAiBusy(false);
+    }
+  }, [createForm, setNotice]);
+
+  const applyAuraMarketDraft = useCallback(() => {
+    if (!aiMarketDraft) return;
+    setCreateForm((current) => ({
+      ...current,
+      question: aiMarketDraft.question || current.question,
+      category: aiMarketDraft.category && CATEGORIES.includes(aiMarketDraft.category) ? aiMarketDraft.category : current.category,
+      closeTime: aiMarketDraft.closeTime || current.closeTime
+    }));
+    setNotice("Aura Agent draft applied. Review it before launching.");
+  }, [aiMarketDraft, setNotice]);
+
+  const askAuraForResolution = useCallback(
+    async (market: MarketView) => {
+      setAiBusy(true);
+      try {
+        const evidenceRows = marketEvidence[String(market.id)] || [];
+        const response = await postIndexerJson<{ report: AiResolutionReport }>("/api/ai/resolution-report", {
+          marketId: market.id,
+          question: market.question,
+          category: market.category,
+          closeTime: market.closeTime,
+          evidence: evidenceRows
+        });
+        if (!response?.report) throw new Error("Aura Agent did not return a report.");
+        setAiResolutionReports((current) => ({ ...current, [market.id]: response.report }));
+        setNotice("Aura Agent resolution report updated.");
+      } catch (error) {
+        setNotice(`Aura Agent unavailable: ${compactErrorMessage(error)}`);
+      } finally {
+        setAiBusy(false);
+      }
+    },
+    [marketEvidence, setNotice]
   );
 
   const setThemeMode = useCallback((nextTheme: ThemeMode) => {
@@ -4838,6 +4919,15 @@ export default function App() {
       selectedMarketYesPercent,
       selectedMarketNoPercent
     );
+    const aiResolutionReport = aiResolutionReports[selectedMarket.id];
+    const displayedAgentLabel = aiResolutionReport?.suggestedOutcome || agentReport.suggestedLabel;
+    const displayedAgentConfidence =
+      typeof aiResolutionReport?.confidence === "number" ? aiResolutionReport.confidence : agentReport.confidence;
+    const displayedAgentSummary = aiResolutionReport?.summary || agentReport.summary;
+    const displayedAgentChecklist =
+      aiResolutionReport?.disputeRisks && aiResolutionReport.disputeRisks.length > 0
+        ? aiResolutionReport.disputeRisks
+        : agentReport.checklist;
     const topTraderRows = Array.from(
       selectedMarketActivities.reduce(
         (map, activity) => {
@@ -4868,9 +4958,10 @@ export default function App() {
       const report = [
         `Aura Agent report for Market #${selectedMarket.id}`,
         selectedMarket.question,
-        `Suggested outcome: ${agentReport.suggestedLabel}`,
-        `Confidence: ${agentReport.confidence}%`,
-        agentReport.summary,
+        `Suggested outcome: ${displayedAgentLabel}`,
+        `Confidence: ${displayedAgentConfidence}%`,
+        displayedAgentSummary,
+        ...(aiResolutionReport?.evidence || []).map((item, index) => `${index + 1}. ${item.title || "Evidence"}${item.url ? ` - ${item.url}` : ""}${item.finding ? ` - ${item.finding}` : ""}`),
         ...selectedEvidenceRows.map((item, index) => `${index + 1}. ${item.title}${item.url ? ` - ${item.url}` : ""}`)
       ].join("\n");
       void copyTextToClipboard(report, "Aura Agent report copied.");
@@ -5176,18 +5267,37 @@ export default function App() {
                   <span className="section-label">Aura Agent</span>
                   <h3>Resolution assistant</h3>
                 </div>
-                <span className="agent-confidence">{agentReport.confidence}% confidence</span>
+                <span className="agent-confidence">{displayedAgentConfidence}% confidence</span>
               </div>
               <div className="agent-result">
                 <span>Suggested outcome</span>
-                <strong>{agentReport.suggestedLabel}</strong>
-                <p>{agentReport.summary}</p>
+                <strong>{displayedAgentLabel}</strong>
+                <p>{displayedAgentSummary}</p>
+                {aiResolutionReport?.resolverAction && <p>{aiResolutionReport.resolverAction}</p>}
               </div>
               <div className="agent-checklist">
-                {agentReport.checklist.map((item) => (
+                {displayedAgentChecklist.map((item) => (
                   <span key={item}>{item}</span>
                 ))}
               </div>
+              {aiResolutionReport?.evidence && aiResolutionReport.evidence.length > 0 && (
+                <div className="agent-evidence-list">
+                  {aiResolutionReport.evidence.slice(0, 3).map((item, index) => (
+                    <article key={`${item.title || "evidence"}-${index}`}>
+                      <strong>{item.title || `Evidence ${index + 1}`}</strong>
+                      {item.finding && <p>{item.finding}</p>}
+                      {item.url && (
+                        <a href={item.url} target="_blank" rel="noreferrer">
+                          Open source
+                        </a>
+                      )}
+                    </article>
+                  ))}
+                </div>
+              )}
+              <button className="secondary" disabled={aiBusy} onClick={() => askAuraForResolution(selectedMarket)} type="button">
+                {aiBusy ? "Aura thinking..." : "Ask Aura Agent"}
+              </button>
               <button className="secondary" onClick={copyAgentReport} type="button">
                 Copy report
               </button>
@@ -6784,12 +6894,57 @@ export default function App() {
               Question
               <textarea
                 value={createForm.question}
-                onChange={(event) => setCreateForm({ ...createForm, question: event.target.value })}
+                onChange={(event) => {
+                  setCreateForm({ ...createForm, question: event.target.value });
+                  setAiMarketDraft(null);
+                }}
                 placeholder="Will Arc Testnet pass 1M transactions this week?"
                 minLength={8}
                 rows={4}
               />
             </label>
+            <div className="aura-agent-create-panel">
+              <div>
+                <span className="section-label">Aura Agent</span>
+                <strong>Draft clear market terms before launch.</strong>
+                <small>AI can suggest a measurable question, UTC close time, sources, and risk flags. Review before signing.</small>
+              </div>
+              <button className="secondary" disabled={aiBusy || createForm.question.trim().length < 4} onClick={askAuraForMarketDraft} type="button">
+                {aiBusy ? "Aura thinking..." : "Ask Aura Agent"}
+              </button>
+            </div>
+            {aiMarketDraft && (
+              <div className="aura-draft-card">
+                <div className="panel-heading">
+                  <div>
+                    <span className="section-label">Suggested market</span>
+                    <h3>{aiMarketDraft.question || "Draft ready"}</h3>
+                  </div>
+                  {typeof aiMarketDraft.clarityScore === "number" && (
+                    <span>{aiMarketDraft.clarityScore}% clarity</span>
+                  )}
+                </div>
+                {aiMarketDraft.resolutionCriteria && <p>{aiMarketDraft.resolutionCriteria}</p>}
+                {aiMarketDraft.sources && aiMarketDraft.sources.length > 0 && (
+                  <div className="aura-draft-tags">
+                    {aiMarketDraft.sources.slice(0, 4).map((source) => (
+                      <span key={source}>{source}</span>
+                    ))}
+                  </div>
+                )}
+                {aiMarketDraft.riskFlags && aiMarketDraft.riskFlags.length > 0 && (
+                  <div className="aura-draft-tags warning">
+                    {aiMarketDraft.riskFlags.slice(0, 4).map((flag) => (
+                      <span key={flag}>{flag}</span>
+                    ))}
+                  </div>
+                )}
+                {aiMarketDraft.creatorNote && <small>{aiMarketDraft.creatorNote}</small>}
+                <button className="secondary" onClick={applyAuraMarketDraft} type="button">
+                  Apply suggestion
+                </button>
+              </div>
+            )}
             <div className="modal-form-grid">
               <label>
                 Category

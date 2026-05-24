@@ -3855,6 +3855,82 @@ label {
   padding: 8px;
 }
 
+.agent-evidence-list,
+.aura-draft-card,
+.aura-agent-create-panel {
+  display: grid;
+  gap: 8px;
+}
+
+.agent-evidence-list article,
+.aura-draft-card,
+.aura-agent-create-panel {
+  background: #f8fafc;
+  border: 1px solid #e5ebf4;
+  border-radius: 8px;
+}
+
+.agent-evidence-list article {
+  display: grid;
+  gap: 5px;
+  padding: 9px;
+}
+
+.agent-evidence-list strong,
+.aura-agent-create-panel strong {
+  color: #101827;
+  font-size: 0.88rem;
+}
+
+.agent-evidence-list p,
+.aura-draft-card p,
+.aura-agent-create-panel small,
+.aura-draft-card small {
+  color: #536178;
+  line-height: 1.45;
+  margin: 0;
+}
+
+.agent-evidence-list a {
+  color: #08768a;
+  font-size: 0.76rem;
+  font-weight: 900;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.aura-agent-create-panel {
+  align-items: center;
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding: 12px;
+}
+
+.aura-draft-card {
+  padding: 12px;
+}
+
+.aura-draft-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.aura-draft-tags span {
+  background: #e7faff;
+  border: 1px solid #b4ecf8;
+  border-radius: 999px;
+  color: #08768a;
+  font-size: 0.72rem;
+  font-weight: 860;
+  padding: 5px 8px;
+}
+
+.aura-draft-tags.warning span {
+  background: #fff7ed;
+  border-color: #fed7aa;
+  color: #9a3412;
+}
+
 .top-trader-list {
   display: grid;
   gap: 8px;
@@ -4891,10 +4967,25 @@ label {
 [data-theme="dark"] .onboarding-steps span,
 [data-theme="dark"] .agent-result,
 [data-theme="dark"] .agent-checklist span,
+[data-theme="dark"] .agent-evidence-list article,
+[data-theme="dark"] .aura-agent-create-panel,
+[data-theme="dark"] .aura-draft-card,
 [data-theme="dark"] .top-trader-list article,
 [data-theme="dark"] .aura-breakdown-grid div {
   background: #0b1020;
   border-color: #202a3f;
+}
+
+[data-theme="dark"] .agent-evidence-list strong,
+[data-theme="dark"] .aura-agent-create-panel strong {
+  color: #f7f9ff;
+}
+
+[data-theme="dark"] .agent-evidence-list p,
+[data-theme="dark"] .aura-draft-card p,
+[data-theme="dark"] .aura-agent-create-panel small,
+[data-theme="dark"] .aura-draft-card small {
+  color: #9aa7bd;
 }
 
 [data-theme="dark"] .market-card-skeleton span,
@@ -5324,6 +5415,7 @@ label {
   .market-meta,
   .trade-row,
   .modal-form-grid,
+  .aura-agent-create-panel,
   .wallet-connect-modal {
     grid-template-columns: 1fr;
   }
@@ -5346,6 +5438,7 @@ label {
   .profile-actions,
   .board-actions,
   .modal-actions,
+  .aura-agent-create-panel,
   .social-links {
     justify-content: flex-start;
     flex-wrap: wrap;
@@ -5798,6 +5891,7 @@ label {
   }
 
   .modal-form-grid,
+  .aura-agent-create-panel,
   .modal-actions {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
