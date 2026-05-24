@@ -30,8 +30,11 @@ const POLL_MS = Number(process.env.AURA_INDEXER_POLL_MS || 12_000);
 const START_BLOCK = BigInt(process.env.AURA_INDEXER_START_BLOCK || 0);
 const CHUNK_SIZE = BigInt(process.env.AURA_INDEXER_CHUNK_SIZE || 9_000);
 const AI_PROVIDER = String(process.env.AI_PROVIDER || "").trim().toLowerCase();
+const AI_FALLBACK_PROVIDER = String(process.env.AI_FALLBACK_PROVIDER || "").trim().toLowerCase();
 const GEMINI_API_KEY = String(process.env.GEMINI_API_KEY || "").trim();
+const OPENAI_API_KEY = String(process.env.OPENAI_API_KEY || "").trim();
 const AI_MODEL = String(process.env.AI_MODEL || "gemini-2.5-flash").trim();
+const OPENAI_MODEL = String(process.env.OPENAI_MODEL || "gpt-4o-mini").trim();
 const RESOLUTION_ADMIN_TOKEN = String(process.env.AURA_RESOLUTION_ADMIN_TOKEN || "").trim();
 const RESOLUTION_AUTO_RUN = String(process.env.AURA_RESOLUTION_AUTO_RUN || "").trim() === "1";
 const RESOLUTION_AUTO_PROPOSE = String(process.env.AURA_RESOLUTION_AUTO_PROPOSE || "").trim() === "1";
@@ -953,9 +956,37 @@ function extractJsonObject(text) {
   }
 }
 
+class AiProviderError extends Error {
+  constructor(message, options = {}) {
+    super(message);
+    this.name = "AiProviderError";
+    this.provider = options.provider || "unknown";
+    this.status = options.status || 0;
+    this.retryable = Boolean(options.retryable);
+  }
+}
+
+function configuredProviders() {
+  const providers = [];
+  const requested = AI_PROVIDER || (GEMINI_API_KEY ? "gemini" : OPENAI_API_KEY ? "openai" : "");
+  const fallback = AI_FALLBACK_PROVIDER;
+  if (requested) providers.push(requested);
+  if (fallback && fallback !== requested) providers.push(fallback);
+  if (providers.length === 1 && providers[0] === "gemini" && OPENAI_API_KEY) providers.push("openai");
+  return providers;
+}
+
+function providerModel(provider) {
+  if (provider === "openai") return OPENAI_MODEL;
+  return AI_MODEL;
+}
+
 async function callGeminiJson(systemInstruction, prompt) {
-  if (AI_PROVIDER !== "gemini" || !GEMINI_API_KEY) {
-    throw new Error("Aura Agent is not configured. Set AI_PROVIDER=gemini and GEMINI_API_KEY on Render.");
+  if (!GEMINI_API_KEY) {
+    throw new AiProviderError("Gemini is not configured. Set GEMINI_API_KEY.", {
+      provider: "gemini",
+      retryable: false
+    });
   }
 
   const response = await fetch(
@@ -986,11 +1017,87 @@ async function callGeminiJson(systemInstruction, prompt) {
 
   const body = await response.json().catch(() => ({}));
   if (!response.ok) {
-    throw new Error(body?.error?.message || `Gemini request failed with status ${response.status}.`);
+    throw new AiProviderError(body?.error?.message || `Gemini request failed with status ${response.status}.`, {
+      provider: "gemini",
+      status: response.status,
+      retryable: response.status === 429 || response.status >= 500
+    });
   }
 
   const text = body?.candidates?.[0]?.content?.parts?.map((part) => part.text || "").join("\n") || "";
-  return extractJsonObject(text);
+  return {
+    json: extractJsonObject(text),
+    provider: "gemini",
+    model: AI_MODEL
+  };
+}
+
+async function callOpenAiJson(systemInstruction, prompt) {
+  if (!OPENAI_API_KEY) {
+    throw new AiProviderError("OpenAI is not configured. Set OPENAI_API_KEY.", {
+      provider: "openai",
+      retryable: false
+    });
+  }
+
+  const response = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      authorization: `Bearer ${OPENAI_API_KEY}`
+    },
+    body: JSON.stringify({
+      model: OPENAI_MODEL,
+      temperature: 0.2,
+      response_format: { type: "json_object" },
+      messages: [
+        { role: "system", content: systemInstruction },
+        { role: "user", content: prompt }
+      ]
+    })
+  });
+
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const message = body?.error?.message || `OpenAI request failed with status ${response.status}.`;
+    throw new AiProviderError(message, {
+      provider: "openai",
+      status: response.status,
+      retryable: response.status === 429 || response.status >= 500
+    });
+  }
+
+  const text = body?.choices?.[0]?.message?.content || "";
+  return {
+    json: extractJsonObject(text),
+    provider: "openai",
+    model: OPENAI_MODEL
+  };
+}
+
+async function callAiJson(systemInstruction, prompt) {
+  const providers = configuredProviders();
+  if (providers.length === 0) {
+    throw new Error(
+      "Aura Agent is not configured. Set AI_PROVIDER=gemini with GEMINI_API_KEY, or AI_PROVIDER=openai with OPENAI_API_KEY."
+    );
+  }
+
+  let lastError = null;
+  for (let index = 0; index < providers.length; index += 1) {
+    const provider = providers[index];
+    try {
+      if (provider === "gemini") return await callGeminiJson(systemInstruction, prompt);
+      if (provider === "openai") return await callOpenAiJson(systemInstruction, prompt);
+      throw new AiProviderError(`Unsupported AI provider: ${provider}`, { provider, retryable: false });
+    } catch (error) {
+      lastError = error;
+      const retryable = error instanceof AiProviderError ? error.retryable : false;
+      if (!retryable || index === providers.length - 1) continue;
+    }
+  }
+
+  throw lastError instanceof Error ? lastError : new Error(String(lastError));
 }
 
 function marketDraftPrompt(body) {
@@ -1136,10 +1243,16 @@ async function buildResolutionReceipt(marketId, options = {}) {
 
   const reviews = [];
   for (const role of roles) {
-    reviews.push(await callGeminiJson(systemInstruction, resolutionReviewerPrompt(market, evidenceRows, role)));
+    const review = await callAiJson(systemInstruction, resolutionReviewerPrompt(market, evidenceRows, role));
+    reviews.push({
+      ...review.json,
+      provider: review.provider,
+      model: review.model
+    });
   }
 
   const consensus = consensusFromReviews(reviews);
+  const reviewProviderSummary = Array.from(new Set(reviews.map((review) => `${review.provider}:${review.model}`))).join(", ");
   const receipt = {
     id: `${marketId}-${Date.now()}`,
     version: 1,
@@ -1148,8 +1261,8 @@ async function buildResolutionReceipt(marketId, options = {}) {
     category: market.category,
     closeTime: market.closeTime,
     generatedAt: nowIso(),
-    provider: AI_PROVIDER,
-    model: AI_MODEL,
+    provider: reviewProviderSummary || configuredProviders().join(","),
+    model: providerModel(configuredProviders()[0] || "gemini"),
     minConfidence: RESOLUTION_MIN_CONFIDENCE,
     consensusCount: RESOLUTION_CONSENSUS_COUNT,
     consensus,
@@ -1178,9 +1291,10 @@ async function proposeResolutionOnchain(receipt) {
   if (!market) throw new Error("Market not found.");
   const resolver = String(market.resolver || "").toLowerCase();
   const owner = String(state.owner || "").toLowerCase();
+  const authority = String(state.resolutionAuthority || "").toLowerCase();
   const signer = resolverAccount.address.toLowerCase();
-  if (signer !== resolver && signer !== owner) {
-    throw new Error("Resolver key is not the market resolver or contract owner.");
+  if (signer !== resolver && signer !== owner && signer !== authority) {
+    throw new Error("Resolver key is not the market resolver, contract owner, or resolution authority.");
   }
 
   const functionName = receipt.proposedOutcomeValue === Outcome.Canceled ? "cancel" : "resolve";
@@ -1404,23 +1518,23 @@ async function route(req, res) {
       if (segments[2] === "market-draft") {
         const { idea, similarMarkets, prompt } = marketDraftPrompt(body);
         if (idea.length < 4) return json(res, 400, { error: "Market idea is too short." });
-        const draft = await callGeminiJson(systemInstruction, prompt);
+        const draft = await callAiJson(systemInstruction, prompt);
         json(res, 200, {
           draft: {
-            ...draft,
-            duplicateRisk: draft.duplicateRisk || duplicateRiskFor(similarMarkets),
+            ...draft.json,
+            duplicateRisk: draft.json?.duplicateRisk || duplicateRiskFor(similarMarkets),
             similarMarkets
           },
-          provider: AI_PROVIDER,
-          model: AI_MODEL,
+          provider: draft.provider,
+          model: draft.model,
           updatedAt: nowIso()
         });
         return;
       }
 
       if (segments[2] === "resolution-report") {
-        const report = await callGeminiJson(systemInstruction, resolutionPrompt(body));
-        json(res, 200, { report, provider: AI_PROVIDER, model: AI_MODEL, updatedAt: nowIso() });
+        const report = await callAiJson(systemInstruction, resolutionPrompt(body));
+        json(res, 200, { report: report.json, provider: report.provider, model: report.model, updatedAt: nowIso() });
         return;
       }
 
