@@ -838,8 +838,13 @@ function chartTimeLabel(value: number, includeDate = false) {
 }
 
 function parseUtcDateTime(value: string) {
-  const normalized = value.length === 16 ? `${value}:00Z` : `${value}Z`;
-  const timestamp = Date.parse(normalized);
+  const normalizedValue = value.trim().replace("T", " ");
+  const match = normalizedValue.match(/^(\d{4})-(\d{2})-(\d{2})\s([01]\d|2[0-3]):([0-5]\d)$/);
+  if (!match) {
+    throw new Error("Use UTC format YYYY-MM-DD HH:mm (24-hour).");
+  }
+  const [, y, mo, d, h, mi] = match;
+  const timestamp = Date.UTC(Number(y), Number(mo) - 1, Number(d), Number(h), Number(mi), 0);
   if (Number.isNaN(timestamp)) {
     throw new Error("Enter a valid UTC close time.");
   }
@@ -854,7 +859,7 @@ function utcDateTimeInputValue(date: Date) {
     pad(date.getUTCMonth() + 1),
     "-",
     pad(date.getUTCDate()),
-    "T",
+    " ",
     pad(date.getUTCHours()),
     ":",
     pad(date.getUTCMinutes())
@@ -7615,18 +7620,20 @@ export default function App() {
                     </option>
                   ))}
                 </select>
+                <small className="time-format-hint">Choose the main topic for this market.</small>
               </label>
               <label>
                 Close time (UTC)
                 <input
-                  type="datetime-local"
-                  lang="sv-SE"
-                  step={60}
-                  min={minimumCloseInput}
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="off"
+                  spellCheck={false}
+                  placeholder={minimumCloseInput}
                   value={createForm.closeTime}
                   onChange={(event) => setCreateForm({ ...createForm, closeTime: event.target.value })}
                 />
-                <small className="time-format-hint">Use 24-hour format (HH:mm) in UTC.</small>
+                <small className="time-format-hint">Use UTC format: YYYY-MM-DD HH:mm (24-hour).</small>
               </label>
             </div>
             <div className="resolver-note">
