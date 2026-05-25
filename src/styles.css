@@ -3187,6 +3187,13 @@ textarea {
   font-weight: 900;
 }
 
+.field-label {
+  align-items: center;
+  display: inline-flex;
+  gap: 6px;
+  line-height: 1.2;
+}
+
 .resolution-rule-field textarea {
   min-height: 120px;
   resize: vertical;

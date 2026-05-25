@@ -907,6 +907,32 @@ function combineUtcDateTimeParts(datePart: string, timePart: string) {
   return `${date} ${time}`;
 }
 
+function parseAuraUtcCloseTimeFromText(value: string) {
+  const text = value.trim();
+  if (!text) return "";
+  const direct = parseUtcDateTimeParts(text);
+  if (direct) return combineUtcDateTimeParts(direct.date, direct.time);
+
+  const namedDateMatch = text.match(
+    /(\d{1,2}):(\d{2})\s*(AM|PM)\s+UTC\s+on\s+([A-Za-z]+)\s+(\d{1,2}),\s*(\d{4})/i
+  );
+  if (!namedDateMatch) return "";
+  const [, hhRaw, mmRaw, ampmRaw, monthRaw, dayRaw, yearRaw] = namedDateMatch;
+  const monthIndex = new Date(`${monthRaw} 1, 2000`).getMonth();
+  if (Number.isNaN(monthIndex)) return "";
+  let hour = Number(hhRaw);
+  const minute = Number(mmRaw);
+  const ampm = ampmRaw.toUpperCase();
+  if (ampm === "AM") {
+    if (hour === 12) hour = 0;
+  } else if (hour < 12) {
+    hour += 12;
+  }
+  const datePart = `${yearRaw}-${String(monthIndex + 1).padStart(2, "0")}-${String(Number(dayRaw)).padStart(2, "0")}`;
+  const timePart = `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+  return combineUtcDateTimeParts(datePart, timePart);
+}
+
 function utcDateTimeInputValue(date: Date) {
   const pad = (value: number) => String(value).padStart(2, "0");
   return [
@@ -3657,11 +3683,15 @@ export default function App() {
     if (!aiMarketDraft) return;
     const firstSource = normalizeReferenceUrl(aiMarketDraft.sources?.[0] || "");
     const secondSource = normalizeReferenceUrl(aiMarketDraft.sources?.[1] || "");
+    const inferredCloseTime =
+      parseAuraUtcCloseTimeFromText(aiMarketDraft.closeTime || "") ||
+      parseAuraUtcCloseTimeFromText(aiMarketDraft.question || "") ||
+      parseAuraUtcCloseTimeFromText(aiMarketDraft.resolutionCriteria || "");
     setCreateForm((current) => ({
       ...current,
       question: aiMarketDraft.question || current.question,
       category: aiMarketDraft.category && CATEGORIES.includes(aiMarketDraft.category) ? aiMarketDraft.category : current.category,
-      closeTime: aiMarketDraft.closeTime || current.closeTime,
+      closeTime: inferredCloseTime || current.closeTime,
       resolutionSource: firstSource || current.resolutionSource || "https://www.coingecko.com",
       resolutionRule:
         aiMarketDraft.resolutionCriteria ||
@@ -8148,7 +8178,9 @@ export default function App() {
               </button>
             </div>
             <label>
-              Question <span className="required-mark">*</span>
+              <span className="field-label">
+                Question <span className="required-mark">*</span>
+              </span>
               <textarea
                 value={createForm.question}
                 onChange={(event) => {
@@ -8229,7 +8261,9 @@ export default function App() {
             )}
             <div className="modal-form-grid">
               <label>
-                Category <span className="required-mark">*</span>
+                <span className="field-label">
+                  Category <span className="required-mark">*</span>
+                </span>
                 <select
                   value={createForm.category}
                   onChange={(event) => setCreateForm({ ...createForm, category: event.target.value })}
@@ -8243,7 +8277,9 @@ export default function App() {
                 <small className="time-format-hint">Choose the main topic for this market.</small>
               </label>
               <label>
-                Close time (UTC) <span className="required-mark">*</span>
+                <span className="field-label">
+                  Close time (UTC) <span className="required-mark">*</span>
+                </span>
                 <div className="close-time-fields">
                   <input
                     type="date"
@@ -8291,7 +8327,9 @@ export default function App() {
                 </small>
               </label>
               <label>
-                Resolution source URL <span className="required-mark">*</span>
+                <span className="field-label">
+                  Resolution source URL <span className="required-mark">*</span>
+                </span>
                 <input
                   type="text"
                   value={createForm.resolutionSource}
@@ -8301,7 +8339,9 @@ export default function App() {
                 <small className="time-format-hint">Primary source used to resolve this market.</small>
               </label>
               <label className="full-width resolution-rule-field">
-                Resolution rule <span className="required-mark">*</span>
+                <span className="field-label">
+                  Resolution rule <span className="required-mark">*</span>
+                </span>
                 <textarea
                   value={createForm.resolutionRule}
                   onChange={(event) => setCreateForm({ ...createForm, resolutionRule: event.target.value })}
