@@ -777,10 +777,22 @@ function parseUsdcInput(value: string) {
 function normalizeReferenceUrl(value: string) {
   const trimmed = value.trim();
   if (!trimmed) return "";
-  if (/^https?:\/\//i.test(trimmed)) return trimmed;
-  const domainMatch = trimmed.match(/([a-z0-9-]+(?:\.[a-z0-9-]+)+)(\/[^\s)]*)?/i);
-  if (!domainMatch) return trimmed;
-  return `https://${domainMatch[1]}${domainMatch[2] || ""}`;
+  const cleaned = trimmed.replace(/^[\s"'`[(]+|[\s"'`)\].,;:!?]+$/g, "");
+  const markdownLink = cleaned.match(/\((https?:\/\/[^\s)]+)\)/i);
+  if (markdownLink?.[1]) return markdownLink[1];
+  const directLink = cleaned.match(/https?:\/\/[^\s)\]]+/i);
+  if (directLink?.[0]) return directLink[0];
+  const domainMatch = cleaned.match(/([a-z0-9-]+(?:\.[a-z0-9-]+)+)(\/[^\s)]*)?/i);
+  if (domainMatch) return `https://${domainMatch[1]}${domainMatch[2] || ""}`;
+
+  const lower = cleaned.toLowerCase();
+  if (lower.includes("coingecko")) return "https://www.coingecko.com";
+  if (lower.includes("coinmarketcap")) return "https://coinmarketcap.com";
+  if (lower.includes("tradingview")) return "https://www.tradingview.com";
+  if (lower.includes("binance")) return "https://www.binance.com";
+  if (lower.includes("coinbase")) return "https://www.coinbase.com";
+  if (lower.includes("kraken")) return "https://www.kraken.com";
+  return cleaned;
 }
 
 function isValidHttpUrl(value: string) {
@@ -3649,8 +3661,11 @@ export default function App() {
       question: aiMarketDraft.question || current.question,
       category: aiMarketDraft.category && CATEGORIES.includes(aiMarketDraft.category) ? aiMarketDraft.category : current.category,
       closeTime: aiMarketDraft.closeTime || current.closeTime,
-      resolutionSource: firstSource || current.resolutionSource,
-      resolutionRule: aiMarketDraft.resolutionCriteria || current.resolutionRule,
+      resolutionSource: firstSource || current.resolutionSource || "https://www.coingecko.com",
+      resolutionRule:
+        aiMarketDraft.resolutionCriteria ||
+        current.resolutionRule ||
+        "Use the primary source value at the exact UTC close timestamp defined by this market.",
       fallbackSource: secondSource || current.fallbackSource
     }));
     setDuplicateAcknowledged(false);
@@ -8343,8 +8358,8 @@ export default function App() {
                   !hasContract ||
                   transactionPending ||
                   createForm.question.trim().length < 8 ||
-                  createForm.resolutionSource.trim().length < 8 ||
-                  createForm.resolutionRule.trim().length < 12 ||
+                  createForm.resolutionSource.trim().length === 0 ||
+                  createForm.resolutionRule.trim().length === 0 ||
                   !canCreateAfterAura ||
                   (!!aiMarketDraft?.duplicateRisk && aiMarketDraft.duplicateRisk !== "LOW" && !duplicateAcknowledged)
                 }
