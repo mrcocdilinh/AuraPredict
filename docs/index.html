@@ -135,7 +135,7 @@
             </article>
             <article>
               <h3>AI receipts</h3>
-              <p>The indexer can calculate a proposed outcome off-chain while contract settlement stays unchanged.</p>
+              <p>The indexer can calculate and auto-propose a suggested outcome off-chain while contract settlement stays unchanged.</p>
             </article>
           </div>
         </div>
@@ -168,6 +168,8 @@
               <ul>
                 <li>Markets that need creator resolution.</li>
                 <li>Results ready to finalize.</li>
+                <li>Owner alerts when resolver proposal differs from AI suggestion.</li>
+                <li>Owner alerts when a dispute is opened and needs review.</li>
                 <li>Stale disputes that can be canceled to refund both sides.</li>
                 <li>Claims available after settlement.</li>
                 <li>Transaction confirmation links to Arcscan.</li>
@@ -281,7 +283,12 @@
             <article>
               <span>4</span>
               <h3>Propose result</h3>
-              <p>An admin can review the receipt, then the resolver, owner, or configured authority signs the normal contract transaction.</p>
+              <p>An admin can review the receipt, then AI auto-propose or the resolver signs the normal contract transaction.</p>
+            </article>
+            <article>
+              <span>5</span>
+              <h3>Owner escalation</h3>
+              <p>If resolver and AI differ, or if users dispute, owner/resolution authority receives an alert and reviews before final settlement.</p>
             </article>
           </div>
           <div class="two-column">
@@ -301,7 +308,7 @@ Authorization: Bearer your_admin_token</code></pre>
             <article><span>AI provider</span><strong>AI_PROVIDER=gemini and GEMINI_API_KEY</strong></article>
             <article><span>Manual mode</span><strong>Receipt only; human reviews and signs the result proposal.</strong></article>
             <article><span>Auto-run</span><strong>AURA_RESOLUTION_AUTO_RUN=1 creates the first receipt for closed unresolved markets.</strong></article>
-            <article><span>Auto-propose</span><strong>AURA_RESOLUTION_AUTO_PROPOSE=1 requires a resolver, owner, or authority private key.</strong></article>
+            <article><span>Auto-propose</span><strong>AURA_RESOLUTION_AUTO_PROPOSE=1 proposes AI suggested YES/NO; owner receives mismatch/dispute alerts for review.</strong></article>
           </div>
           <div class="note">
             AI receipts are decision support, not a trustless oracle. The contract still controls

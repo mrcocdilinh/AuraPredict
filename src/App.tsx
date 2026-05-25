@@ -1158,6 +1158,22 @@ function finalizeWaitingHint(market: Pick<MarketView, "proposedAt" | "outcome" |
   return `Finalize available after ${closeDate(market.disputeDeadline)} (${closeDateLocal(market.disputeDeadline)} local).`;
 }
 
+function aiOutcomeFromReceipt(receipt?: AiResolutionReceipt | null) {
+  if (!receipt) return Outcome.Unresolved;
+  if (typeof receipt.proposedOutcomeValue === "number") {
+    if (receipt.proposedOutcomeValue === Outcome.Yes) return Outcome.Yes;
+    if (receipt.proposedOutcomeValue === Outcome.No) return Outcome.No;
+    if (receipt.proposedOutcomeValue === Outcome.Canceled) return Outcome.Canceled;
+  }
+  const outcomeText = String(receipt.consensus?.outcome || receipt.proposedOutcome || "")
+    .trim()
+    .toUpperCase();
+  if (outcomeText === "YES") return Outcome.Yes;
+  if (outcomeText === "NO") return Outcome.No;
+  if (outcomeText === "CANCEL" || outcomeText === "CANCELED" || outcomeText === "CANCELLED") return Outcome.Canceled;
+  return Outcome.Unresolved;
+}
+
 function isUnknownChainError(error: unknown) {
   const code = (error as { code?: number }).code;
   const message = error instanceof Error ? error.message : JSON.stringify(error);
@@ -1455,7 +1471,7 @@ function LandingPage() {
     },
     {
       title: "AI resolution receipts",
-      text: "The indexer can run three AI reviewer roles, publish a hashed consensus receipt, and keep settlement on the current contract."
+      text: "The indexer can run three AI reviewer roles, publish a hashed consensus receipt, and auto-propose a suggested outcome while keeping settlement on the current contract."
     },
     {
       title: "Live indexer",
@@ -1466,9 +1482,11 @@ function LandingPage() {
   const architectureSteps = ["Wallet", "AuraPredict UI", "Render Indexer", "Arc RPC", "Market Contract", "Arcscan"];
   const settlementSteps = [
     "Market closes in UTC",
-    "Indexer can create an AI receipt",
-    "Creator, owner, or resolution authority proposes YES, NO, or Cancel",
+    "Indexer creates an AI receipt and suggested YES/NO",
+    "Resolver can follow or override the AI proposal",
+    "Owner receives an alert when resolver and AI disagree",
     "Dispute window stays open",
+    "Disputes are routed to owner/resolution authority review",
     "Stale disputes can be canceled to refund users",
     "Final outcome is locked",
     "Winners claim payout"
@@ -1476,6 +1494,7 @@ function LandingPage() {
   const dataFlow = [
     "Live Render indexer now powers market history, volume, participants, activity, and leaderboards",
     "Aura Agent drafts clearer markets, checks similar questions, and produces AI resolution receipts from evidence",
+    "AI can propose first; owner/authority gets mismatch and dispute alerts for manual review",
     "Resolution receipts stay off-chain unless the resolver, owner, or future authority signs the normal contract proposal",
     "Wallet actions still sign directly against the Arc contract, with Arcscan as the verification layer"
   ];
@@ -2597,6 +2616,23 @@ export default function App() {
               (!!resolutionAuthority && sameAddress(resolutionAuthority, account)))
         )
       : [];
+  const ownerAiMismatchNotifications =
+    account && (owner || resolutionAuthority)
+      ? pendingResolutionMarkets.filter((market) => {
+          if (market.proposedAt <= 0 || market.outcome !== Outcome.Unresolved) return false;
+          if (!((!!owner && sameAddress(owner, account)) || (!!resolutionAuthority && sameAddress(resolutionAuthority, account)))) {
+            return false;
+          }
+          const receipt = aiResolutionReceipts[String(market.id)];
+          const aiOutcome = aiOutcomeFromReceipt(receipt);
+          if (aiOutcome === Outcome.Unresolved || aiOutcome === Outcome.Canceled) return false;
+          return (
+            market.proposedOutcome !== Outcome.Unresolved &&
+            market.proposedOutcome !== Outcome.Canceled &&
+            market.proposedOutcome !== aiOutcome
+          );
+        })
+      : [];
   const staleDisputeNotifications = account
     ? pendingResolutionMarkets.filter(
         (market) =>
@@ -2628,6 +2664,7 @@ export default function App() {
     resolveNotifications.length +
     finalizeNotifications.length +
     disputeReviewNotifications.length +
+    ownerAiMismatchNotifications.length +
     staleDisputeNotifications.length +
     claimNotifications.length +
     resultNotifications.length;
@@ -2922,6 +2959,38 @@ export default function App() {
       canceled = true;
     };
   }, [selectedMarketId]);
+
+  useEffect(() => {
+    if (!account) return;
+    const canReviewAsOwner =
+      (!!owner && sameAddress(owner, account)) || (!!resolutionAuthority && sameAddress(resolutionAuthority, account));
+    if (!canReviewAsOwner) return;
+
+    const targetMarketIds = pendingResolutionMarkets
+      .filter((market) => market.proposedAt > 0 && market.outcome === Outcome.Unresolved)
+      .map((market) => market.id)
+      .slice(0, 80);
+    if (targetMarketIds.length === 0) return;
+
+    let canceled = false;
+    Promise.all(
+      targetMarketIds.map(async (marketId) => {
+        const response = await fetchIndexerJson<ResolutionReceiptResponse>(`/api/resolutions/${marketId}`);
+        return { marketId, receipt: response?.receipt ?? null };
+      })
+    ).then((rows) => {
+      if (canceled) return;
+      setAiResolutionReceipts((current) => {
+        const next = { ...current };
+        for (const row of rows) next[String(row.marketId)] = row.receipt;
+        return next;
+      });
+    });
+
+    return () => {
+      canceled = true;
+    };
+  }, [account, owner, pendingResolutionMarkets, resolutionAuthority]);
 
   useEffect(() => {
     if (!viewedProfileAddress || !isAddress(viewedProfileAddress)) return;
@@ -6248,6 +6317,24 @@ export default function App() {
                         </button>
                       </article>
                     ))}
+                    {ownerAiMismatchNotifications.map((market) => {
+                      const receipt = aiResolutionReceipts[String(market.id)];
+                      const aiOutcome = aiOutcomeFromReceipt(receipt);
+                      return (
+                        <article className="notification-card" key={`owner-ai-mismatch-${market.id}`}>
+                          <span>Owner review: AI mismatch</span>
+                          <strong>{shortQuestion(market.question)}</strong>
+                          <small>
+                            AI suggested {outcomeLabel(aiOutcome)} but resolver proposed {outcomeLabel(market.proposedOutcome)}.
+                          </small>
+                          <div className="notification-actions">
+                            <button className="secondary" onClick={() => openMarket(market.id)} type="button">
+                              View market
+                            </button>
+                          </div>
+                        </article>
+                      );
+                    })}
                     {disputeReviewNotifications.map((market) => (
                       <article className="notification-card" key={`review-${market.id}`}>
                         <span>Dispute review</span>
@@ -6620,6 +6707,22 @@ export default function App() {
                   </div>
                 </article>
               ))}
+              {ownerAiMismatchNotifications.map((market) => {
+                const receipt = aiResolutionReceipts[String(market.id)];
+                const aiOutcome = aiOutcomeFromReceipt(receipt);
+                return (
+                  <article className="notification-card" key={`page-owner-ai-mismatch-${market.id}`}>
+                    <span>Owner review: AI mismatch</span>
+                    <strong>{shortQuestion(market.question)}</strong>
+                    <small>
+                      AI suggested {outcomeLabel(aiOutcome)} but resolver proposed {outcomeLabel(market.proposedOutcome)}.
+                    </small>
+                    <div className="notification-actions">
+                      <button className="secondary" onClick={() => openMarket(market.id)} type="button">View market</button>
+                    </div>
+                  </article>
+                );
+              })}
               {disputeReviewNotifications.map((market) => (
                 <article className="notification-card" key={`page-review-${market.id}`}>
                   <span>Dispute review</span>
