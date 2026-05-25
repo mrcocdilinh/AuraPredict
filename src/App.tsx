@@ -1101,6 +1101,15 @@ function marketStatus(market: MarketView) {
   return "Live";
 }
 
+function resolveActionHint(market: Pick<MarketView, "yesPool" | "noPool">) {
+  const noYesPool = market.yesPool <= 0n;
+  const noNoPool = market.noPool <= 0n;
+  if (noYesPool && noNoPool) return "Cannot propose YES/NO: both YES pool and NO pool are zero. Use Propose Cancel.";
+  if (noYesPool) return "Cannot propose YES: YES pool is zero.";
+  if (noNoPool) return "Cannot propose NO: NO pool is zero.";
+  return "";
+}
+
 function isUnknownChainError(error: unknown) {
   const code = (error as { code?: number }).code;
   const message = error instanceof Error ? error.message : JSON.stringify(error);
@@ -6076,24 +6085,40 @@ export default function App() {
                         </button>
                       </div>
                     )}
-                    {resolveNotifications.map((market) => (
-                      <article className="notification-card" key={`resolve-${market.id}`}>
-                        <span>Result needed</span>
-                        <strong>{shortQuestion(market.question)}</strong>
-                        <small>Closed {closeDate(market.closeTime)}. Creator bond stays locked during dispute window.</small>
-                        <div className="notification-actions">
-                          <button disabled={transactionPending || isMarketActionPending("resolve", market.id)} onClick={() => resolveMarket(market.id, Outcome.Yes)}>
-                            Propose YES
-                          </button>
-                          <button disabled={transactionPending || isMarketActionPending("resolve", market.id)} onClick={() => resolveMarket(market.id, Outcome.No)}>
-                            Propose NO
-                          </button>
-                          <button className="secondary" disabled={transactionPending || isMarketActionPending("resolve", market.id)} onClick={() => cancelMarket(market.id)}>
-                            {isMarketActionPending("resolve", market.id) ? "Proposing..." : "Propose Cancel"}
-                          </button>
-                        </div>
-                      </article>
-                    ))}
+                    {resolveNotifications.map((market) => {
+                      const yesEnabled = market.yesPool > 0n;
+                      const noEnabled = market.noPool > 0n;
+                      const hint = resolveActionHint(market);
+                      return (
+                        <article className="notification-card" key={`resolve-${market.id}`}>
+                          <span>Result needed</span>
+                          <strong>{shortQuestion(market.question)}</strong>
+                          <small>Closed {closeDate(market.closeTime)}. Creator bond stays locked during dispute window.</small>
+                          {hint && <small>{hint}</small>}
+                          <small>Ended tab updates after finalization, not right after proposal.</small>
+                          <div className="notification-actions">
+                            <button
+                              disabled={transactionPending || isMarketActionPending("resolve", market.id) || !yesEnabled}
+                              onClick={() => resolveMarket(market.id, Outcome.Yes)}
+                            >
+                              Propose YES
+                            </button>
+                            <button
+                              disabled={transactionPending || isMarketActionPending("resolve", market.id) || !noEnabled}
+                              onClick={() => resolveMarket(market.id, Outcome.No)}
+                            >
+                              Propose NO
+                            </button>
+                            <button className="secondary" disabled={transactionPending || isMarketActionPending("resolve", market.id)} onClick={() => cancelMarket(market.id)}>
+                              {isMarketActionPending("resolve", market.id) ? "Proposing..." : "Propose Cancel"}
+                            </button>
+                            <button className="secondary" onClick={() => openMarket(market.id)} type="button">
+                              View market
+                            </button>
+                          </div>
+                        </article>
+                      );
+                    })}
                     {finalizeNotifications.map((market) => (
                       <article className="notification-card" key={`finalize-${market.id}`}>
                         <span>Ready to finalize</span>
@@ -6428,21 +6453,28 @@ export default function App() {
                   <span>Claim, resolve, dispute, and result notices will appear here.</span>
                 </div>
               )}
-              {resolveNotifications.map((market) => (
-                <article className="notification-card" key={`page-resolve-${market.id}`}>
-                  <span>Result needed</span>
-                  <strong>{shortQuestion(market.question)}</strong>
-                  <small>Closed {closeDate(market.closeTime)}. Creator bond stays locked during dispute window.</small>
-                  <div className="notification-actions">
-                    <button disabled={transactionPending || isMarketActionPending("resolve", market.id)} onClick={() => resolveMarket(market.id, Outcome.Yes)}>Propose YES</button>
-                    <button disabled={transactionPending || isMarketActionPending("resolve", market.id)} onClick={() => resolveMarket(market.id, Outcome.No)}>Propose NO</button>
-                    <button className="secondary" disabled={transactionPending || isMarketActionPending("resolve", market.id)} onClick={() => cancelMarket(market.id)}>
-                      {isMarketActionPending("resolve", market.id) ? "Proposing..." : "Propose Cancel"}
-                    </button>
-                    <button className="secondary" onClick={() => openMarket(market.id)} type="button">View market</button>
-                  </div>
-                </article>
-              ))}
+              {resolveNotifications.map((market) => {
+                const yesEnabled = market.yesPool > 0n;
+                const noEnabled = market.noPool > 0n;
+                const hint = resolveActionHint(market);
+                return (
+                  <article className="notification-card" key={`page-resolve-${market.id}`}>
+                    <span>Result needed</span>
+                    <strong>{shortQuestion(market.question)}</strong>
+                    <small>Closed {closeDate(market.closeTime)}. Creator bond stays locked during dispute window.</small>
+                    {hint && <small>{hint}</small>}
+                    <small>Ended tab updates after finalization, not right after proposal.</small>
+                    <div className="notification-actions">
+                      <button disabled={transactionPending || isMarketActionPending("resolve", market.id) || !yesEnabled} onClick={() => resolveMarket(market.id, Outcome.Yes)}>Propose YES</button>
+                      <button disabled={transactionPending || isMarketActionPending("resolve", market.id) || !noEnabled} onClick={() => resolveMarket(market.id, Outcome.No)}>Propose NO</button>
+                      <button className="secondary" disabled={transactionPending || isMarketActionPending("resolve", market.id)} onClick={() => cancelMarket(market.id)}>
+                        {isMarketActionPending("resolve", market.id) ? "Proposing..." : "Propose Cancel"}
+                      </button>
+                      <button className="secondary" onClick={() => openMarket(market.id)} type="button">View market</button>
+                    </div>
+                  </article>
+                );
+              })}
               {finalizeNotifications.map((market) => (
                 <article className="notification-card" key={`page-finalize-${market.id}`}>
                   <span>Ready to finalize</span>
@@ -7538,10 +7570,13 @@ export default function App() {
                 Close time (UTC)
                 <input
                   type="datetime-local"
+                  lang="sv-SE"
+                  step={60}
                   min={minimumCloseInput}
                   value={createForm.closeTime}
                   onChange={(event) => setCreateForm({ ...createForm, closeTime: event.target.value })}
                 />
+                <small className="time-format-hint">Use 24-hour format (HH:mm) in UTC.</small>
               </label>
             </div>
             <div className="resolver-note">
