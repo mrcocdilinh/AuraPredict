@@ -3871,6 +3871,10 @@ export default function App() {
 
   const askAuraForResolution = useCallback(
     async (market: MarketView) => {
+      if (market.outcome !== Outcome.Unresolved) {
+        setNotice("This market is finalized. Saved Aura analysis is read-only and no new AI review will run.");
+        return;
+      }
       setAiBusy(true);
       setAuraResolutionStatusByMarket((current) => ({ ...current, [market.id]: "idle" }));
       try {
@@ -5956,6 +5960,8 @@ export default function App() {
     );
     const aiResolutionReport = aiResolutionReports[selectedMarket.id];
     const aiResolutionReceipt = aiResolutionReceipts[String(selectedMarket.id)];
+    const selectedMarketIsSettled = selectedMarket.outcome !== Outcome.Unresolved;
+    const showResolutionAssistant = !selectedMarketIsSettled || Boolean(aiResolutionReport);
     const reportAiSuggestedOutcome = aiOutcomeFromText(aiResolutionReport?.suggestedOutcome);
     const receiptAiSuggestedOutcome = aiOutcomeFromReceipt(aiResolutionReceipt);
     const selectedAiSuggestedOutcome =
@@ -6391,6 +6397,7 @@ export default function App() {
 
         {hasWalletAccess ? (
           <section className="market-intelligence-grid">
+            {showResolutionAssistant && (
             <section className="agent-panel" id="aura-resolution-details">
               <div className="panel-heading">
                 <div>
@@ -6425,16 +6432,21 @@ export default function App() {
                   ))}
                 </div>
               )}
-              <button className="secondary" disabled={aiBusy} onClick={() => askAuraForResolution(selectedMarket)} type="button">
-                {aiBusy ? "Aura thinking..." : aiResolutionReport || selectedAiCanPropose ? "Refresh Aura Agent" : "Ask Aura Agent"}
-              </button>
+              {!selectedMarketIsSettled ? (
+                <button className="secondary" disabled={aiBusy} onClick={() => askAuraForResolution(selectedMarket)} type="button">
+                  {aiBusy ? "Aura thinking..." : aiResolutionReport || selectedAiCanPropose ? "Refresh Aura Agent" : "Ask Aura Agent"}
+                </button>
+              ) : (
+                <div className="resolver-note">Finalized market. This saved Aura report is read-only; new AI reviews are disabled.</div>
+              )}
               <button className="secondary" onClick={copyAgentReport} type="button">
                 Copy report
               </button>
             </section>
+            )}
 
             {aiResolutionReceipt && (
-              <section className="agent-panel">
+              <section className="agent-panel" id={!showResolutionAssistant ? "aura-resolution-details" : undefined}>
                 <div className="panel-heading">
                   <div>
                     <span className="section-label">AI receipt</span>

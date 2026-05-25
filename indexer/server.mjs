@@ -1631,6 +1631,12 @@ async function route(req, res) {
       }
 
       if (segments[2] === "resolution-report") {
+        const marketId = Number(body.marketId);
+        const storedMarket = Number.isInteger(marketId) ? state.markets[String(marketId)] : null;
+        if (storedMarket && storedMarket.outcome !== Outcome.Unresolved) {
+          json(res, 409, { error: "Market is finalized. Saved Aura analysis is read-only; new AI reviews are disabled." });
+          return;
+        }
         const report = await callAiJson(systemInstruction, resolutionPrompt(body));
         const normalizedReport = normalizeResolutionReportWithHeuristic(body, report.json);
         json(res, 200, { report: normalizedReport, provider: report.provider, model: report.model, updatedAt: nowIso() });
