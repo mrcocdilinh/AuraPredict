@@ -987,6 +987,24 @@ function parseResolutionReferenceTime(value: string) {
   return parseAuraUtcCloseTimeFromText(value);
 }
 
+function defaultSourceByContext(category?: string, text?: string) {
+  const cat = (category || "").toLowerCase();
+  const content = (text || "").toLowerCase();
+  if (cat === "crypto" || /\bbtc\b|\beth\b|token|price|usdt|usdc|coin|coingecko|binance|coinbase/.test(content)) {
+    return "https://www.coingecko.com";
+  }
+  if (cat === "sports" || /match|goal|nba|nfl|mlb|fifa|uefa|atp|wta/.test(content)) {
+    return "https://www.espn.com";
+  }
+  if (cat === "politics" || cat === "macro" || /election|president|white house|fed|cpi|inflation|war|government|parliament/.test(content)) {
+    return "https://www.reuters.com";
+  }
+  if (cat === "arc" || /\barc\b|testnet|mainnet|chain/.test(content)) {
+    return "https://docs.arc.io";
+  }
+  return "https://www.reuters.com";
+}
+
 function utcDateTimeInputValue(date: Date) {
   const pad = (value: number) => String(value).padStart(2, "0");
   return [
@@ -3754,6 +3772,10 @@ export default function App() {
       parseAuraUtcCloseTimeFromText(aiMarketDraft.closeTime || "") ||
       parseAuraUtcCloseTimeFromText(aiMarketDraft.question || "") ||
       parseAuraUtcCloseTimeFromText(aiMarketDraft.resolutionCriteria || "");
+    const contextFallbackSource = defaultSourceByContext(
+      aiMarketDraft.category,
+      `${aiMarketDraft.question || ""} ${aiMarketDraft.resolutionCriteria || ""}`
+    );
     setCreateForm((current) => ({
       ...current,
       question: aiMarketDraft.question || current.question,
@@ -3764,7 +3786,7 @@ export default function App() {
         (isValidHttpUrl(normalizeReferenceUrl(current.resolutionSource))
           ? normalizeReferenceUrl(current.resolutionSource)
           : "") ||
-        "https://www.coingecko.com",
+        contextFallbackSource,
       resolutionRule:
         aiMarketDraft.resolutionCriteria ||
         current.resolutionRule ||
@@ -3774,7 +3796,9 @@ export default function App() {
     setDuplicateAcknowledged(false);
     if (!firstSource && rawSources.length > 0) {
       const unresolvedHint = unresolvedSourceNames.length > 0 ? ` (${unresolvedSourceNames.join(", ")})` : "";
-      setNotice(`Aura draft applied. Some sources were names only${unresolvedHint}. Please set a valid source URL before launch.`);
+      setNotice(
+        `Aura draft applied. Some sources were names only${unresolvedHint}. Applied context fallback source: ${contextFallbackSource}`
+      );
     } else {
       setNotice("Aura Agent draft applied. Review it before launching.");
     }
