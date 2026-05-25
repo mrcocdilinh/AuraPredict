@@ -829,7 +829,21 @@ function normalizeReferenceUrl(value: string) {
 function isValidHttpUrl(value: string) {
   try {
     const parsed = new URL(value);
-    return parsed.protocol === "http:" || parsed.protocol === "https:";
+    if (!(parsed.protocol === "http:" || parsed.protocol === "https:")) return false;
+    const host = parsed.hostname.toLowerCase();
+    const blockedHosts = new Set([
+      "e.g",
+      "i.e",
+      "example.com",
+      "example.net",
+      "example.org",
+      "localhost",
+      "invalid",
+      "test"
+    ]);
+    if (blockedHosts.has(host)) return false;
+    if (/^[a-z]\.[a-z]$/.test(host)) return false;
+    return true;
   } catch {
     return false;
   }
@@ -3745,7 +3759,12 @@ export default function App() {
       question: aiMarketDraft.question || current.question,
       category: aiMarketDraft.category && CATEGORIES.includes(aiMarketDraft.category) ? aiMarketDraft.category : current.category,
       closeTime: inferredCloseTime || current.closeTime,
-      resolutionSource: firstSource || current.resolutionSource || "https://www.coingecko.com",
+      resolutionSource:
+        firstSource ||
+        (isValidHttpUrl(normalizeReferenceUrl(current.resolutionSource))
+          ? normalizeReferenceUrl(current.resolutionSource)
+          : "") ||
+        "https://www.coingecko.com",
       resolutionRule:
         aiMarketDraft.resolutionCriteria ||
         current.resolutionRule ||
