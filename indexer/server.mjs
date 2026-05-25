@@ -1246,9 +1246,22 @@ function looksLikeDeadlineEventQuestion(text) {
 
 function hasEvidenceContent(evidenceRows) {
   if (!Array.isArray(evidenceRows)) return false;
-  return evidenceRows.some((item) =>
-    cleanText(item?.title, 160) || cleanUrl(item?.url) || cleanText(item?.notes || item?.finding, 300)
-  );
+  return evidenceRows.some((item) => {
+    if (isSetupEvidenceRow(item)) return false;
+    return cleanText(item?.title, 160) || cleanUrl(item?.url) || cleanText(item?.notes || item?.finding, 300);
+  });
+}
+
+function isSetupEvidenceRow(item) {
+  const title = cleanText(item?.title, 160).toLowerCase();
+  const notes = cleanText(item?.notes || item?.finding, 700).toLowerCase();
+  const setupTitle = title === "resolution source" || title === "fallback source";
+  const setupNote =
+    notes.includes("use only if primary source is unavailable") ||
+    (notes.includes("yes") && notes.includes("no") && notes.includes("cancel")) ||
+    notes.includes("at exactly") ||
+    notes.includes("resolution rule");
+  return setupTitle || setupNote;
 }
 
 function normalizeResolutionReportWithHeuristic(body, reportJson) {
