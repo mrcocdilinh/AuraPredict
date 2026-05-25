@@ -817,6 +817,16 @@ function closeDate(value: number) {
   }).format(new Date(value * 1000)) + " UTC";
 }
 
+function closeDateLocal(value: number) {
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false
+  }).format(new Date(value * 1000));
+}
+
 function chartTimeLabel(value: number, includeDate = false) {
   return new Intl.DateTimeFormat("en-US", {
     timeZone: "UTC",
@@ -1108,6 +1118,17 @@ function resolveActionHint(market: Pick<MarketView, "yesPool" | "noPool">) {
   if (noYesPool) return "Cannot propose YES: YES pool is zero.";
   if (noNoPool) return "Cannot propose NO: NO pool is zero.";
   return "";
+}
+
+function finalizeWaitingHint(market: Pick<MarketView, "proposedAt" | "outcome" | "disputed" | "disputeDeadline">) {
+  if (market.outcome !== Outcome.Unresolved || market.proposedAt === 0 || market.disputed || market.disputeDeadline <= 0) {
+    return "";
+  }
+  const now = Math.floor(Date.now() / 1000);
+  if (now >= market.disputeDeadline) {
+    return "Finalize is now available.";
+  }
+  return `Finalize available after ${closeDate(market.disputeDeadline)} (${closeDateLocal(market.disputeDeadline)} local).`;
 }
 
 function isUnknownChainError(error: unknown) {
@@ -5001,6 +5022,10 @@ export default function App() {
           market.outcome === Outcome.Unresolved &&
           Date.now() / 1000 >= market.closeTime &&
           [market.resolver.toLowerCase(), owner.toLowerCase()].includes(account.toLowerCase());
+        const canProposeYes = market.yesPool > 0n;
+        const canProposeNo = market.noPool > 0n;
+        const proposeHint = resolveActionHint(market);
+        const finalizeHint = finalizeWaitingHint(market);
 
         return (
           <article
@@ -5137,10 +5162,10 @@ export default function App() {
                 )}
                 {canPropose && (
                   <>
-                    <button className="secondary" onClick={() => resolveMarket(market.id, Outcome.Yes)}>
+                    <button className="secondary" onClick={() => resolveMarket(market.id, Outcome.Yes)} disabled={!canProposeYes}>
                       Propose YES
                     </button>
-                    <button className="secondary" onClick={() => resolveMarket(market.id, Outcome.No)}>
+                    <button className="secondary" onClick={() => resolveMarket(market.id, Outcome.No)} disabled={!canProposeNo}>
                       Propose NO
                     </button>
                     <button className="secondary" onClick={() => cancelMarket(market.id)}>
@@ -5148,6 +5173,8 @@ export default function App() {
                     </button>
                   </>
                 )}
+                {canPropose && proposeHint && <small>{proposeHint}</small>}
+                {finalizeHint && <small>{finalizeHint}</small>}
                 {canDispute && (
                   <button className="secondary" onClick={() => disputeMarket(market.id)}>
                     Dispute {formatUsdc(disputeBond)} USDC
@@ -5258,6 +5285,10 @@ export default function App() {
       selectedMarket.outcome === Outcome.Unresolved &&
       Date.now() / 1000 >= selectedMarket.closeTime &&
       [selectedMarket.resolver.toLowerCase(), owner.toLowerCase()].includes(account.toLowerCase());
+    const canProposeYes = selectedMarket.yesPool > 0n;
+    const canProposeNo = selectedMarket.noPool > 0n;
+    const proposeHint = resolveActionHint(selectedMarket);
+    const finalizeHint = finalizeWaitingHint(selectedMarket);
     const canClaim = account && selectedMarket.potentialPayout > 0n && !selectedMarket.claimed;
     const tradeAmount = parseUsdcInput(stakeInputs[selectedMarket.id] || "");
     const yesEstimate = betEstimate(selectedMarket, Outcome.Yes, tradeAmount, protocolFeeBps);
@@ -5593,10 +5624,10 @@ export default function App() {
                 )}
                 {canPropose && (
                   <>
-                    <button className="secondary" onClick={() => resolveMarket(selectedMarket.id, Outcome.Yes)}>
+                    <button className="secondary" onClick={() => resolveMarket(selectedMarket.id, Outcome.Yes)} disabled={!canProposeYes}>
                       Propose YES
                     </button>
-                    <button className="secondary" onClick={() => resolveMarket(selectedMarket.id, Outcome.No)}>
+                    <button className="secondary" onClick={() => resolveMarket(selectedMarket.id, Outcome.No)} disabled={!canProposeNo}>
                       Propose NO
                     </button>
                     <button className="secondary" onClick={() => cancelMarket(selectedMarket.id)}>
@@ -5604,6 +5635,8 @@ export default function App() {
                     </button>
                   </>
                 )}
+                {canPropose && proposeHint && <small>{proposeHint}</small>}
+                {finalizeHint && <small>{finalizeHint}</small>}
                 {canDispute && (
                   <button className="secondary" onClick={() => disputeMarket(selectedMarket.id)}>
                     Dispute {formatUsdc(disputeBond)} USDC
@@ -5639,7 +5672,11 @@ export default function App() {
                 )}
               </div>
             )}
-            </aside>
+            <div className="resolver-note">
+              Resolution rules: only propose YES when YES pool &gt; 0, only propose NO when NO pool &gt; 0.
+              If both pools are zero, use Cancel. A proposed result moves to Ended only after Finalize.
+            </div>
+          </aside>
           ) : (
             <aside className="detail-public-card">
               <span className="section-label">Public preview</span>
@@ -6879,6 +6916,10 @@ export default function App() {
                     market.outcome === Outcome.Unresolved &&
                     Date.now() / 1000 >= market.closeTime &&
                     [market.resolver.toLowerCase(), owner.toLowerCase()].includes(account.toLowerCase());
+                  const canProposeYes = market.yesPool > 0n;
+                  const canProposeNo = market.noPool > 0n;
+                  const proposeHint = resolveActionHint(market);
+                  const finalizeHint = finalizeWaitingHint(market);
                   const meta = categoryMeta(market.category || "Other");
                   const result = personalMarketResult(market, isOwnProfile ? "You" : "Profile");
                   const settlement = userSettlement(market, protocolFeeBps);
@@ -6962,10 +7003,10 @@ export default function App() {
                           )}
                           {canPropose && (
                             <>
-                              <button className="secondary" onClick={() => resolveMarket(market.id, Outcome.Yes)}>
+                              <button className="secondary" onClick={() => resolveMarket(market.id, Outcome.Yes)} disabled={!canProposeYes}>
                                 Propose YES
                               </button>
-                              <button className="secondary" onClick={() => resolveMarket(market.id, Outcome.No)}>
+                              <button className="secondary" onClick={() => resolveMarket(market.id, Outcome.No)} disabled={!canProposeNo}>
                                 Propose NO
                               </button>
                               <button className="secondary" onClick={() => cancelMarket(market.id)}>
@@ -6973,6 +7014,8 @@ export default function App() {
                               </button>
                             </>
                           )}
+                          {canPropose && proposeHint && <small>{proposeHint}</small>}
+                          {finalizeHint && <small>{finalizeHint}</small>}
                           {canFinalize && (
                             <button className="secondary" onClick={() => finalizeMarket(market.id)}>
                               Finalize
