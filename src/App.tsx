@@ -84,7 +84,7 @@ type ActivityItem = {
   txHash?: Hash | string;
 };
 
-type AppView = "markets" | "ended" | "leaderboard" | "profile" | "collection" | "market" | "security" | "notifications";
+type AppView = "markets" | "ended" | "leaderboard" | "profile" | "collection" | "market" | "security" | "notifications" | "owner";
 type LeaderboardMetric = "volume" | "winRate" | "pnl" | "auraPoints";
 type LeaderboardPeriod = "day" | "7d" | "30d" | "all";
 type MarketSectionKey = "fresh" | "hot" | "closing";
@@ -2691,6 +2691,19 @@ export default function App() {
         );
       })
     : [];
+  const canReviewAsOwner =
+    !!account &&
+    ((!!owner && sameAddress(owner, account)) || (!!resolutionAuthority && sameAddress(resolutionAuthority, account)));
+  const ownerMismatchHistory = canReviewAsOwner
+    ? markets.filter((market) => {
+        if (market.proposedAt <= 0 || market.outcome === Outcome.Unresolved) return false;
+        const aiReceipt = aiResolutionReceipts[String(market.id)];
+        const aiOutcome = aiOutcomeFromReceipt(aiReceipt);
+        if (aiOutcome === Outcome.Unresolved || aiOutcome === Outcome.Canceled) return false;
+        if (market.proposedOutcome === Outcome.Unresolved || market.proposedOutcome === Outcome.Canceled) return false;
+        return market.proposedOutcome !== aiOutcome;
+      })
+    : [];
   const notificationCount =
     resolveNotifications.length +
     finalizeNotifications.length +
@@ -2732,6 +2745,8 @@ export default function App() {
               ? "Wallet profile"
               : view === "notifications"
                 ? "Notifications"
+              : view === "owner"
+                ? "Owner review"
               : view === "security"
                 ? "Security and audit"
                 : "Live markets";
@@ -2999,10 +3014,10 @@ export default function App() {
       (!!owner && sameAddress(owner, account)) || (!!resolutionAuthority && sameAddress(resolutionAuthority, account));
     if (!canReviewAsOwner) return;
 
-    const targetMarketIds = pendingResolutionMarkets
-      .filter((market) => market.outcome === Outcome.Unresolved)
+    const targetMarketIds = markets
+      .filter((market) => market.proposedAt > 0)
       .map((market) => market.id)
-      .slice(0, 80);
+      .slice(0, 120);
     if (targetMarketIds.length === 0) return;
 
     let canceled = false;
@@ -3023,7 +3038,7 @@ export default function App() {
     return () => {
       canceled = true;
     };
-  }, [account, owner, pendingResolutionMarkets, resolutionAuthority]);
+  }, [account, markets, owner, resolutionAuthority]);
 
   useEffect(() => {
     if (!viewedProfileAddress || !isAddress(viewedProfileAddress)) return;
@@ -4688,6 +4703,16 @@ export default function App() {
   const resolveMarket = async (marketId: number, outcome: Outcome) => {
     if (!account || !isAddress(account)) throw new Error("Connect wallet first.");
     if (isMarketActionPending("resolve", marketId)) return;
+    const aiReceipt = aiResolutionReceipts[String(marketId)];
+    const aiSuggestedOutcome = aiOutcomeFromReceipt(aiReceipt);
+    const hasAiSuggestion = aiSuggestedOutcome === Outcome.Yes || aiSuggestedOutcome === Outcome.No;
+    const mismatchWithAi = hasAiSuggestion && aiSuggestedOutcome !== outcome;
+    if (mismatchWithAi) {
+      const continueWithMismatch = window.confirm(
+        `AI suggested ${outcomeLabel(aiSuggestedOutcome)} but you are proposing ${outcomeLabel(outcome)}. This will notify owner for review. Continue?`
+      );
+      if (!continueWithMismatch) return;
+    }
     await switchToArc();
     const walletClient = getActiveWalletClient();
     setMarketActionPending("resolve", marketId, true);
@@ -4728,6 +4753,13 @@ export default function App() {
           );
         }
       );
+      if (mismatchWithAi) {
+        setNotice(
+          `You proposed ${outcomeLabel(outcome)} against AI suggestion ${outcomeLabel(
+            aiSuggestedOutcome
+          )}. Owner was notified for review.`
+        );
+      }
       if (success) setNotificationMenuOpen(false);
     } finally {
       setMarketActionPending("resolve", marketId, false);
@@ -6189,6 +6221,19 @@ export default function App() {
             >
               Security
             </button>
+            {canReviewAsOwner && (
+              <button
+                className={view === "owner" ? "tab active" : "tab"}
+                onClick={() => {
+                  setSelectedMarketId(null);
+                  setSelectedProfileAddress("");
+                  updateMarketRoute(null);
+                  setView("owner");
+                }}
+              >
+                Owner Review
+              </button>
+            )}
           </div>
           <div className="market-search">
             <svg className="search-icon" viewBox="0 0 24 24" aria-hidden="true">
@@ -6723,7 +6768,7 @@ export default function App() {
             </div>
           </div>
 
-          {view !== "leaderboard" && view !== "profile" && view !== "market" && view !== "security" && (
+          {view !== "leaderboard" && view !== "profile" && view !== "market" && view !== "security" && view !== "owner" && (
             <div className="category-row">
               {CATEGORIES.map((category) => (
                 <button
@@ -6941,6 +6986,58 @@ export default function App() {
                   </div>
                 </article>
               ))}
+            </section>
+          ) : view === "owner" ? (
+            <section className="notifications-page">
+              <div className="notifications-page-head">
+                <div>
+                  <span className="section-label">Owner review</span>
+                  <h3>{ownerAiMismatchNotifications.length} active mismatch alerts</h3>
+                </div>
+              </div>
+              {ownerAiMismatchNotifications.length === 0 && ownerMismatchHistory.length === 0 && (
+                <div className="empty-state">
+                  <strong>No owner review items</strong>
+                  <span>AI mismatch and dispute escalation alerts will appear here.</span>
+                </div>
+              )}
+              {ownerAiMismatchNotifications.map((market) => {
+                const receipt = aiResolutionReceipts[String(market.id)];
+                const aiOutcome = aiOutcomeFromReceipt(receipt);
+                return (
+                  <article className="notification-card" key={`owner-live-${market.id}`}>
+                    <span>Active mismatch</span>
+                    <strong>{shortQuestion(market.question)}</strong>
+                    <small>AI suggested {outcomeLabel(aiOutcome)} but resolver proposed {outcomeLabel(market.proposedOutcome)}.</small>
+                    <small>Dispute deadline: {market.disputeDeadline > 0 ? closeDate(market.disputeDeadline) : "Pending"}</small>
+                    <div className="notification-actions">
+                      <button className="secondary" onClick={() => openMarket(market.id)} type="button">View market</button>
+                    </div>
+                  </article>
+                );
+              })}
+              {ownerMismatchHistory.length > 0 && (
+                <div className="notifications-page-head">
+                  <div>
+                    <span className="section-label">History</span>
+                    <h3>{ownerMismatchHistory.length} reviewed mismatch outcomes</h3>
+                  </div>
+                </div>
+              )}
+              {ownerMismatchHistory.map((market) => {
+                const receipt = aiResolutionReceipts[String(market.id)];
+                const aiOutcome = aiOutcomeFromReceipt(receipt);
+                return (
+                  <article className="notification-card" key={`owner-history-${market.id}-${market.outcome}`}>
+                    <span>Reviewed mismatch</span>
+                    <strong>{shortQuestion(market.question)}</strong>
+                    <small>AI suggested {outcomeLabel(aiOutcome)}. Resolver proposed {outcomeLabel(market.proposedOutcome)}. Final {outcomeLabel(market.outcome)}.</small>
+                    <div className="notification-actions">
+                      <button className="secondary" onClick={() => openMarket(market.id)} type="button">View market</button>
+                    </div>
+                  </article>
+                );
+              })}
             </section>
           ) : view === "collection" ? (
             <section className={`market-section section-${collectionView}`}>
