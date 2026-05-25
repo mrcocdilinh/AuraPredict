@@ -1634,11 +1634,11 @@ function LandingPage() {
     },
     {
       title: "Aura Agent",
-      text: "Use AI assistance to draft clearer markets, review duplicate risk, summarize evidence, and generate resolution suggestions."
+      text: "Use AI assistance to draft clearer markets, review duplicate risk, prepare source-based rules, and receive visible result suggestions."
     },
     {
       title: "AI resolution receipts",
-      text: "AI can generate auditable suggestion receipts while final settlement remains in the same onchain dispute flow."
+      text: "View a suggested YES or NO outcome with confidence and supporting detail while final settlement remains in the onchain dispute flow."
     },
     {
       title: "Live indexer",
@@ -1648,9 +1648,10 @@ function LandingPage() {
   const flow = ["Create a market", "Stake YES or NO", "Track odds", "Resolve result", "Claim payout"];
   const architectureSteps = ["Wallet", "AuraPredict UI", "Render Indexer", "Arc RPC", "Market Contract", "Arcscan"];
   const settlementSteps = [
-    "Market closes in UTC",
-    "Indexer creates an AI suggestion receipt",
-    "Resolver can follow or override the AI proposal",
+    "Trading closes at the published UTC time",
+    "Resolution opens only after the rule's event timestamp",
+    "Resolver requests or views Aura's YES/NO suggestion and confidence",
+    "Resolver can apply the suggestion or propose a different result",
     "Owner receives an alert when resolver and AI disagree",
     "Dispute window stays open",
     "Disputes are routed to owner/resolution authority review",
@@ -1660,9 +1661,11 @@ function LandingPage() {
   ];
   const dataFlow = [
     "Live Render indexer now powers market history, volume, participants, activity, and leaderboards",
-    "Aura Agent drafts clearer markets, checks similar questions, and produces AI suggestions from evidence",
-    "AI can propose first; owner/authority gets mismatch and dispute alerts for manual review",
-    "Resolution receipts stay off-chain unless the resolver, owner, or future authority signs the normal contract proposal",
+    "Aura Agent drafts clearer markets, checks similar questions, and prepares rules with source links",
+    "After the rule timestamp, Aura displays a suggested outcome and confidence in Resolution actions",
+    "A saved AI receipt can be viewed without running a new AI request; Ask or Refresh requests a new review",
+    "Resolver decisions that differ from Aura and user disputes are flagged for owner/authority review",
+    "Resolution receipts stay off-chain; only wallet-signed contract actions affect settlement",
     "Wallet actions still sign directly against the Arc contract, with Arcscan as the verification layer"
   ];
   const roadmapItems = [
@@ -1903,9 +1906,10 @@ function LandingPage() {
           <p>
             A market starts as a clear YES/NO question. Users stake based on their conviction.
             Creation now requires a primary resolution source and an explicit resolution rule.
-            When the market closes, Aura runs first to generate a resolution suggestion from evidence, then the creator
-            or owner proposes the result through the existing contract, users can dispute during the
-            window, and winners claim directly from their wallet after finalization.
+            After the event timestamp in the resolution rule has passed, the resolver opens the
+            market to request or view Aura's visible YES/NO suggestion and confidence. The creator
+            or owner then proposes the result through the existing contract, users can dispute
+            during the window, and winners claim directly from their wallet after finalization.
           </p>
           <a className="landing-primary" href={APP_URL}>
             Launch the App
@@ -1962,8 +1966,8 @@ function LandingPage() {
             <span className="docs-label">Resolution model</span>
             <h3>AI assisted, contract settled</h3>
             <p>
-              The indexer can calculate a suggested outcome with AI reviewers, but the creator or owner
-              still signs the normal contract proposal and users keep the dispute window.
+              Aura displays a suggested outcome with confidence after the rule timestamp, but the
+              creator or owner still signs the contract proposal and users keep the dispute window.
             </p>
           </article>
           <article className="docs-card">
@@ -1971,7 +1975,7 @@ function LandingPage() {
             <h3>Aura Agent plus receipts</h3>
             <p>
               Aura Agent helps draft questions, score clarity, surface similar markets, summarize
-              evidence, and publish hashed resolution receipts for market outcome review.
+              evidence, and expose resolution receipts that users can inspect without rerunning AI.
             </p>
           </article>
         </div>
@@ -2040,7 +2044,11 @@ function LandingPage() {
           </article>
           <article>
             <span>AI resolution</span>
-            <strong>Aura-first flow: creators must run Aura before proposing; manual propose unlocks only when Aura is unavailable.</strong>
+            <strong>Aura-first flow: the suggested result is visible before proposal, with mismatch alerts and dispute review when needed.</strong>
+          </article>
+          <article>
+            <span>Deadline outcomes</span>
+            <strong>For a clearly defined event due by a fixed time, Aura may suggest NO after the deadline when reviewed evidence provides no credible confirmation, while displaying its confidence and risk.</strong>
           </article>
           <article>
             <span>Profiles</span>

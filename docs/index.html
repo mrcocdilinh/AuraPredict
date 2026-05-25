@@ -102,7 +102,7 @@
         <a href="#ai-resolution">
           <span>04</span>
           <strong>AI resolution</strong>
-          <small>Off-chain receipts, admin runs, optional resolver proposal.</small>
+          <small>Visible suggestions, saved receipts, mismatch and dispute review.</small>
         </a>
       </section>
 
@@ -131,11 +131,11 @@
             </article>
             <article>
               <h3>Aura Agent</h3>
-              <p>AI drafts markets, checks duplicate risk, summarizes evidence, and creates resolution receipts.</p>
+              <p>AI drafts markets, checks duplicate risk, helps define source-based rules, and shows resolution suggestions.</p>
             </article>
             <article>
               <h3>AI receipts</h3>
-              <p>The indexer can calculate and auto-propose a suggested outcome off-chain while contract settlement stays unchanged.</p>
+              <p>A visible suggested outcome, confidence, and receipt can assist the resolver while contract settlement stays unchanged.</p>
             </article>
           </div>
         </div>
@@ -199,9 +199,10 @@
             <article>
               <h3>Resolution checklist</h3>
               <ul>
-                <li>Run Aura first before any YES/NO/Cancel proposal.</li>
-                <li>Attach evidence links before proposing a result.</li>
-                <li>Run AI resolution when evidence is ready to create an auditable off-chain receipt.</li>
+                <li>Wait until the event timestamp stated in the resolution rule has passed.</li>
+                <li>Open Resolution actions to view or request Aura's suggested result and confidence.</li>
+                <li>Attach supporting source links before proposing a result.</li>
+                <li>Apply Aura's suggestion or explicitly propose a different result for owner review.</li>
                 <li>Use Cancel only when the market cannot be fairly resolved.</li>
                 <li>Wait through the dispute window before treating the result as final.</li>
                 <li>Keep official sources and screenshots for contested results.</li>
@@ -229,7 +230,7 @@
             <article>
               <span>3</span>
               <h3>Propose</h3>
-              <p>Creator, owner, or the configured resolution authority proposes YES, NO, or Cancel after close, optionally using an AI receipt.</p>
+              <p>The app opens Resolution actions only after the rule timestamp; creator, owner, or authority then proposes YES, NO, or Cancel with Aura assistance.</p>
             </article>
             <article>
               <span>4</span>
@@ -262,63 +263,65 @@
         <div class="section-body">
           <h2>AI outcome calculation without changing the contract</h2>
           <p>
-            AuraPredict V2 keeps AI calculation off-chain. The indexer runs an AI review
-            committee, stores a public resolution receipt, and leaves final settlement to
-            the creator, owner, or future resolution authority flow on the contract.
+            AuraPredict keeps Aura Agent's calculation off-chain. After the event timestamp
+            in the rule, Resolution actions can show a suggested YES or NO outcome, confidence,
+            supporting detail, and a receipt. Final settlement still follows the existing
+            creator, owner, or future resolution-authority contract flow.
           </p>
           <div class="note">
-            Why this design: it keeps resolution fast and scalable with AI support, but still preserves user protection through onchain dispute and final human authority when needed.
+            Why this design: Aura helps a resolver check evidence and spot questionable decisions, while wallet-signed proposals, disputes, and finalization remain the settlement controls.
           </div>
           <div class="timeline">
             <article>
               <span>1</span>
-              <h3>Collect evidence</h3>
-              <p>Creators and users attach source links, notes, and resolution context to the market.</p>
+              <h3>Define the rule</h3>
+              <p>At creation, the market records a source link, an exact UTC event timestamp, and a clear YES/NO rule.</p>
             </article>
             <article>
               <span>2</span>
-              <h3>Run reviewers</h3>
-              <p>The indexer asks three AI reviewer roles to return YES, NO, Cancel, or insufficient evidence.</p>
+              <h3>Reach the event time</h3>
+              <p>Trading may close first, but the app does not expose result proposal actions until the rule's actual timestamp has passed.</p>
             </article>
             <article>
               <span>3</span>
-              <h3>Create receipt</h3>
-              <p>The consensus, confidence, reasoning, risks, evidence, and immutable decision hash are stored off-chain.</p>
+              <h3>Review Aura</h3>
+              <p>The resolver sees or requests Aura's outcome suggestion and confidence, then can open the detailed rationale and receipt.</p>
             </article>
             <article>
               <span>4</span>
               <h3>Propose result</h3>
-              <p>An admin can review the receipt, then the resolver signs the normal contract transaction after Aura-first checks.</p>
+              <p>The resolver can use Aura's suggestion or choose another outcome; only the wallet-signed proposal changes contract state.</p>
             </article>
             <article>
               <span>5</span>
-              <h3>Owner escalation</h3>
-              <p>If resolver and AI differ, or if users dispute, owner/resolution authority receives an alert and reviews before final settlement.</p>
+              <h3>Review and dispute</h3>
+              <p>A mismatch with Aura alerts the owner/authority. A user dispute also routes the result for review before final settlement.</p>
             </article>
           </div>
           <div class="two-column">
             <article>
-              <h3>Public read endpoint</h3>
-              <pre><code>GET /api/resolutions/:marketId</code></pre>
-              <p>The app uses this endpoint to show the AI receipt panel on a market detail page.</p>
+              <h3>Visible in the market</h3>
+              <p>Resolution actions show Aura's suggested YES or NO outcome and confidence above the proposal buttons. Selecting the suggestion detail jumps to the full report.</p>
             </article>
             <article>
-              <h3>Admin run endpoint</h3>
-              <pre><code>POST /api/resolutions/:marketId/run
-Authorization: Bearer your_admin_token</code></pre>
-              <p>Admin reruns are used only when better evidence arrives or a dispute needs deeper review.</p>
+              <h3>Saved receipt behavior</h3>
+              <p>Opening a market can display a previously saved receipt without spending a new AI request. Only asking or refreshing Aura requests a new evaluation.</p>
             </article>
           </div>
+          <div class="note">
+            For an explicit by-deadline event question, Aura can suggest NO after the
+            deadline if reviewed evidence provides no credible confirmation of that event.
+            It still displays confidence and risk; unclear rules or conflicting evidence require review.
+          </div>
           <div class="reference-table">
-            <article><span>Manual mode</span><strong>Receipt only; human reviews and signs the result proposal.</strong></article>
-            <article><span>Auto-run</span><strong>Closed unresolved markets can be processed automatically to prepare AI suggestions.</strong></article>
-            <article><span>Auto-propose</span><strong>AI can propose first; owner receives mismatch/dispute alerts for review.</strong></article>
-            <article><span>Security boundary</span><strong>Private keys and operator credentials are never published in public documentation.</strong></article>
+            <article><span>Timing</span><strong>Result actions wait for the rule's event timestamp, not an earlier trading cutoff.</strong></article>
+            <article><span>Use AI</span><strong>The resolver may apply Aura's suggestion directly from Resolution actions.</strong></article>
+            <article><span>Mismatch</span><strong>A proposal against Aura's suggestion is highlighted for owner/authority review.</strong></article>
+            <article><span>Dispute</span><strong>Participants keep the contract dispute window before finalization.</strong></article>
           </div>
           <div class="note">
-            AI receipts are decision support, not a trustless oracle. The contract still controls
-            settlement, users can still dispute, and private resolver or authority keys must stay
-            outside GitHub and Vercel logs.
+            Aura Agent is decision support, not an autonomous oracle. It cannot settle a market
+            by itself: the contract proposal, dispute window, and finalization remain authoritative.
           </div>
         </div>
       </section>
@@ -378,12 +381,9 @@ VITE_PREDICTION_MARKET_START_BLOCK=43295581
 VITE_WALLETCONNECT_PROJECT_ID=your_project_id</code></pre>
             </article>
             <article>
-              <h3>Indexer AI resolution</h3>
-              <pre><code>AI_PROVIDER=gemini
-GEMINI_API_KEY=your_gemini_key
-AURA_RESOLUTION_ADMIN_TOKEN=long_random_token
-AURA_RESOLUTION_AUTO_RUN=0
-AURA_RESOLUTION_AUTO_PROPOSE=0</code></pre>
+              <h3>Aura provider secrets</h3>
+              <p>AI provider credentials and resolution policy are server-only deployment secrets. They are never placed in frontend environment variables or exposed to app users.</p>
+              <p>Self-hosted builders can review <code>.env.example</code> in the repository for local setup fields.</p>
             </article>
           </div>
           <div class="command-block">
