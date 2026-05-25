@@ -987,6 +987,15 @@ function parseResolutionReferenceTime(value: string) {
   return parseAuraUtcCloseTimeFromText(value);
 }
 
+function parseUtcInputToUnixSeconds(value: string) {
+  if (!value) return null;
+  try {
+    return Number(parseUtcDateTime(value));
+  } catch {
+    return null;
+  }
+}
+
 function defaultSourceByContext(category?: string, text?: string) {
   const cat = (category || "").toLowerCase();
   const content = (text || "").toLowerCase();
@@ -2317,11 +2326,34 @@ export default function App() {
   const contractAddress = CONTRACT_ADDRESS as Address;
 
   const nowSeconds = Math.floor(currentTime.getTime() / 1000);
+  const resolutionUnlockByMarketId = useMemo(() => {
+    const byId: Record<number, number> = {};
+    for (const market of markets) {
+      let unlockTime = market.closeTime;
+      const evidenceRows = marketEvidence[String(market.id)] || [];
+      const referenceCandidates = [
+        parseResolutionReferenceTime(market.question),
+        ...evidenceRows.map((item) => parseResolutionReferenceTime(item.notes || ""))
+      ];
+      for (const reference of referenceCandidates) {
+        const referenceSeconds = parseUtcInputToUnixSeconds(reference || "");
+        if (referenceSeconds && referenceSeconds > unlockTime) {
+          unlockTime = referenceSeconds;
+        }
+      }
+      byId[market.id] = unlockTime;
+    }
+    return byId;
+  }, [marketEvidence, markets]);
+  const resolutionUnlockTime = useCallback(
+    (market: Pick<MarketView, "id" | "closeTime">) => resolutionUnlockByMarketId[market.id] ?? market.closeTime,
+    [resolutionUnlockByMarketId]
+  );
   const activeMarkets = markets.filter(
     (market) => market.outcome === Outcome.Unresolved && market.closeTime > nowSeconds
   );
   const pendingResolutionMarkets = markets.filter(
-    (market) => market.outcome === Outcome.Unresolved && market.closeTime <= nowSeconds
+    (market) => market.outcome === Outcome.Unresolved && resolutionUnlockTime(market) <= nowSeconds
   );
   const endedMarkets = markets.filter((market) => market.outcome !== Outcome.Unresolved);
   const liveMarkets = activeMarkets.length;
@@ -3753,13 +3785,18 @@ export default function App() {
   );
 
   const resolveAuraStatusLabel = useCallback(
-    (marketId: number) => {
+    (market: Pick<MarketView, "id" | "closeTime">) => {
+      const unlockTime = resolutionUnlockTime(market);
+      if (nowSeconds < unlockTime) {
+        return `Resolution opens at ${closeDate(unlockTime)} (rule timestamp).`;
+      }
+      const marketId = market.id;
       const status = auraResolutionStatusByMarket[marketId] || "idle";
       if (status === "ready") return "Aura suggestion is ready.";
       if (status === "failed") return "Aura unavailable. Manual propose is unlocked.";
       return "Ask Aura first before proposing. If Aura fails, manual propose is unlocked.";
     },
-    [auraResolutionStatusByMarket]
+    [auraResolutionStatusByMarket, closeDate, nowSeconds, resolutionUnlockTime]
   );
 
   const applyAuraMarketDraft = useCallback(() => {
@@ -3814,11 +3851,12 @@ export default function App() {
       setAuraResolutionStatusByMarket((current) => ({ ...current, [market.id]: "idle" }));
       try {
         const evidenceRows = marketEvidence[String(market.id)] || [];
+        const effectiveCloseTime = resolutionUnlockTime(market);
         const response = await postIndexerJson<{ report: AiResolutionReport }>("/api/ai/resolution-report", {
           marketId: market.id,
           question: market.question,
           category: market.category,
-          closeTime: market.closeTime,
+          closeTime: effectiveCloseTime,
           evidence: evidenceRows
         });
         if (!response?.report) throw new Error("Aura Agent did not return a report.");
@@ -3832,7 +3870,7 @@ export default function App() {
         setAiBusy(false);
       }
     },
-    [marketEvidence, setNotice]
+    [marketEvidence, resolutionUnlockTime, setNotice]
   );
 
   const setThemeMode = useCallback((nextTheme: ThemeMode) => {
@@ -5479,12 +5517,14 @@ export default function App() {
         const imageVariant = marketImageVariant(market);
         const walletResult = personalMarketResult(market, resultSubject);
         const canUseDisputeFlow = contractVersion !== "legacy";
+        const resolutionReadyAt = resolutionUnlockTime(market);
+        const isResolutionReady = nowSeconds >= resolutionReadyAt;
         const canPropose =
           canUseDisputeFlow &&
           account &&
           market.outcome === Outcome.Unresolved &&
           market.proposedAt === 0 &&
-          Date.now() / 1000 >= market.closeTime &&
+          isResolutionReady &&
           (sameAddress(market.resolver, account) ||
             (!!owner && sameAddress(owner, account)) ||
             (!!resolutionAuthority && sameAddress(resolutionAuthority, account)));
@@ -5530,7 +5570,7 @@ export default function App() {
           contractVersion === "legacy" &&
           account &&
           market.outcome === Outcome.Unresolved &&
-          Date.now() / 1000 >= market.closeTime &&
+          isResolutionReady &&
           [market.resolver.toLowerCase(), owner.toLowerCase()].includes(account.toLowerCase());
         const canProposeYes = market.yesPool > 0n;
         const canProposeNo = market.noPool > 0n;
@@ -5689,7 +5729,7 @@ export default function App() {
                   </>
                 )}
                 {canPropose && proposeHint && <small>{proposeHint}</small>}
-                {canPropose && <small>{resolveAuraStatusLabel(market.id)}</small>}
+                {canPropose && <small>{resolveAuraStatusLabel(market)}</small>}
                 {finalizeHint && <small>{finalizeHint}</small>}
                 {canDispute && (
                   <button className="secondary" onClick={() => disputeMarket(market.id)}>
@@ -5749,6 +5789,8 @@ export default function App() {
 
     const totalPool = marketVolume(selectedMarket);
     const canUseDisputeFlow = contractVersion !== "legacy";
+    const selectedResolutionReadyAt = resolutionUnlockTime(selectedMarket);
+    const selectedResolutionReady = nowSeconds >= selectedResolutionReadyAt;
     const canBet =
       account &&
       selectedMarket.outcome === Outcome.Unresolved &&
@@ -5759,7 +5801,7 @@ export default function App() {
       account &&
       selectedMarket.outcome === Outcome.Unresolved &&
       selectedMarket.proposedAt === 0 &&
-      Date.now() / 1000 >= selectedMarket.closeTime &&
+      selectedResolutionReady &&
       (sameAddress(selectedMarket.resolver, account) ||
         (!!owner && sameAddress(owner, account)) ||
         (!!resolutionAuthority && sameAddress(resolutionAuthority, account)));
@@ -5799,7 +5841,7 @@ export default function App() {
       contractVersion === "legacy" &&
       account &&
       selectedMarket.outcome === Outcome.Unresolved &&
-      Date.now() / 1000 >= selectedMarket.closeTime &&
+      selectedResolutionReady &&
       [selectedMarket.resolver.toLowerCase(), owner.toLowerCase()].includes(account.toLowerCase());
     const canProposeYes = selectedMarket.yesPool > 0n;
     const canProposeNo = selectedMarket.noPool > 0n;
@@ -6157,7 +6199,7 @@ export default function App() {
                   </>
                 )}
                 {canPropose && proposeHint && <small>{proposeHint}</small>}
-                {canPropose && <small>{resolveAuraStatusLabel(selectedMarket.id)}</small>}
+                {canPropose && <small>{resolveAuraStatusLabel(selectedMarket)}</small>}
                 {finalizeHint && <small>{finalizeHint}</small>}
                 {canDispute && (
                   <button className="secondary" onClick={() => disputeMarket(selectedMarket.id)}>
@@ -6662,6 +6704,7 @@ export default function App() {
                       const yesEnabled = market.yesPool > 0n;
                       const noEnabled = market.noPool > 0n;
                       const hint = resolveActionHint(market);
+                      const resolutionReadyAt = resolutionUnlockTime(market);
                       const aiReceipt = aiResolutionReceipts[String(market.id)];
                       const aiSuggestedOutcome = aiOutcomeFromReceipt(aiReceipt);
                       const aiCanPropose = aiSuggestedOutcome === Outcome.Yes || aiSuggestedOutcome === Outcome.No;
@@ -6669,12 +6712,15 @@ export default function App() {
                       const noLiquidity = hasNoLiquidity(market);
                       const auraStatusText = aiCanPropose
                         ? `AI suggests ${outcomeLabel(aiSuggestedOutcome)}`
-                        : resolveAuraStatusLabel(market.id);
+                        : resolveAuraStatusLabel(market);
                       return (
                         <article className="notification-card" key={`resolve-${market.id}`}>
                           <span>Result needed</span>
                           <strong>{shortQuestion(market.question)}</strong>
                           <small>Closed {closeDate(market.closeTime)}. Creator bond stays locked during dispute window.</small>
+                          {resolutionReadyAt > market.closeTime && (
+                            <small>Resolution unlock: {closeDate(resolutionReadyAt)} (rule timestamp).</small>
+                          )}
                           <small>{auraStatusText}</small>
                           {hint && <small>{hint}</small>}
                           <small>Ended tab updates after finalization, not right after proposal.</small>
@@ -7136,6 +7182,7 @@ export default function App() {
                 const yesEnabled = market.yesPool > 0n;
                 const noEnabled = market.noPool > 0n;
                 const hint = resolveActionHint(market);
+                const resolutionReadyAt = resolutionUnlockTime(market);
                 const aiReceipt = aiResolutionReceipts[String(market.id)];
                 const aiSuggestedOutcome = aiOutcomeFromReceipt(aiReceipt);
                 const aiCanPropose = aiSuggestedOutcome === Outcome.Yes || aiSuggestedOutcome === Outcome.No;
@@ -7143,12 +7190,15 @@ export default function App() {
                 const noLiquidity = hasNoLiquidity(market);
                 const auraStatusText = aiCanPropose
                   ? `AI suggests ${outcomeLabel(aiSuggestedOutcome)}`
-                  : resolveAuraStatusLabel(market.id);
+                  : resolveAuraStatusLabel(market);
                 return (
                   <article className="notification-card" key={`page-resolve-${market.id}`}>
                     <span>Result needed</span>
                     <strong>{shortQuestion(market.question)}</strong>
                     <small>Closed {closeDate(market.closeTime)}. Creator bond stays locked during dispute window.</small>
+                    {resolutionReadyAt > market.closeTime && (
+                      <small>Resolution unlock: {closeDate(resolutionReadyAt)} (rule timestamp).</small>
+                    )}
                     <small>{auraStatusText}</small>
                     {hint && <small>{hint}</small>}
                     <small>Ended tab updates after finalization, not right after proposal.</small>
@@ -7651,13 +7701,15 @@ export default function App() {
                   );
                   const firstTxUrl = maybeTransactionUrl(marketActivityRows[0]?.txHash);
                   const canUseDisputeFlow = contractVersion !== "legacy";
+                  const resolutionReadyAt = resolutionUnlockTime(market);
+                  const isResolutionReady = nowSeconds >= resolutionReadyAt;
                   const canPropose =
                     isOwnProfile &&
                     canUseDisputeFlow &&
                     account &&
                     market.outcome === Outcome.Unresolved &&
                     market.proposedAt === 0 &&
-                    Date.now() / 1000 >= market.closeTime &&
+                    isResolutionReady &&
                     (sameAddress(market.resolver, account) ||
                       (!!owner && sameAddress(owner, account)) ||
                       (!!resolutionAuthority && sameAddress(resolutionAuthority, account)));
@@ -7691,7 +7743,7 @@ export default function App() {
                     contractVersion === "legacy" &&
                     account &&
                     market.outcome === Outcome.Unresolved &&
-                    Date.now() / 1000 >= market.closeTime &&
+                    isResolutionReady &&
                     [market.resolver.toLowerCase(), owner.toLowerCase()].includes(account.toLowerCase());
                   const canProposeYes = market.yesPool > 0n;
                   const canProposeNo = market.noPool > 0n;
@@ -7797,7 +7849,7 @@ export default function App() {
                             </>
                           )}
                           {canPropose && proposeHint && <small>{proposeHint}</small>}
-                          {canPropose && <small>{resolveAuraStatusLabel(market.id)}</small>}
+                          {canPropose && <small>{resolveAuraStatusLabel(market)}</small>}
                           {finalizeHint && <small>{finalizeHint}</small>}
                           {canFinalize && (
                             <button className="secondary" onClick={() => finalizeMarket(market.id)}>
