@@ -778,6 +778,10 @@ function normalizeReferenceUrl(value: string) {
   const trimmed = value.trim();
   if (!trimmed) return "";
   const cleaned = trimmed.replace(/^[\s"'`[(]+|[\s"'`)\].,;:!?]+$/g, "");
+  const normalizedToken = cleaned.toLowerCase();
+  if (normalizedToken === "e.g" || normalizedToken === "eg" || normalizedToken === "i.e" || normalizedToken === "ie") {
+    return "";
+  }
   const markdownLink = cleaned.match(/\((https?:\/\/[^\s)]+)\)/i);
   if (markdownLink?.[1]) return markdownLink[1];
   const directLink = cleaned.match(/https?:\/\/[^\s)\]]+/i);
@@ -799,6 +803,26 @@ function normalizeReferenceUrl(value: string) {
   if (lower.includes("bloomberg")) return "https://www.bloomberg.com";
   if (lower.includes("wsj") || lower.includes("wall street journal")) return "https://www.wsj.com";
   if (lower.includes("new york times") || lower === "nyt") return "https://www.nytimes.com";
+  if (lower.includes("financial times") || lower === "ft") return "https://www.ft.com";
+  if (lower.includes("washington post")) return "https://www.washingtonpost.com";
+  if (lower.includes("al jazeera")) return "https://www.aljazeera.com";
+  if (lower.includes("axios")) return "https://www.axios.com";
+  if (lower.includes("politico")) return "https://www.politico.com";
+  if (lower.includes("abc news")) return "https://abcnews.go.com";
+  if (lower.includes("cbs news")) return "https://www.cbsnews.com";
+  if (lower.includes("nbc news")) return "https://www.nbcnews.com";
+  if (lower.includes("fox news")) return "https://www.foxnews.com";
+  if (lower.includes("the guardian") || lower === "guardian") return "https://www.theguardian.com";
+  if (lower === "npr" || lower.includes("national public radio")) return "https://www.npr.org";
+  if (lower.includes("coindesk")) return "https://www.coindesk.com";
+  if (lower.includes("cointelegraph")) return "https://cointelegraph.com";
+  if (lower.includes("federal reserve") || lower === "fed") return "https://www.federalreserve.gov";
+  if (lower.includes("bls") || lower.includes("bureau of labor statistics")) return "https://www.bls.gov";
+  if (lower.includes("sec")) return "https://www.sec.gov";
+  if (lower.includes("fec")) return "https://www.fec.gov";
+  if (lower.includes("congress.gov")) return "https://www.congress.gov";
+  if (lower.includes("govtrack")) return "https://www.govtrack.us";
+  if (lower.includes("ecb")) return "https://www.ecb.europa.eu";
   return cleaned;
 }
 
@@ -3704,10 +3728,14 @@ export default function App() {
 
   const applyAuraMarketDraft = useCallback(() => {
     if (!aiMarketDraft) return;
+    const rawSources = aiMarketDraft.sources || [];
     const firstSourceCandidate = normalizeReferenceUrl(aiMarketDraft.sources?.[0] || "");
     const secondSourceCandidate = normalizeReferenceUrl(aiMarketDraft.sources?.[1] || "");
     const firstSource = isValidHttpUrl(firstSourceCandidate) ? firstSourceCandidate : "";
     const secondSource = isValidHttpUrl(secondSourceCandidate) ? secondSourceCandidate : "";
+    const unresolvedSourceNames = rawSources
+      .filter((source) => !isValidHttpUrl(normalizeReferenceUrl(source)))
+      .slice(0, 3);
     const inferredCloseTime =
       parseAuraUtcCloseTimeFromText(aiMarketDraft.closeTime || "") ||
       parseAuraUtcCloseTimeFromText(aiMarketDraft.question || "") ||
@@ -3725,8 +3753,9 @@ export default function App() {
       fallbackSource: secondSource || current.fallbackSource
     }));
     setDuplicateAcknowledged(false);
-    if (!firstSource && (aiMarketDraft.sources?.length || 0) > 0) {
-      setNotice("Aura draft applied. Source name was not a URL, so please set a valid source link before launch.");
+    if (!firstSource && rawSources.length > 0) {
+      const unresolvedHint = unresolvedSourceNames.length > 0 ? ` (${unresolvedSourceNames.join(", ")})` : "";
+      setNotice(`Aura draft applied. Some sources were names only${unresolvedHint}. Please set a valid source URL before launch.`);
     } else {
       setNotice("Aura Agent draft applied. Review it before launching.");
     }
