@@ -3079,9 +3079,10 @@ textarea {
 }
 
 .resolution-zone {
-  background: rgba(8, 13, 26, 0.42);
-  border: 1px solid rgba(38, 201, 255, 0.28);
+  background: #ffffff;
+  border: 1px solid #dfe6f1;
   border-radius: 8px;
+  color: #172033;
   display: grid;
   gap: 10px;
   padding: 14px;
@@ -3105,11 +3106,11 @@ textarea {
 }
 
 .resolution-ai-banner {
-  background: rgba(93, 170, 255, 0.08);
-  border: 1px solid rgba(93, 170, 255, 0.6);
+  background: #f2f7ff;
+  border: 1px solid #c9dcff;
   border-radius: 8px;
   box-shadow: none;
-  color: #cde4ff;
+  color: #2f67d8;
   display: grid;
   font-size: 0.78rem;
   font-weight: 800;
@@ -3121,15 +3122,15 @@ textarea {
 }
 
 .resolution-ai-banner.yes {
-  background: rgba(41, 215, 163, 0.09);
-  border-color: rgba(41, 215, 163, 0.8);
-  color: #7af8d0;
+  background: #edfdf7;
+  border-color: #c9eee1;
+  color: #087f5b;
 }
 
 .resolution-ai-banner.no {
-  background: rgba(255, 107, 138, 0.09);
-  border-color: rgba(255, 107, 138, 0.8);
-  color: #ffb7c5;
+  background: #fff3f5;
+  border-color: #ffd0d8;
+  color: #c92a3b;
 }
 
 .resolution-ai-banner small {
@@ -3174,38 +3175,70 @@ textarea {
 }
 
 .resolution-actions .action-refresh-aura {
-  border-color: rgba(93, 170, 255, 0.75);
-  color: #b7d8ff;
+  background: #f5f8ff;
+  border-color: #cfe0ff;
+  color: #2f67d8;
 }
 
 .resolution-actions .action-use-ai {
-  background: linear-gradient(135deg, #4be7ff, #3eb8ff);
-  border-color: #4be7ff;
-  color: #001325;
+  background: #e8f8ff;
+  border-color: #bce8f8;
+  color: #08768a;
 }
 
 .resolution-actions .action-propose-yes {
-  background: linear-gradient(135deg, #29d7a3, #2acb7f);
-  border-color: #29d7a3;
-  color: #031c15;
+  background: #edfbf6;
+  border-color: #caeee1;
+  color: #087f5b;
 }
 
 .resolution-actions .action-propose-no {
-  background: linear-gradient(135deg, #ff6b8a, #ff4f68);
-  border-color: #ff6b8a;
-  color: #2a0a12;
+  background: #fff2f4;
+  border-color: #ffd0d6;
+  color: #c92a3b;
 }
 
 .resolution-actions .action-propose-cancel {
-  background: rgba(255, 188, 102, 0.08);
-  border-color: rgba(255, 188, 102, 0.8);
-  color: #ffd59d;
+  background: #fffaf0;
+  border-color: #f0dca8;
+  color: #9a6200;
 }
 
 .resolution-actions .action-dispute {
-  background: rgba(255, 188, 102, 0.1);
-  border-color: rgba(255, 188, 102, 0.8);
-  color: #ffd59d;
+  background: #fffaf0;
+  border-color: #f0dca8;
+  color: #9a6200;
+}
+
+.resolution-actions .action-refresh-aura:hover:not(:disabled) {
+  background: #eaf2ff;
+  border-color: #b8d1ff;
+  color: #2155bd;
+}
+
+.resolution-actions .action-use-ai:hover:not(:disabled) {
+  background: #d7f2fc;
+  border-color: #8ed9f3;
+  color: #065f73;
+}
+
+.resolution-actions .action-propose-yes:hover:not(:disabled) {
+  background: #d8f5e9;
+  border-color: #9fdfc9;
+  color: #066748;
+}
+
+.resolution-actions .action-propose-no:hover:not(:disabled) {
+  background: #ffe0e5;
+  border-color: #ffb7c2;
+  color: #a82134;
+}
+
+.resolution-actions .action-propose-cancel:hover:not(:disabled),
+.resolution-actions .action-dispute:hover:not(:disabled) {
+  background: #fff1cf;
+  border-color: #e9c66c;
+  color: #754a00;
 }
 
 .resolution-actions .secondary:disabled {
@@ -5745,6 +5778,92 @@ label {
   background: rgba(12, 17, 31, 0.96);
   border-color: #202a3f;
   color: #d8e1f0;
+}
+
+[data-theme="dark"] .resolution-zone {
+  background: rgba(8, 13, 26, 0.42);
+  border-color: rgba(38, 201, 255, 0.28);
+  color: #d8e1f0;
+}
+
+[data-theme="dark"] .resolution-ai-banner {
+  background: rgba(93, 170, 255, 0.08);
+  border-color: rgba(93, 170, 255, 0.6);
+  color: #cde4ff;
+}
+
+[data-theme="dark"] .resolution-ai-banner.yes {
+  background: rgba(41, 215, 163, 0.09);
+  border-color: rgba(41, 215, 163, 0.8);
+  color: #7af8d0;
+}
+
+[data-theme="dark"] .resolution-ai-banner.no {
+  background: rgba(255, 107, 138, 0.09);
+  border-color: rgba(255, 107, 138, 0.8);
+  color: #ffb7c5;
+}
+
+[data-theme="dark"] .resolution-actions .action-refresh-aura {
+  background: transparent;
+  border-color: rgba(93, 170, 255, 0.75);
+  color: #b7d8ff;
+}
+
+[data-theme="dark"] .resolution-actions .action-use-ai {
+  background: linear-gradient(135deg, #4be7ff, #3eb8ff);
+  border-color: #4be7ff;
+  color: #001325;
+}
+
+[data-theme="dark"] .resolution-actions .action-propose-yes {
+  background: linear-gradient(135deg, #29d7a3, #2acb7f);
+  border-color: #29d7a3;
+  color: #031c15;
+}
+
+[data-theme="dark"] .resolution-actions .action-propose-no {
+  background: linear-gradient(135deg, #ff6b8a, #ff4f68);
+  border-color: #ff6b8a;
+  color: #2a0a12;
+}
+
+[data-theme="dark"] .resolution-actions .action-propose-cancel,
+[data-theme="dark"] .resolution-actions .action-dispute {
+  background: rgba(255, 188, 102, 0.1);
+  border-color: rgba(255, 188, 102, 0.8);
+  color: #ffd59d;
+}
+
+[data-theme="dark"] .resolution-actions .action-refresh-aura:hover:not(:disabled) {
+  background: #10233d;
+  border-color: rgba(93, 170, 255, 0.9);
+  color: #e1efff;
+}
+
+[data-theme="dark"] .resolution-actions .action-use-ai:hover:not(:disabled) {
+  background: linear-gradient(135deg, #71edff, #63c7ff);
+  border-color: #71edff;
+  color: #001325;
+}
+
+[data-theme="dark"] .resolution-actions .action-propose-yes:hover:not(:disabled) {
+  background: linear-gradient(135deg, #4de4b6, #42d992);
+  border-color: #4de4b6;
+  color: #031c15;
+}
+
+[data-theme="dark"] .resolution-actions .action-propose-no:hover:not(:disabled) {
+  background: linear-gradient(135deg, #ff87a0, #ff697f);
+  border-color: #ff87a0;
+  color: #2a0a12;
+}
+
+[data-theme="dark"] .resolution-actions .action-propose-cancel:hover:not(:disabled),
+[data-theme="dark"] .resolution-actions .action-dispute:hover:not(:disabled) {
+  background: rgba(255, 188, 102, 0.18);
+  border-color: rgba(255, 198, 116, 0.95);
+  color: #ffe2ba;
 }
 
 [data-theme="dark"] .profile-hero-card {
