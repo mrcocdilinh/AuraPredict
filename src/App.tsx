@@ -5576,6 +5576,12 @@ export default function App() {
         const canProposeNo = market.noPool > 0n;
         const proposeHint = resolveActionHint(market);
         const finalizeHint = finalizeWaitingHint(market);
+        const aiReceipt = aiResolutionReceipts[String(market.id)];
+        const aiSuggestedOutcome = aiOutcomeFromReceipt(aiReceipt);
+        const aiCanPropose = aiSuggestedOutcome === Outcome.Yes || aiSuggestedOutcome === Outcome.No;
+        const aiSuggestionBlockedByPool =
+          (aiSuggestedOutcome === Outcome.Yes && !canProposeYes) ||
+          (aiSuggestedOutcome === Outcome.No && !canProposeNo);
 
         return (
           <article
@@ -5717,6 +5723,16 @@ export default function App() {
                         Ask Aura
                       </button>
                     )}
+                    {aiCanPropose && (
+                      <button
+                        className="secondary"
+                        onClick={() => resolveMarket(market.id, aiSuggestedOutcome as Outcome.Yes | Outcome.No)}
+                        disabled={!canResolveAfterAura(market.id) || aiSuggestionBlockedByPool}
+                        type="button"
+                      >
+                        Use AI
+                      </button>
+                    )}
                     <button className="secondary" onClick={() => resolveMarket(market.id, Outcome.Yes)} disabled={!canProposeYes || !canResolveAfterAura(market.id)}>
                       Propose YES
                     </button>
@@ -5730,6 +5746,12 @@ export default function App() {
                 )}
                 {canPropose && proposeHint && <small>{proposeHint}</small>}
                 {canPropose && <small>{resolveAuraStatusLabel(market)}</small>}
+                {canPropose && aiCanPropose && (
+                  <small>
+                    AI suggests {outcomeLabel(aiSuggestedOutcome)}
+                    {typeof aiReceipt?.consensus?.confidence === "number" ? ` (${aiReceipt.consensus.confidence}% confidence)` : ""}.
+                  </small>
+                )}
                 {finalizeHint && <small>{finalizeHint}</small>}
                 {canDispute && (
                   <button className="secondary" onClick={() => disputeMarket(market.id)}>
@@ -5898,6 +5920,11 @@ export default function App() {
     );
     const aiResolutionReport = aiResolutionReports[selectedMarket.id];
     const aiResolutionReceipt = aiResolutionReceipts[String(selectedMarket.id)];
+    const selectedAiSuggestedOutcome = aiOutcomeFromReceipt(aiResolutionReceipt);
+    const selectedAiCanPropose = selectedAiSuggestedOutcome === Outcome.Yes || selectedAiSuggestedOutcome === Outcome.No;
+    const selectedAiSuggestionBlockedByPool =
+      (selectedAiSuggestedOutcome === Outcome.Yes && !canProposeYes) ||
+      (selectedAiSuggestedOutcome === Outcome.No && !canProposeNo);
     const displayedAgentLabel = aiResolutionReport?.suggestedOutcome || agentReport.suggestedLabel;
     const displayedAgentConfidence =
       typeof aiResolutionReport?.confidence === "number" ? aiResolutionReport.confidence : agentReport.confidence;
@@ -6187,6 +6214,16 @@ export default function App() {
                         Ask Aura
                       </button>
                     )}
+                    {selectedAiCanPropose && (
+                      <button
+                        className="secondary"
+                        onClick={() => resolveMarket(selectedMarket.id, selectedAiSuggestedOutcome as Outcome.Yes | Outcome.No)}
+                        disabled={!canResolveAfterAura(selectedMarket.id) || selectedAiSuggestionBlockedByPool}
+                        type="button"
+                      >
+                        Use AI
+                      </button>
+                    )}
                     <button className="secondary" onClick={() => resolveMarket(selectedMarket.id, Outcome.Yes)} disabled={!canProposeYes || !canResolveAfterAura(selectedMarket.id)}>
                       Propose YES
                     </button>
@@ -6200,6 +6237,14 @@ export default function App() {
                 )}
                 {canPropose && proposeHint && <small>{proposeHint}</small>}
                 {canPropose && <small>{resolveAuraStatusLabel(selectedMarket)}</small>}
+                {canPropose && selectedAiCanPropose && (
+                  <small>
+                    AI suggests {outcomeLabel(selectedAiSuggestedOutcome)}
+                    {typeof aiResolutionReceipt?.consensus?.confidence === "number"
+                      ? ` (${aiResolutionReceipt.consensus.confidence}% confidence)`
+                      : ""}.
+                  </small>
+                )}
                 {finalizeHint && <small>{finalizeHint}</small>}
                 {canDispute && (
                   <button className="secondary" onClick={() => disputeMarket(selectedMarket.id)}>
@@ -7749,6 +7794,12 @@ export default function App() {
                   const canProposeNo = market.noPool > 0n;
                   const proposeHint = resolveActionHint(market);
                   const finalizeHint = finalizeWaitingHint(market);
+                  const aiReceipt = aiResolutionReceipts[String(market.id)];
+                  const aiSuggestedOutcome = aiOutcomeFromReceipt(aiReceipt);
+                  const aiCanPropose = aiSuggestedOutcome === Outcome.Yes || aiSuggestedOutcome === Outcome.No;
+                  const aiSuggestionBlockedByPool =
+                    (aiSuggestedOutcome === Outcome.Yes && !canProposeYes) ||
+                    (aiSuggestedOutcome === Outcome.No && !canProposeNo);
                   const meta = categoryMeta(market.category || "Other");
                   const result = personalMarketResult(market, isOwnProfile ? "You" : "Profile");
                   const settlement = userSettlement(market, protocolFeeBps);
@@ -7837,6 +7888,16 @@ export default function App() {
                                   Ask Aura
                                 </button>
                               )}
+                              {aiCanPropose && (
+                                <button
+                                  className="secondary"
+                                  onClick={() => resolveMarket(market.id, aiSuggestedOutcome as Outcome.Yes | Outcome.No)}
+                                  disabled={!canResolveAfterAura(market.id) || aiSuggestionBlockedByPool}
+                                  type="button"
+                                >
+                                  Use AI
+                                </button>
+                              )}
                               <button className="secondary" onClick={() => resolveMarket(market.id, Outcome.Yes)} disabled={!canProposeYes || !canResolveAfterAura(market.id)}>
                                 Propose YES
                               </button>
@@ -7850,6 +7911,12 @@ export default function App() {
                           )}
                           {canPropose && proposeHint && <small>{proposeHint}</small>}
                           {canPropose && <small>{resolveAuraStatusLabel(market)}</small>}
+                          {canPropose && aiCanPropose && (
+                            <small>
+                              AI suggests {outcomeLabel(aiSuggestedOutcome)}
+                              {typeof aiReceipt?.consensus?.confidence === "number" ? ` (${aiReceipt.consensus.confidence}% confidence)` : ""}.
+                            </small>
+                          )}
                           {finalizeHint && <small>{finalizeHint}</small>}
                           {canFinalize && (
                             <button className="secondary" onClick={() => finalizeMarket(market.id)}>
