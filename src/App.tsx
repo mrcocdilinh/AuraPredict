@@ -2292,6 +2292,7 @@ export default function App() {
   const [aiResolutionReceipts, setAiResolutionReceipts] = useState<Record<string, AiResolutionReceipt | null>>({});
   const [auraResolutionStatusByMarket, setAuraResolutionStatusByMarket] = useState<Record<number, "idle" | "ready" | "failed">>({});
   const [mismatchConfirm, setMismatchConfirm] = useState<MismatchConfirmState | null>(null);
+  const [focusResolutionMarketId, setFocusResolutionMarketId] = useState<number | null>(null);
   const [onboardingDismissed, setOnboardingDismissed] = useState(() => {
     try {
       return window.localStorage.getItem(ONBOARDING_DISMISSED_KEY) === "true";
@@ -3978,8 +3979,9 @@ export default function App() {
     window.setTimeout(() => document.getElementById("markets")?.scrollIntoView({ block: "start" }), 50);
   }, []);
 
-  const openMarket = useCallback((marketId: number) => {
+  const openMarket = useCallback((marketId: number, focusResolution = false) => {
     setSelectedMarketId(marketId);
+    if (focusResolution) setFocusResolutionMarketId(marketId);
     setSelectedProfileAddress("");
     updateMarketRoute(marketId);
     setView("market");
@@ -3991,6 +3993,15 @@ export default function App() {
     setThemeMenuOpen(false);
     window.setTimeout(() => document.getElementById("markets")?.scrollIntoView({ block: "start" }), 50);
   }, []);
+
+  useEffect(() => {
+    if (view !== "market" || selectedMarketId === null || focusResolutionMarketId !== selectedMarketId) return;
+    const timer = window.setTimeout(() => {
+      document.getElementById("market-resolution-zone")?.scrollIntoView({ block: "center", behavior: "smooth" });
+      setFocusResolutionMarketId(null);
+    }, 120);
+    return () => window.clearTimeout(timer);
+  }, [focusResolutionMarketId, selectedMarketId, view]);
 
   const backToMarkets = useCallback(() => {
     setSelectedMarketId(null);
@@ -6207,8 +6218,9 @@ export default function App() {
                 Your position: YES {formatUsdc(selectedMarket.yesPosition)} / NO {formatUsdc(selectedMarket.noPosition)}
               </div>
             )}
+            <div id="market-resolution-zone" className="resolution-zone">
             {(canLegacyResolve || canPropose || canDispute || canFinalize || canFinalizeDispute || canCancelStaleDispute || canClaim) && (
-              <div className="settlement-row">
+              <div className="settlement-row resolution-actions">
                 {canLegacyResolve && (
                   <>
                     <button className="secondary" onClick={() => resolveMarket(selectedMarket.id, Outcome.Yes)}>
@@ -6225,13 +6237,13 @@ export default function App() {
                 {canPropose && (
                   <>
                     {!hasNoLiquidity(selectedMarket) && (
-                      <button className="secondary" disabled={aiBusy} onClick={() => askAuraForResolution(selectedMarket)} type="button">
+                      <button className="secondary action-refresh-aura" disabled={aiBusy} onClick={() => askAuraForResolution(selectedMarket)} type="button">
                         {aiBusy ? "Aura thinking..." : selectedAiCanPropose ? "Refresh Aura" : "Ask Aura"}
                       </button>
                     )}
                     {selectedAiCanPropose && (
                       <button
-                        className="secondary"
+                        className="secondary action-use-ai"
                         onClick={() => resolveMarket(selectedMarket.id, selectedAiSuggestedOutcome as Outcome.Yes | Outcome.No)}
                         disabled={!canResolveAfterAura(selectedMarket.id) || selectedAiSuggestionBlockedByPool}
                         type="button"
@@ -6239,13 +6251,13 @@ export default function App() {
                         Use AI
                       </button>
                     )}
-                    <button className="secondary" onClick={() => resolveMarket(selectedMarket.id, Outcome.Yes)} disabled={!canProposeYes || !canResolveAfterAura(selectedMarket.id)}>
+                    <button className="secondary action-propose-yes" onClick={() => resolveMarket(selectedMarket.id, Outcome.Yes)} disabled={!canProposeYes || !canResolveAfterAura(selectedMarket.id)}>
                       Propose YES
                     </button>
-                    <button className="secondary" onClick={() => resolveMarket(selectedMarket.id, Outcome.No)} disabled={!canProposeNo || !canResolveAfterAura(selectedMarket.id)}>
+                    <button className="secondary action-propose-no" onClick={() => resolveMarket(selectedMarket.id, Outcome.No)} disabled={!canProposeNo || !canResolveAfterAura(selectedMarket.id)}>
                       Propose NO
                     </button>
-                    <button className="secondary" disabled={!canResolveAfterAura(selectedMarket.id) && !hasNoLiquidity(selectedMarket)} onClick={() => cancelMarket(selectedMarket.id)}>
+                    <button className="secondary action-propose-cancel" disabled={!canResolveAfterAura(selectedMarket.id) && !hasNoLiquidity(selectedMarket)} onClick={() => cancelMarket(selectedMarket.id)}>
                       Cancel
                     </button>
                   </>
@@ -6299,6 +6311,7 @@ export default function App() {
             <div className="resolver-note">
               Resolution rules: only propose YES when YES pool &gt; 0, only propose NO when NO pool &gt; 0.
               If both pools are zero, use Cancel. A proposed result moves to Ended only after Finalize.
+            </div>
             </div>
           </aside>
           ) : (
@@ -6761,15 +6774,11 @@ export default function App() {
                       </div>
                     )}
                     {resolveNotifications.map((market) => {
-                      const yesEnabled = market.yesPool > 0n;
-                      const noEnabled = market.noPool > 0n;
                       const hint = resolveActionHint(market);
                       const resolutionReadyAt = resolutionUnlockTime(market);
                       const aiReceipt = aiResolutionReceipts[String(market.id)];
                       const aiSuggestedOutcome = aiOutcomeFromReceipt(aiReceipt);
                       const aiCanPropose = aiSuggestedOutcome === Outcome.Yes || aiSuggestedOutcome === Outcome.No;
-                      const auraReadyForResolve = canResolveAfterAura(market.id);
-                      const noLiquidity = hasNoLiquidity(market);
                       const auraStatusText = aiCanPropose
                         ? `AI suggests ${outcomeLabel(aiSuggestedOutcome)}`
                         : resolveAuraStatusLabel(market);
@@ -6785,43 +6794,8 @@ export default function App() {
                           {hint && <small>{hint}</small>}
                           <small>Ended tab updates after finalization, not right after proposal.</small>
                           <div className="notification-actions">
-                            {!noLiquidity && (
-                              <button
-                                className="secondary"
-                                disabled={transactionPending || aiBusy}
-                                onClick={() => askAuraForResolution(market)}
-                                type="button"
-                              >
-                                {aiBusy ? "Aura thinking..." : aiCanPropose ? "Refresh Aura" : "Ask Aura"}
-                              </button>
-                            )}
-                            {aiCanPropose && (
-                              <button
-                                className="secondary"
-                                disabled={transactionPending || isMarketActionPending("resolve", market.id) || !auraReadyForResolve}
-                                onClick={() => resolveMarket(market.id, aiSuggestedOutcome as Outcome.Yes | Outcome.No)}
-                                type="button"
-                              >
-                                Use AI
-                              </button>
-                            )}
-                            <button
-                              disabled={transactionPending || isMarketActionPending("resolve", market.id) || !yesEnabled || !auraReadyForResolve}
-                              onClick={() => resolveMarket(market.id, Outcome.Yes)}
-                            >
-                              Propose YES
-                            </button>
-                            <button
-                              disabled={transactionPending || isMarketActionPending("resolve", market.id) || !noEnabled || !auraReadyForResolve}
-                              onClick={() => resolveMarket(market.id, Outcome.No)}
-                            >
-                              Propose NO
-                            </button>
-                            <button className="secondary" disabled={transactionPending || isMarketActionPending("resolve", market.id) || (!auraReadyForResolve && !noLiquidity)} onClick={() => cancelMarket(market.id)}>
-                              {isMarketActionPending("resolve", market.id) ? "Proposing..." : "Propose Cancel"}
-                            </button>
-                            <button className="secondary" onClick={() => openMarket(market.id)} type="button">
-                              View market
+                            <button className="secondary" onClick={() => openMarket(market.id, true)} type="button">
+                              Open Resolution
                             </button>
                           </div>
                         </article>
@@ -6832,9 +6806,11 @@ export default function App() {
                         <span>Ready to finalize</span>
                         <strong>{shortQuestion(market.question)}</strong>
                         <small>Proposed {outcomeLabel(market.proposedOutcome)}. No dispute was opened.</small>
-                        <button disabled={transactionPending || isMarketActionPending("finalize", market.id)} onClick={() => finalizeMarket(market.id)}>
-                          {isMarketActionPending("finalize", market.id) ? `Finalizing #${market.id}...` : `Finalize #${market.id}`}
-                        </button>
+                        <div className="notification-actions">
+                          <button className="secondary" onClick={() => openMarket(market.id, true)} type="button">
+                            Open Resolution
+                          </button>
+                        </div>
                       </article>
                     ))}
                     {ownerAiMismatchNotifications.map((market) => {
@@ -6863,10 +6839,8 @@ export default function App() {
                           Proposed {outcomeLabel(market.proposedOutcome)}. Disputer {displayNameForAddress(market.disputer)}.
                         </small>
                         <div className="notification-actions">
-                          <button onClick={() => finalizeDispute(market.id, Outcome.Yes)}>Final YES</button>
-                          <button onClick={() => finalizeDispute(market.id, Outcome.No)}>Final NO</button>
-                          <button className="secondary" onClick={() => finalizeDispute(market.id, Outcome.Canceled)}>
-                            Cancel
+                          <button className="secondary" onClick={() => openMarket(market.id, true)} type="button">
+                            Open Dispute
                           </button>
                         </div>
                       </article>
@@ -6876,13 +6850,11 @@ export default function App() {
                         <span>Stale dispute</span>
                         <strong>{shortQuestion(market.question)}</strong>
                         <small>Resolution authority did not finalize after the grace period. Cancel refunds both sides.</small>
-                        <button
-                          className="secondary"
-                          disabled={transactionPending || isMarketActionPending("stale-dispute", market.id)}
-                          onClick={() => cancelStaleDispute(market.id)}
-                        >
-                          {isMarketActionPending("stale-dispute", market.id) ? `Canceling #${market.id}...` : `Cancel stale #${market.id}`}
-                        </button>
+                        <div className="notification-actions">
+                          <button className="secondary" onClick={() => openMarket(market.id, true)} type="button">
+                            Open Dispute
+                          </button>
+                        </div>
                       </article>
                     ))}
                     {proposedResultNotifications.map((market) => {
@@ -7239,15 +7211,11 @@ export default function App() {
                 </div>
               )}
               {resolveNotifications.map((market) => {
-                const yesEnabled = market.yesPool > 0n;
-                const noEnabled = market.noPool > 0n;
                 const hint = resolveActionHint(market);
                 const resolutionReadyAt = resolutionUnlockTime(market);
                 const aiReceipt = aiResolutionReceipts[String(market.id)];
                 const aiSuggestedOutcome = aiOutcomeFromReceipt(aiReceipt);
                 const aiCanPropose = aiSuggestedOutcome === Outcome.Yes || aiSuggestedOutcome === Outcome.No;
-                const auraReadyForResolve = canResolveAfterAura(market.id);
-                const noLiquidity = hasNoLiquidity(market);
                 const auraStatusText = aiCanPropose
                   ? `AI suggests ${outcomeLabel(aiSuggestedOutcome)}`
                   : resolveAuraStatusLabel(market);
@@ -7263,32 +7231,7 @@ export default function App() {
                     {hint && <small>{hint}</small>}
                     <small>Ended tab updates after finalization, not right after proposal.</small>
                     <div className="notification-actions">
-                      {!noLiquidity && (
-                        <button
-                          className="secondary"
-                          disabled={transactionPending || aiBusy}
-                          onClick={() => askAuraForResolution(market)}
-                          type="button"
-                        >
-                          {aiBusy ? "Aura thinking..." : aiCanPropose ? "Refresh Aura" : "Ask Aura"}
-                        </button>
-                      )}
-                      {aiCanPropose && (
-                        <button
-                          className="secondary"
-                          disabled={transactionPending || isMarketActionPending("resolve", market.id) || !auraReadyForResolve}
-                          onClick={() => resolveMarket(market.id, aiSuggestedOutcome as Outcome.Yes | Outcome.No)}
-                          type="button"
-                        >
-                          Use AI
-                        </button>
-                      )}
-                      <button disabled={transactionPending || isMarketActionPending("resolve", market.id) || !yesEnabled || !auraReadyForResolve} onClick={() => resolveMarket(market.id, Outcome.Yes)}>Propose YES</button>
-                      <button disabled={transactionPending || isMarketActionPending("resolve", market.id) || !noEnabled || !auraReadyForResolve} onClick={() => resolveMarket(market.id, Outcome.No)}>Propose NO</button>
-                      <button className="secondary" disabled={transactionPending || isMarketActionPending("resolve", market.id) || (!auraReadyForResolve && !noLiquidity)} onClick={() => cancelMarket(market.id)}>
-                        {isMarketActionPending("resolve", market.id) ? "Proposing..." : "Propose Cancel"}
-                      </button>
-                      <button className="secondary" onClick={() => openMarket(market.id)} type="button">View market</button>
+                      <button className="secondary" onClick={() => openMarket(market.id, true)} type="button">Open Resolution</button>
                     </div>
                   </article>
                 );
@@ -7299,10 +7242,7 @@ export default function App() {
                   <strong>{shortQuestion(market.question)}</strong>
                   <small>Proposed {outcomeLabel(market.proposedOutcome)}. No dispute was opened.</small>
                   <div className="notification-actions">
-                    <button disabled={transactionPending || isMarketActionPending("finalize", market.id)} onClick={() => finalizeMarket(market.id)}>
-                      {isMarketActionPending("finalize", market.id) ? `Finalizing #${market.id}...` : `Finalize #${market.id}`}
-                    </button>
-                    <button className="secondary" onClick={() => openMarket(market.id)} type="button">View market</button>
+                    <button className="secondary" onClick={() => openMarket(market.id, true)} type="button">Open Resolution</button>
                   </div>
                 </article>
               ))}
@@ -7317,7 +7257,7 @@ export default function App() {
                       AI suggested {outcomeLabel(aiOutcome)} but resolver proposed {outcomeLabel(market.proposedOutcome)}.
                     </small>
                     <div className="notification-actions">
-                      <button className="secondary" onClick={() => openMarket(market.id)} type="button">View market</button>
+                      <button className="secondary" onClick={() => openMarket(market.id, true)} type="button">Open Resolution</button>
                     </div>
                   </article>
                 );
@@ -7328,10 +7268,7 @@ export default function App() {
                   <strong>{shortQuestion(market.question)}</strong>
                   <small>Proposed {outcomeLabel(market.proposedOutcome)}. Disputer {displayNameForAddress(market.disputer)}.</small>
                   <div className="notification-actions">
-                    <button onClick={() => finalizeDispute(market.id, Outcome.Yes)}>Final YES</button>
-                    <button onClick={() => finalizeDispute(market.id, Outcome.No)}>Final NO</button>
-                    <button className="secondary" onClick={() => finalizeDispute(market.id, Outcome.Canceled)}>Cancel</button>
-                    <button className="secondary" onClick={() => openMarket(market.id)} type="button">View market</button>
+                    <button className="secondary" onClick={() => openMarket(market.id, true)} type="button">Open Dispute</button>
                   </div>
                 </article>
               ))}
@@ -7341,14 +7278,7 @@ export default function App() {
                   <strong>{shortQuestion(market.question)}</strong>
                   <small>Resolution authority did not finalize after the grace period. Cancel refunds both sides.</small>
                   <div className="notification-actions">
-                    <button
-                      className="secondary"
-                      disabled={transactionPending || isMarketActionPending("stale-dispute", market.id)}
-                      onClick={() => cancelStaleDispute(market.id)}
-                    >
-                      {isMarketActionPending("stale-dispute", market.id) ? `Canceling #${market.id}...` : `Cancel stale #${market.id}`}
-                    </button>
-                    <button className="secondary" onClick={() => openMarket(market.id)} type="button">View market</button>
+                    <button className="secondary" onClick={() => openMarket(market.id, true)} type="button">Open Dispute</button>
                   </div>
                 </article>
               ))}

@@ -3078,6 +3078,50 @@ textarea {
   flex-wrap: wrap;
 }
 
+.resolution-zone {
+  border: 1px solid rgba(38, 201, 255, 0.28);
+  border-radius: 8px;
+  margin-top: 8px;
+  padding: 10px;
+  scroll-margin-top: 110px;
+}
+
+.resolution-actions .secondary {
+  font-weight: 700;
+}
+
+.resolution-actions .action-refresh-aura {
+  border-color: rgba(93, 170, 255, 0.75);
+  color: #b7d8ff;
+}
+
+.resolution-actions .action-use-ai {
+  background: linear-gradient(135deg, #4be7ff, #3eb8ff);
+  border-color: #4be7ff;
+  color: #001325;
+}
+
+.resolution-actions .action-propose-yes {
+  background: linear-gradient(135deg, #29d7a3, #2acb7f);
+  border-color: #29d7a3;
+  color: #031c15;
+}
+
+.resolution-actions .action-propose-no {
+  background: linear-gradient(135deg, #ff6b8a, #ff4f68);
+  border-color: #ff6b8a;
+  color: #2a0a12;
+}
+
+.resolution-actions .action-propose-cancel {
+  border-color: rgba(255, 188, 102, 0.8);
+  color: #ffd59d;
+}
+
+.resolution-actions .secondary:disabled {
+  opacity: 0.5;
+}
+
 .side-rail {
   display: grid;
   gap: 14px;
