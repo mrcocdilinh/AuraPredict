@@ -4328,6 +4328,36 @@ label {
   margin-top: 6px;
 }
 
+.close-time-presets {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.close-time-fields {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) minmax(120px, 160px);
+}
+
+.close-time-presets button {
+  background: #f8fafc;
+  border: 1px solid #d7e0ee;
+  border-radius: 8px;
+  box-shadow: none;
+  color: #172033;
+  font-size: 0.76rem;
+  font-weight: 850;
+  min-height: 30px;
+  padding: 0 10px;
+}
+
+.close-time-presets button:hover:not(:disabled) {
+  background: #eef5ff;
+  border-color: #9ec8f6;
+  color: #111827;
+}
+
 .related-market-section {
   background: #ffffff;
   border: 1px solid #dfe6f1;
@@ -5381,6 +5411,18 @@ label {
   color: #9aa7bd;
 }
 
+[data-theme="dark"] .close-time-presets button {
+  background: #101a2d;
+  border-color: #253656;
+  color: #d8e1f0;
+}
+
+[data-theme="dark"] .close-time-presets button:hover:not(:disabled) {
+  background: #132340;
+  border-color: #2f5d93;
+  color: #f7f9ff;
+}
+
 [data-theme="dark"] .agent-evidence-list strong,
 [data-theme="dark"] .aura-agent-create-panel strong {
   color: #f7f9ff;
@@ -6432,6 +6474,14 @@ label {
 
   .modal-actions button {
     width: 100%;
+  }
+
+  .close-time-presets {
+    flex-wrap: wrap;
+  }
+
+  .close-time-fields {
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .notifications-page-head,

@@ -851,6 +851,23 @@ function parseUtcDateTime(value: string) {
   return BigInt(Math.floor(timestamp / 1000));
 }
 
+function parseUtcDateTimeParts(value: string) {
+  const normalizedValue = value.trim().replace("T", " ");
+  const match = normalizedValue.match(/^(\d{4}-\d{2}-\d{2})\s([01]\d|2[0-3]):([0-5]\d)$/);
+  if (!match) return null;
+  return {
+    date: match[1],
+    time: `${match[2]}:${match[3]}`
+  };
+}
+
+function combineUtcDateTimeParts(datePart: string, timePart: string) {
+  const date = datePart.trim();
+  const time = timePart.trim();
+  if (!date || !time) return "";
+  return `${date} ${time}`;
+}
+
 function utcDateTimeInputValue(date: Date) {
   const pad = (value: number) => String(value).padStart(2, "0");
   return [
@@ -864,6 +881,11 @@ function utcDateTimeInputValue(date: Date) {
     ":",
     pad(date.getUTCMinutes())
   ].join("");
+}
+
+function utcInputFromNow(now: Date, offsetMinutes: number) {
+  const timestamp = now.getTime() + Math.max(0, offsetMinutes) * 60 * 1000;
+  return utcDateTimeInputValue(new Date(timestamp));
 }
 
 function countdownText(closeTime: number, now: Date) {
@@ -2310,6 +2332,8 @@ export default function App() {
     () => utcDateTimeInputValue(new Date(currentTime.getTime() + 6 * 60 * 1000)),
     [currentTime]
   );
+  const minimumCloseParts = useMemo(() => parseUtcDateTimeParts(minimumCloseInput), [minimumCloseInput]);
+  const selectedCloseParts = useMemo(() => parseUtcDateTimeParts(createForm.closeTime), [createForm.closeTime]);
   const allFreshMarkets = [...filteredMarkets].sort((a, b) => b.id - a.id);
   const allHottestMarkets = [...filteredMarkets]
     .sort((a, b) => {
@@ -3207,6 +3231,18 @@ export default function App() {
     setDuplicateAcknowledged(false);
     setCreateModalOpen(true);
   }, []);
+
+  const setCreateCloseTimePreset = useCallback(
+    (offsetMinutes: number) => {
+      const minimumOffset = 6;
+      const targetOffset = Math.max(minimumOffset, offsetMinutes);
+      setCreateForm((current) => ({
+        ...current,
+        closeTime: utcInputFromNow(currentTime, targetOffset)
+      }));
+    },
+    [currentTime]
+  );
 
   const loadMoreMarkets = useCallback((silent = false) => {
     silentLoadRef.current = silent;
@@ -7624,16 +7660,51 @@ export default function App() {
               </label>
               <label>
                 Close time (UTC)
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  autoComplete="off"
-                  spellCheck={false}
-                  placeholder={minimumCloseInput}
-                  value={createForm.closeTime}
-                  onChange={(event) => setCreateForm({ ...createForm, closeTime: event.target.value })}
-                />
-                <small className="time-format-hint">Use UTC format: YYYY-MM-DD HH:mm (24-hour).</small>
+                <div className="close-time-fields">
+                  <input
+                    type="date"
+                    value={selectedCloseParts?.date || ""}
+                    min={minimumCloseParts?.date}
+                    onChange={(event) =>
+                      setCreateForm((current) => {
+                        const parts = parseUtcDateTimeParts(current.closeTime);
+                        const nextDate = event.target.value;
+                        const nextTime = parts?.time || "00:00";
+                        return { ...current, closeTime: combineUtcDateTimeParts(nextDate, nextTime) };
+                      })
+                    }
+                  />
+                  <input
+                    type="time"
+                    step={60}
+                    value={selectedCloseParts?.time || ""}
+                    onChange={(event) =>
+                      setCreateForm((current) => {
+                        const parts = parseUtcDateTimeParts(current.closeTime);
+                        const nextDate = parts?.date || minimumCloseParts?.date || "";
+                        const nextTime = event.target.value;
+                        return { ...current, closeTime: combineUtcDateTimeParts(nextDate, nextTime) };
+                      })
+                    }
+                  />
+                </div>
+                <div className="close-time-presets" aria-label="Quick close time presets">
+                  <button type="button" onClick={() => setCreateCloseTimePreset(60)}>
+                    +1h
+                  </button>
+                  <button type="button" onClick={() => setCreateCloseTimePreset(6 * 60)}>
+                    +6h
+                  </button>
+                  <button type="button" onClick={() => setCreateCloseTimePreset(24 * 60)}>
+                    +24h
+                  </button>
+                  <button type="button" onClick={() => setCreateCloseTimePreset(72 * 60)}>
+                    +3d
+                  </button>
+                </div>
+                <small className="time-format-hint">
+                  UTC only. Min close time: {minimumCloseInput}. Date and time are selected separately.
+                </small>
               </label>
             </div>
             <div className="resolver-note">
