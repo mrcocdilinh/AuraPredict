@@ -2976,7 +2976,7 @@ export default function App() {
     if (!canReviewAsOwner) return;
 
     const targetMarketIds = pendingResolutionMarkets
-      .filter((market) => market.proposedAt > 0 && market.outcome === Outcome.Unresolved)
+      .filter((market) => market.outcome === Outcome.Unresolved)
       .map((market) => market.id)
       .slice(0, 80);
     if (targetMarketIds.length === 0) return;
@@ -6290,14 +6290,32 @@ export default function App() {
                       const yesEnabled = market.yesPool > 0n;
                       const noEnabled = market.noPool > 0n;
                       const hint = resolveActionHint(market);
+                      const aiReceipt = aiResolutionReceipts[String(market.id)];
+                      const aiSuggestedOutcome = aiOutcomeFromReceipt(aiReceipt);
+                      const aiCanPropose = aiSuggestedOutcome === Outcome.Yes || aiSuggestedOutcome === Outcome.No;
                       return (
                         <article className="notification-card" key={`resolve-${market.id}`}>
                           <span>Result needed</span>
                           <strong>{shortQuestion(market.question)}</strong>
                           <small>Closed {closeDate(market.closeTime)}. Creator bond stays locked during dispute window.</small>
+                          <small>
+                            {aiCanPropose
+                              ? `AI suggests ${outcomeLabel(aiSuggestedOutcome)}`
+                              : "AI suggestion is not ready yet."}
+                          </small>
                           {hint && <small>{hint}</small>}
                           <small>Ended tab updates after finalization, not right after proposal.</small>
                           <div className="notification-actions">
+                            {aiCanPropose && (
+                              <button
+                                className="secondary"
+                                disabled={transactionPending || isMarketActionPending("resolve", market.id)}
+                                onClick={() => resolveMarket(market.id, aiSuggestedOutcome as Outcome.Yes | Outcome.No)}
+                                type="button"
+                              >
+                                Use AI
+                              </button>
+                            )}
                             <button
                               disabled={transactionPending || isMarketActionPending("resolve", market.id) || !yesEnabled}
                               onClick={() => resolveMarket(market.id, Outcome.Yes)}
@@ -6689,14 +6707,32 @@ export default function App() {
                 const yesEnabled = market.yesPool > 0n;
                 const noEnabled = market.noPool > 0n;
                 const hint = resolveActionHint(market);
+                const aiReceipt = aiResolutionReceipts[String(market.id)];
+                const aiSuggestedOutcome = aiOutcomeFromReceipt(aiReceipt);
+                const aiCanPropose = aiSuggestedOutcome === Outcome.Yes || aiSuggestedOutcome === Outcome.No;
                 return (
                   <article className="notification-card" key={`page-resolve-${market.id}`}>
                     <span>Result needed</span>
                     <strong>{shortQuestion(market.question)}</strong>
                     <small>Closed {closeDate(market.closeTime)}. Creator bond stays locked during dispute window.</small>
+                    <small>
+                      {aiCanPropose
+                        ? `AI suggests ${outcomeLabel(aiSuggestedOutcome)}`
+                        : "AI suggestion is not ready yet."}
+                    </small>
                     {hint && <small>{hint}</small>}
                     <small>Ended tab updates after finalization, not right after proposal.</small>
                     <div className="notification-actions">
+                      {aiCanPropose && (
+                        <button
+                          className="secondary"
+                          disabled={transactionPending || isMarketActionPending("resolve", market.id)}
+                          onClick={() => resolveMarket(market.id, aiSuggestedOutcome as Outcome.Yes | Outcome.No)}
+                          type="button"
+                        >
+                          Use AI
+                        </button>
+                      )}
                       <button disabled={transactionPending || isMarketActionPending("resolve", market.id) || !yesEnabled} onClick={() => resolveMarket(market.id, Outcome.Yes)}>Propose YES</button>
                       <button disabled={transactionPending || isMarketActionPending("resolve", market.id) || !noEnabled} onClick={() => resolveMarket(market.id, Outcome.No)}>Propose NO</button>
                       <button className="secondary" disabled={transactionPending || isMarketActionPending("resolve", market.id)} onClick={() => cancelMarket(market.id)}>
