@@ -1505,6 +1505,26 @@ h3 {
   min-width: 0;
 }
 
+.wallet-network-state {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+}
+
+.wallet-network-state span {
+  font-size: 0.78rem;
+  font-weight: 760;
+}
+
+.wallet-network-state.ok span {
+  color: #047857;
+}
+
+.wallet-network-state.warning span {
+  color: #b45309;
+}
+
 .wallet-refresh-button {
   background: #ffffff;
   border: 1px solid #d6deeb;
@@ -3188,6 +3208,13 @@ textarea {
   font-weight: 900;
   margin-top: 8px;
   text-transform: uppercase;
+}
+
+.wallet-connect-hint {
+  color: #667085;
+  display: block;
+  font-size: 0.76rem;
+  margin-bottom: 4px;
 }
 
 .wallet-option {
@@ -5205,6 +5232,18 @@ label {
 [data-theme="dark"] .wallet-balance-row {
   background: #080d1a;
   border-color: #202a3f;
+}
+
+[data-theme="dark"] .wallet-network-state.ok span {
+  color: #34d399;
+}
+
+[data-theme="dark"] .wallet-network-state.warning span {
+  color: #f59e0b;
+}
+
+[data-theme="dark"] .wallet-connect-hint {
+  color: #9aa7bd;
 }
 
 [data-theme="dark"] .wallet-refresh-button {

@@ -2031,6 +2031,8 @@ export default function App() {
   const [marketLoadLimit, setMarketLoadLimit] = useState(MARKET_INITIAL_LOAD);
   const [loading, setLoading] = useState(false);
   const [connecting, setConnecting] = useState(false);
+  const [switchingNetwork, setSwitchingNetwork] = useState(false);
+  const [isArcNetwork, setIsArcNetwork] = useState(true);
   const [walletProviders, setWalletProviders] = useState<Eip6963ProviderDetail[]>([]);
   const [selectedWalletProvider, setSelectedWalletProvider] = useState<EthereumProvider | null>(null);
   const [walletMenuOpen, setWalletMenuOpen] = useState(false);
@@ -3074,7 +3076,31 @@ export default function App() {
         params: [{ chainId: arcTestnetParams.chainId }]
       });
     }
+    setIsArcNetwork(true);
   }, [selectedWalletProvider]);
+
+  const refreshNetworkState = useCallback(async (provider?: EthereumProvider | null) => {
+    try {
+      const walletClient = getWalletClient(provider ?? selectedWalletProvider ?? window.ethereum ?? null);
+      const chainId = await walletClient.getChainId();
+      setIsArcNetwork(BigInt(chainId) === ARC_CHAIN_ID_DECIMAL);
+    } catch {
+      setIsArcNetwork(false);
+    }
+  }, [selectedWalletProvider]);
+
+  const ensureArcNetwork = useCallback(async (provider?: EthereumProvider | null) => {
+    setSwitchingNetwork(true);
+    try {
+      await switchToArc(provider);
+      await refreshNetworkState(provider);
+      setNotice("Arc Testnet network is ready.");
+    } catch (error) {
+      setNotice(`Network switch failed: ${errorMessage(error)}`);
+    } finally {
+      setSwitchingNetwork(false);
+    }
+  }, [refreshNetworkState, setNotice, switchToArc]);
 
   const registerUser = useCallback((address: string) => {
     if (!address || !isAddress(address)) return;
@@ -3129,6 +3155,7 @@ export default function App() {
     registerUser(addresses[0]);
     void refreshWalletBalance(addresses[0]);
     setSelectedWalletProvider(providerToUse);
+    setIsArcNetwork(true);
     window.localStorage.setItem(WALLET_CONNECTED_KEY, "true");
     window.localStorage.removeItem(WALLET_DISCONNECTED_KEY);
     setNotice("Wallet connected on Arc Testnet.");
@@ -4856,13 +4883,18 @@ export default function App() {
       }
     };
 
+    const handleChainChanged = () => {
+      void refreshNetworkState(window.ethereum ?? null);
+    };
+
     window.ethereum.on?.("accountsChanged", handleAccounts);
-    window.ethereum.on?.("chainChanged", () => window.location.reload());
+    window.ethereum.on?.("chainChanged", handleChainChanged);
 
     return () => {
       window.ethereum?.removeListener?.("accountsChanged", handleAccounts);
+      window.ethereum?.removeListener?.("chainChanged", handleChainChanged);
     };
-  }, [refreshWalletBalance, registerUser]);
+  }, [refreshNetworkState, refreshWalletBalance, registerUser]);
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -4897,7 +4929,10 @@ export default function App() {
         window.localStorage.removeItem(WALLET_DISCONNECTED_KEY);
 
         if (BigInt(chainId) !== ARC_CHAIN_ID_DECIMAL) {
-          setNotice("Wallet remembered. Switch MetaMask to Arc Testnet to continue.");
+          setIsArcNetwork(false);
+          setNotice("Wallet connected but not on Arc Testnet. Use Switch Network in the wallet menu.");
+        } else {
+          setIsArcNetwork(true);
         }
       } catch (error) {
         if (mounted) setNotice(`Reconnect failed: ${errorMessage(error)}`);
@@ -6281,6 +6316,19 @@ export default function App() {
                     <div className="wallet-dropdown-head">
                       <span>Connected wallet</span>
                       <strong>{shortAddress(account)}</strong>
+                    </div>
+                    <div className={`wallet-network-state ${isArcNetwork ? "ok" : "warning"}`}>
+                      <span>{isArcNetwork ? "Network: Arc Testnet" : "Network: Not Arc Testnet"}</span>
+                      {!isArcNetwork && (
+                        <button
+                          className="wallet-refresh-button"
+                          onClick={() => ensureArcNetwork()}
+                          type="button"
+                          disabled={switchingNetwork}
+                        >
+                          {switchingNetwork ? "Switching..." : "Switch Network"}
+                        </button>
+                      )}
                     </div>
                     <div className="wallet-balance-row">
                       <div>
@@ -7769,6 +7817,9 @@ export default function App() {
                 </button>
               </div>
               <span className="wallet-group-label">Installed</span>
+              <small className="wallet-connect-hint">
+                If wallet opens on another chain, AuraPredict will request switching to Arc Testnet automatically.
+              </small>
               {walletOptions.length > 0 ? (
                 walletOptions.map((wallet) => (
                   <button
