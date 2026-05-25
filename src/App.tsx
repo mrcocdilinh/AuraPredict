@@ -146,6 +146,15 @@ type EvidenceDraft = {
   notes: string;
 };
 
+type CreateFormState = {
+  question: string;
+  category: string;
+  closeTime: string;
+  resolutionSource: string;
+  resolutionRule: string;
+  fallbackSource: string;
+};
+
 type SocialMarketResponse = {
   comments?: MarketComment[];
   evidence?: MarketEvidence[];
@@ -2162,10 +2171,13 @@ export default function App() {
       return [];
     }
   });
-  const [createForm, setCreateForm] = useState({
+  const [createForm, setCreateForm] = useState<CreateFormState>({
     question: "",
     category: "Crypto",
-    closeTime: ""
+    closeTime: "",
+    resolutionSource: "",
+    resolutionRule: "",
+    fallbackSource: ""
   });
 
   const hasContract = useMemo(() => isAddress(CONTRACT_ADDRESS), []);
@@ -3612,11 +3624,16 @@ export default function App() {
 
   const applyAuraMarketDraft = useCallback(() => {
     if (!aiMarketDraft) return;
+    const firstSource = aiMarketDraft.sources?.[0] || "";
+    const secondSource = aiMarketDraft.sources?.[1] || "";
     setCreateForm((current) => ({
       ...current,
       question: aiMarketDraft.question || current.question,
       category: aiMarketDraft.category && CATEGORIES.includes(aiMarketDraft.category) ? aiMarketDraft.category : current.category,
-      closeTime: aiMarketDraft.closeTime || current.closeTime
+      closeTime: aiMarketDraft.closeTime || current.closeTime,
+      resolutionSource: firstSource || current.resolutionSource,
+      resolutionRule: aiMarketDraft.resolutionCriteria || current.resolutionRule,
+      fallbackSource: secondSource || current.fallbackSource
     }));
     setDuplicateAcknowledged(false);
     setNotice("Aura Agent draft applied. Review it before launching.");
@@ -4486,9 +4503,14 @@ export default function App() {
       if (!account || !isAddress(account)) throw new Error("Connect wallet first.");
       const question = createForm.question.trim().replace(/\s+/g, " ");
       const category = createForm.category.trim() || "Other";
+      const resolutionSource = createForm.resolutionSource.trim();
+      const resolutionRule = createForm.resolutionRule.trim();
+      const fallbackSource = createForm.fallbackSource.trim();
       if (!question) throw new Error("Market question is required.");
       if (question.length < 8) throw new Error("Market question must be at least 8 characters.");
       if (!canCreateAfterAura) throw new Error("Ask Aura Agent once before launching. If Aura is unavailable, you can continue after the failed check.");
+      if (!resolutionSource) throw new Error("Resolution source is required.");
+      if (!resolutionRule) throw new Error("Resolution rule is required.");
       if (!createForm.closeTime) throw new Error("Close time is required.");
       const closeTime = parseUtcDateTime(createForm.closeTime);
       const earliestCloseTime = BigInt(Math.floor(Date.now() / 1000) + 5 * 60);
@@ -4626,7 +4648,57 @@ export default function App() {
             }
           : current
       );
-      setCreateForm({ question: "", category: "Crypto", closeTime: "" });
+      if (createdMarketId !== null) {
+        const createdAtIso = new Date().toISOString();
+        const sourceEvidence: MarketEvidence = {
+          id: `${createdMarketId}-source-${Date.now()}`,
+          marketId: createdMarketId,
+          title: "Resolution source",
+          url: resolutionSource,
+          notes: resolutionRule,
+          addedBy: account,
+          createdAt: createdAtIso
+        };
+        const rows: MarketEvidence[] = [sourceEvidence];
+        if (fallbackSource) {
+          rows.push({
+            id: `${createdMarketId}-fallback-${Date.now() + 1}`,
+            marketId: createdMarketId,
+            title: "Fallback source",
+            url: fallbackSource,
+            notes: "Use only if primary source is unavailable.",
+            addedBy: account,
+            createdAt: createdAtIso
+          });
+        }
+        setMarketEvidence((current) => ({
+          ...current,
+          [String(createdMarketId)]: rows
+        }));
+        try {
+          await Promise.all(
+            rows.map((item) =>
+              postIndexerJson(`/api/social/markets/${createdMarketId}/evidence`, {
+                title: item.title,
+                url: item.url,
+                notes: item.notes,
+                addedBy: item.addedBy
+              })
+            )
+          );
+        } catch {
+          // Keep local evidence even if sync is temporarily unavailable.
+        }
+      }
+
+      setCreateForm({
+        question: "",
+        category: "Crypto",
+        closeTime: "",
+        resolutionSource: "",
+        resolutionRule: "",
+        fallbackSource: ""
+      });
       setAiMarketDraft(null);
       setAuraCreateStatus("idle");
       setDuplicateAcknowledged(false);
@@ -8186,11 +8258,42 @@ export default function App() {
                   UTC only. Min close time: {minimumCloseInput}. Date and time are selected separately.
                 </small>
               </label>
+              <label>
+                Resolution source URL
+                <input
+                  type="url"
+                  value={createForm.resolutionSource}
+                  onChange={(event) => setCreateForm({ ...createForm, resolutionSource: event.target.value })}
+                  placeholder="https://www.coingecko.com/..."
+                />
+                <small className="time-format-hint">Primary source used to resolve this market.</small>
+              </label>
+              <label>
+                Resolution rule
+                <textarea
+                  value={createForm.resolutionRule}
+                  onChange={(event) => setCreateForm({ ...createForm, resolutionRule: event.target.value })}
+                  placeholder="Example: Use BTC/USD spot price at 09:30 UTC from primary source."
+                  rows={3}
+                />
+                <small className="time-format-hint">Define exactly what value and timestamp are used.</small>
+              </label>
+              <label>
+                Fallback source URL (optional)
+                <input
+                  type="url"
+                  value={createForm.fallbackSource}
+                  onChange={(event) => setCreateForm({ ...createForm, fallbackSource: event.target.value })}
+                  placeholder="https://www.binance.com/..."
+                />
+                <small className="time-format-hint">Secondary source if primary source is unavailable.</small>
+              </label>
             </div>
             <div className="resolver-note">
               Resolver is locked to the creator wallet: {account ? shortAddress(account) : "connect wallet first"}.
               Resolution authority can later be moved to an oracle or committee wallet without changing market cards.
               Question must be at least 8 characters.
+              Resolution source and rule are required before launch.
               Market close time is saved in UTC and must be at least 5 minutes after the current UTC time.
               {contractVersion === "legacy"
                 ? " This legacy contract does not use creator bonds or dispute windows."
@@ -8220,6 +8323,8 @@ export default function App() {
                   !hasContract ||
                   transactionPending ||
                   createForm.question.trim().length < 8 ||
+                  createForm.resolutionSource.trim().length < 8 ||
+                  createForm.resolutionRule.trim().length < 12 ||
                   !canCreateAfterAura ||
                   (!!aiMarketDraft?.duplicateRisk && aiMarketDraft.duplicateRisk !== "LOW" && !duplicateAcknowledged)
                 }
