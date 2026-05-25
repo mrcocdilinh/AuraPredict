@@ -3081,12 +3081,67 @@ textarea {
 .resolution-zone {
   border: 1px solid rgba(38, 201, 255, 0.28);
   border-radius: 8px;
+  display: grid;
+  gap: 10px;
   margin-top: 8px;
   padding: 10px;
   scroll-margin-top: 110px;
 }
 
-.resolution-actions .secondary {
+.resolution-zone-head {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.resolution-zone-head strong {
+  font-size: 0.92rem;
+}
+
+.resolution-ai-banner {
+  border: 1px solid rgba(93, 170, 255, 0.6);
+  border-radius: 999px;
+  color: #cde4ff;
+  font-size: 0.78rem;
+  font-weight: 800;
+  padding: 6px 10px;
+}
+
+.resolution-ai-banner.yes {
+  border-color: rgba(41, 215, 163, 0.8);
+  color: #7af8d0;
+}
+
+.resolution-ai-banner.no {
+  border-color: rgba(255, 107, 138, 0.8);
+  color: #ffb7c5;
+}
+
+.resolution-actions {
+  display: grid;
+  gap: 10px;
+}
+
+.resolution-button-grid {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 1fr 1fr;
+}
+
+.resolution-button-grid .secondary,
+.resolution-button-grid button {
+  min-height: 44px;
+  width: 100%;
+}
+
+.resolution-meta {
+  display: grid;
+  gap: 4px;
+}
+
+.resolution-actions .secondary,
+.resolution-actions button {
   font-weight: 700;
 }
 

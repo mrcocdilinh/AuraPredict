@@ -6219,8 +6219,20 @@ export default function App() {
               </div>
             )}
             <div id="market-resolution-zone" className="resolution-zone">
+            <div className="resolution-zone-head">
+              <strong>Resolution actions</strong>
+              {canPropose && selectedAiCanPropose && (
+                <span className={`resolution-ai-banner ${selectedAiSuggestedOutcome === Outcome.Yes ? "yes" : "no"}`}>
+                  AI suggests {outcomeLabel(selectedAiSuggestedOutcome)}
+                  {typeof aiResolutionReceipt?.consensus?.confidence === "number"
+                    ? ` (${aiResolutionReceipt.consensus.confidence}% confidence)`
+                    : ""}
+                </span>
+              )}
+            </div>
             {(canLegacyResolve || canPropose || canDispute || canFinalize || canFinalizeDispute || canCancelStaleDispute || canClaim) && (
               <div className="settlement-row resolution-actions">
+                <div className="resolution-button-grid">
                 {canLegacyResolve && (
                   <>
                     <button className="secondary" onClick={() => resolveMarket(selectedMarket.id, Outcome.Yes)}>
@@ -6262,17 +6274,12 @@ export default function App() {
                     </button>
                   </>
                 )}
+                </div>
+                <div className="resolution-meta">
                 {canPropose && proposeHint && <small>{proposeHint}</small>}
                 {canPropose && <small>{resolveAuraStatusLabel(selectedMarket)}</small>}
-                {canPropose && selectedAiCanPropose && (
-                  <small>
-                    AI suggests {outcomeLabel(selectedAiSuggestedOutcome)}
-                    {typeof aiResolutionReceipt?.consensus?.confidence === "number"
-                      ? ` (${aiResolutionReceipt.consensus.confidence}% confidence)`
-                      : ""}.
-                  </small>
-                )}
                 {finalizeHint && <small>{finalizeHint}</small>}
+                </div>
                 {canDispute && (
                   <button className="secondary" onClick={() => disputeMarket(selectedMarket.id)}>
                     Dispute {formatUsdc(disputeBond)} USDC
