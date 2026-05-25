@@ -4193,20 +4193,39 @@ label {
 .wallet-history-search,
 .ended-search {
   align-items: center;
-  background: #f8fafc;
-  border: 1px solid #dfe6f1;
-  border-radius: 8px;
-  display: grid;
-  gap: 8px;
-  grid-template-columns: 18px minmax(0, 1fr);
-  min-height: 38px;
-  min-width: min(260px, 100%);
-  padding: 0 10px;
+  background: #f8fbff;
+  border: 1px solid #19b9e633;
+  border-radius: 10px;
+  box-shadow: inset 0 0 0 1px #ffffff66;
+  display: flex;
+  flex: 1 1 320px;
+  gap: 10px;
+  min-height: 48px;
+  min-width: 280px;
+  padding: 0 14px;
+  width: min(460px, 100%);
+}
+
+.wallet-history-search:focus-within,
+.ended-search:focus-within {
+  border-color: #18b9e6;
+  box-shadow: 0 0 0 3px rgba(24, 185, 230, 0.14);
 }
 
 .wallet-history-search .search-icon,
 .ended-search .search-icon {
-  stroke: #667085;
+  flex: 0 0 auto;
+  stroke: #3f5f90;
+  height: 16px;
+  width: 16px;
+}
+
+.search-prefix {
+  color: #3f5f90;
+  font-size: 0.74rem;
+  font-weight: 780;
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
 }
 
 .wallet-history-search input,
@@ -4218,6 +4237,12 @@ label {
   min-width: 0;
   outline: 0;
   width: 100%;
+}
+
+.wallet-history-search input::placeholder,
+.ended-search input::placeholder {
+  color: #5c6f92;
+  opacity: 1;
 }
 
 .market-history-list {
@@ -4290,8 +4315,17 @@ label {
 
 .ended-search-actions {
   align-items: center;
+  display: flex;
+  gap: 10px;
   flex-wrap: wrap;
   justify-content: flex-end;
+}
+
+.time-format-hint {
+  color: #667085;
+  display: block;
+  font-size: 0.78rem;
+  margin-top: 6px;
 }
 
 .related-market-section {
@@ -5320,7 +5354,8 @@ label {
 [data-theme="dark"] .wallet-history-search,
 [data-theme="dark"] .ended-search {
   background: #0b1020;
-  border-color: #202a3f;
+  border-color: #225c71;
+  box-shadow: inset 0 0 0 1px #19b9e622;
 }
 
 [data-theme="dark"] .wallet-history-search input,
@@ -5328,9 +5363,22 @@ label {
   color: #f7f9ff;
 }
 
+[data-theme="dark"] .wallet-history-search input::placeholder,
+[data-theme="dark"] .ended-search input::placeholder {
+  color: #96acc8;
+}
+
 [data-theme="dark"] .wallet-history-search .search-icon,
 [data-theme="dark"] .ended-search .search-icon {
   stroke: #9aa7bd;
+}
+
+[data-theme="dark"] .search-prefix {
+  color: #9fc7dd;
+}
+
+[data-theme="dark"] .time-format-hint {
+  color: #9aa7bd;
 }
 
 [data-theme="dark"] .agent-evidence-list strong,

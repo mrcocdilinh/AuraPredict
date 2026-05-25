@@ -5839,9 +5839,10 @@ export default function App() {
                 <circle cx="11" cy="11" r="7" />
                 <path d="m16 16 4 4" />
               </svg>
+              <span className="search-prefix">Search</span>
               <input
                 aria-label="Search wallet in this market"
-                placeholder="Search wallet"
+                placeholder="Wallet address or name"
                 value={marketWalletSearch}
                 onChange={(event) => setMarketWalletSearch(event.target.value)}
               />
@@ -7271,9 +7272,10 @@ export default function App() {
                       <circle cx="11" cy="11" r="7" />
                       <path d="m16 16 4 4" />
                     </svg>
+                    <span className="search-prefix">Search</span>
                     <input
                       aria-label="Search ended markets"
-                      placeholder="Search ended"
+                      placeholder="Question, category, market id, or wallet"
                       value={endedSearchQuery}
                       onChange={(event) => setEndedSearchQuery(event.target.value)}
                     />
