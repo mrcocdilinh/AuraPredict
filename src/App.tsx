@@ -2657,6 +2657,28 @@ export default function App() {
       )
     : [];
   const claimableTotal = claimNotifications.reduce((sum, market) => sum + market.potentialPayout, 0n);
+  const proposedResultNotifications = account && isOwnProfile
+    ? profileMarkets.filter((market) => {
+        const key = `${account.toLowerCase()}:proposal:${market.id}:${market.proposedAt}:${market.proposedOutcome}`;
+        return (
+          hasUserPosition(market) &&
+          market.outcome === Outcome.Unresolved &&
+          market.proposedAt > 0 &&
+          !dismissedResultNotices.includes(key)
+        );
+      })
+    : [];
+  const disputeResolvedNotifications = account && isOwnProfile
+    ? profileMarkets.filter((market) => {
+        const key = `${account.toLowerCase()}:dispute-resolved:${market.id}:${market.outcome}`;
+        return (
+          hasUserPosition(market) &&
+          market.disputed &&
+          market.outcome !== Outcome.Unresolved &&
+          !dismissedResultNotices.includes(key)
+        );
+      })
+    : [];
   const resultNotifications = account && isOwnProfile
     ? profileMarkets.filter((market) => {
         const key = `${account.toLowerCase()}:result:${market.id}:${market.outcome}`;
@@ -2675,6 +2697,8 @@ export default function App() {
     disputeReviewNotifications.length +
     ownerAiMismatchNotifications.length +
     staleDisputeNotifications.length +
+    proposedResultNotifications.length +
+    disputeResolvedNotifications.length +
     claimNotifications.length +
     resultNotifications.length;
   const walletOptions =
@@ -3333,6 +3357,15 @@ export default function App() {
       return next;
     });
   }, [account]);
+
+  const dismissNotificationByKey = useCallback((key: string) => {
+    setDismissedResultNotices((current) => {
+      if (current.includes(key)) return current;
+      const next = [...current, key];
+      window.localStorage.setItem(DISMISSED_RESULT_KEY, JSON.stringify(next));
+      return next;
+    });
+  }, []);
 
   const openCreateMarket = useCallback(() => {
     setAiMarketDraft(null);
@@ -6396,6 +6429,52 @@ export default function App() {
                         </button>
                       </article>
                     ))}
+                    {proposedResultNotifications.map((market) => {
+                      const aiReceipt = aiResolutionReceipts[String(market.id)];
+                      const aiSuggestedOutcome = aiOutcomeFromReceipt(aiReceipt);
+                      const dismissKey = `${account.toLowerCase()}:proposal:${market.id}:${market.proposedAt}:${market.proposedOutcome}`;
+                      return (
+                        <article className="notification-card" key={`proposal-${market.id}-${market.proposedAt}`}>
+                          <span>Result proposed</span>
+                          <strong>{shortQuestion(market.question)}</strong>
+                          <small>
+                            Resolver proposed {outcomeLabel(market.proposedOutcome)}
+                            {aiSuggestedOutcome !== Outcome.Unresolved ? `. AI suggested ${outcomeLabel(aiSuggestedOutcome)}.` : "."}
+                          </small>
+                          <div className="notification-actions">
+                            {!market.disputed && market.disputeDeadline > nowSeconds && (
+                              <button className="secondary" onClick={() => disputeMarket(market.id)}>
+                                Dispute {formatUsdc(disputeBond)} USDC
+                              </button>
+                            )}
+                            <button className="secondary" onClick={() => openMarket(market.id)} type="button">
+                              View market
+                            </button>
+                            <button className="secondary" onClick={() => dismissNotificationByKey(dismissKey)} type="button">
+                              Dismiss
+                            </button>
+                          </div>
+                        </article>
+                      );
+                    })}
+                    {disputeResolvedNotifications.map((market) => {
+                      const dismissKey = `${account.toLowerCase()}:dispute-resolved:${market.id}:${market.outcome}`;
+                      return (
+                        <article className="notification-card" key={`dispute-resolved-${market.id}-${market.outcome}`}>
+                          <span>Dispute resolved</span>
+                          <strong>{shortQuestion(market.question)}</strong>
+                          <small>Final outcome is {outcomeLabel(market.outcome)} after dispute review by owner/authority.</small>
+                          <div className="notification-actions">
+                            <button className="secondary" onClick={() => openMarket(market.id)} type="button">
+                              View market
+                            </button>
+                            <button className="secondary" onClick={() => dismissNotificationByKey(dismissKey)} type="button">
+                              Dismiss
+                            </button>
+                          </div>
+                        </article>
+                      );
+                    })}
                     {claimNotifications.map((market) => (
                       <article className="notification-card" key={`claim-${market.id}`}>
                         <span>Claim available</span>
@@ -6802,6 +6881,44 @@ export default function App() {
                   </div>
                 </article>
               ))}
+              {proposedResultNotifications.map((market) => {
+                const aiReceipt = aiResolutionReceipts[String(market.id)];
+                const aiSuggestedOutcome = aiOutcomeFromReceipt(aiReceipt);
+                const dismissKey = `${account.toLowerCase()}:proposal:${market.id}:${market.proposedAt}:${market.proposedOutcome}`;
+                return (
+                  <article className="notification-card" key={`page-proposal-${market.id}-${market.proposedAt}`}>
+                    <span>Result proposed</span>
+                    <strong>{shortQuestion(market.question)}</strong>
+                    <small>
+                      Resolver proposed {outcomeLabel(market.proposedOutcome)}
+                      {aiSuggestedOutcome !== Outcome.Unresolved ? `. AI suggested ${outcomeLabel(aiSuggestedOutcome)}.` : "."}
+                    </small>
+                    <div className="notification-actions">
+                      {!market.disputed && market.disputeDeadline > nowSeconds && (
+                        <button className="secondary" onClick={() => disputeMarket(market.id)}>
+                          Dispute {formatUsdc(disputeBond)} USDC
+                        </button>
+                      )}
+                      <button className="secondary" onClick={() => openMarket(market.id)} type="button">View market</button>
+                      <button className="secondary" onClick={() => dismissNotificationByKey(dismissKey)} type="button">Dismiss</button>
+                    </div>
+                  </article>
+                );
+              })}
+              {disputeResolvedNotifications.map((market) => {
+                const dismissKey = `${account.toLowerCase()}:dispute-resolved:${market.id}:${market.outcome}`;
+                return (
+                  <article className="notification-card" key={`page-dispute-resolved-${market.id}-${market.outcome}`}>
+                    <span>Dispute resolved</span>
+                    <strong>{shortQuestion(market.question)}</strong>
+                    <small>Final outcome is {outcomeLabel(market.outcome)} after dispute review by owner/authority.</small>
+                    <div className="notification-actions">
+                      <button className="secondary" onClick={() => openMarket(market.id)} type="button">View market</button>
+                      <button className="secondary" onClick={() => dismissNotificationByKey(dismissKey)} type="button">Dismiss</button>
+                    </div>
+                  </article>
+                );
+              })}
               {claimNotifications.map((market) => (
                 <article className="notification-card" key={`page-claim-${market.id}`}>
                   <span>Claim available</span>
