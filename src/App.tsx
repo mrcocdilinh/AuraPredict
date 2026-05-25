@@ -2129,10 +2129,11 @@ export default function App() {
   const [evidenceDrafts, setEvidenceDrafts] = useState<Record<number, EvidenceDraft>>({});
   const [aiBusy, setAiBusy] = useState(false);
   const [aiMarketDraft, setAiMarketDraft] = useState<AiMarketDraft | null>(null);
-  const [auraAskedForCreate, setAuraAskedForCreate] = useState(false);
+  const [auraCreateStatus, setAuraCreateStatus] = useState<"idle" | "ready" | "failed">("idle");
   const [duplicateAcknowledged, setDuplicateAcknowledged] = useState(false);
   const [aiResolutionReports, setAiResolutionReports] = useState<Record<number, AiResolutionReport>>({});
   const [aiResolutionReceipts, setAiResolutionReceipts] = useState<Record<string, AiResolutionReceipt | null>>({});
+  const [auraResolutionStatusByMarket, setAuraResolutionStatusByMarket] = useState<Record<number, "idle" | "ready" | "failed">>({});
   const [onboardingDismissed, setOnboardingDismissed] = useState(() => {
     try {
       return window.localStorage.getItem(ONBOARDING_DISMISSED_KEY) === "true";
@@ -3384,7 +3385,7 @@ export default function App() {
 
   const openCreateMarket = useCallback(() => {
     setAiMarketDraft(null);
-    setAuraAskedForCreate(false);
+    setAuraCreateStatus("idle");
     setDuplicateAcknowledged(false);
     setCreateModalOpen(true);
   }, []);
@@ -3565,7 +3566,7 @@ export default function App() {
       return;
     }
     setAiBusy(true);
-    setAuraAskedForCreate(true);
+    setAuraCreateStatus("idle");
     setAiMarketDraft(null);
     setDuplicateAcknowledged(false);
     try {
@@ -3576,13 +3577,38 @@ export default function App() {
       });
       if (!response?.draft) throw new Error("Aura Agent did not return a draft.");
       setAiMarketDraft(response.draft);
+      setAuraCreateStatus("ready");
       setNotice("Aura Agent drafted clearer market terms.");
     } catch (error) {
-      setNotice(`Aura Agent unavailable: ${compactErrorMessage(error)}`);
+      setAuraCreateStatus("failed");
+      setNotice(`Aura Agent unavailable: ${compactErrorMessage(error)}. You can launch market manually.`);
     } finally {
       setAiBusy(false);
     }
   }, [createForm, setNotice]);
+
+  const canCreateAfterAura = auraCreateStatus !== "idle";
+  const createAuraStatusLabel =
+    auraCreateStatus === "ready"
+      ? "Aura draft ready. Review and launch."
+      : auraCreateStatus === "failed"
+        ? "Aura unavailable. Manual launch is unlocked."
+        : "Ask Aura first. If Aura fails, manual launch will unlock.";
+
+  const canResolveAfterAura = useCallback(
+    (marketId: number) => (auraResolutionStatusByMarket[marketId] || "idle") !== "idle",
+    [auraResolutionStatusByMarket]
+  );
+
+  const resolveAuraStatusLabel = useCallback(
+    (marketId: number) => {
+      const status = auraResolutionStatusByMarket[marketId] || "idle";
+      if (status === "ready") return "Aura suggestion is ready.";
+      if (status === "failed") return "Aura unavailable. Manual propose is unlocked.";
+      return "Ask Aura first before proposing. If Aura fails, manual propose is unlocked.";
+    },
+    [auraResolutionStatusByMarket]
+  );
 
   const applyAuraMarketDraft = useCallback(() => {
     if (!aiMarketDraft) return;
@@ -3599,6 +3625,7 @@ export default function App() {
   const askAuraForResolution = useCallback(
     async (market: MarketView) => {
       setAiBusy(true);
+      setAuraResolutionStatusByMarket((current) => ({ ...current, [market.id]: "idle" }));
       try {
         const evidenceRows = marketEvidence[String(market.id)] || [];
         const response = await postIndexerJson<{ report: AiResolutionReport }>("/api/ai/resolution-report", {
@@ -3610,9 +3637,11 @@ export default function App() {
         });
         if (!response?.report) throw new Error("Aura Agent did not return a report.");
         setAiResolutionReports((current) => ({ ...current, [market.id]: response.report }));
+        setAuraResolutionStatusByMarket((current) => ({ ...current, [market.id]: "ready" }));
         setNotice("Aura Agent resolution report updated.");
       } catch (error) {
-        setNotice(`Aura Agent unavailable: ${compactErrorMessage(error)}`);
+        setAuraResolutionStatusByMarket((current) => ({ ...current, [market.id]: "failed" }));
+        setNotice(`Aura Agent unavailable: ${compactErrorMessage(error)}. Manual propose is unlocked.`);
       } finally {
         setAiBusy(false);
       }
@@ -4459,7 +4488,7 @@ export default function App() {
       const category = createForm.category.trim() || "Other";
       if (!question) throw new Error("Market question is required.");
       if (question.length < 8) throw new Error("Market question must be at least 8 characters.");
-      if (!auraAskedForCreate) throw new Error("Ask Aura Agent once before launching. If Aura is unavailable, you can continue after the failed check.");
+      if (!canCreateAfterAura) throw new Error("Ask Aura Agent once before launching. If Aura is unavailable, you can continue after the failed check.");
       if (!createForm.closeTime) throw new Error("Close time is required.");
       const closeTime = parseUtcDateTime(createForm.closeTime);
       const earliestCloseTime = BigInt(Math.floor(Date.now() / 1000) + 5 * 60);
@@ -4599,7 +4628,7 @@ export default function App() {
       );
       setCreateForm({ question: "", category: "Crypto", closeTime: "" });
       setAiMarketDraft(null);
-      setAuraAskedForCreate(false);
+      setAuraCreateStatus("idle");
       setDuplicateAcknowledged(false);
       setCreateModalOpen(false);
       setView("markets");
@@ -4703,6 +4732,10 @@ export default function App() {
   const resolveMarket = async (marketId: number, outcome: Outcome) => {
     if (!account || !isAddress(account)) throw new Error("Connect wallet first.");
     if (isMarketActionPending("resolve", marketId)) return;
+    const auraStatus = auraResolutionStatusByMarket[marketId] || "idle";
+    if (auraStatus === "idle") {
+      throw new Error("Ask Aura Agent before proposing. If Aura is unavailable, manual propose will be unlocked.");
+    }
     const aiReceipt = aiResolutionReceipts[String(marketId)];
     const aiSuggestedOutcome = aiOutcomeFromReceipt(aiReceipt);
     const hasAiSuggestion = aiSuggestedOutcome === Outcome.Yes || aiSuggestedOutcome === Outcome.No;
@@ -5390,18 +5423,22 @@ export default function App() {
                 )}
                 {canPropose && (
                   <>
-                    <button className="secondary" onClick={() => resolveMarket(market.id, Outcome.Yes)} disabled={!canProposeYes}>
+                    <button className="secondary" disabled={aiBusy} onClick={() => askAuraForResolution(market)} type="button">
+                      Ask Aura
+                    </button>
+                    <button className="secondary" onClick={() => resolveMarket(market.id, Outcome.Yes)} disabled={!canProposeYes || !canResolveAfterAura(market.id)}>
                       Propose YES
                     </button>
-                    <button className="secondary" onClick={() => resolveMarket(market.id, Outcome.No)} disabled={!canProposeNo}>
+                    <button className="secondary" onClick={() => resolveMarket(market.id, Outcome.No)} disabled={!canProposeNo || !canResolveAfterAura(market.id)}>
                       Propose NO
                     </button>
-                    <button className="secondary" onClick={() => cancelMarket(market.id)}>
+                    <button className="secondary" disabled={!canResolveAfterAura(market.id)} onClick={() => cancelMarket(market.id)}>
                       Propose Cancel
                     </button>
                   </>
                 )}
                 {canPropose && proposeHint && <small>{proposeHint}</small>}
+                {canPropose && <small>{resolveAuraStatusLabel(market.id)}</small>}
                 {finalizeHint && <small>{finalizeHint}</small>}
                 {canDispute && (
                   <button className="secondary" onClick={() => disputeMarket(market.id)}>
@@ -5852,18 +5889,22 @@ export default function App() {
                 )}
                 {canPropose && (
                   <>
-                    <button className="secondary" onClick={() => resolveMarket(selectedMarket.id, Outcome.Yes)} disabled={!canProposeYes}>
+                    <button className="secondary" disabled={aiBusy} onClick={() => askAuraForResolution(selectedMarket)} type="button">
+                      Ask Aura
+                    </button>
+                    <button className="secondary" onClick={() => resolveMarket(selectedMarket.id, Outcome.Yes)} disabled={!canProposeYes || !canResolveAfterAura(selectedMarket.id)}>
                       Propose YES
                     </button>
-                    <button className="secondary" onClick={() => resolveMarket(selectedMarket.id, Outcome.No)} disabled={!canProposeNo}>
+                    <button className="secondary" onClick={() => resolveMarket(selectedMarket.id, Outcome.No)} disabled={!canProposeNo || !canResolveAfterAura(selectedMarket.id)}>
                       Propose NO
                     </button>
-                    <button className="secondary" onClick={() => cancelMarket(selectedMarket.id)}>
+                    <button className="secondary" disabled={!canResolveAfterAura(selectedMarket.id)} onClick={() => cancelMarket(selectedMarket.id)}>
                       Cancel
                     </button>
                   </>
                 )}
                 {canPropose && proposeHint && <small>{proposeHint}</small>}
+                {canPropose && <small>{resolveAuraStatusLabel(selectedMarket.id)}</small>}
                 {finalizeHint && <small>{finalizeHint}</small>}
                 {canDispute && (
                   <button className="secondary" onClick={() => disputeMarket(selectedMarket.id)}>
@@ -6371,6 +6412,7 @@ export default function App() {
                       const aiReceipt = aiResolutionReceipts[String(market.id)];
                       const aiSuggestedOutcome = aiOutcomeFromReceipt(aiReceipt);
                       const aiCanPropose = aiSuggestedOutcome === Outcome.Yes || aiSuggestedOutcome === Outcome.No;
+                      const auraReadyForResolve = canResolveAfterAura(market.id);
                       return (
                         <article className="notification-card" key={`resolve-${market.id}`}>
                           <span>Result needed</span>
@@ -6381,13 +6423,22 @@ export default function App() {
                               ? `AI suggests ${outcomeLabel(aiSuggestedOutcome)}`
                               : "AI suggestion is not ready yet."}
                           </small>
+                          <small>{resolveAuraStatusLabel(market.id)}</small>
                           {hint && <small>{hint}</small>}
                           <small>Ended tab updates after finalization, not right after proposal.</small>
                           <div className="notification-actions">
+                            <button
+                              className="secondary"
+                              disabled={transactionPending || aiBusy}
+                              onClick={() => askAuraForResolution(market)}
+                              type="button"
+                            >
+                              {aiBusy ? "Aura thinking..." : "Ask Aura"}
+                            </button>
                             {aiCanPropose && (
                               <button
                                 className="secondary"
-                                disabled={transactionPending || isMarketActionPending("resolve", market.id)}
+                                disabled={transactionPending || isMarketActionPending("resolve", market.id) || !auraReadyForResolve}
                                 onClick={() => resolveMarket(market.id, aiSuggestedOutcome as Outcome.Yes | Outcome.No)}
                                 type="button"
                               >
@@ -6395,18 +6446,18 @@ export default function App() {
                               </button>
                             )}
                             <button
-                              disabled={transactionPending || isMarketActionPending("resolve", market.id) || !yesEnabled}
+                              disabled={transactionPending || isMarketActionPending("resolve", market.id) || !yesEnabled || !auraReadyForResolve}
                               onClick={() => resolveMarket(market.id, Outcome.Yes)}
                             >
                               Propose YES
                             </button>
                             <button
-                              disabled={transactionPending || isMarketActionPending("resolve", market.id) || !noEnabled}
+                              disabled={transactionPending || isMarketActionPending("resolve", market.id) || !noEnabled || !auraReadyForResolve}
                               onClick={() => resolveMarket(market.id, Outcome.No)}
                             >
                               Propose NO
                             </button>
-                            <button className="secondary" disabled={transactionPending || isMarketActionPending("resolve", market.id)} onClick={() => cancelMarket(market.id)}>
+                            <button className="secondary" disabled={transactionPending || isMarketActionPending("resolve", market.id) || !auraReadyForResolve} onClick={() => cancelMarket(market.id)}>
                               {isMarketActionPending("resolve", market.id) ? "Proposing..." : "Propose Cancel"}
                             </button>
                             <button className="secondary" onClick={() => openMarket(market.id)} type="button">
@@ -6834,6 +6885,7 @@ export default function App() {
                 const aiReceipt = aiResolutionReceipts[String(market.id)];
                 const aiSuggestedOutcome = aiOutcomeFromReceipt(aiReceipt);
                 const aiCanPropose = aiSuggestedOutcome === Outcome.Yes || aiSuggestedOutcome === Outcome.No;
+                const auraReadyForResolve = canResolveAfterAura(market.id);
                 return (
                   <article className="notification-card" key={`page-resolve-${market.id}`}>
                     <span>Result needed</span>
@@ -6844,22 +6896,31 @@ export default function App() {
                         ? `AI suggests ${outcomeLabel(aiSuggestedOutcome)}`
                         : "AI suggestion is not ready yet."}
                     </small>
+                    <small>{resolveAuraStatusLabel(market.id)}</small>
                     {hint && <small>{hint}</small>}
                     <small>Ended tab updates after finalization, not right after proposal.</small>
                     <div className="notification-actions">
+                      <button
+                        className="secondary"
+                        disabled={transactionPending || aiBusy}
+                        onClick={() => askAuraForResolution(market)}
+                        type="button"
+                      >
+                        {aiBusy ? "Aura thinking..." : "Ask Aura"}
+                      </button>
                       {aiCanPropose && (
                         <button
                           className="secondary"
-                          disabled={transactionPending || isMarketActionPending("resolve", market.id)}
+                          disabled={transactionPending || isMarketActionPending("resolve", market.id) || !auraReadyForResolve}
                           onClick={() => resolveMarket(market.id, aiSuggestedOutcome as Outcome.Yes | Outcome.No)}
                           type="button"
                         >
                           Use AI
                         </button>
                       )}
-                      <button disabled={transactionPending || isMarketActionPending("resolve", market.id) || !yesEnabled} onClick={() => resolveMarket(market.id, Outcome.Yes)}>Propose YES</button>
-                      <button disabled={transactionPending || isMarketActionPending("resolve", market.id) || !noEnabled} onClick={() => resolveMarket(market.id, Outcome.No)}>Propose NO</button>
-                      <button className="secondary" disabled={transactionPending || isMarketActionPending("resolve", market.id)} onClick={() => cancelMarket(market.id)}>
+                      <button disabled={transactionPending || isMarketActionPending("resolve", market.id) || !yesEnabled || !auraReadyForResolve} onClick={() => resolveMarket(market.id, Outcome.Yes)}>Propose YES</button>
+                      <button disabled={transactionPending || isMarketActionPending("resolve", market.id) || !noEnabled || !auraReadyForResolve} onClick={() => resolveMarket(market.id, Outcome.No)}>Propose NO</button>
+                      <button className="secondary" disabled={transactionPending || isMarketActionPending("resolve", market.id) || !auraReadyForResolve} onClick={() => cancelMarket(market.id)}>
                         {isMarketActionPending("resolve", market.id) ? "Proposing..." : "Propose Cancel"}
                       </button>
                       <button className="secondary" onClick={() => openMarket(market.id)} type="button">View market</button>
@@ -7464,18 +7525,22 @@ export default function App() {
                           )}
                           {canPropose && (
                             <>
-                              <button className="secondary" onClick={() => resolveMarket(market.id, Outcome.Yes)} disabled={!canProposeYes}>
+                              <button className="secondary" disabled={aiBusy} onClick={() => askAuraForResolution(market)} type="button">
+                                Ask Aura
+                              </button>
+                              <button className="secondary" onClick={() => resolveMarket(market.id, Outcome.Yes)} disabled={!canProposeYes || !canResolveAfterAura(market.id)}>
                                 Propose YES
                               </button>
-                              <button className="secondary" onClick={() => resolveMarket(market.id, Outcome.No)} disabled={!canProposeNo}>
+                              <button className="secondary" onClick={() => resolveMarket(market.id, Outcome.No)} disabled={!canProposeNo || !canResolveAfterAura(market.id)}>
                                 Propose NO
                               </button>
-                              <button className="secondary" onClick={() => cancelMarket(market.id)}>
+                              <button className="secondary" disabled={!canResolveAfterAura(market.id)} onClick={() => cancelMarket(market.id)}>
                                 Propose Cancel
                               </button>
                             </>
                           )}
                           {canPropose && proposeHint && <small>{proposeHint}</small>}
+                          {canPropose && <small>{resolveAuraStatusLabel(market.id)}</small>}
                           {finalizeHint && <small>{finalizeHint}</small>}
                           {canFinalize && (
                             <button className="secondary" onClick={() => finalizeMarket(market.id)}>
@@ -7985,7 +8050,7 @@ export default function App() {
                 onChange={(event) => {
                   setCreateForm({ ...createForm, question: event.target.value });
                   setAiMarketDraft(null);
-                  setAuraAskedForCreate(false);
+                  setAuraCreateStatus("idle");
                   setDuplicateAcknowledged(false);
                 }}
                 placeholder="Will Arc Testnet pass 1M transactions this week?"
@@ -7998,6 +8063,7 @@ export default function App() {
                 <span className="section-label">Aura Agent</span>
                 <strong>Draft clear market terms before launch.</strong>
                 <small>AI can suggest a measurable question, UTC close time, sources, and risk flags. Review before signing.</small>
+                <small>{createAuraStatusLabel}</small>
               </div>
               <button className="aura-ask-button" disabled={aiBusy || createForm.question.trim().length < 4} onClick={askAuraForMarketDraft} type="button">
                 {aiBusy ? "Aura thinking..." : "Ask Aura Agent"}
@@ -8154,7 +8220,7 @@ export default function App() {
                   !hasContract ||
                   transactionPending ||
                   createForm.question.trim().length < 8 ||
-                  !auraAskedForCreate ||
+                  !canCreateAfterAura ||
                   (!!aiMarketDraft?.duplicateRisk && aiMarketDraft.duplicateRisk !== "LOW" && !duplicateAcknowledged)
                 }
                 type="submit"
@@ -8163,7 +8229,7 @@ export default function App() {
                   ? "Waiting Wallet..."
                   : aiMarketDraft?.duplicateRisk && aiMarketDraft.duplicateRisk !== "LOW"
                     ? "Create anyway"
-                    : !auraAskedForCreate
+                    : !canCreateAfterAura
                       ? "Ask Aura first"
                     : "Launch Market"}
               </button>
