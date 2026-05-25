@@ -3079,43 +3079,64 @@ textarea {
 }
 
 .resolution-zone {
+  background: rgba(8, 13, 26, 0.42);
   border: 1px solid rgba(38, 201, 255, 0.28);
   border-radius: 8px;
   display: grid;
   gap: 10px;
-  margin-top: 8px;
-  padding: 10px;
+  padding: 14px;
   scroll-margin-top: 110px;
 }
 
 .resolution-zone-head {
-  align-items: center;
+  align-items: start;
   display: flex;
   gap: 8px;
   justify-content: space-between;
 }
 
+.resolution-zone-head > div {
+  display: grid;
+  gap: 4px;
+}
+
 .resolution-zone-head strong {
-  font-size: 0.92rem;
+  font-size: 1rem;
 }
 
 .resolution-ai-banner {
+  background: rgba(93, 170, 255, 0.08);
   border: 1px solid rgba(93, 170, 255, 0.6);
-  border-radius: 999px;
+  border-radius: 8px;
+  box-shadow: none;
   color: #cde4ff;
+  display: grid;
   font-size: 0.78rem;
   font-weight: 800;
+  gap: 2px;
+  justify-items: start;
+  min-height: 48px;
   padding: 6px 10px;
+  text-align: left;
 }
 
 .resolution-ai-banner.yes {
+  background: rgba(41, 215, 163, 0.09);
   border-color: rgba(41, 215, 163, 0.8);
   color: #7af8d0;
 }
 
 .resolution-ai-banner.no {
+  background: rgba(255, 107, 138, 0.09);
   border-color: rgba(255, 107, 138, 0.8);
   color: #ffb7c5;
+}
+
+.resolution-ai-banner small {
+  color: inherit;
+  font-size: 0.68rem;
+  font-weight: 700;
+  opacity: 0.86;
 }
 
 .resolution-actions {
@@ -3133,6 +3154,13 @@ textarea {
 .resolution-button-grid button {
   min-height: 44px;
   width: 100%;
+}
+
+.resolution-button-grid .action-refresh-aura,
+.resolution-button-grid .action-use-ai,
+.resolution-button-grid .action-propose-cancel,
+.resolution-button-grid .action-dispute {
+  grid-column: 1 / -1;
 }
 
 .resolution-meta {
@@ -3169,6 +3197,13 @@ textarea {
 }
 
 .resolution-actions .action-propose-cancel {
+  background: rgba(255, 188, 102, 0.08);
+  border-color: rgba(255, 188, 102, 0.8);
+  color: #ffd59d;
+}
+
+.resolution-actions .action-dispute {
+  background: rgba(255, 188, 102, 0.1);
   border-color: rgba(255, 188, 102, 0.8);
   color: #ffd59d;
 }
@@ -3687,6 +3722,12 @@ label {
   display: grid;
   gap: 10px;
   grid-template-columns: minmax(0, 1fr) 300px;
+}
+
+.detail-primary-column {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
 }
 
 .detail-chart-card {
