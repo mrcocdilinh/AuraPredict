@@ -2471,7 +2471,13 @@ export default function App() {
   })();
   const relatedMarkets = selectedMarket
     ? [...markets]
-        .filter((market) => market.id !== selectedMarket.id && (market.category || "Other") === (selectedMarket.category || "Other"))
+        .filter(
+          (market) =>
+            market.id !== selectedMarket.id &&
+            (market.category || "Other") === (selectedMarket.category || "Other") &&
+            market.outcome === Outcome.Unresolved &&
+            market.closeTime > nowSeconds
+        )
         .map((market) => {
           const selectedTerms = new Set(
             selectedMarket.question
@@ -2483,8 +2489,7 @@ export default function App() {
             .toLowerCase()
             .split(/[^a-z0-9]+/)
             .filter((term) => selectedTerms.has(term)).length;
-          const liveBonus = market.outcome === Outcome.Unresolved && market.closeTime > nowSeconds ? 4 : 0;
-          return { market, score: liveBonus + overlap * 3 + Math.min(8, market.traderCount) };
+          return { market, score: 4 + overlap * 3 + Math.min(8, market.traderCount) };
         })
         .sort((a, b) => {
           if (b.score !== a.score) return b.score - a.score;
@@ -6307,7 +6312,7 @@ export default function App() {
             <p className="network-kicker">Arc Testnet prediction markets</p>
             <h1>Trade the future with native USDC.</h1>
             <p>
-              A Polymarket-style testnet venue for fast YES/NO markets on Arc.
+              A fast Arc testnet venue for YES/NO markets settled onchain.
               Market creators are the resolvers, and every stake settles onchain.
             </p>
             <div className="hero-actions">
