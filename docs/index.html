@@ -264,6 +264,9 @@
             committee, stores a public resolution receipt, and leaves final settlement to
             the creator, owner, or future resolution authority flow on the contract.
           </p>
+          <div class="note">
+            Why this design: it keeps resolution fast and scalable with AI support, but still preserves user protection through onchain dispute and final human authority when needed.
+          </div>
           <div class="timeline">
             <article>
               <span>1</span>
@@ -301,14 +304,14 @@
               <h3>Admin run endpoint</h3>
               <pre><code>POST /api/resolutions/:marketId/run
 Authorization: Bearer your_admin_token</code></pre>
-              <p>Admin runs require <code>AURA_RESOLUTION_ADMIN_TOKEN</code>. Use <code>force: true</code> only when rerunning after better evidence.</p>
+              <p>Admin reruns are used only when better evidence arrives or a dispute needs deeper review.</p>
             </article>
           </div>
           <div class="reference-table">
-            <article><span>AI provider</span><strong>AI_PROVIDER=gemini and GEMINI_API_KEY</strong></article>
             <article><span>Manual mode</span><strong>Receipt only; human reviews and signs the result proposal.</strong></article>
-            <article><span>Auto-run</span><strong>AURA_RESOLUTION_AUTO_RUN=1 creates the first receipt for closed unresolved markets.</strong></article>
-            <article><span>Auto-propose</span><strong>AURA_RESOLUTION_AUTO_PROPOSE=1 proposes AI suggested YES/NO; owner receives mismatch/dispute alerts for review.</strong></article>
+            <article><span>Auto-run</span><strong>Closed unresolved markets can be processed automatically to prepare AI suggestions.</strong></article>
+            <article><span>Auto-propose</span><strong>AI can propose first; owner receives mismatch/dispute alerts for review.</strong></article>
+            <article><span>Security boundary</span><strong>Private keys and operator credentials are never published in public documentation.</strong></article>
           </div>
           <div class="note">
             AI receipts are decision support, not a trustless oracle. The contract still controls

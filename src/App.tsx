@@ -1467,11 +1467,11 @@ function LandingPage() {
     },
     {
       title: "Aura Agent",
-      text: "Use AI assistance to draft clearer markets, review duplicate risk, summarize evidence, and calculate off-chain resolution receipts."
+      text: "Use AI assistance to draft clearer markets, review duplicate risk, summarize evidence, and generate resolution suggestions."
     },
     {
       title: "AI resolution receipts",
-      text: "The indexer can run three AI reviewer roles, publish a hashed consensus receipt, and auto-propose a suggested outcome while keeping settlement on the current contract."
+      text: "AI can generate auditable suggestion receipts while final settlement remains in the same onchain dispute flow."
     },
     {
       title: "Live indexer",
@@ -1482,7 +1482,7 @@ function LandingPage() {
   const architectureSteps = ["Wallet", "AuraPredict UI", "Render Indexer", "Arc RPC", "Market Contract", "Arcscan"];
   const settlementSteps = [
     "Market closes in UTC",
-    "Indexer creates an AI receipt and suggested YES/NO",
+    "Indexer creates an AI suggestion receipt",
     "Resolver can follow or override the AI proposal",
     "Owner receives an alert when resolver and AI disagree",
     "Dispute window stays open",
@@ -1493,7 +1493,7 @@ function LandingPage() {
   ];
   const dataFlow = [
     "Live Render indexer now powers market history, volume, participants, activity, and leaderboards",
-    "Aura Agent drafts clearer markets, checks similar questions, and produces AI resolution receipts from evidence",
+    "Aura Agent drafts clearer markets, checks similar questions, and produces AI suggestions from evidence",
     "AI can propose first; owner/authority gets mismatch and dispute alerts for manual review",
     "Resolution receipts stay off-chain unless the resolver, owner, or future authority signs the normal contract proposal",
     "Wallet actions still sign directly against the Arc contract, with Arcscan as the verification layer"
@@ -1872,7 +1872,7 @@ function LandingPage() {
           </article>
           <article>
             <span>AI resolution</span>
-            <strong>Three reviewer roles produce a consensus, confidence score, evidence notes, risks, and receipt hash.</strong>
+            <strong>AI suggestions include confidence and evidence notes so outcomes can be reviewed before final settlement.</strong>
           </article>
           <article>
             <span>Profiles</span>
@@ -1884,7 +1884,7 @@ function LandingPage() {
           </article>
           <article>
             <span>Admin controls</span>
-            <strong>AI runs require an admin token; optional auto-propose requires a resolver or owner private key.</strong>
+            <strong>Operational credentials and automation policies stay private; public docs only show user-facing behavior and rules.</strong>
           </article>
           <article>
             <span>Docs domain</span>
