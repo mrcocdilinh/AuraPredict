@@ -155,6 +155,12 @@ type CreateFormState = {
   fallbackSource: string;
 };
 
+type MismatchConfirmState = {
+  marketId: number;
+  outcome: Outcome;
+  aiSuggestedOutcome: Outcome.Yes | Outcome.No;
+};
+
 type SocialMarketResponse = {
   comments?: MarketComment[];
   evidence?: MarketEvidence[];
@@ -2285,6 +2291,7 @@ export default function App() {
   const [aiResolutionReports, setAiResolutionReports] = useState<Record<number, AiResolutionReport>>({});
   const [aiResolutionReceipts, setAiResolutionReceipts] = useState<Record<string, AiResolutionReceipt | null>>({});
   const [auraResolutionStatusByMarket, setAuraResolutionStatusByMarket] = useState<Record<number, "idle" | "ready" | "failed">>({});
+  const [mismatchConfirm, setMismatchConfirm] = useState<MismatchConfirmState | null>(null);
   const [onboardingDismissed, setOnboardingDismissed] = useState(() => {
     try {
       return window.localStorage.getItem(ONBOARDING_DISMISSED_KEY) === "true";
@@ -3780,8 +3787,14 @@ export default function App() {
         : "Ask Aura first. If Aura fails, manual launch will unlock.";
 
   const canResolveAfterAura = useCallback(
-    (marketId: number) => (auraResolutionStatusByMarket[marketId] || "idle") !== "idle",
-    [auraResolutionStatusByMarket]
+    (marketId: number) => {
+      const status = auraResolutionStatusByMarket[marketId] || "idle";
+      if (status !== "idle") return true;
+      const receipt = aiResolutionReceipts[String(marketId)];
+      const suggested = aiOutcomeFromReceipt(receipt);
+      return suggested === Outcome.Yes || suggested === Outcome.No;
+    },
+    [aiResolutionReceipts, auraResolutionStatusByMarket]
   );
 
   const resolveAuraStatusLabel = useCallback(
@@ -5016,22 +5029,24 @@ export default function App() {
     }
   };
 
-  const resolveMarket = async (marketId: number, outcome: Outcome) => {
+  const resolveMarket = async (marketId: number, outcome: Outcome, skipMismatchConfirm = false) => {
     if (!account || !isAddress(account)) throw new Error("Connect wallet first.");
     if (isMarketActionPending("resolve", marketId)) return;
     const auraStatus = auraResolutionStatusByMarket[marketId] || "idle";
-    if (auraStatus === "idle") {
-      throw new Error("Ask Aura Agent before proposing. If Aura is unavailable, manual propose will be unlocked.");
-    }
     const aiReceipt = aiResolutionReceipts[String(marketId)];
     const aiSuggestedOutcome = aiOutcomeFromReceipt(aiReceipt);
     const hasAiSuggestion = aiSuggestedOutcome === Outcome.Yes || aiSuggestedOutcome === Outcome.No;
+    if (auraStatus === "idle" && !hasAiSuggestion) {
+      throw new Error("Ask Aura Agent before proposing. If Aura is unavailable, manual propose will be unlocked.");
+    }
     const mismatchWithAi = hasAiSuggestion && aiSuggestedOutcome !== outcome;
-    if (mismatchWithAi) {
-      const continueWithMismatch = window.confirm(
-        `AI suggested ${outcomeLabel(aiSuggestedOutcome)} but you are proposing ${outcomeLabel(outcome)}. This will notify owner for review. Continue?`
-      );
-      if (!continueWithMismatch) return;
+    if (mismatchWithAi && !skipMismatchConfirm) {
+      setMismatchConfirm({
+        marketId,
+        outcome,
+        aiSuggestedOutcome: aiSuggestedOutcome as Outcome.Yes | Outcome.No
+      });
+      return;
     }
     await switchToArc();
     const walletClient = getActiveWalletClient();
@@ -5720,7 +5735,7 @@ export default function App() {
                   <>
                     {!hasNoLiquidity(market) && (
                       <button className="secondary" disabled={aiBusy} onClick={() => askAuraForResolution(market)} type="button">
-                        Ask Aura
+                        {aiBusy ? "Aura thinking..." : aiCanPropose ? "Refresh Aura" : "Ask Aura"}
                       </button>
                     )}
                     {aiCanPropose && (
@@ -6211,7 +6226,7 @@ export default function App() {
                   <>
                     {!hasNoLiquidity(selectedMarket) && (
                       <button className="secondary" disabled={aiBusy} onClick={() => askAuraForResolution(selectedMarket)} type="button">
-                        Ask Aura
+                        {aiBusy ? "Aura thinking..." : selectedAiCanPropose ? "Refresh Aura" : "Ask Aura"}
                       </button>
                     )}
                     {selectedAiCanPropose && (
@@ -6777,7 +6792,7 @@ export default function App() {
                                 onClick={() => askAuraForResolution(market)}
                                 type="button"
                               >
-                                {aiBusy ? "Aura thinking..." : "Ask Aura"}
+                                {aiBusy ? "Aura thinking..." : aiCanPropose ? "Refresh Aura" : "Ask Aura"}
                               </button>
                             )}
                             {aiCanPropose && (
@@ -7255,7 +7270,7 @@ export default function App() {
                           onClick={() => askAuraForResolution(market)}
                           type="button"
                         >
-                          {aiBusy ? "Aura thinking..." : "Ask Aura"}
+                          {aiBusy ? "Aura thinking..." : aiCanPropose ? "Refresh Aura" : "Ask Aura"}
                         </button>
                       )}
                       {aiCanPropose && (
@@ -7885,7 +7900,7 @@ export default function App() {
                             <>
                               {!hasNoLiquidity(market) && (
                                 <button className="secondary" disabled={aiBusy} onClick={() => askAuraForResolution(market)} type="button">
-                                  Ask Aura
+                                  {aiBusy ? "Aura thinking..." : aiCanPropose ? "Refresh Aura" : "Ask Aura"}
                                 </button>
                               )}
                               {aiCanPropose && (
@@ -8660,6 +8675,40 @@ export default function App() {
               </button>
             </div>
           </form>
+        </div>
+      )}
+
+      {mismatchConfirm && (
+        <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="AI mismatch confirmation">
+          <section className="modal-panel wallet-connect-modal">
+            <div className="modal-header">
+              <h2>AI Mismatch Warning</h2>
+              <button className="icon-button" type="button" onClick={() => setMismatchConfirm(null)}>
+                X
+              </button>
+            </div>
+            <p>
+              AI suggests <strong>{outcomeLabel(mismatchConfirm.aiSuggestedOutcome)}</strong>, but you are proposing{" "}
+              <strong>{outcomeLabel(mismatchConfirm.outcome)}</strong>.
+            </p>
+            <p>This action will create an owner review alert. Continue?</p>
+            <div className="modal-actions">
+              <button className="secondary" type="button" onClick={() => setMismatchConfirm(null)}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  const pending = mismatchConfirm;
+                  if (!pending) return;
+                  setMismatchConfirm(null);
+                  await resolveMarket(pending.marketId, pending.outcome, true);
+                }}
+              >
+                Continue
+              </button>
+            </div>
+          </section>
         </div>
       )}
 
