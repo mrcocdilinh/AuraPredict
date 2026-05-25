@@ -1198,7 +1198,9 @@ function resolutionPrompt(body) {
     '  "disputeRisks": ["..."],',
     '  "resolverAction": "what the creator/admin should do next"',
     "}",
-    "Do not invent facts. If evidence is missing or sources are not enough, return INSUFFICIENT_EVIDENCE."
+    "Do not invent facts.",
+    "For deadline questions phrased like 'Will X ... by time T?', if current time is already past T and there is no credible evidence that X happened, lean NO (low/medium confidence) instead of INSUFFICIENT_EVIDENCE.",
+    "Use INSUFFICIENT_EVIDENCE only when rules are ambiguous, time has not passed, or evidence quality is too weak/conflicting."
   ].join("\n");
 }
 
@@ -1229,9 +1231,53 @@ function resolutionReviewerPrompt(market, evidenceRows, role) {
     '  "risks": ["specific dispute or ambiguity risk"]',
     "}",
     "Use only the supplied evidence and public facts that can be verified from URLs in the evidence list.",
+    "For deadline questions phrased like 'Will X ... by time T?', if T has passed and there is no credible evidence that X happened, prefer NO (with lower confidence) over INSUFFICIENT_EVIDENCE.",
     "If the evidence is not enough to decide confidently, return INSUFFICIENT_EVIDENCE.",
     "For price/date markets, require the source to match the metric and time window exactly."
   ].join("\n");
+}
+
+function looksLikeDeadlineEventQuestion(text) {
+  const value = String(text || "").toLowerCase();
+  if (!value.startsWith("will ")) return false;
+  if (!/\bby\b|\bbefore\b|\bno later than\b/.test(value)) return false;
+  return /\bannounce\b|\bdeclare\b|\blaunch\b|\brelease\b|\bhappen\b|\boccur\b|\bpublish\b|\bconfirm\b/.test(value);
+}
+
+function hasEvidenceContent(evidenceRows) {
+  if (!Array.isArray(evidenceRows)) return false;
+  return evidenceRows.some((item) =>
+    cleanText(item?.title, 160) || cleanUrl(item?.url) || cleanText(item?.notes || item?.finding, 300)
+  );
+}
+
+function normalizeResolutionReportWithHeuristic(body, reportJson) {
+  const normalized = { ...(reportJson || {}) };
+  const outcome = outcomeName(normalized.suggestedOutcome);
+  if (outcome !== "INSUFFICIENT_EVIDENCE") return normalized;
+
+  const closeTime = Number(body?.closeTime || 0);
+  const now = Math.floor(Date.now() / 1000);
+  if (!Number.isFinite(closeTime) || closeTime <= 0 || now < closeTime) return normalized;
+
+  const question = cleanText(body?.question, 300);
+  const criteria = cleanText(body?.resolutionCriteria, 1000);
+  const marketText = `${question} ${criteria}`.trim();
+  if (!looksLikeDeadlineEventQuestion(marketText)) return normalized;
+
+  const evidenceRows = Array.isArray(body?.evidence) ? body.evidence : [];
+  if (hasEvidenceContent(evidenceRows)) return normalized;
+
+  normalized.suggestedOutcome = "NO";
+  normalized.confidence = Math.max(55, Math.min(70, Number(normalized.confidence || 0) || 0));
+  normalized.summary =
+    "Deadline has passed and no credible evidence was provided that the event happened. Based on 'by-time' rule semantics, the suggested outcome is NO.";
+  normalized.disputeRisks = [
+    "Low evidence depth: attach at least 1-2 reputable links proving no qualifying announcement was found by deadline."
+  ];
+  normalized.resolverAction =
+    "Propose NO, then attach reputable source links (for example Reuters/AP/official account pages) showing no qualifying announcement by the deadline.";
+  return normalized;
 }
 
 function consensusFromReviews(reviews) {
@@ -1573,7 +1619,8 @@ async function route(req, res) {
 
       if (segments[2] === "resolution-report") {
         const report = await callAiJson(systemInstruction, resolutionPrompt(body));
-        json(res, 200, { report: report.json, provider: report.provider, model: report.model, updatedAt: nowIso() });
+        const normalizedReport = normalizeResolutionReportWithHeuristic(body, report.json);
+        json(res, 200, { report: normalizedReport, provider: report.provider, model: report.model, updatedAt: nowIso() });
         return;
       }
 
