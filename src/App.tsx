@@ -1180,6 +1180,15 @@ function isUnknownChainError(error: unknown) {
   return code === 4902 || message.includes("4902") || message.includes("not added");
 }
 
+function isDuplicateRpcNetworkError(error: unknown) {
+  const message = errorMessage(error).toLowerCase();
+  return (
+    message.includes("same rpc endpoint as existing network") ||
+    message.includes("already exists") ||
+    message.includes("already been added")
+  );
+}
+
 function errorMessage(error: unknown) {
   if (error instanceof Error && error.message) return error.message;
   if (typeof error === "object" && error !== null && "message" in error) {
@@ -3136,10 +3145,14 @@ export default function App() {
       });
     } catch (error) {
       if (!isUnknownChainError(error)) throw error;
-      await injected.request({
-        method: "wallet_addEthereumChain",
-        params: [arcTestnetParams]
-      });
+      try {
+        await injected.request({
+          method: "wallet_addEthereumChain",
+          params: [arcTestnetParams]
+        });
+      } catch (addError) {
+        if (!isDuplicateRpcNetworkError(addError)) throw addError;
+      }
       await injected.request({
         method: "wallet_switchEthereumChain",
         params: [{ chainId: arcTestnetParams.chainId }]
