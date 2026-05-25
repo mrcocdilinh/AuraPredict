@@ -3178,6 +3178,20 @@ textarea {
   grid-template-columns: 1fr 1fr;
 }
 
+.modal-form-grid .full-width {
+  grid-column: 1 / -1;
+}
+
+.required-mark {
+  color: #ff4d6d;
+  font-weight: 900;
+}
+
+.resolution-rule-field textarea {
+  min-height: 120px;
+  resize: vertical;
+}
+
 .modal-actions {
   display: flex;
   gap: 10px;

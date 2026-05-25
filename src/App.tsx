@@ -1783,7 +1783,8 @@ function LandingPage() {
           <h2>From question to payout, every step is transparent.</h2>
           <p>
             A market starts as a clear YES/NO question. Users stake based on their conviction.
-            When the market closes, the indexer can create an AI receipt from evidence, the creator
+            Creation now requires a primary resolution source and an explicit resolution rule.
+            When the market closes, Aura runs first to generate a resolution suggestion from evidence, then the creator
             or owner proposes the result through the existing contract, users can dispute during the
             window, and winners claim directly from their wallet after finalization.
           </p>
@@ -1908,7 +1909,7 @@ function LandingPage() {
         <div className="docs-feature-table">
           <article>
             <span>Market creation</span>
-            <strong>YES/NO questions with UTC close time and category labels.</strong>
+            <strong>YES/NO questions with UTC close time, category labels, required source URL, and required resolution rule.</strong>
           </article>
           <article>
             <span>Trading</span>
@@ -1920,7 +1921,7 @@ function LandingPage() {
           </article>
           <article>
             <span>AI resolution</span>
-            <strong>AI suggestions include confidence and evidence notes so outcomes can be reviewed before final settlement.</strong>
+            <strong>Aura-first flow: creators must run Aura before proposing; manual propose unlocks only when Aura is unavailable.</strong>
           </article>
           <article>
             <span>Profiles</span>
@@ -6520,17 +6521,15 @@ export default function App() {
                       const aiSuggestedOutcome = aiOutcomeFromReceipt(aiReceipt);
                       const aiCanPropose = aiSuggestedOutcome === Outcome.Yes || aiSuggestedOutcome === Outcome.No;
                       const auraReadyForResolve = canResolveAfterAura(market.id);
+                      const auraStatusText = aiCanPropose
+                        ? `AI suggests ${outcomeLabel(aiSuggestedOutcome)}`
+                        : resolveAuraStatusLabel(market.id);
                       return (
                         <article className="notification-card" key={`resolve-${market.id}`}>
                           <span>Result needed</span>
                           <strong>{shortQuestion(market.question)}</strong>
                           <small>Closed {closeDate(market.closeTime)}. Creator bond stays locked during dispute window.</small>
-                          <small>
-                            {aiCanPropose
-                              ? `AI suggests ${outcomeLabel(aiSuggestedOutcome)}`
-                              : "AI suggestion is not ready yet."}
-                          </small>
-                          <small>{resolveAuraStatusLabel(market.id)}</small>
+                          <small>{auraStatusText}</small>
                           {hint && <small>{hint}</small>}
                           <small>Ended tab updates after finalization, not right after proposal.</small>
                           <div className="notification-actions">
@@ -6993,17 +6992,15 @@ export default function App() {
                 const aiSuggestedOutcome = aiOutcomeFromReceipt(aiReceipt);
                 const aiCanPropose = aiSuggestedOutcome === Outcome.Yes || aiSuggestedOutcome === Outcome.No;
                 const auraReadyForResolve = canResolveAfterAura(market.id);
+                const auraStatusText = aiCanPropose
+                  ? `AI suggests ${outcomeLabel(aiSuggestedOutcome)}`
+                  : resolveAuraStatusLabel(market.id);
                 return (
                   <article className="notification-card" key={`page-resolve-${market.id}`}>
                     <span>Result needed</span>
                     <strong>{shortQuestion(market.question)}</strong>
                     <small>Closed {closeDate(market.closeTime)}. Creator bond stays locked during dispute window.</small>
-                    <small>
-                      {aiCanPropose
-                        ? `AI suggests ${outcomeLabel(aiSuggestedOutcome)}`
-                        : "AI suggestion is not ready yet."}
-                    </small>
-                    <small>{resolveAuraStatusLabel(market.id)}</small>
+                    <small>{auraStatusText}</small>
                     {hint && <small>{hint}</small>}
                     <small>Ended tab updates after finalization, not right after proposal.</small>
                     <div className="notification-actions">
@@ -8151,7 +8148,7 @@ export default function App() {
               </button>
             </div>
             <label>
-              Question
+              Question <span className="required-mark">*</span>
               <textarea
                 value={createForm.question}
                 onChange={(event) => {
@@ -8232,7 +8229,7 @@ export default function App() {
             )}
             <div className="modal-form-grid">
               <label>
-                Category
+                Category <span className="required-mark">*</span>
                 <select
                   value={createForm.category}
                   onChange={(event) => setCreateForm({ ...createForm, category: event.target.value })}
@@ -8246,7 +8243,7 @@ export default function App() {
                 <small className="time-format-hint">Choose the main topic for this market.</small>
               </label>
               <label>
-                Close time (UTC)
+                Close time (UTC) <span className="required-mark">*</span>
                 <div className="close-time-fields">
                   <input
                     type="date"
@@ -8294,7 +8291,7 @@ export default function App() {
                 </small>
               </label>
               <label>
-                Resolution source URL
+                Resolution source URL <span className="required-mark">*</span>
                 <input
                   type="text"
                   value={createForm.resolutionSource}
@@ -8303,8 +8300,8 @@ export default function App() {
                 />
                 <small className="time-format-hint">Primary source used to resolve this market.</small>
               </label>
-              <label>
-                Resolution rule
+              <label className="full-width resolution-rule-field">
+                Resolution rule <span className="required-mark">*</span>
                 <textarea
                   value={createForm.resolutionRule}
                   onChange={(event) => setCreateForm({ ...createForm, resolutionRule: event.target.value })}
@@ -8313,7 +8310,7 @@ export default function App() {
                 />
                 <small className="time-format-hint">Define exactly what value and timestamp are used.</small>
               </label>
-              <label>
+              <label className="full-width">
                 Fallback source URL (optional)
                 <input
                   type="text"
