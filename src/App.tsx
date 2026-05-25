@@ -933,6 +933,10 @@ function parseAuraUtcCloseTimeFromText(value: string) {
   return combineUtcDateTimeParts(datePart, timePart);
 }
 
+function parseResolutionReferenceTime(value: string) {
+  return parseAuraUtcCloseTimeFromText(value);
+}
+
 function utcDateTimeInputValue(date: Date) {
   const pad = (value: number) => String(value).padStart(2, "0");
   return [
@@ -3657,6 +3661,13 @@ export default function App() {
   }, [createForm, setNotice]);
 
   const canCreateAfterAura = auraCreateStatus !== "idle";
+  const ruleReferenceCloseTime = useMemo(
+    () => parseResolutionReferenceTime(createForm.resolutionRule),
+    [createForm.resolutionRule]
+  );
+  const hasRuleCloseMismatch = Boolean(
+    ruleReferenceCloseTime && createForm.closeTime && ruleReferenceCloseTime !== createForm.closeTime
+  );
   const createAuraStatusLabel =
     auraCreateStatus === "ready"
       ? "Aura draft ready. Review and launch."
@@ -4578,6 +4589,12 @@ export default function App() {
       if (!isValidHttpUrl(resolutionSource)) throw new Error("Resolution source must be a valid http(s) link.");
       if (fallbackSource && !isValidHttpUrl(fallbackSource)) throw new Error("Fallback source must be a valid http(s) link.");
       if (!createForm.closeTime) throw new Error("Close time is required.");
+      const ruleReferenceTime = parseResolutionReferenceTime(resolutionRule);
+      if (ruleReferenceTime && createForm.closeTime !== ruleReferenceTime) {
+        throw new Error(
+          `Close time must match rule time (${ruleReferenceTime} UTC). Update close time or resolution rule.`
+        );
+      }
       const closeTime = parseUtcDateTime(createForm.closeTime);
       const earliestCloseTime = BigInt(Math.floor(Date.now() / 1000) + 5 * 60);
       if (closeTime <= earliestCloseTime) {
@@ -8325,6 +8342,11 @@ export default function App() {
                 <small className="time-format-hint">
                   UTC only. Min close time: {minimumCloseInput}. Date and time are selected separately.
                 </small>
+                {hasRuleCloseMismatch && (
+                  <small className="time-format-hint error-hint">
+                    Close time does not match rule time: {ruleReferenceCloseTime} UTC.
+                  </small>
+                )}
               </label>
               <label>
                 <span className="field-label">
@@ -8397,6 +8419,7 @@ export default function App() {
                   createForm.question.trim().length < 8 ||
                   createForm.resolutionSource.trim().length === 0 ||
                   createForm.resolutionRule.trim().length === 0 ||
+                  hasRuleCloseMismatch ||
                   !canCreateAfterAura ||
                   (!!aiMarketDraft?.duplicateRisk && aiMarketDraft.duplicateRisk !== "LOW" && !duplicateAcknowledged)
                 }

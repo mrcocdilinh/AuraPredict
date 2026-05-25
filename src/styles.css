@@ -3194,6 +3194,11 @@ textarea {
   line-height: 1.2;
 }
 
+.error-hint {
+  color: #ff7d95 !important;
+  font-weight: 700;
+}
+
 .resolution-rule-field textarea {
   min-height: 120px;
   resize: vertical;
