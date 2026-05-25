@@ -774,6 +774,24 @@ function parseUsdcInput(value: string) {
   }
 }
 
+function normalizeReferenceUrl(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  const domainMatch = trimmed.match(/([a-z0-9-]+(?:\.[a-z0-9-]+)+)(\/[^\s)]*)?/i);
+  if (!domainMatch) return trimmed;
+  return `https://${domainMatch[1]}${domainMatch[2] || ""}`;
+}
+
+function isValidHttpUrl(value: string) {
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === "http:" || parsed.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
 function marketVolume(market: MarketView) {
   return market.yesPool + market.noPool;
 }
@@ -3624,8 +3642,8 @@ export default function App() {
 
   const applyAuraMarketDraft = useCallback(() => {
     if (!aiMarketDraft) return;
-    const firstSource = aiMarketDraft.sources?.[0] || "";
-    const secondSource = aiMarketDraft.sources?.[1] || "";
+    const firstSource = normalizeReferenceUrl(aiMarketDraft.sources?.[0] || "");
+    const secondSource = normalizeReferenceUrl(aiMarketDraft.sources?.[1] || "");
     setCreateForm((current) => ({
       ...current,
       question: aiMarketDraft.question || current.question,
@@ -4503,14 +4521,16 @@ export default function App() {
       if (!account || !isAddress(account)) throw new Error("Connect wallet first.");
       const question = createForm.question.trim().replace(/\s+/g, " ");
       const category = createForm.category.trim() || "Other";
-      const resolutionSource = createForm.resolutionSource.trim();
+      const resolutionSource = normalizeReferenceUrl(createForm.resolutionSource);
       const resolutionRule = createForm.resolutionRule.trim();
-      const fallbackSource = createForm.fallbackSource.trim();
+      const fallbackSource = normalizeReferenceUrl(createForm.fallbackSource);
       if (!question) throw new Error("Market question is required.");
       if (question.length < 8) throw new Error("Market question must be at least 8 characters.");
       if (!canCreateAfterAura) throw new Error("Ask Aura Agent once before launching. If Aura is unavailable, you can continue after the failed check.");
       if (!resolutionSource) throw new Error("Resolution source is required.");
       if (!resolutionRule) throw new Error("Resolution rule is required.");
+      if (!isValidHttpUrl(resolutionSource)) throw new Error("Resolution source must be a valid http(s) link.");
+      if (fallbackSource && !isValidHttpUrl(fallbackSource)) throw new Error("Fallback source must be a valid http(s) link.");
       if (!createForm.closeTime) throw new Error("Close time is required.");
       const closeTime = parseUtcDateTime(createForm.closeTime);
       const earliestCloseTime = BigInt(Math.floor(Date.now() / 1000) + 5 * 60);
@@ -8154,7 +8174,7 @@ export default function App() {
                   </div>
                 </div>
                 {aiMarketDraft.resolutionCriteria && <p>{aiMarketDraft.resolutionCriteria}</p>}
-                <button className="secondary" onClick={applyAuraMarketDraft} type="button">
+                <button className="aura-apply-button" onClick={applyAuraMarketDraft} type="button">
                   Apply suggestion
                 </button>
                 {aiMarketDraft.similarMarkets && aiMarketDraft.similarMarkets.length > 0 && (
@@ -8261,7 +8281,7 @@ export default function App() {
               <label>
                 Resolution source URL
                 <input
-                  type="url"
+                  type="text"
                   value={createForm.resolutionSource}
                   onChange={(event) => setCreateForm({ ...createForm, resolutionSource: event.target.value })}
                   placeholder="https://www.coingecko.com/..."
@@ -8281,7 +8301,7 @@ export default function App() {
               <label>
                 Fallback source URL (optional)
                 <input
-                  type="url"
+                  type="text"
                   value={createForm.fallbackSource}
                   onChange={(event) => setCreateForm({ ...createForm, fallbackSource: event.target.value })}
                   placeholder="https://www.binance.com/..."

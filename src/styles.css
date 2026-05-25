@@ -4083,6 +4083,30 @@ label {
   color: #64748b;
 }
 
+.aura-apply-button {
+  background: #18d7ff;
+  border: 1px solid #18d7ff;
+  border-radius: 8px;
+  box-shadow: 0 14px 34px rgba(24, 215, 255, 0.22);
+  color: #06111e;
+  font-weight: 950;
+  min-height: 42px;
+  padding: 0 16px;
+}
+
+.aura-apply-button:hover:not(:disabled) {
+  background: #5be6ff;
+  border-color: #5be6ff;
+  transform: translateY(-1px);
+}
+
+.aura-apply-button:disabled {
+  background: #d7e1ef;
+  border-color: #d7e1ef;
+  box-shadow: none;
+  color: #64748b;
+}
+
 .aura-draft-card {
   padding: 12px;
 }
@@ -5473,7 +5497,19 @@ label {
   color: #06111e;
 }
 
+[data-theme="dark"] .aura-apply-button {
+  background: #18d7ff;
+  border-color: #18d7ff;
+  color: #06111e;
+}
+
 [data-theme="dark"] .aura-ask-button:disabled {
+  background: #202a3f;
+  border-color: #2b3952;
+  color: #7f8ca3;
+}
+
+[data-theme="dark"] .aura-apply-button:disabled {
   background: #202a3f;
   border-color: #2b3952;
   color: #7f8ca3;
