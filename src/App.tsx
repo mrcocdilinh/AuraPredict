@@ -792,6 +792,13 @@ function normalizeReferenceUrl(value: string) {
   if (lower.includes("binance")) return "https://www.binance.com";
   if (lower.includes("coinbase")) return "https://www.coinbase.com";
   if (lower.includes("kraken")) return "https://www.kraken.com";
+  if (lower.includes("reuters")) return "https://www.reuters.com";
+  if (lower.includes("associated press") || lower === "ap" || lower.includes(" ap ")) return "https://apnews.com";
+  if (lower.includes("bbc")) return "https://www.bbc.com/news";
+  if (lower.includes("cnn")) return "https://www.cnn.com";
+  if (lower.includes("bloomberg")) return "https://www.bloomberg.com";
+  if (lower.includes("wsj") || lower.includes("wall street journal")) return "https://www.wsj.com";
+  if (lower.includes("new york times") || lower === "nyt") return "https://www.nytimes.com";
   return cleaned;
 }
 
@@ -910,6 +917,11 @@ function combineUtcDateTimeParts(datePart: string, timePart: string) {
 function parseAuraUtcCloseTimeFromText(value: string) {
   const text = value.trim();
   if (!text) return "";
+  const isoMatch = text.match(/(\d{4}-\d{2}-\d{2})[T\s]([01]\d|2[0-3]):([0-5]\d)(?::[0-5]\d)?\s*Z/i);
+  if (isoMatch) {
+    const [, datePart, hh, mm] = isoMatch;
+    return combineUtcDateTimeParts(datePart, `${hh}:${mm}`);
+  }
   const direct = parseUtcDateTimeParts(text);
   if (direct) return combineUtcDateTimeParts(direct.date, direct.time);
 
@@ -3692,8 +3704,10 @@ export default function App() {
 
   const applyAuraMarketDraft = useCallback(() => {
     if (!aiMarketDraft) return;
-    const firstSource = normalizeReferenceUrl(aiMarketDraft.sources?.[0] || "");
-    const secondSource = normalizeReferenceUrl(aiMarketDraft.sources?.[1] || "");
+    const firstSourceCandidate = normalizeReferenceUrl(aiMarketDraft.sources?.[0] || "");
+    const secondSourceCandidate = normalizeReferenceUrl(aiMarketDraft.sources?.[1] || "");
+    const firstSource = isValidHttpUrl(firstSourceCandidate) ? firstSourceCandidate : "";
+    const secondSource = isValidHttpUrl(secondSourceCandidate) ? secondSourceCandidate : "";
     const inferredCloseTime =
       parseAuraUtcCloseTimeFromText(aiMarketDraft.closeTime || "") ||
       parseAuraUtcCloseTimeFromText(aiMarketDraft.question || "") ||
@@ -3711,7 +3725,11 @@ export default function App() {
       fallbackSource: secondSource || current.fallbackSource
     }));
     setDuplicateAcknowledged(false);
-    setNotice("Aura Agent draft applied. Review it before launching.");
+    if (!firstSource && (aiMarketDraft.sources?.length || 0) > 0) {
+      setNotice("Aura draft applied. Source name was not a URL, so please set a valid source link before launch.");
+    } else {
+      setNotice("Aura Agent draft applied. Review it before launching.");
+    }
   }, [aiMarketDraft, setNotice]);
 
   const askAuraForResolution = useCallback(
