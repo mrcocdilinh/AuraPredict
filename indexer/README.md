@@ -24,17 +24,16 @@ http://127.0.0.1:8787
 
 ## Environment
 
-The indexer reads `VITE_PREDICTION_MARKET_ADDRESS` from `.env`, detects V2 or V3 at startup, and applies the matching ABI. Optional overrides:
+The production indexer is pinned to AuraPredict V3 at `0x4399ea3f59AA14e4D19217f1af2aD0681f5FafFd` from block `44074836`, detects its ABI at startup, and indexes the primary V3 market surface. Optional runtime settings:
 
 ```bash
 VITE_AURA_INDEXER_URL=http://127.0.0.1:8787
 AURA_INDEXER_PORT=8787
 AURA_INDEXER_HOST=127.0.0.1
-AURA_INDEXER_START_BLOCK=0
 AURA_INDEXER_CHUNK_SIZE=9000
 ```
 
-If `AURA_INDEXER_START_BLOCK=0`, the indexer automatically finds the deployment block with `eth_getCode`, then scans logs from there. Arc RPC currently limits `eth_getLogs` ranges, so the default chunk size stays below that limit.
+The active production contract and its initial block are pinned in `indexer/server.mjs` for the V3 cutover. Arc RPC currently limits `eth_getLogs` ranges, so the default chunk size stays below that limit.
 
 ## API
 
@@ -146,7 +145,7 @@ Then set the frontend production env:
 
 ```bash
 VITE_AURA_INDEXER_URL=https://mrcocdilinh.github.io/AuraPredict
-VITE_PREDICTION_MARKET_START_BLOCK=43295581
+VITE_PREDICTION_MARKET_START_BLOCK=44074836
 ```
 
 This option is free and does not need a card. The tradeoff is that data refreshes on the GitHub Actions schedule, not instantly.
@@ -158,7 +157,7 @@ Recommended flow:
 1. Deploy this repo as a separate web service named `aurapredict-indexer`.
 2. Use Dockerfile: `Dockerfile.indexer`.
 3. Start command is already handled by Docker: `npm run indexer`.
-4. Set these environment variables on the indexer service:
+4. The current V3 address and block are pinned in source and recorded in `render.yaml`:
 
 ```bash
 VITE_PREDICTION_MARKET_ADDRESS=0x4399ea3f59AA14e4D19217f1af2aD0681f5FafFd
@@ -166,6 +165,8 @@ AURA_INDEXER_START_BLOCK=44074836
 AURA_INDEXER_CHUNK_SIZE=9000
 AURA_INDEXER_POLL_MS=12000
 ```
+
+For a future contract migration, update the pin in `indexer/server.mjs` and `render.yaml` together before deployment.
 
 Most hosts set `PORT` automatically. The indexer listens on `0.0.0.0` when `PORT` is present.
 
@@ -185,5 +186,5 @@ VITE_PREDICTION_MARKET_START_BLOCK=44074836
 
 Redeploy the frontend after changing env vars.
 
-`render.yaml` intentionally leaves the active contract address and deployment block as dashboard settings. Do not switch the production indexer away from V2 until existing V2 markets have a maintained resolution and claim path.
+`render.yaml` and the production indexer code pin the active Arc Testnet V3 contract and deployment block. Legacy V2 markets remain onchain outside the primary V3 index.
 For smooth production behavior, avoid free plans that sleep. If the host sleeps or has ephemeral storage, the indexer will recover by backfilling from `AURA_INDEXER_START_BLOCK`, but users may see slow data during cold starts.

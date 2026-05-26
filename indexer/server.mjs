@@ -11,11 +11,9 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = path.join(__dirname, "data");
 const DATA_FILE = path.join(DATA_DIR, "aurapredict-index.json");
 
-const CONTRACT_ADDRESS = (
-  process.env.AURA_INDEXER_CONTRACT_ADDRESS ||
-  process.env.VITE_PREDICTION_MARKET_ADDRESS ||
-  ""
-).trim();
+const ACTIVE_V3_CONTRACT_ADDRESS = "0x4399ea3f59AA14e4D19217f1af2aD0681f5FafFd";
+const ACTIVE_V3_DEPLOYMENT_BLOCK = 44074836n;
+const CONTRACT_ADDRESS = ACTIVE_V3_CONTRACT_ADDRESS;
 const RPC_URLS = (
   process.env.AURA_INDEXER_RPC_URLS ||
   process.env.ARC_RPC_URL ||
@@ -27,7 +25,7 @@ const RPC_URLS = (
 const PORT = Number(process.env.PORT || process.env.AURA_INDEXER_PORT || 8787);
 const HOST = process.env.AURA_INDEXER_HOST || (process.env.PORT ? "0.0.0.0" : "127.0.0.1");
 const POLL_MS = Number(process.env.AURA_INDEXER_POLL_MS || 12_000);
-const START_BLOCK = BigInt(process.env.AURA_INDEXER_START_BLOCK || 0);
+const START_BLOCK = ACTIVE_V3_DEPLOYMENT_BLOCK;
 const CHUNK_SIZE = BigInt(process.env.AURA_INDEXER_CHUNK_SIZE || 9_000);
 const AI_PROVIDER = String(process.env.AI_PROVIDER || "").trim().toLowerCase();
 const AI_FALLBACK_PROVIDER = String(process.env.AI_FALLBACK_PROVIDER || "").trim().toLowerCase();

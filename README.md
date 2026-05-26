@@ -26,8 +26,8 @@ Tinh nang hien tai:
 - Market khong co thanh khoan co the cancel sau resolution time ma khong can ton luot goi AI; bond/refund duoc rut theo pull-withdrawal.
 - Tung market co lich su bet va o tim kiem vi rieng; tab Ended cung co tim kiem rieng cho market da ket thuc.
 
-Contract V3 da deploy tren Arc Testnet tai `0x4399ea3f59AA14e4D19217f1af2aD0681f5FafFd`, bat dau tu block `44074836`. Frontend va indexer doc duoc ca V2/V3; production chi chuyen sang V3 sau khi cac environment variable cua Vercel/Render tro vao dia chi nay.
-Khong cat production khoi V2 khi van con market V2 dang live hoac chua claim; tien va trang thai onchain cua market V2 khong the di chuyen sang V3.
+Production hien dung contract V3 tren Arc Testnet tai `0x4399ea3f59AA14e4D19217f1af2aD0681f5FafFd`, bat dau tu block `44074836`. Frontend va indexer duoc pin vao deployment V3 nay.
+Market V2 cu va tien cua chung van ton tai tren contract cu, nhung khong con hien trong giao dien V3 chinh va khong duoc di chuyen onchain.
 
 ## Arc Testnet
 
@@ -60,7 +60,7 @@ ARC_USDC_TOKEN_ADDRESS=0x3600000000000000000000000000000000000000
 ARC_EURC_TOKEN_ADDRESS=0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a
 ```
 
-De chay local hoac chuyen production sang V3, dien:
+Deployment production duoc pin truc tiep trong frontend va indexer. Cac gia tri tham chieu V3 hien tai la:
 
 ```bash
 VITE_PREDICTION_MARKET_ADDRESS=0x4399ea3f59AA14e4D19217f1af2aD0681f5FafFd
@@ -123,7 +123,7 @@ Sau khi co data, them env cho frontend production tren Vercel:
 
 ```bash
 VITE_AURA_INDEXER_URL=https://mrcocdilinh.github.io/AuraPredict
-VITE_PREDICTION_MARKET_START_BLOCK=43295581
+VITE_PREDICTION_MARKET_START_BLOCK=44074836
 ```
 
 Sau do redeploy frontend.
@@ -134,7 +134,7 @@ Sau khi co URL public cua indexer, them env cho frontend production:
 
 ```bash
 VITE_AURA_INDEXER_URL=https://your-indexer-domain
-VITE_PREDICTION_MARKET_START_BLOCK=43295581
+VITE_PREDICTION_MARKET_START_BLOCK=44074836
 ```
 
 Sau do redeploy frontend.
@@ -146,4 +146,4 @@ Sau do redeploy frontend.
 - Contract hien la ban MVP testnet, chua audit.
 - V3 da mo duong cho authority/oracle/committee va policy gate co ban, nhung chua thay the quy trinh compliance, audit, multisig va giam sat production.
 - Neu mo ca USDC va EURC, moi market chi settle trong token da chon; dashboard co the hien tong `stablecoin units` nhung day khong phai la gia tri FX quy doi.
-- De dung V3, deploy contract moi voi dia chi token settlement dung, cap nhat frontend/indexer sang dia chi do, va chap nhan rang market cua deployment cu khong tu di chuyen sang contract moi.
+- Production dang dung deployment V3 da pin trong source; market V2 cu khong tu di chuyen sang contract moi va khong hien trong giao dien V3 chinh.

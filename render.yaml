@@ -9,9 +9,9 @@ services:
       - key: NODE_VERSION
         value: 22
       - key: VITE_PREDICTION_MARKET_ADDRESS
-        sync: false
+        value: 0x4399ea3f59AA14e4D19217f1af2aD0681f5FafFd
       - key: AURA_INDEXER_START_BLOCK
-        sync: false
+        value: 44074836
       - key: AURA_INDEXER_CHUNK_SIZE
         value: 9000
       - key: AURA_INDEXER_POLL_MS

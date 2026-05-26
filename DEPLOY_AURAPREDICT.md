@@ -178,11 +178,11 @@ USDC:     0x3600000000000000000000000000000000000000
 EURC:     0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a
 ```
 
-Contract V3 them `resolutionTime` duoc cuong che onchain, settlement asset theo market, fee/bond snapshot, authority review modes, evidence/AI receipt hash va pull-withdrawal. Frontend/indexer doc duoc ca V2 va V3, nhung market cua contract cu khong tu chuyen sang V3.
+Contract V3 them `resolutionTime` duoc cuong che onchain, settlement asset theo market, fee/bond snapshot, authority review modes, evidence/AI receipt hash va pull-withdrawal. Production hien duoc pin vao V3. Market cua contract V2 cu khong tu chuyen sang V3 va khong hien trong giao dien V3 chinh.
 
-### 3.4. Dua dia chi contract vao frontend local
+### 3.4. Dia chi production V3
 
-Mo `.env` va dien:
+Frontend/indexer production hien pin truc tiep deployment nay trong source. Gia tri tham chieu de chay local hoac kiem tra cau hinh la:
 
 ```env
 VITE_PREDICTION_MARKET_ADDRESS=0x4399ea3f59AA14e4D19217f1af2aD0681f5FafFd
@@ -299,10 +299,10 @@ Trong phan `Environment Variables`, them bien:
 
 ```text
 Name:  VITE_PREDICTION_MARKET_ADDRESS
-Value: 0x_dia_chi_contract_da_deploy
+Value: 0x4399ea3f59AA14e4D19217f1af2aD0681f5FafFd
 
 Name:  VITE_ARC_EURC_TOKEN_ADDRESS
-Value: 0x_dia_chi_eurc_neu_bat_market_eurc
+Value: 0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a
 ```
 
 Chon tat ca moi truong neu Vercel hoi:
@@ -311,7 +311,7 @@ Chon tat ca moi truong neu Vercel hoi:
 - Preview
 - Development
 
-Khong them `PRIVATE_KEY`, `ARC_USDC_TOKEN_ADDRESS` hoac `ARC_EURC_TOKEN_ADDRESS` dung cho deploy len Vercel neu khong can. Frontend chi can dia chi contract va dia chi EURC tuy chon de hien lua chon asset. Private key chi dung de deploy contract tu may cua ban.
+Khong them `PRIVATE_KEY`, `ARC_USDC_TOKEN_ADDRESS` hoac `ARC_EURC_TOKEN_ADDRESS` dung cho deploy len Vercel neu khong can. Ban build production hien pin dia chi V3 trong source de cuong che cutover; cac bien frontend tren giu cau hinh dashboard nhat quan voi deployment dang dung. Private key chi dung de deploy contract tu may cua ban.
 
 Vercel docs ghi environment variables la key-value duoc cau hinh ngoai source code va thay doi moi chi ap dung cho deployment moi.
 

@@ -323,8 +323,11 @@ enum Outcome {
   Canceled = 3
 }
 
-const CONTRACT_ADDRESS = import.meta.env.VITE_PREDICTION_MARKET_ADDRESS || "";
-const EURC_TOKEN_ADDRESS = String(import.meta.env.VITE_ARC_EURC_TOKEN_ADDRESS || "").trim();
+const ACTIVE_V3_CONTRACT_ADDRESS = "0x4399ea3f59AA14e4D19217f1af2aD0681f5FafFd";
+const ACTIVE_V3_DEPLOYMENT_BLOCK = "44074836";
+const ACTIVE_V3_EURC_TOKEN_ADDRESS = "0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a";
+const CONTRACT_ADDRESS = ACTIVE_V3_CONTRACT_ADDRESS;
+const EURC_TOKEN_ADDRESS = ACTIVE_V3_EURC_TOKEN_ADDRESS;
 const V3_STABLECOIN_DECIMALS = 6;
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 const ZERO_HASH = "0x0000000000000000000000000000000000000000000000000000000000000000";
@@ -402,7 +405,7 @@ const INDEXER_URL = String(
   import.meta.env.VITE_AURA_INDEXER_URL ||
     (import.meta.env.DEV ? "http://127.0.0.1:8787" : "https://aurapredict-indexer.onrender.com")
 ).replace(/\/$/, "");
-const EVENT_START_BLOCK = BigInt(import.meta.env.VITE_PREDICTION_MARKET_START_BLOCK || "43295581");
+const EVENT_START_BLOCK = BigInt(ACTIVE_V3_DEPLOYMENT_BLOCK);
 const EVENT_LOG_CHUNK_SIZE = 9_000n;
 const CATEGORY_META: Record<string, { label: string; className: string }> = {
   All: { label: "All", className: "category-all" },
@@ -2008,7 +2011,7 @@ function LandingPage() {
             AuraPredict is live as an Arc Testnet MVP with a public Render indexer. The current product
             proves market creation, staking, dispute-aware settlement, profiles, comments, evidence,
             AI resolution receipts, live stats, notifications, and public reputation while wallet
-            actions remain fully onchain. V3 is deployed at 0x4399...FafFd; production reads it after the frontend and indexer configuration switch.
+            actions remain fully onchain. Production now uses V3 at 0x4399...FafFd; prior V2 markets remain on their original contract outside this primary interface.
           </p>
           <div className="landing-docs-actions">
             <a className="landing-primary" href={DOCS_URL}>
