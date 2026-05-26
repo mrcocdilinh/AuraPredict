@@ -44,11 +44,11 @@
           <p class="eyebrow">Arc Testnet prediction market documentation</p>
           <h1>Everything needed to use, deploy, and understand AuraPredict.</h1>
           <p>
-            AuraPredict is a YES/NO prediction market dapp on Arc Testnet. It combines native
-            Arc USDC staking, creator-led resolution with a future oracle/committee hook,
-            dispute protection, protocol fees, a public Render indexer, wallet profiles,
-            searchable bet history, Aura Points, and AI resolution receipts that help
-            calculate market outcomes while settlement stays onchain.
+            AuraPredict is a YES/NO prediction market dapp on Arc Testnet. It combines stablecoin
+            staking, AI-assisted evidence review, dispute protection, protocol fees, a public Render
+            indexer, wallet profiles, searchable bet history, and Aura Points. The prepared V3
+            contract upgrade adds enforced resolution timing, configurable settlement assets, and
+            authority modes suitable for a future oracle or committee.
           </p>
           <div class="hero-actions">
             <a class="primary-action" href="#users">Start using</a>
@@ -78,6 +78,10 @@
             <div>
               <dt>Gas token</dt>
               <dd>Native USDC</dd>
+            </div>
+            <div>
+              <dt>USDC ERC-20 interface</dt>
+              <dd>0x3600...0000 (6 decimals)</dd>
             </div>
           </dl>
         </aside>
@@ -112,7 +116,7 @@
           <h2>What AuraPredict is</h2>
           <p>
             AuraPredict is a testnet prediction market venue for binary questions. Traders stake
-            Arc native USDC on YES or NO, creators resolve markets after close, and winners claim
+            stablecoins on YES or NO, results follow an evidence and review flow, and winners claim
             payout from the contract. The product is designed to make public forecasting measurable:
             every wallet can build history, PNL, win rate, Aura Points, and creator reputation.
           </p>
@@ -135,7 +139,11 @@
             </article>
             <article>
               <h3>AI receipts</h3>
-              <p>A visible suggested outcome, confidence, and receipt can assist the resolver while contract settlement stays unchanged.</p>
+              <p>A visible suggested outcome, confidence, and receipt assist resolution. V3 can anchor evidence and receipt hashes in the signed proposal.</p>
+            </article>
+            <article>
+              <h3>Policy controls</h3>
+              <p>V3 can pause new market exposure, allowlist creators, or block new positions while preserving settlement and claims for existing markets.</p>
             </article>
           </div>
         </div>
@@ -189,7 +197,7 @@
               <h3>Question checklist</h3>
               <ul>
                 <li>Use one clear YES/NO outcome.</li>
-                <li>Include exact event boundary and UTC close time.</li>
+                <li>Set trading close time separately from the event's resolution time when needed.</li>
                 <li>Add a primary resolution source URL before launch.</li>
                 <li>Add a resolution rule that defines value + timestamp precisely.</li>
                 <li>Avoid subjective words such as successful, major, best, or viral.</li>
@@ -220,17 +228,17 @@
             <article>
               <span>1</span>
               <h3>Create</h3>
-              <p>Creator opens a market, sets category and close time, locks the creator bond, and pays any configured creation fee.</p>
+              <p>Creator sets trading close time, resolution time, settlement asset, evidence metadata, and a resolution mode; bond and any configured creation fee are locked in that asset.</p>
             </article>
             <article>
               <span>2</span>
               <h3>Trade</h3>
-              <p>Users stake native USDC on YES or NO before the market close time.</p>
+              <p>Users stake the market's configured stablecoin on YES or NO before trading closes.</p>
             </article>
             <article>
               <span>3</span>
               <h3>Propose</h3>
-              <p>The app opens Resolution actions only after the rule timestamp; creator, owner, or authority then proposes YES, NO, or Cancel with Aura assistance.</p>
+              <p>V3 rejects proposals before its onchain resolution time. Depending on mode, creator, owner, or configured authority proposes YES, NO, or Cancel with Aura assistance.</p>
             </article>
             <article>
               <span>4</span>
@@ -245,7 +253,7 @@
             <article>
               <span>6</span>
               <h3>Claim</h3>
-              <p>After finalization, winners claim payout or both sides refund if canceled.</p>
+              <p>After finalization, winners claim payout or both sides refund if canceled. Bonds and refunds use pull withdrawals to avoid blocking settlement.</p>
             </article>
           </div>
           <div class="reference-table">
@@ -253,7 +261,16 @@
             <article><span>ABI</span><strong>src/contracts/arcPredictionMarketAbi.ts</strong></article>
             <article><span>Tests</span><strong>test/ArcPredictionMarket.js</strong></article>
             <article><span>Deploy script</span><strong>scripts/deploy.js</strong></article>
-            <article><span>V2 hooks</span><strong>resolutionAuthority, marketCreationFee, cancelStaleDispute</strong></article>
+            <article><span>V3 controls</span><strong>resolutionTime, asset terms, authority review, policy gates, receipt hashes, pull withdrawals</strong></article>
+          </div>
+          <div class="note">
+            Deployment status: the live app can continue reading the existing V2 deployment. V3 controls become active only after the new contract is deployed and the app/indexer contract address is updated.
+          </div>
+          <div class="note">
+            Arc USDC has a native gas representation and an ERC-20 interface for the same asset. V3 uses the official ERC-20 interface at <code>0x3600000000000000000000000000000000000000</code> for allowance-based settlement and keeps amounts at 6 decimals.
+          </div>
+          <div class="note">
+            Multi-asset scope: V3 accepts 6-decimal settlement stablecoins such as USDC and optional EURC. A market settles and refunds only in the token selected when it was created. AuraPredict does not perform FX conversion; when multiple assets are active, aggregate dashboard amounts are identified as stablecoin units.
           </div>
         </div>
       </section>
@@ -261,12 +278,12 @@
       <section id="ai-resolution" class="docs-section">
         <div class="section-label">AI resolution</div>
         <div class="section-body">
-          <h2>AI outcome calculation without changing the contract</h2>
+          <h2>AI-assisted resolution with onchain accountability</h2>
           <p>
             AuraPredict keeps Aura Agent's calculation off-chain. After the event timestamp
             in the rule, Resolution actions can show a suggested YES or NO outcome, confidence,
-            supporting detail, and a receipt. Final settlement still follows the existing
-            creator, owner, or future resolution-authority contract flow.
+            supporting detail, and a receipt. In V3, the wallet-signed proposal can commit the
+            evidence hash and AI receipt hash onchain while the detailed report remains in the indexer.
           </p>
           <div class="note">
             Why this design: Aura helps a resolver check evidence and spot questionable decisions, while wallet-signed proposals, disputes, and finalization remain the settlement controls.
@@ -290,12 +307,12 @@
             <article>
               <span>4</span>
               <h3>Propose result</h3>
-              <p>The resolver can use Aura's suggestion or choose another outcome; only the wallet-signed proposal changes contract state.</p>
+              <p>The resolver can use Aura's suggestion or choose another outcome; only the wallet-signed proposal changes contract state and V3 stores its evidence and receipt commitments.</p>
             </article>
             <article>
               <span>5</span>
               <h3>Review and dispute</h3>
-              <p>A mismatch with Aura alerts the owner/authority. A user dispute also routes the result for review before final settlement.</p>
+              <p>A mismatch with Aura can be held for authority review. A user dispute also routes the result for review before final settlement.</p>
             </article>
           </div>
           <div class="two-column">
@@ -316,7 +333,7 @@
           <div class="reference-table">
             <article><span>Timing</span><strong>Result actions wait for the rule's event timestamp, not an earlier trading cutoff.</strong></article>
             <article><span>Use AI</span><strong>The resolver may apply Aura's suggestion directly from Resolution actions.</strong></article>
-            <article><span>Mismatch</span><strong>A proposal against Aura's suggestion is highlighted for owner/authority review.</strong></article>
+            <article><span>Mismatch</span><strong>A proposal against Aura's suggestion is highlighted, and V3 authority review can stop ordinary finalization.</strong></article>
             <article><span>Dispute</span><strong>Participants keep the contract dispute window before finalization.</strong></article>
           </div>
           <div class="note">
@@ -376,6 +393,7 @@ npm run build</code></pre>
             <article>
               <h3>Frontend environment</h3>
               <pre><code>VITE_PREDICTION_MARKET_ADDRESS=0x...
+VITE_ARC_EURC_TOKEN_ADDRESS=0x...   # optional after V3 deployment
 VITE_AURA_INDEXER_URL=https://aurapredict-indexer.onrender.com
 VITE_PREDICTION_MARKET_START_BLOCK=43295581
 VITE_WALLETCONNECT_PROJECT_ID=your_project_id</code></pre>
@@ -390,6 +408,8 @@ VITE_WALLETCONNECT_PROJECT_ID=your_project_id</code></pre>
             <span>Contract deployment</span>
             <pre><code>PRIVATE_KEY=0x...
 ARC_RPC_URL=https://rpc.testnet.arc.network
+ARC_USDC_TOKEN_ADDRESS=0x3600000000000000000000000000000000000000
+ARC_EURC_TOKEN_ADDRESS=0x...        # optional V3 asset
 npm run deploy:arc</code></pre>
           </div>
         </div>
@@ -455,10 +475,15 @@ Value: cname.vercel-dns.com</code></pre>
               <h3>Admin keys</h3>
               <p>AI run tokens, Gemini keys, and optional resolver private keys must stay in private deployment secrets.</p>
             </article>
+            <article>
+              <h3>Policy scope</h3>
+              <p>V3 policy gates are operational safeguards for new activity, not a complete regulatory compliance system.</p>
+            </article>
           </div>
           <div class="note">
-            Before mainnet, AuraPredict needs deeper contract review, durable social data storage,
-            stronger oracle/dispute design, and operational monitoring.
+            Before mainnet, AuraPredict still needs an independent contract audit, multisig or
+            timelocked administration, durable social data storage, a selected oracle/committee
+            operating policy, and production monitoring.
           </div>
         </div>
       </section>
@@ -472,6 +497,7 @@ Value: cname.vercel-dns.com</code></pre>
             <a href="https://app.aurapredict.xyz">AuraPredict app</a>
             <a href="https://github.com/mrcocdilinh/AuraPredict">GitHub repository</a>
             <a href="https://docs.arc.io/arc/references/rpc-endpoints">Arc RPC endpoints</a>
+            <a href="https://docs.arc.network/arc/references/contract-addresses">Arc contract addresses</a>
             <a href="https://docs.arc.io/integrate/wallets">Add Arc to a wallet</a>
             <a href="https://testnet.arcscan.app">Arc Testnet explorer</a>
             <a href="https://faucet.circle.com">Circle faucet</a>

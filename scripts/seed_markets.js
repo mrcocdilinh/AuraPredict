@@ -25,16 +25,25 @@ async function main() {
   const [signer] = await ethers.getSigners();
   const factory = await ethers.getContractFactory("ArcPredictionMarket");
   const contract = factory.attach(contractAddress);
-
-  const creatorBond = await contract.creatorBond();
-  const marketCreationFee = await contract.marketCreationFee();
+  const version = await contract.CONTRACT_VERSION().catch(() => "legacy");
+  const isV3 = version === "AURAPREDICT_V3";
+  const settlementToken = isV3 ? await contract.defaultSettlementToken() : ethers.ZeroAddress;
+  const asset = isV3 ? await contract.assetConfigs(settlementToken) : null;
+  const creatorBond = isV3 ? asset.creatorBond : await contract.creatorBond();
+  const marketCreationFee = isV3 ? asset.marketCreationFee : await contract.marketCreationFee();
   const requiredValue = creatorBond + marketCreationFee;
+  const tokenDecimals = isV3 ? Number(asset.decimals) : 18;
+  const symbol = isV3 ? asset.symbol : "USDC";
+  const token = isV3
+    ? new ethers.Contract(settlementToken, ["function approve(address spender,uint256 amount) returns (bool)"], signer)
+    : null;
 
   console.log("Seeder wallet:", signer.address);
   console.log("Contract:", contractAddress);
   console.log("Markets in file:", markets.length);
-  console.log("Per market cost:", ethers.formatEther(requiredValue), "USDC");
-  console.log("Total cost:", ethers.formatEther(requiredValue * BigInt(markets.length)), "USDC");
+  console.log("Contract version:", version);
+  console.log("Per market cost:", ethers.formatUnits(requiredValue, tokenDecimals), symbol);
+  console.log("Total cost:", ethers.formatUnits(requiredValue * BigInt(markets.length), tokenDecimals), symbol);
   if (dryRun) {
     console.log("Mode: dry-run (no transaction will be sent)");
   }
@@ -71,7 +80,17 @@ async function main() {
 
     if (dryRun) continue;
 
-    const tx = await contract.createMarket(question, category, closeTime, { value: requiredValue });
+    let tx;
+    if (isV3) {
+      const metadataHash = ethers.keccak256(
+        ethers.toUtf8Bytes(JSON.stringify({ question, category, closeTime: closeTime.toString(), resolutionTime: closeTime.toString() }))
+      );
+      const approveTx = await token.approve(contractAddress, requiredValue);
+      await approveTx.wait();
+      tx = await contract.createMarket(question, category, settlementToken, closeTime, closeTime, metadataHash, "", 0);
+    } else {
+      tx = await contract.createMarket(question, category, closeTime, { value: requiredValue });
+    }
     console.log(`  tx: ${tx.hash}`);
     await tx.wait();
   }

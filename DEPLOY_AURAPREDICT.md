@@ -77,7 +77,10 @@ Mo file `.env` bang VS Code hoac Notepad. Ban se thay:
 ARC_RPC_URL=https://rpc.testnet.arc.network
 PRIVATE_KEY=
 MIN_STAKE_USDC=0.1
+ARC_USDC_TOKEN_ADDRESS=
+ARC_EURC_TOKEN_ADDRESS=
 VITE_PREDICTION_MARKET_ADDRESS=
+VITE_ARC_EURC_TOKEN_ADDRESS=
 ```
 
 Giai thich:
@@ -85,7 +88,10 @@ Giai thich:
 - `ARC_RPC_URL`: RPC Arc Testnet.
 - `PRIVATE_KEY`: private key cua vi deploy contract. Chi dung local, khong dua len GitHub.
 - `MIN_STAKE_USDC`: so USDC toi thieu khi stake.
+- `ARC_USDC_TOKEN_ADDRESS`: dia chi ERC-20 USDC Arc Testnet dung lam settlement asset mac dinh cua contract V3.
+- `ARC_EURC_TOKEN_ADDRESS`: dia chi ERC-20 EURC tuy chon neu muon mo them market EURC.
 - `VITE_PREDICTION_MARKET_ADDRESS`: dia chi contract sau khi deploy.
+- `VITE_ARC_EURC_TOKEN_ADDRESS`: dia chi EURC tuy chon de frontend hien lua chon asset khi tao market V3.
 
 ### 2.4. Kiem tra code
 
@@ -123,6 +129,8 @@ Trong MetaMask/Rabby:
 
 ```env
 PRIVATE_KEY=0x_private_key_cua_ban
+ARC_USDC_TOKEN_ADDRESS=0x3600000000000000000000000000000000000000
+ARC_EURC_TOKEN_ADDRESS=0x_dia_chi_eurc_arc_testnet_neu_dung
 ```
 
 Can than:
@@ -130,6 +138,12 @@ Can than:
 - Khong dung vi chua tien that.
 - Khong gui private key cho ai.
 - Khong commit `.env`.
+
+Tren Arc, USDC native dung lam gas va USDC ERC-20 interface la cung mot tai san. V3 dung ERC-20
+interface `0x3600000000000000000000000000000000000000` (6 decimals) de ho tro `approve` va
+`transferFrom`; khong tron so du native 18 decimals voi gia tri settlement 6 decimals.
+V3 chi nhan settlement asset co 6 decimals nhu USDC/EURC. Moi market thanh toan bang dung
+token da chon; dashboard co the cong cac don vi stablecoin nhung contract khong tu quy doi FX.
 
 ### 3.2. Lay USDC testnet
 
@@ -155,7 +169,7 @@ Explorer: https://testnet.arcscan.app/address/0x...
 
 Copy dia chi `0x...`.
 
-Neu ban da tung deploy contract phien ban cu, van can deploy lai contract moi vi ABI da doi: resolver bay gio luon la nguoi tao market, contract co them `traderCount`, creator bond, dispute window, phi protocol, va frontend doc event `BetPlaced` de hien activity ticker.
+Contract V3 la mot deployment moi: no them `resolutionTime` duoc cuong che onchain, settlement asset theo market, fee/bond snapshot, authority review modes, evidence/AI receipt hash va pull-withdrawal. Frontend/indexer doc duoc ca V2 va V3, nhung market cua contract cu khong tu chuyen sang V3. Chi doi dia chi production sau khi da test deployment V3.
 
 ### 3.4. Dua dia chi contract vao frontend local
 
@@ -163,6 +177,7 @@ Mo `.env` va dien:
 
 ```env
 VITE_PREDICTION_MARKET_ADDRESS=0x_dia_chi_contract_vua_deploy
+VITE_ARC_EURC_TOKEN_ADDRESS=0x_dia_chi_eurc_neu_dung
 ```
 
 Dung dev server neu dang chay bang `Ctrl + C`, roi chay lai:
@@ -276,6 +291,9 @@ Trong phan `Environment Variables`, them bien:
 ```text
 Name:  VITE_PREDICTION_MARKET_ADDRESS
 Value: 0x_dia_chi_contract_da_deploy
+
+Name:  VITE_ARC_EURC_TOKEN_ADDRESS
+Value: 0x_dia_chi_eurc_neu_bat_market_eurc
 ```
 
 Chon tat ca moi truong neu Vercel hoi:
@@ -284,7 +302,7 @@ Chon tat ca moi truong neu Vercel hoi:
 - Preview
 - Development
 
-Khong them `PRIVATE_KEY` len Vercel. Frontend chi can dia chi contract. Private key chi dung de deploy contract tu may cua ban.
+Khong them `PRIVATE_KEY`, `ARC_USDC_TOKEN_ADDRESS` hoac `ARC_EURC_TOKEN_ADDRESS` dung cho deploy len Vercel neu khong can. Frontend chi can dia chi contract va dia chi EURC tuy chon de hien lua chon asset. Private key chi dung de deploy contract tu may cua ban.
 
 Vercel docs ghi environment variables la key-value duoc cau hinh ngoai source code va thay doi moi chi ap dung cho deployment moi.
 

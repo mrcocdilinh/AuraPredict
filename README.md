@@ -7,7 +7,6 @@ AuraPredict la dapp Prediction Market chay tren Arc Testnet. Du an gom:
 - Frontend Vite React: `src/`
 - Local backend/indexer doc event Arc nhanh hon: `indexer/`
 - Static docs site cho `docs.aurapredict.xyz`: `docs/`
-- Huong dan tu dau, gom ca tao contract: `HUONG_DAN_TU_DAU_AURAPREDICT.md`
 - Huong dan deploy ngan gon: `DEPLOY_AURAPREDICT.md`
 
 Tinh nang hien tai:
@@ -17,18 +16,24 @@ Tinh nang hien tai:
 - Hottest sap xep theo so vi da tham gia, doc tu `traderCount` trong contract.
 - Thanh activity ticker doc event `BetPlaced` de hien nguoi choi vua stake YES/NO.
 - Frontend uu tien doc market, stats, leaderboard va history tu AuraPredict Indexer neu `VITE_AURA_INDEXER_URL` kha dung; neu khong co thi fallback ve Arc RPC nhu cu.
-- Contract thu phi protocol mac dinh 2% tren phan loi nhuan cua vi thang. Owner co the rut phi da tich luy.
-- Contract v2 co them `marketCreationFee` de thu phi tao market ngay khi creator launch market.
-- Creator phai khoa creator bond khi tao market. Sau deadline, creator, owner, hoac `resolutionAuthority` de xuat ket qua. Mac dinh authority la owner, nhung sau nay co the chuyen sang oracle/committee wallet ma khong doi flow UI.
-- Nguoi choi chi duoc dispute neu da co position trong market do. Neu dispute bi treo qua grace period, bat ky ai cung co the goi `cancelStaleDispute` de cancel market va refund nguoi choi.
+- Aura Agent giup draft market va goi y ket qua; thao tac de xuat/finalize van la giao dich onchain duoc ky boi vi co tham quyen.
+- Contract V3 tach `closeTime` cua giao dich voi `resolutionTime` cua su kien; contract khong cho cong bo ket qua truoc `resolutionTime`.
+- V3 snapshot dieu khoan phi, creator bond, dispute bond va dispute window theo tung market de thay doi cau hinh sau nay khong lam doi market cu.
+- V3 cho phep settlement asset 6 decimals cau hinh theo market, vi du USDC hoac EURC, va quan ly phi theo tung token; khong quy doi FX giua cac token.
+- V3 co ba che do resolution: creator + dispute review, creator + required authority review, va authority/oracle only.
+- Proposal V3 luu hash cua bang chung va AI receipt; authority co the giu proposal de review, nguoi choi co position van co the dispute.
+- V3 co policy gate co ban: tam dung tao/cuot moi, gioi han vi duoc tao market va chan account mo position moi; resolve, refund va claim cua market dang ton tai van hoat dong.
+- Market khong co thanh khoan co the cancel sau resolution time ma khong can ton luot goi AI; bond/refund duoc rut theo pull-withdrawal.
 - Tung market co lich su bet va o tim kiem vi rieng; tab Ended cung co tim kiem rieng cho market da ket thuc.
+
+Trang production hien co the van dang tro vao deployment V2. Code frontend va indexer doc duoc ca V2/V3; cac control V3 chi hoat dong sau khi deploy contract moi va cap nhat dia chi contract.
 
 ## Arc Testnet
 
 - Chain ID: `5042002` (`0x4CEF52`)
 - RPC: `https://rpc.testnet.arc.network`
 - Explorer: `https://testnet.arcscan.app`
-- Gas token: native `USDC`
+- Gas token: native `USDC`; V3 dung cung tai san USDC qua ERC-20 interface `0x3600000000000000000000000000000000000000` (6 decimals) cho allowance/transfer.
 - Faucet: `https://faucet.circle.com`
 
 Nguon tham khao: [Arc RPC endpoints](https://docs.arc.io/arc/references/rpc-endpoints), [Add Arc to a Wallet](https://docs.arc.io/integrate/wallets).
@@ -47,6 +52,8 @@ npm run dev
 Muon frontend ket noi contract that tren Arc Testnet, ban can deploy contract truoc:
 
 ```bash
+ARC_USDC_TOKEN_ADDRESS=0x...
+ARC_EURC_TOKEN_ADDRESS=0x... # optional
 npm run deploy:arc
 ```
 
@@ -54,6 +61,7 @@ Sau do dien dia chi contract vao:
 
 ```bash
 VITE_PREDICTION_MARKET_ADDRESS=0x...
+VITE_ARC_EURC_TOKEN_ADDRESS=0x... # optional after V3 deployment
 VITE_AURA_INDEXER_URL=http://127.0.0.1:8787
 VITE_WALLETCONNECT_PROJECT_ID=...
 ```
@@ -133,5 +141,6 @@ Sau do redeploy frontend.
 - Khong commit file `.env`.
 - Khong dua `PRIVATE_KEY` len GitHub hoac Vercel.
 - Contract hien la ban MVP testnet, chua audit.
-- Resolver mac dinh la vi tao market, nhung contract v2 co `resolutionAuthority` de sau nay chuyen sang oracle/committee.
-- Neu ban dang dung contract cu, hay deploy lai contract moi va cap nhat `VITE_PREDICTION_MARKET_ADDRESS`, vi ABI hien co them `CONTRACT_VERSION`, creation fee, authority hook, stale-dispute cancel, `traderCount`, event `BetPlaced`, creator bond, dispute flow, va phi protocol.
+- V3 da mo duong cho authority/oracle/committee va policy gate co ban, nhung chua thay the quy trinh compliance, audit, multisig va giam sat production.
+- Neu mo ca USDC va EURC, moi market chi settle trong token da chon; dashboard co the hien tong `stablecoin units` nhung day khong phai la gia tri FX quy doi.
+- De dung V3, deploy contract moi voi dia chi token settlement dung, cap nhat frontend/indexer sang dia chi do, va chap nhan rang market cua deployment cu khong tu di chuyen sang contract moi.

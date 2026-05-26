@@ -2,14 +2,25 @@ const { ethers } = require("hardhat");
 
 async function main() {
   const minStakeUsdc = process.env.MIN_STAKE_USDC || "0.1";
-  const minStake = ethers.parseUnits(minStakeUsdc, 18);
+  const usdcToken = String(process.env.ARC_USDC_TOKEN_ADDRESS || "").trim();
+  const eurcToken = String(process.env.ARC_EURC_TOKEN_ADDRESS || ethers.ZeroAddress).trim();
+  if (!ethers.isAddress(usdcToken)) {
+    throw new Error("Missing valid ARC_USDC_TOKEN_ADDRESS for the V3 settlement token.");
+  }
+  if (!ethers.isAddress(eurcToken)) {
+    throw new Error("ARC_EURC_TOKEN_ADDRESS must be empty or a valid address.");
+  }
+  const minStake = ethers.parseUnits(minStakeUsdc, 6);
   const factory = await ethers.getContractFactory("ArcPredictionMarket");
-  const predictionMarket = await factory.deploy(minStake);
+  const predictionMarket = await factory.deploy(usdcToken, eurcToken, minStake);
 
   await predictionMarket.waitForDeployment();
   const address = await predictionMarket.getAddress();
 
   console.log("ArcPredictionMarket deployed:", address);
+  console.log("Version: AURAPREDICT_V3");
+  console.log("USDC token:", usdcToken);
+  if (eurcToken !== ethers.ZeroAddress) console.log("EURC token:", eurcToken);
   console.log("Min stake:", minStakeUsdc, "USDC");
   console.log("Explorer:", `https://testnet.arcscan.app/address/${address}`);
 }

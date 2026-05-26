@@ -5,7 +5,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createPublicClient, createWalletClient, fallback, formatUnits, http, isAddress, keccak256, stringToHex } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import { arcPredictionMarketAbi } from "./arcPredictionMarketAbi.mjs";
+import { arcPredictionMarketV2Abi, arcPredictionMarketV3Abi } from "./arcPredictionMarketAbi.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = path.join(__dirname, "data");
@@ -46,7 +46,9 @@ const RESOLVER_PRIVATE_KEY = String(process.env.AURA_RESOLVER_PRIVATE_KEY || "")
 const RESOLUTION_MIN_CONFIDENCE = Number(process.env.AURA_RESOLUTION_MIN_CONFIDENCE || 72);
 const RESOLUTION_CONSENSUS_COUNT = Number(process.env.AURA_RESOLUTION_CONSENSUS_COUNT || 2);
 const USDC_DECIMALS = 18;
+const V3_SETTLEMENT_DECIMALS = 6;
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
+const ZERO_HASH = "0x0000000000000000000000000000000000000000000000000000000000000000";
 const ARC_CHAIN = {
   id: 5042002,
   name: "Arc Testnet",
@@ -55,7 +57,7 @@ const ARC_CHAIN = {
     default: { http: RPC_URLS }
   }
 };
-const EVENT_NAMES = [
+const V2_EVENT_NAMES = [
   "MarketCreated",
   "BetPlaced",
   "MarketResultProposed",
@@ -64,6 +66,19 @@ const EVENT_NAMES = [
   "MarketResolved",
   "DisputeFinalized",
   "DisputeCanceledByTimeout",
+  "MarketCreationFeeCollected",
+  "Claimed"
+];
+const V3_EVENT_NAMES = [
+  "MarketCreated",
+  "BetPlaced",
+  "MarketResultProposed",
+  "AuthorityReviewRequested",
+  "MarketDisputed",
+  "MarketResolved",
+  "DisputeFinalized",
+  "DisputeCanceledByTimeout",
+  "EmptyMarketCanceled",
   "MarketCreationFeeCollected",
   "Claimed"
 ];
@@ -110,32 +125,6 @@ const walletClient = resolverAccount
       transport: http(RPC_URLS[0], { retryCount: 1, retryDelay: 250, timeout: 15_000 })
     })
   : null;
-const writeMarketAbi = [
-  {
-    type: "function",
-    name: "resolve",
-    stateMutability: "nonpayable",
-    inputs: [
-      { type: "uint256", name: "marketId" },
-      { type: "uint8", name: "outcome" }
-    ],
-    outputs: []
-  },
-  {
-    type: "function",
-    name: "cancel",
-    stateMutability: "nonpayable",
-    inputs: [{ type: "uint256", name: "marketId" }],
-    outputs: []
-  },
-  {
-    type: "function",
-    name: "finalize",
-    stateMutability: "nonpayable",
-    inputs: [{ type: "uint256", name: "marketId" }],
-    outputs: []
-  }
-];
 const GEMINI_RATE_LIMIT_COOLDOWN_MS = Number(process.env.GEMINI_RATE_LIMIT_COOLDOWN_MS || 120_000);
 const geminiKeyState = {
   cursor: 0,
@@ -174,10 +163,10 @@ function percent(value, total) {
   return Number((value * 10000n) / total) / 100;
 }
 
-function auraPointsFor(volume, wonMarkets, resolvedMarkets, createdMarkets, pnl) {
+function auraPointsFor(volume, wonMarkets, resolvedMarkets, createdMarkets, pnl, decimals = USDC_DECIMALS) {
   const participationScore = 25;
-  const volumeScore = Number(formatUnits(volume, USDC_DECIMALS)) * 10;
-  const pnlScore = Math.max(0, Number(formatUnits(pnl, USDC_DECIMALS)) * 12);
+  const volumeScore = Number(formatUnits(volume, decimals)) * 10;
+  const pnlScore = Math.max(0, Number(formatUnits(pnl, decimals)) * 12);
   const winRate = resolvedMarkets > 0 ? (wonMarkets / resolvedMarkets) * 100 : 0;
 
   return Math.max(
@@ -235,7 +224,9 @@ function emptyState() {
       liveLiquidity: "0",
       averageMarketVolume: "0",
       participantEntries: 0,
-      knownPlayers: 0
+      knownPlayers: 0,
+      settlementSymbols: ["USDC"],
+      hasMixedSettlementAssets: false
     }
   };
 }
@@ -280,8 +271,21 @@ function ensureMarket(marketId) {
       category: "Other",
       createdAt: 0,
       closeTime: 0,
+      resolutionTime: 0,
+      settlementToken: ZERO_ADDRESS,
+      settlementSymbol: "USDC",
+      settlementDecimals: USDC_DECIMALS,
       creator: ZERO_ADDRESS,
       resolver: ZERO_ADDRESS,
+      authority: ZERO_ADDRESS,
+      resolutionMode: 0,
+      metadataHash: ZERO_HASH,
+      metadataURI: "",
+      termsProtocolFeeBps: 0,
+      termsCreatorBond: "0",
+      termsDisputeBond: "0",
+      termsDisputeWindow: 0,
+      termsDisputeGracePeriod: 0,
       yesPool: "0",
       noPool: "0",
       traderCount: 0,
@@ -289,6 +293,9 @@ function ensureMarket(marketId) {
       proposedAt: 0,
       disputeDeadline: 0,
       proposedBy: ZERO_ADDRESS,
+      proposalEvidenceHash: ZERO_HASH,
+      aiReceiptHash: ZERO_HASH,
+      authorityReviewRequired: false,
       disputed: false,
       disputer: ZERO_ADDRESS,
       outcome: Outcome.Unresolved,
@@ -330,6 +337,16 @@ async function processEvent(eventName, log) {
     market.question = String(args.question ?? market.question);
     market.category = String(args.category ?? market.category ?? "Other");
     market.closeTime = toNumber(args.closeTime);
+    if (isV3Contract()) {
+      market.resolutionTime = toNumber(args.resolutionTime);
+      market.settlementToken = args.settlementToken ?? market.settlementToken;
+      market.authority = args.authority ?? market.authority;
+      market.resolutionMode = Number(args.resolutionMode ?? 0);
+      market.metadataHash = args.metadataHash ?? ZERO_HASH;
+      market.metadataURI = String(args.metadataURI ?? "");
+    } else {
+      market.resolutionTime = market.closeTime;
+    }
     market.creator = args.creator ?? market.creator;
     market.resolver = args.resolver ?? market.resolver;
     market.createdAt = timestamp || market.createdAt;
@@ -370,6 +387,12 @@ async function processEvent(eventName, log) {
     market.proposedOutcome = Number(args.outcome ?? Outcome.Unresolved);
     market.proposedAt = timestamp;
     market.disputeDeadline = toNumber(args.disputeDeadline);
+    if (isV3Contract()) {
+      market.proposedBy = args.proposer ?? ZERO_ADDRESS;
+      market.proposalEvidenceHash = args.evidenceHash ?? ZERO_HASH;
+      market.aiReceiptHash = args.aiReceiptHash ?? ZERO_HASH;
+      market.authorityReviewRequired = Boolean(args.authorityReviewRequired);
+    }
     market.updatedTxHash = txHash;
     return;
   }
@@ -385,6 +408,13 @@ async function processEvent(eventName, log) {
     const market = ensureMarket(Number(args.marketId ?? 0n));
     market.disputed = true;
     market.disputer = args.disputer ?? ZERO_ADDRESS;
+    market.updatedTxHash = txHash;
+    return;
+  }
+
+  if (eventName === "AuthorityReviewRequested") {
+    const market = ensureMarket(Number(args.marketId ?? 0n));
+    market.authorityReviewRequired = true;
     market.updatedTxHash = txHash;
     return;
   }
@@ -416,6 +446,15 @@ async function processEvent(eventName, log) {
     return;
   }
 
+  if (eventName === "EmptyMarketCanceled") {
+    const market = ensureMarket(Number(args.marketId ?? 0n));
+    market.outcome = Outcome.Canceled;
+    market.resolvedAt = timestamp;
+    market.updatedTxHash = txHash;
+    addSnapshot(market, timestamp, txHash, logIndex);
+    return;
+  }
+
   if (eventName === "MarketCreationFeeCollected") {
     state.accumulatedProtocolFees = toAmount(toBigint(state.accumulatedProtocolFees) + toBigint(args.fee));
     return;
@@ -437,22 +476,76 @@ async function processEvent(eventName, log) {
   }
 }
 
+function isV3Contract() {
+  return state.contractVersion === "AURAPREDICT_V3";
+}
+
+function currentContractAbi() {
+  return isV3Contract() ? arcPredictionMarketV3Abi : arcPredictionMarketV2Abi;
+}
+
+async function detectContractVersion() {
+  try {
+    const contractVersion = await client.readContract({
+      address: CONTRACT_ADDRESS,
+      abi: arcPredictionMarketV2Abi,
+      functionName: "CONTRACT_VERSION"
+    });
+    state.contractVersion = String(contractVersion || "unknown");
+  } catch {
+    state.contractVersion = "legacy";
+  }
+}
+
 async function readContract(functionName, args = []) {
   return client.readContract({
     address: CONTRACT_ADDRESS,
-    abi: arcPredictionMarketAbi,
+    abi: currentContractAbi(),
     functionName,
     args
   });
 }
 
 async function readMarketData(id) {
+  if (isV3Contract()) {
+    const data = await readContract("getMarket", [BigInt(id)]);
+    return {
+      question: data[0],
+      category: data[1],
+      settlementToken: data[2],
+      closeTime: Number(data[3]),
+      resolutionTime: Number(data[4]),
+      creator: data[5],
+      resolver: data[6],
+      authority: data[7],
+      resolutionMode: Number(data[8]),
+      metadataHash: data[9],
+      metadataURI: data[10],
+      termsProtocolFeeBps: Number(data[11]),
+      termsCreatorBond: toAmount(data[12]),
+      termsDisputeBond: toAmount(data[13]),
+      termsDisputeWindow: Number(data[14]),
+      yesPool: toAmount(data[15]),
+      noPool: toAmount(data[16]),
+      traderCount: Number(data[17]),
+      proposedOutcome: Number(data[18]),
+      proposedAt: Number(data[19]),
+      disputeDeadline: Number(data[20]),
+      authorityReviewRequired: Boolean(data[21]),
+      disputed: Boolean(data[22]),
+      disputer: data[23],
+      outcome: Number(data[24]),
+      termsDisputeGracePeriod: Number(data[25])
+    };
+  }
+
   try {
     const data = await readContract("getMarket", [BigInt(id)]);
     return {
       question: data[0],
       category: data[1],
       closeTime: Number(data[2]),
+      resolutionTime: Number(data[2]),
       creator: data[3],
       resolver: data[4],
       yesPool: toAmount(data[5]),
@@ -482,6 +575,7 @@ async function readMarketData(id) {
       question: data[0],
       category: data[1],
       closeTime: Number(data[2]),
+      resolutionTime: Number(data[2]),
       creator: data[3],
       resolver: data[4],
       yesPool: toAmount(data[5]),
@@ -498,6 +592,7 @@ async function readMarketData(id) {
 }
 
 async function refreshContractState() {
+  await detectContractVersion();
   const [count, owner, minStake] = await Promise.all([
     readContract("marketCount"),
     readContract("owner"),
@@ -559,12 +654,31 @@ async function refreshContractState() {
   );
 
   state.markets = Object.fromEntries(markets.map((market) => [String(market.id), market]));
+  if (isV3Contract()) {
+    const tokens = [...new Set(markets.map((market) => market.settlementToken).filter((token) => token && token !== ZERO_ADDRESS))];
+    const assets = new Map();
+    await Promise.all(
+      tokens.map(async (token) => {
+        const config = await readContract("assetConfigs", [token]);
+        assets.set(token.toLowerCase(), {
+          symbol: String(config[1] || "TOKEN"),
+          decimals: Number(config[2] || 6)
+        });
+      })
+    );
+    for (const market of Object.values(state.markets)) {
+      const asset = assets.get(String(market.settlementToken).toLowerCase());
+      market.settlementSymbol = asset?.symbol || "TOKEN";
+      market.settlementDecimals = asset?.decimals ?? 6;
+    }
+  }
 }
 
 function computeStats() {
   const markets = Object.values(state.markets);
   const now = Math.floor(Date.now() / 1000);
   const totalVolume = markets.reduce((sum, market) => sum + toBigint(market.yesPool) + toBigint(market.noPool), 0n);
+  const settlementSymbols = [...new Set(markets.map((market) => String(market.settlementSymbol || "USDC")))];
   const liveMarkets = markets.filter((market) => market.outcome === Outcome.Unresolved && market.closeTime > now);
   const endedMarkets = markets.filter((market) => market.outcome !== Outcome.Unresolved);
   const pendingMarkets = markets.filter((market) => market.outcome === Outcome.Unresolved && market.closeTime <= now);
@@ -592,7 +706,9 @@ function computeStats() {
       .toString(),
     averageMarketVolume: markets.length > 0 ? (totalVolume / BigInt(markets.length)).toString() : "0",
     participantEntries: markets.reduce((sum, market) => sum + Number(market.traderCount || 0), 0),
-    knownPlayers: users.size
+    knownPlayers: users.size,
+    settlementSymbols,
+    hasMixedSettlementAssets: settlementSymbols.length > 1
   };
 }
 
@@ -600,6 +716,7 @@ function buildLeaderboard(periodStart = 0) {
   const rows = new Map();
   const positions = new Map();
   const marketsById = new Map(Object.values(state.markets).map((market) => [market.id, market]));
+  const pointsDecimals = isV3Contract() ? V3_SETTLEMENT_DECIMALS : USDC_DECIMALS;
 
   const getRow = (address) => {
     const key = address.toLowerCase();
@@ -660,7 +777,7 @@ function buildLeaderboard(periodStart = 0) {
       if (winningStake > 0n && winningPool > 0n) {
         const grossPayout = (winningStake * totalPool) / winningPool;
         const profit = grossPayout > stake ? grossPayout - stake : 0n;
-        const fee = (profit * BigInt(state.protocolFeeBps || 0)) / 10000n;
+        const fee = (profit * BigInt(market.termsProtocolFeeBps ?? state.protocolFeeBps ?? 0)) / 10000n;
         payout = grossPayout - fee;
       }
     }
@@ -680,7 +797,7 @@ function buildLeaderboard(periodStart = 0) {
       payout: row.payout.toString(),
       pnl: row.pnl.toString(),
       winRate,
-      auraPoints: auraPointsFor(row.volume, row.wonMarkets, row.resolvedMarkets, row.createdMarkets, row.pnl)
+      auraPoints: auraPointsFor(row.volume, row.wonMarkets, row.resolvedMarkets, row.createdMarkets, row.pnl, pointsDecimals)
     };
   });
 }
@@ -781,6 +898,14 @@ function outcomeValue(outcome) {
   if (normalized === "NO") return Outcome.No;
   if (normalized === "CANCEL") return Outcome.Canceled;
   return Outcome.Unresolved;
+}
+
+function marketResolutionTime(market) {
+  return Number(market?.resolutionTime || market?.closeTime || 0);
+}
+
+function marketAssetDecimals(market) {
+  return Number(market?.settlementDecimals ?? USDC_DECIMALS);
 }
 
 function receiptHashFor(receipt) {
@@ -1185,7 +1310,8 @@ function resolutionPrompt(body) {
     `Market id: ${Number.isInteger(marketId) ? marketId : "unknown"}`,
     `Question: ${question}`,
     `Category: ${cleanText(body.category || market?.category, 40)}`,
-    `Close time unix: ${body.closeTime || market?.closeTime || "unknown"}`,
+    `Trading close unix: ${body.closeTime || market?.closeTime || "unknown"}`,
+    `Resolution time unix: ${body.resolutionTime || marketResolutionTime(market) || "unknown"}`,
     `Resolution criteria: ${criteria || "not provided"}`,
     `Current pools: YES ${market?.yesPool || "unknown"} / NO ${market?.noPool || "unknown"}`,
     `Evidence JSON: ${JSON.stringify(evidence)}`,
@@ -1218,9 +1344,10 @@ function resolutionReviewerPrompt(market, evidenceRows, role) {
     `Market id: ${market.id}`,
     `Question: ${cleanText(market.question, 260)}`,
     `Category: ${cleanText(market.category, 40)}`,
-    `Close time unix: ${market.closeTime}`,
+    `Trading close unix: ${market.closeTime}`,
+    `Resolution time unix: ${marketResolutionTime(market)}`,
     `Resolution criteria: ${criteria || "not provided"}`,
-    `Current pools: YES ${formatUnits(toBigint(market.yesPool), USDC_DECIMALS)} USDC / NO ${formatUnits(toBigint(market.noPool), USDC_DECIMALS)} USDC`,
+    `Current pools: YES ${formatUnits(toBigint(market.yesPool), marketAssetDecimals(market))} ${market.settlementSymbol || "USDC"} / NO ${formatUnits(toBigint(market.noPool), marketAssetDecimals(market))} ${market.settlementSymbol || "USDC"}`,
     `Evidence JSON: ${JSON.stringify(evidence)}`,
     "Return JSON only with:",
     "{",
@@ -1269,7 +1396,7 @@ function normalizeResolutionReportWithHeuristic(body, reportJson) {
   const outcome = outcomeName(normalized.suggestedOutcome);
   if (outcome !== "INSUFFICIENT_EVIDENCE") return normalized;
 
-  const closeTime = Number(body?.closeTime || 0);
+  const closeTime = Number(body?.resolutionTime || body?.closeTime || 0);
   const now = Math.floor(Date.now() / 1000);
   if (!Number.isFinite(closeTime) || closeTime <= 0 || now < closeTime) return normalized;
 
@@ -1319,7 +1446,7 @@ async function buildResolutionReceipt(marketId, options = {}) {
   const market = state.markets[String(marketId)];
   if (!market) throw new Error("Market not found.");
   const now = Math.floor(Date.now() / 1000);
-  if (market.closeTime > now && !options.force) throw new Error("Market is still open.");
+  if (marketResolutionTime(market) > now && !options.force) throw new Error("Market is not ready for resolution.");
   if (market.outcome !== Outcome.Unresolved && !options.force) throw new Error("Market is already resolved.");
   if (market.proposedAt > 0 && !options.force) throw new Error("Market already has a proposed outcome.");
 
@@ -1358,6 +1485,7 @@ async function buildResolutionReceipt(marketId, options = {}) {
     question: market.question,
     category: market.category,
     closeTime: market.closeTime,
+    resolutionTime: marketResolutionTime(market),
     generatedAt: nowIso(),
     provider: reviewProviderSummary || configuredProviders().join(","),
     model: providerModel(configuredProviders()[0] || "gemini"),
@@ -1395,11 +1523,27 @@ async function proposeResolutionOnchain(receipt) {
     throw new Error("Resolver key is not the market resolver, contract owner, or resolution authority.");
   }
 
-  const functionName = receipt.proposedOutcomeValue === Outcome.Canceled ? "cancel" : "resolve";
-  const args = functionName === "cancel" ? [BigInt(receipt.marketId)] : [BigInt(receipt.marketId), receipt.proposedOutcomeValue];
+  const noLiquidity = toBigint(market.yesPool) === 0n && toBigint(market.noPool) === 0n;
+  const receiptHash = /^0x[a-fA-F0-9]{64}$/.test(String(receipt.receiptHash || "")) ? receipt.receiptHash : ZERO_HASH;
+  const evidenceHash = keccak256(stringToHex(JSON.stringify(receipt.evidence || [])));
+  const functionName =
+    isV3Contract() && noLiquidity
+      ? "cancelEmptyMarket"
+      : receipt.proposedOutcomeValue === Outcome.Canceled
+        ? "cancel"
+        : "resolve";
+  const args = isV3Contract()
+    ? functionName === "cancelEmptyMarket"
+      ? [BigInt(receipt.marketId)]
+      : functionName === "cancel"
+        ? [BigInt(receipt.marketId), evidenceHash, receiptHash]
+        : [BigInt(receipt.marketId), receipt.proposedOutcomeValue, evidenceHash, receiptHash]
+    : functionName === "cancel"
+      ? [BigInt(receipt.marketId)]
+      : [BigInt(receipt.marketId), receipt.proposedOutcomeValue];
   const txHash = await walletClient.writeContract({
     address: CONTRACT_ADDRESS,
-    abi: writeMarketAbi,
+    abi: currentContractAbi(),
     functionName,
     args
   });
@@ -1414,7 +1558,7 @@ async function runAutoResolutionSweep() {
   const now = Math.floor(Date.now() / 1000);
   const candidates = Object.values(state.markets)
     .filter((market) => market.outcome === Outcome.Unresolved)
-    .filter((market) => Number(market.closeTime || 0) > 0 && Number(market.closeTime) <= now)
+    .filter((market) => marketResolutionTime(market) > 0 && marketResolutionTime(market) <= now)
     .filter((market) => Number(market.proposedAt || 0) === 0)
     .filter((market) => !state.resolutions?.[String(market.id)])
     .slice(0, 3);
@@ -1438,10 +1582,12 @@ async function runAutoResolutionSweep() {
 
 async function syncRange(fromBlock, toBlock) {
   const logs = [];
-  for (const eventName of EVENT_NAMES) {
+  const abi = currentContractAbi();
+  const eventNames = isV3Contract() ? V3_EVENT_NAMES : V2_EVENT_NAMES;
+  for (const eventName of eventNames) {
     const eventLogs = await client.getContractEvents({
       address: CONTRACT_ADDRESS,
-      abi: arcPredictionMarketAbi,
+      abi,
       eventName,
       fromBlock,
       toBlock
@@ -1494,6 +1640,7 @@ async function syncOnce() {
 
     const latestBlock = await client.getBlockNumber();
     const startBlock = await resolveStartBlock(latestBlock);
+    await detectContractVersion();
     let fromBlock = toBigint(state.lastIndexedBlock) > 0n ? toBigint(state.lastIndexedBlock) + 1n : startBlock;
 
     if (fromBlock <= latestBlock) {

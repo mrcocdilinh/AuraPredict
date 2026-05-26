@@ -7,7 +7,9 @@ import {
   formatUnits,
   http,
   isAddress,
+  keccak256,
   parseUnits,
+  stringToHex,
   type Address,
   type Hash,
   type TransactionReceipt
@@ -23,7 +25,8 @@ import {
   arcTestnet,
   arcTestnetParams
 } from "./arc";
-import { arcPredictionMarketAbi } from "./contracts/arcPredictionMarketAbi";
+import { arcPredictionMarketV3Abi, settlementTokenAbi } from "./contracts/arcPredictionMarketAbi";
+import { arcPredictionMarketV2Abi as arcPredictionMarketAbi } from "./contracts/arcPredictionMarketV2Abi";
 
 type EthereumProvider = {
   request: (args: { method: string; params?: unknown[] }) => Promise<unknown>;
@@ -54,6 +57,20 @@ type MarketView = {
   category: string;
   createdAt: number;
   closeTime: number;
+  resolutionTime?: number;
+  settlementToken?: string;
+  settlementSymbol?: string;
+  settlementDecimals?: number;
+  authority?: string;
+  resolutionMode?: number;
+  metadataHash?: string;
+  metadataURI?: string;
+  termsProtocolFeeBps?: number;
+  termsCreatorBond?: bigint;
+  termsDisputeBond?: bigint;
+  termsDisputeWindow?: number;
+  termsDisputeGracePeriod?: number;
+  authorityReviewRequired?: boolean;
   creator: string;
   resolver: string;
   yesPool: bigint;
@@ -71,7 +88,7 @@ type MarketView = {
   potentialPayout: bigint;
 };
 
-type MarketContractVersion = "unknown" | "legacy" | "dispute" | "v2";
+type MarketContractVersion = "unknown" | "legacy" | "dispute" | "v2" | "v3";
 
 type ActivityItem = {
   id: string;
@@ -120,6 +137,8 @@ type ProjectStats = {
   averageMarketVolume: bigint;
   participantEntries: number;
   knownPlayers: number;
+  settlementSymbols?: string[];
+  hasMixedSettlementAssets?: boolean;
 };
 
 type MarketComment = {
@@ -150,6 +169,9 @@ type CreateFormState = {
   question: string;
   category: string;
   closeTime: string;
+  resolutionTime: string;
+  settlementToken: string;
+  resolutionMode: "0" | "1" | "2";
   resolutionSource: string;
   resolutionRule: string;
   fallbackSource: string;
@@ -302,6 +324,10 @@ enum Outcome {
 }
 
 const CONTRACT_ADDRESS = import.meta.env.VITE_PREDICTION_MARKET_ADDRESS || "";
+const EURC_TOKEN_ADDRESS = String(import.meta.env.VITE_ARC_EURC_TOKEN_ADDRESS || "").trim();
+const V3_STABLECOIN_DECIMALS = 6;
+const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
+const ZERO_HASH = "0x0000000000000000000000000000000000000000000000000000000000000000";
 const CATEGORIES = ["All", "Crypto", "Macro", "Sports", "Politics", "Arc", "AI", "Other"];
 const SECTION_LIMIT = 6;
 const COLLECTION_PAGE_SIZE = 12;
@@ -430,10 +456,12 @@ const MARKET_SORT_OPTIONS: Array<{ value: MarketSortKey; label: string }> = [
 
 type CachedMarketView = Omit<
   MarketView,
-  "yesPool" | "noPool" | "yesPosition" | "noPosition" | "potentialPayout"
+  "yesPool" | "noPool" | "yesPosition" | "noPosition" | "potentialPayout" | "termsCreatorBond" | "termsDisputeBond"
 > & {
   yesPool: string;
   noPool: string;
+  termsCreatorBond?: string;
+  termsDisputeBond?: string;
 };
 
 function getInjectedProvider(provider?: EthereumProvider | null) {
@@ -528,7 +556,9 @@ function readCachedMarkets() {
         yesPosition: 0n,
         noPosition: 0n,
         claimed: false,
-        potentialPayout: 0n
+        potentialPayout: 0n,
+        termsCreatorBond: market.termsCreatorBond !== undefined ? BigInt(market.termsCreatorBond || "0") : undefined,
+        termsDisputeBond: market.termsDisputeBond !== undefined ? BigInt(market.termsDisputeBond || "0") : undefined
       }))
       .filter((market) => Number.isInteger(market.id));
   } catch {
@@ -544,6 +574,20 @@ function writeCachedMarkets(markets: MarketView[]) {
       category: market.category,
       createdAt: market.createdAt,
       closeTime: market.closeTime,
+      resolutionTime: market.resolutionTime,
+      settlementToken: market.settlementToken,
+      settlementSymbol: market.settlementSymbol,
+      settlementDecimals: market.settlementDecimals,
+      authority: market.authority,
+      resolutionMode: market.resolutionMode,
+      metadataHash: market.metadataHash,
+      metadataURI: market.metadataURI,
+      termsProtocolFeeBps: market.termsProtocolFeeBps,
+      termsCreatorBond: market.termsCreatorBond?.toString(),
+      termsDisputeBond: market.termsDisputeBond?.toString(),
+      termsDisputeWindow: market.termsDisputeWindow,
+      termsDisputeGracePeriod: market.termsDisputeGracePeriod,
+      authorityReviewRequired: market.authorityReviewRequired,
       creator: market.creator,
       resolver: market.resolver,
       yesPool: market.yesPool.toString(),
@@ -570,6 +614,11 @@ function indexedMarketToView(market: IndexedMarket): MarketView {
     category: normalizedCategory,
     createdAt: Number(market.createdAt || 0),
     closeTime: Number(market.closeTime || 0),
+    resolutionTime: Number(market.resolutionTime || market.closeTime || 0),
+    settlementDecimals: Number(market.settlementDecimals ?? ARC_NATIVE_USDC_DECIMALS),
+    termsCreatorBond: market.termsCreatorBond !== undefined ? BigInt(String(market.termsCreatorBond || "0")) : undefined,
+    termsDisputeBond: market.termsDisputeBond !== undefined ? BigInt(String(market.termsDisputeBond || "0")) : undefined,
+    termsDisputeGracePeriod: market.termsDisputeGracePeriod !== undefined ? Number(market.termsDisputeGracePeriod) : undefined,
     yesPool: BigInt(market.yesPool || "0"),
     noPool: BigInt(market.noPool || "0"),
     traderCount: Number(market.traderCount || 0),
@@ -719,31 +768,31 @@ function shortHash(hash: string) {
   return `${hash.slice(0, 10)}...${hash.slice(-6)}`;
 }
 
-function formatUsdc(value: bigint) {
-  const formatted = Number(formatUnits(value, ARC_NATIVE_USDC_DECIMALS));
+function formatUsdc(value: bigint, decimals = ARC_NATIVE_USDC_DECIMALS) {
+  const formatted = Number(formatUnits(value, decimals));
   return new Intl.NumberFormat("en-US", {
     minimumFractionDigits: formatted < 1 && formatted > 0 ? 4 : 2,
     maximumFractionDigits: 6
   }).format(formatted);
 }
 
-function formatStatUsdc(value: bigint) {
-  const formatted = Number(formatUnits(value, ARC_NATIVE_USDC_DECIMALS));
+function formatStatUsdc(value: bigint, decimals = ARC_NATIVE_USDC_DECIMALS) {
+  const formatted = Number(formatUnits(value, decimals));
   return new Intl.NumberFormat("en-US", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2
   }).format(formatted);
 }
 
-function formatSignedUsdc(value: bigint) {
+function formatSignedUsdc(value: bigint, decimals = ARC_NATIVE_USDC_DECIMALS) {
   if (value === 0n) return "0.00";
   const sign = value < 0n ? "-" : "+";
   const absolute = value < 0n ? -value : value;
-  return `${sign}${formatUsdc(absolute)}`;
+  return `${sign}${formatUsdc(absolute, decimals)}`;
 }
 
-function formatUsdcInput(value: bigint) {
-  const raw = formatUnits(value, ARC_NATIVE_USDC_DECIMALS);
+function formatUsdcInput(value: bigint, decimals = ARC_NATIVE_USDC_DECIMALS) {
+  const raw = formatUnits(value, decimals);
   return raw.includes(".") ? raw.replace(/0+$/, "").replace(/\.$/, "") : raw;
 }
 
@@ -770,11 +819,11 @@ function compactErrorMessage(error: unknown) {
   return firstLine.length > 220 ? `${firstLine.slice(0, 220)}...` : firstLine;
 }
 
-function parseUsdcInput(value: string) {
+function parseUsdcInput(value: string, decimals = ARC_NATIVE_USDC_DECIMALS) {
   const normalized = value.trim().replace(/,/g, ".");
   if (!normalized || Number(normalized) <= 0) return 0n;
   try {
-    return parseUnits(normalized, ARC_NATIVE_USDC_DECIMALS);
+    return parseUnits(normalized, decimals);
   } catch {
     return 0n;
   }
@@ -857,6 +906,22 @@ function isValidHttpUrl(value: string) {
 
 function marketVolume(market: MarketView) {
   return market.yesPool + market.noPool;
+}
+
+function marketDecimals(market?: Pick<MarketView, "settlementDecimals">) {
+  return market?.settlementDecimals ?? ARC_NATIVE_USDC_DECIMALS;
+}
+
+function marketSymbol(market?: Pick<MarketView, "settlementSymbol">) {
+  return market?.settlementSymbol || "USDC";
+}
+
+function formatMarketAmount(value: bigint, market?: Pick<MarketView, "settlementDecimals">) {
+  return formatUsdc(value, marketDecimals(market));
+}
+
+function resolutionTimeFor(market: Pick<MarketView, "closeTime" | "resolutionTime">) {
+  return market.resolutionTime || market.closeTime;
 }
 
 function percent(value: bigint, total: bigint) {
@@ -1174,11 +1239,12 @@ function auraPointsFor(
   wonMarkets: number,
   resolvedMarkets: number,
   createdMarkets: number,
-  pnl: bigint
+  pnl: bigint,
+  decimals = ARC_NATIVE_USDC_DECIMALS
 ) {
   const participationScore = 25;
-  const volumeScore = Number(formatUnits(volume, ARC_NATIVE_USDC_DECIMALS)) * 10;
-  const pnlScore = Math.max(0, Number(formatUnits(pnl, ARC_NATIVE_USDC_DECIMALS)) * 12);
+  const volumeScore = Number(formatUnits(volume, decimals)) * 10;
+  const pnlScore = Math.max(0, Number(formatUnits(pnl, decimals)) * 12);
   const winRate = resolvedMarkets > 0 ? (wonMarkets / resolvedMarkets) * 100 : 0;
 
   return Math.max(
@@ -1192,14 +1258,16 @@ function auraBreakdownFor(
   wonMarkets: number,
   resolvedMarkets: number,
   createdMarkets: number,
-  pnl: bigint
+  pnl: bigint,
+  decimals = ARC_NATIVE_USDC_DECIMALS,
+  assetLabel = "USDC"
 ): AuraBreakdown {
-  const volumeUsdc = Number(formatUnits(volume, ARC_NATIVE_USDC_DECIMALS));
-  const pnlUsdc = Number(formatUnits(pnl, ARC_NATIVE_USDC_DECIMALS));
+  const volumeUsdc = Number(formatUnits(volume, decimals));
+  const pnlUsdc = Number(formatUnits(pnl, decimals));
   const winRate = resolvedMarkets > 0 ? (wonMarkets / resolvedMarkets) * 100 : 0;
   const items = [
     { label: "Participation", detail: "Base score for active profiles", value: 25 },
-    { label: "Volume", detail: `${volumeUsdc.toFixed(2)} USDC x 10`, value: volumeUsdc * 10 },
+    { label: "Volume", detail: `${volumeUsdc.toFixed(2)} ${assetLabel} x 10`, value: volumeUsdc * 10 },
     { label: "Positive PNL", detail: `max(${pnlUsdc.toFixed(2)}, 0) x 12`, value: Math.max(0, pnlUsdc * 12) },
     { label: "Winning markets", detail: `${wonMarkets} wins x 90`, value: wonMarkets * 90 },
     { label: "Resolved markets", detail: `${resolvedMarkets} settled x 18`, value: resolvedMarkets * 18 },
@@ -1209,7 +1277,7 @@ function auraBreakdownFor(
 
   return {
     items: items.map((item) => ({ ...item, value: Math.round(item.value) })),
-    total: auraPointsFor(volume, wonMarkets, resolvedMarkets, createdMarkets, pnl),
+    total: auraPointsFor(volume, wonMarkets, resolvedMarkets, createdMarkets, pnl, decimals),
     winRate
   };
 }
@@ -1222,8 +1290,8 @@ function reputationTierFor(points: number) {
   );
 }
 
-function reputationBadgesFor(row: LeaderboardRow) {
-  const volumeUsdc = Number(formatUnits(row.volume, ARC_NATIVE_USDC_DECIMALS));
+function reputationBadgesFor(row: LeaderboardRow, decimals = ARC_NATIVE_USDC_DECIMALS) {
+  const volumeUsdc = Number(formatUnits(row.volume, decimals));
   const badges: string[] = [];
 
   if (row.resolvedMarkets >= 3 && row.winRate >= 70) badges.push("Master Forecaster");
@@ -1605,12 +1673,16 @@ function LandingPage() {
       text: "Create binary prediction markets for crypto, macro, sports, politics, Arc, AI, and community events."
     },
     {
-      title: "Native Arc USDC",
-      text: "Stake directly with native USDC on Arc Testnet and keep every position transparent onchain."
+      title: "Stablecoin settlement",
+      text: "Current testnet markets settle in USDC; the V3 upgrade prepares configurable settlement assets such as USDC and EURC."
     },
     {
       title: "Resolution authority",
-      text: "Creators still resolve by default, while the v2 contract can later point result handling to an oracle or committee wallet."
+      text: "The V3 upgrade supports creator review, required authority review, or authority-only resolution for a future oracle or committee."
+    },
+    {
+      title: "Policy controls",
+      text: "V3 can pause new activity, allow approved creators, or block new positions without preventing existing markets from settling."
     },
     {
       title: "Protocol revenue",
@@ -1665,19 +1737,22 @@ function LandingPage() {
     "After the rule timestamp, Aura displays a suggested outcome and confidence in Resolution actions",
     "A saved AI receipt can be viewed without running a new AI request; Ask or Refresh requests a new review",
     "Resolver decisions that differ from Aura and user disputes are flagged for owner/authority review",
-    "Resolution receipts stay off-chain; only wallet-signed contract actions affect settlement",
+    "Aura analysis remains off-chain; V3 can anchor evidence and receipt hashes in wallet-signed proposal actions",
     "Wallet actions still sign directly against the Arc contract, with Arcscan as the verification layer"
   ];
   const roadmapItems = [
     "Add websocket or event streaming for absolute realtime odds and cross-user updates",
     "Harden AI receipt review with better evidence policy, audit logs, and operator dashboards",
     "Persist social identity, comments, follows, evidence, and notifications beyond local browser storage",
-    "Evaluate oracle integration when Arc supports the right optimistic oracle or data providers"
+    "Deploy the V3 contract after review, then configure an oracle or committee authority as operations mature"
   ];
   const nextTheme = landingTheme === "dark" ? "light" : "dark";
   const heroMarketCount = landingHealth?.marketCount ?? landingStats?.totalMarkets ?? 0;
   const heroMarketText = heroMarketCount > 0 ? heroMarketCount.toLocaleString("en-US") : "--";
-  const indexedVolumeText = landingStats ? `${formatStatUsdc(landingStats.totalVolume)} USDC` : "--";
+  const landingSettlementLabel = landingStats?.hasMixedSettlementAssets
+    ? "stablecoin units"
+    : landingStats?.settlementSymbols?.[0] || "USDC";
+  const indexedVolumeText = landingStats ? `${formatStatUsdc(landingStats.totalVolume)} ${landingSettlementLabel}` : "--";
   const participantsText = landingStats ? landingStats.participantEntries.toLocaleString("en-US") : "--";
   const knownPlayersText = landingStats ? landingStats.knownPlayers.toLocaleString("en-US") : "--";
   const liveMarketsText = landingStats ? landingStats.liveMarkets.toLocaleString("en-US") : "--";
@@ -1774,7 +1849,7 @@ function LandingPage() {
             <span>{heroMarketText}</span> prediction markets indexed.
           </h1>
           <p>
-            Trade YES/NO markets with native Arc USDC while a live Render indexer keeps market
+            Trade YES/NO markets with Arc testnet stablecoins while a live Render indexer keeps market
             history, volume, participants, leaderboards, comments, evidence, AI resolution receipts,
             and profile reputation fast enough for public forecasting.
           </p>
@@ -1809,7 +1884,7 @@ function LandingPage() {
           </div>
           <div className="landing-proof">
             <span>{indexerIsRealtime ? "Render indexer live" : "Indexer fallback active"}</span>
-            <span>AI receipts off-chain</span>
+            <span>V3 upgrade prepared</span>
             <span>{updatedText}</span>
             <span>{pendingMarketsText} pending resolution</span>
           </div>
@@ -1855,7 +1930,7 @@ function LandingPage() {
             The app keeps the trading surface simple while making evidence, profiles, and leaderboard
             performance visible enough for social forecasting. AuraPredict combines onchain YES/NO
             staking, an indexer-backed data layer, AI-assisted market quality checks, and AI resolution
-            receipts that do not require a contract change.
+            receipts. The prepared V3 upgrade adds onchain timing and authority controls before a future deployment switch.
           </p>
         </div>
         <div className="landing-feature-grid">
@@ -1908,8 +1983,8 @@ function LandingPage() {
             Creation now requires a primary resolution source and an explicit resolution rule.
             After the event timestamp in the resolution rule has passed, the resolver opens the
             market to request or view Aura's visible YES/NO suggestion and confidence. The creator
-            or owner then proposes the result through the existing contract, users can dispute
-            during the window, and winners claim directly from their wallet after finalization.
+            or configured authority then proposes the result through a wallet-signed contract action,
+            users can dispute during the window, and winners claim directly after finalization.
           </p>
           <a className="landing-primary" href={APP_URL}>
             Launch the App
@@ -1933,7 +2008,7 @@ function LandingPage() {
             AuraPredict is live as an Arc Testnet MVP with a public Render indexer. The current product
             proves market creation, staking, dispute-aware settlement, profiles, comments, evidence,
             AI resolution receipts, live stats, notifications, and public reputation while wallet
-            actions remain fully onchain.
+            actions remain fully onchain. A V3 contract upgrade is prepared in code and requires a new deployment before its new controls become live.
           </p>
           <div className="landing-docs-actions">
             <a className="landing-primary" href={DOCS_URL}>
@@ -1950,7 +2025,7 @@ function LandingPage() {
             <span className="docs-label">Purpose</span>
             <h3>Make forecasting social on Arc</h3>
             <p>
-              Users can create public markets, back YES or NO with Arc native USDC, track odds, and
+              Users can create public markets, back YES or NO with testnet USDC, track odds, and
               build a visible record through profiles, rankings, PNL, win rate, and Aura Points.
             </p>
           </article>
@@ -1967,7 +2042,7 @@ function LandingPage() {
             <h3>AI assisted, contract settled</h3>
             <p>
               Aura displays a suggested outcome with confidence after the rule timestamp, but the
-              creator or owner still signs the contract proposal and users keep the dispute window.
+              resolver or configured authority still signs the contract proposal and users keep the dispute window.
             </p>
           </article>
           <article className="docs-card">
@@ -2210,6 +2285,9 @@ export default function App() {
   const [owner, setOwner] = useState("");
   const [contractVersion, setContractVersion] = useState<MarketContractVersion>("unknown");
   const [resolutionAuthority, setResolutionAuthority] = useState("");
+  const [defaultSettlementToken, setDefaultSettlementToken] = useState("");
+  const [defaultSettlementDecimals, setDefaultSettlementDecimals] = useState(ARC_NATIVE_USDC_DECIMALS);
+  const [defaultSettlementSymbol, setDefaultSettlementSymbol] = useState("USDC");
   const [minStake, setMinStake] = useState<bigint>(0n);
   const [creatorBond, setCreatorBond] = useState<bigint>(0n);
   const [disputeBond, setDisputeBond] = useState<bigint>(0n);
@@ -2219,6 +2297,7 @@ export default function App() {
   const [marketCreationFee, setMarketCreationFee] = useState<bigint>(0n);
   const [accumulatedProtocolFees, setAccumulatedProtocolFees] = useState<bigint>(0n);
   const [walletBalance, setWalletBalance] = useState<bigint>(0n);
+  const [pendingWithdrawalsByToken, setPendingWithdrawalsByToken] = useState<Record<string, bigint>>({});
   const [markets, setMarkets] = useState<MarketView[]>(() => readCachedMarkets());
   const [activities, setActivities] = useState<ActivityItem[]>([]);
   const [knownMarketCount, setKnownMarketCount] = useState(() => readCachedMarkets().length);
@@ -2335,6 +2414,9 @@ export default function App() {
     question: "",
     category: "Crypto",
     closeTime: "",
+    resolutionTime: "",
+    settlementToken: "",
+    resolutionMode: "0",
     resolutionSource: "",
     resolutionRule: "",
     fallbackSource: ""
@@ -2347,7 +2429,7 @@ export default function App() {
   const resolutionUnlockByMarketId = useMemo(() => {
     const byId: Record<number, number> = {};
     for (const market of markets) {
-      let unlockTime = market.closeTime;
+      let unlockTime = resolutionTimeFor(market);
       const evidenceRows = marketEvidence[String(market.id)] || [];
       const referenceCandidates = [
         parseResolutionReferenceTime(market.question),
@@ -2364,8 +2446,11 @@ export default function App() {
     return byId;
   }, [marketEvidence, markets]);
   const resolutionUnlockTime = useCallback(
-    (market: Pick<MarketView, "id" | "closeTime">) => resolutionUnlockByMarketId[market.id] ?? market.closeTime,
-    [resolutionUnlockByMarketId]
+    (market: Pick<MarketView, "id" | "closeTime" | "resolutionTime">) =>
+      contractVersion === "v3"
+        ? market.resolutionTime || market.closeTime
+        : resolutionUnlockByMarketId[market.id] ?? market.closeTime,
+    [contractVersion, resolutionUnlockByMarketId]
   );
   const activeMarkets = markets.filter(
     (market) => market.outcome === Outcome.Unresolved && market.closeTime > nowSeconds
@@ -2379,6 +2464,10 @@ export default function App() {
   const hasMoreMarkets = knownMarketCount > loadedScopeCount;
   const totalLiquidity = markets.reduce((sum, market) => sum + marketVolume(market), 0n);
   const liveLiquidity = activeMarkets.reduce((sum, market) => sum + marketVolume(market), 0n);
+  const hasMixedSettlementAssets =
+    contractVersion === "v3" &&
+    new Set(markets.map((market) => (market.settlementToken || defaultSettlementToken).toLowerCase()).filter(Boolean)).size > 1;
+  const aggregateAssetLabel = hasMixedSettlementAssets ? "stablecoin units" : defaultSettlementSymbol;
   const totalTradeVolume = activities.length > 0
     ? activities.reduce((sum, activity) => sum + activity.amount, 0n)
     : totalLiquidity;
@@ -2480,15 +2569,15 @@ export default function App() {
     ? new Intl.DateTimeFormat("en-US", { month: "short", year: "numeric" }).format(new Date(profileJoinedDate))
     : "New profile";
   const profileSettlements = participatedProfileMarkets
-    .map((market) => ({ market, ...userSettlement(market, protocolFeeBps) }))
+    .map((market) => ({ market, ...userSettlement(market, market.termsProtocolFeeBps ?? protocolFeeBps) }))
     .filter((item) => item.settled);
   const profileResolvedCount = profileSettlements.length;
   const profileWonCount = profileSettlements.filter((item) => item.won).length;
   const profileRealizedStake = profileSettlements.reduce((sum, item) => sum + item.stake, 0n);
   const profileRealizedPayout = profileSettlements.reduce((sum, item) => sum + item.payout, 0n);
   const profilePnl = profileRealizedPayout - profileRealizedStake;
-  const profilePnlNumber = Number(formatUnits(profilePnl, ARC_NATIVE_USDC_DECIMALS));
-  const profileStakeNumber = Number(formatUnits(profileRealizedStake, ARC_NATIVE_USDC_DECIMALS));
+  const profilePnlNumber = Number(formatUnits(profilePnl, defaultSettlementDecimals));
+  const profileStakeNumber = Number(formatUnits(profileRealizedStake, defaultSettlementDecimals));
   const profileEdgePercent = profileStakeNumber > 0 ? (profilePnlNumber / profileStakeNumber) * 100 : 0;
   const profileWinRate = profileResolvedCount > 0 ? (profileWonCount / profileResolvedCount) * 100 : 0;
   const profileAuraScore = auraPointsFor(
@@ -2496,7 +2585,8 @@ export default function App() {
     profileWonCount,
     profileResolvedCount,
     createdMarkets,
-    profilePnl
+    profilePnl,
+    defaultSettlementDecimals
   );
   const profileWinStreak = [...profileSettlements]
     .sort((a, b) => b.market.closeTime - a.market.closeTime)
@@ -2560,6 +2650,7 @@ export default function App() {
   );
   const minimumCloseParts = useMemo(() => parseUtcDateTimeParts(minimumCloseInput), [minimumCloseInput]);
   const selectedCloseParts = useMemo(() => parseUtcDateTimeParts(createForm.closeTime), [createForm.closeTime]);
+  const selectedResolutionParts = useMemo(() => parseUtcDateTimeParts(createForm.resolutionTime), [createForm.resolutionTime]);
   const allFreshMarkets = [...filteredMarkets].sort((a, b) => b.id - a.id);
   const allHottestMarkets = [...filteredMarkets]
     .sort((a, b) => {
@@ -2790,9 +2881,12 @@ export default function App() {
     ? pendingResolutionMarkets.filter(
         (market) =>
           market.proposedAt === 0 &&
-          (sameAddress(market.resolver, account) ||
-            (!!owner && sameAddress(owner, account)) ||
-            (!!resolutionAuthority && sameAddress(resolutionAuthority, account)))
+          (market.resolutionMode === 2
+            ? (!!owner && sameAddress(owner, account)) ||
+              (!!market.authority && sameAddress(market.authority, account))
+            : sameAddress(market.resolver, account) ||
+              (!!owner && sameAddress(owner, account)) ||
+              (!!market.authority && sameAddress(market.authority, account)))
       )
     : [];
   const finalizeNotifications = account
@@ -2800,32 +2894,33 @@ export default function App() {
         (market) =>
           market.proposedAt > 0 &&
           !market.disputed &&
+          !market.authorityReviewRequired &&
           market.disputeDeadline > 0 &&
           market.disputeDeadline <= nowSeconds &&
           (sameAddress(market.resolver, account) ||
             (!!owner && sameAddress(owner, account)) ||
-            (!!resolutionAuthority && sameAddress(resolutionAuthority, account)))
+            (!!(market.authority || resolutionAuthority) && sameAddress(market.authority || resolutionAuthority, account)))
       )
     : [];
   const disputeReviewNotifications =
     account && (owner || resolutionAuthority)
       ? pendingResolutionMarkets.filter(
           (market) =>
-            market.disputed &&
+            (market.disputed || Boolean(market.authorityReviewRequired)) &&
             !(
               market.disputeDeadline > 0 &&
-              disputeGracePeriod > 0 &&
-              market.disputeDeadline + disputeGracePeriod <= nowSeconds
+              (market.termsDisputeGracePeriod ?? disputeGracePeriod) > 0 &&
+              market.disputeDeadline + (market.termsDisputeGracePeriod ?? disputeGracePeriod) <= nowSeconds
             ) &&
             ((!!owner && sameAddress(owner, account)) ||
-              (!!resolutionAuthority && sameAddress(resolutionAuthority, account)))
+              (!!(market.authority || resolutionAuthority) && sameAddress(market.authority || resolutionAuthority, account)))
         )
       : [];
   const ownerAiMismatchNotifications =
     account && (owner || resolutionAuthority)
       ? pendingResolutionMarkets.filter((market) => {
           if (market.proposedAt <= 0 || market.outcome !== Outcome.Unresolved) return false;
-          if (!((!!owner && sameAddress(owner, account)) || (!!resolutionAuthority && sameAddress(resolutionAuthority, account)))) {
+          if (!((!!owner && sameAddress(owner, account)) || (!!(market.authority || resolutionAuthority) && sameAddress(market.authority || resolutionAuthority, account)))) {
             return false;
           }
           const receipt = aiResolutionReceipts[String(market.id)];
@@ -2841,10 +2936,10 @@ export default function App() {
   const staleDisputeNotifications = account
     ? pendingResolutionMarkets.filter(
         (market) =>
-          market.disputed &&
+          (market.disputed || Boolean(market.authorityReviewRequired)) &&
           market.disputeDeadline > 0 &&
-          disputeGracePeriod > 0 &&
-          market.disputeDeadline + disputeGracePeriod <= nowSeconds
+          (market.termsDisputeGracePeriod ?? disputeGracePeriod) > 0 &&
+          market.disputeDeadline + (market.termsDisputeGracePeriod ?? disputeGracePeriod) <= nowSeconds
       )
     : [];
   const claimNotifications = account && isOwnProfile
@@ -3048,7 +3143,7 @@ export default function App() {
           const winningPool = market.outcome === Outcome.Yes ? market.yesPool : market.noPool;
           const grossPayout = winningStake > 0n && winningPool > 0n ? (winningStake * marketVolume(market)) / winningPool : 0n;
           const profit = grossPayout > winningStake ? grossPayout - winningStake : 0n;
-          const fee = (profit * BigInt(protocolFeeBps)) / 10000n;
+          const fee = (profit * BigInt(market.termsProtocolFeeBps ?? protocolFeeBps)) / 10000n;
           const payout = grossPayout - fee;
           row.payout += payout;
           row.pnl += payout - stake;
@@ -3071,7 +3166,7 @@ export default function App() {
         wonMarkets: row.wonMarkets,
         resolvedMarkets: row.resolvedMarkets,
         winRate,
-        auraPoints: auraPointsFor(row.volume, row.wonMarkets, row.resolvedMarkets, row.createdMarkets, row.pnl),
+        auraPoints: auraPointsFor(row.volume, row.wonMarkets, row.resolvedMarkets, row.createdMarkets, row.pnl, defaultSettlementDecimals),
         createdMarkets: row.createdMarkets
       };
     });
@@ -3083,7 +3178,7 @@ export default function App() {
         row.resolvedMarkets > 0 ||
         (category === "All" && !!userRegistry[row.address.toLowerCase()])
     );
-  }, [account, activities, markets, protocolFeeBps, userRegistry]);
+  }, [account, activities, defaultSettlementDecimals, markets, protocolFeeBps, userRegistry]);
 
   const sortLeaderboardRows = useCallback((rows: LeaderboardRow[], metric: LeaderboardMetric) => {
     return [...rows]
@@ -3140,7 +3235,9 @@ export default function App() {
     displayedProfileWonCount,
     displayedProfileResolvedCount,
     createdMarkets,
-    displayedProfilePnl
+    displayedProfilePnl,
+    defaultSettlementDecimals,
+    aggregateAssetLabel
   );
   const displayedProfileTier = reputationTierFor(displayedProfileAuraScore);
   const displayedProfileBadgeRow: LeaderboardRow = profileLeaderboardRow ?? {
@@ -3155,7 +3252,7 @@ export default function App() {
     auraPoints: displayedProfileAuraScore,
     createdMarkets
   };
-  const displayedProfileBadges = reputationBadgesFor(displayedProfileBadgeRow);
+  const displayedProfileBadges = reputationBadgesFor(displayedProfileBadgeRow, defaultSettlementDecimals);
 
   useEffect(() => {
     if (!notice) return;
@@ -3437,12 +3534,20 @@ export default function App() {
     }
 
     try {
-      const balance = await withRpcRetry(() => getPublicClient().getBalance({ address: address as Address }));
+      const balance =
+        contractVersion === "v3" && isAddress(defaultSettlementToken)
+          ? await withRpcRetry(() => getPublicClient().readContract({
+              address: defaultSettlementToken as Address,
+              abi: settlementTokenAbi,
+              functionName: "balanceOf",
+              args: [address as Address]
+            }))
+          : await withRpcRetry(() => getPublicClient().getBalance({ address: address as Address }));
       setWalletBalance(balance);
     } catch {
       setWalletBalance(0n);
     }
-  }, [account]);
+  }, [account, contractVersion, defaultSettlementToken]);
 
   useEffect(() => {
     if (!account) {
@@ -3453,6 +3558,34 @@ export default function App() {
     registerUser(account);
     void refreshWalletBalance(account);
   }, [account, refreshWalletBalance, registerUser]);
+
+  useEffect(() => {
+    if (contractVersion !== "v3" || !account || !isAddress(account)) {
+      setPendingWithdrawalsByToken({});
+      return;
+    }
+    const tokens = Array.from(
+      new Set(
+        markets
+          .map((market) => market.settlementToken)
+          .filter((token): token is string => Boolean(token && isAddress(token)))
+      )
+    );
+    if (tokens.length === 0 && isAddress(defaultSettlementToken)) tokens.push(defaultSettlementToken);
+    Promise.all(
+      tokens.map(async (token) => {
+        const amount = await withRpcRetry(() => getPublicClient().readContract({
+          address: contractAddress,
+          abi: arcPredictionMarketV3Abi,
+          functionName: "pendingWithdrawals",
+          args: [token as Address, account as Address]
+        }));
+        return [token.toLowerCase(), amount] as const;
+      })
+    )
+      .then((rows) => setPendingWithdrawalsByToken(Object.fromEntries(rows)))
+      .catch(() => setPendingWithdrawalsByToken({}));
+  }, [account, contractAddress, contractVersion, defaultSettlementToken, markets]);
 
   const connectWallet = useCallback(async (provider?: EthereumProvider | null) => {
     setNotice("");
@@ -3589,12 +3722,14 @@ export default function App() {
     (offsetMinutes: number) => {
       const minimumOffset = 6;
       const targetOffset = Math.max(minimumOffset, offsetMinutes);
+      const nextTime = utcInputFromNow(currentTime, targetOffset);
       setCreateForm((current) => ({
         ...current,
-        closeTime: utcInputFromNow(currentTime, targetOffset)
+        closeTime: nextTime,
+        resolutionTime: contractVersion === "v3" ? nextTime : current.resolutionTime
       }));
     },
-    [currentTime]
+    [contractVersion, currentTime]
   );
 
   const loadMoreMarkets = useCallback((silent = false) => {
@@ -3613,8 +3748,10 @@ export default function App() {
 
     const clamped = Math.max(0, Math.min(100, percentage));
     const value = (walletBalance * BigInt(Math.round(clamped * 100))) / 10000n;
-    setStakeInputs((current) => ({ ...current, [marketId]: value > 0n ? formatUsdcInput(value) : "" }));
-  }, [walletBalance]);
+    const market = markets.find((item) => item.id === marketId);
+    const decimals = contractVersion === "v3" ? marketDecimals(market) : ARC_NATIVE_USDC_DECIMALS;
+    setStakeInputs((current) => ({ ...current, [marketId]: value > 0n ? formatUsdcInput(value, decimals) : "" }));
+  }, [contractVersion, markets, walletBalance]);
 
   const chooseTradeSide = useCallback((marketId: number, side: Outcome.Yes | Outcome.No) => {
     setSelectedTradeSides((current) => {
@@ -3788,7 +3925,9 @@ export default function App() {
     [createForm.resolutionRule]
   );
   const hasRuleCloseMismatch = Boolean(
-    ruleReferenceCloseTime && createForm.closeTime && ruleReferenceCloseTime !== createForm.closeTime
+    ruleReferenceCloseTime &&
+      (contractVersion === "v3" ? createForm.resolutionTime : createForm.closeTime) &&
+      ruleReferenceCloseTime !== (contractVersion === "v3" ? createForm.resolutionTime : createForm.closeTime)
   );
   const createAuraStatusLabel =
     auraCreateStatus === "ready"
@@ -3845,7 +3984,8 @@ export default function App() {
       ...current,
       question: aiMarketDraft.question || current.question,
       category: aiMarketDraft.category && CATEGORIES.includes(aiMarketDraft.category) ? aiMarketDraft.category : current.category,
-      closeTime: inferredCloseTime || current.closeTime,
+      closeTime: current.closeTime || inferredCloseTime,
+      resolutionTime: inferredCloseTime || current.resolutionTime || current.closeTime,
       resolutionSource:
         firstSource ||
         (isValidHttpUrl(normalizeReferenceUrl(current.resolutionSource))
@@ -3884,7 +4024,8 @@ export default function App() {
           marketId: market.id,
           question: market.question,
           category: market.category,
-          closeTime: effectiveCloseTime,
+          closeTime: market.closeTime,
+          resolutionTime: effectiveCloseTime,
           evidence: evidenceRows
         });
         if (!response?.report) throw new Error("Aura Agent did not return a report.");
@@ -4064,6 +4205,9 @@ export default function App() {
     if (!isSilentLoad) setLoading(true);
     try {
       const publicClient = getPublicClient();
+      let detectedContractVersion: MarketContractVersion = contractVersion;
+      let detectedSettlementSymbol = defaultSettlementSymbol;
+      let detectedSettlementDecimals = defaultSettlementDecimals;
       const [count, contractOwner, contractMinStake] = await Promise.all([
         withRpcRetry(() => publicClient.readContract({
           address: contractAddress,
@@ -4154,10 +4298,38 @@ export default function App() {
               functionName: "marketCreationFee"
             }))
           ]);
-        setContractVersion(String(contractVersionName) === "AURAPREDICT_V2" ? "v2" : "dispute");
+        detectedContractVersion =
+          String(contractVersionName) === "AURAPREDICT_V3"
+            ? "v3"
+            : String(contractVersionName) === "AURAPREDICT_V2"
+              ? "v2"
+              : "dispute";
+        setContractVersion(detectedContractVersion);
         setResolutionAuthority(contractResolutionAuthority);
         setDisputeGracePeriod(Number(contractDisputeGracePeriod));
         setMarketCreationFee(contractMarketCreationFee);
+        if (detectedContractVersion === "v3") {
+          const token = await withRpcRetry(() => publicClient.readContract({
+            address: contractAddress,
+            abi: arcPredictionMarketV3Abi,
+            functionName: "defaultSettlementToken"
+          }));
+          const asset = await withRpcRetry(() => publicClient.readContract({
+            address: contractAddress,
+            abi: arcPredictionMarketV3Abi,
+            functionName: "assetConfigs",
+            args: [token]
+          }));
+          detectedSettlementSymbol = String(asset[1] || "USDC");
+          detectedSettlementDecimals = Number(asset[2] || V3_STABLECOIN_DECIMALS);
+          setDefaultSettlementToken(token);
+          setDefaultSettlementSymbol(detectedSettlementSymbol);
+          setDefaultSettlementDecimals(detectedSettlementDecimals);
+        } else {
+          setDefaultSettlementToken("");
+          setDefaultSettlementSymbol("USDC");
+          setDefaultSettlementDecimals(ARC_NATIVE_USDC_DECIMALS);
+        }
       } catch {
         setResolutionAuthority(contractOwner);
         setDisputeGracePeriod(0);
@@ -4261,6 +4433,65 @@ export default function App() {
       let failedMarketLoads = 0;
       setDataSource("rpc");
       const readMarketById = async (id: number, trackFailure: boolean) => {
+        if (detectedContractVersion === "v3") {
+          try {
+            const data = await withRpcRetry(() => publicClient.readContract({
+              address: contractAddress,
+              abi: arcPredictionMarketV3Abi,
+              functionName: "getMarket",
+              args: [BigInt(id)]
+            }));
+            const asset = await withRpcRetry(() => publicClient.readContract({
+              address: contractAddress,
+              abi: arcPredictionMarketV3Abi,
+              functionName: "assetConfigs",
+              args: [data[2]]
+            }));
+            return {
+              market: {
+                id,
+                question: data[0],
+                category: normalizeCategory(data[1]),
+                settlementToken: data[2],
+                settlementSymbol: String(asset[1] || detectedSettlementSymbol),
+                settlementDecimals: Number(asset[2] || detectedSettlementDecimals),
+                createdAt: 0,
+                closeTime: Number(data[3]),
+                resolutionTime: Number(data[4]),
+                creator: data[5],
+                resolver: data[6],
+                authority: data[7],
+                resolutionMode: Number(data[8]),
+                metadataHash: data[9],
+                metadataURI: data[10],
+                termsProtocolFeeBps: Number(data[11]),
+                termsCreatorBond: data[12],
+                termsDisputeBond: data[13],
+                termsDisputeWindow: Number(data[14]),
+                termsDisputeGracePeriod: Number(data[25]),
+                yesPool: data[15],
+                noPool: data[16],
+                traderCount: Number(data[17]),
+                proposedOutcome: Number(data[18]) as Outcome,
+                proposedAt: Number(data[19]),
+                disputeDeadline: Number(data[20]),
+                authorityReviewRequired: Boolean(data[21]),
+                disputed: Boolean(data[22]),
+                disputer: data[23],
+                outcome: Number(data[24]) as Outcome,
+                yesPosition: 0n,
+                noPosition: 0n,
+                claimed: false,
+                potentialPayout: 0n
+              },
+              isLegacyMarket: false
+            };
+          } catch (error) {
+            if (trackFailure) failedMarketLoads += 1;
+            console.warn(`Failed to load V3 market #${id}`, error);
+            return null;
+          }
+        }
         let marketData;
         let isLegacyMarket = false;
 
@@ -4760,26 +4991,111 @@ export default function App() {
       if (fallbackSource && !isValidHttpUrl(fallbackSource)) throw new Error("Fallback source must be a valid http(s) link.");
       if (!createForm.closeTime) throw new Error("Close time is required.");
       const ruleReferenceTime = parseResolutionReferenceTime(resolutionRule);
-      if (ruleReferenceTime && createForm.closeTime !== ruleReferenceTime) {
+      const declaredResolutionInput = contractVersion === "v3" ? createForm.resolutionTime : createForm.closeTime;
+      if (contractVersion === "v3" && !declaredResolutionInput) throw new Error("Resolution time is required.");
+      if (ruleReferenceTime && declaredResolutionInput !== ruleReferenceTime) {
         throw new Error(
-          `Close time must match rule time (${ruleReferenceTime} UTC). Update close time or resolution rule.`
+          `Resolution time must match rule time (${ruleReferenceTime} UTC). Update resolution time or the rule.`
         );
       }
       const closeTime = parseUtcDateTime(createForm.closeTime);
+      const resolutionTime = contractVersion === "v3" ? parseUtcDateTime(createForm.resolutionTime) : closeTime;
       const earliestCloseTime = BigInt(Math.floor(Date.now() / 1000) + 5 * 60);
       if (closeTime <= earliestCloseTime) {
         throw new Error("Close time must be at least 5 minutes after the current UTC time.");
       }
+      if (resolutionTime < closeTime) throw new Error("Resolution time cannot be earlier than close time.");
 
       await switchToArc();
       const walletClient = getActiveWalletClient();
 
       let completed = false;
       let createdMarketId: number | null = null;
+      let createdSettlementSymbol = defaultSettlementSymbol;
+      let createdSettlementDecimals = defaultSettlementDecimals;
 
       const useLegacyCreate = contractVersion === "legacy" || (contractVersion === "unknown" && creatorBond === 0n);
 
-      if (useLegacyCreate) {
+      if (contractVersion === "v3") {
+        const settlementToken =
+          isAddress(createForm.settlementToken) ? createForm.settlementToken as Address : defaultSettlementToken as Address;
+        if (!isAddress(settlementToken)) throw new Error("Settlement token is not configured for V3.");
+        const asset = await withRpcRetry(() => getPublicClient().readContract({
+          address: contractAddress,
+          abi: arcPredictionMarketV3Abi,
+          functionName: "assetConfigs",
+          args: [settlementToken]
+        }));
+        if (!asset[0]) throw new Error("Selected settlement token is not enabled in the contract.");
+        createdSettlementSymbol = String(asset[1] || "TOKEN");
+        createdSettlementDecimals = Number(asset[2] || V3_STABLECOIN_DECIMALS);
+        const createCost = asset[4] + asset[6];
+        const allowance = await withRpcRetry(() => getPublicClient().readContract({
+          address: settlementToken,
+          abi: settlementTokenAbi,
+          functionName: "allowance",
+          args: [account as Address, contractAddress]
+        }));
+        if (allowance < createCost) {
+          const approved = await runTransaction(
+            () =>
+              walletClient.writeContract({
+                account: account as Address,
+                chain: arcTestnet,
+                address: settlementToken,
+                abi: settlementTokenAbi,
+                functionName: "approve",
+                args: [contractAddress, createCost]
+              }),
+            `Approving ${formatUsdc(createCost, createdSettlementDecimals)} ${createdSettlementSymbol} for market creation...`
+          );
+          if (!approved) return;
+        }
+        const metadataHash = keccak256(stringToHex(JSON.stringify({
+          question,
+          category,
+          resolutionSource,
+          resolutionRule,
+          fallbackSource,
+          closeTime: closeTime.toString(),
+          resolutionTime: resolutionTime.toString()
+        })));
+        completed = await runTransaction(
+          () =>
+            walletClient.writeContract({
+              account: account as Address,
+              chain: arcTestnet,
+              address: contractAddress,
+              abi: arcPredictionMarketV3Abi,
+              functionName: "createMarket",
+              args: [
+                question,
+                category,
+                settlementToken,
+                closeTime,
+                resolutionTime,
+                metadataHash,
+                resolutionSource,
+                Number(createForm.resolutionMode)
+              ]
+            }),
+          `Creating V3 market with ${formatUsdc(createCost, createdSettlementDecimals)} ${createdSettlementSymbol} locked/charged...`,
+          true,
+          (receipt) => {
+            const createdEvent = receipt.logs
+              .map((log) => {
+                try {
+                  return decodeEventLog({ abi: arcPredictionMarketV3Abi, data: log.data, topics: log.topics });
+                } catch {
+                  return null;
+                }
+              })
+              .find((event) => event?.eventName === "MarketCreated");
+            const args = createdEvent?.args as { marketId?: bigint } | undefined;
+            if (args?.marketId !== undefined) createdMarketId = Number(args.marketId);
+          }
+        );
+      } else if (useLegacyCreate) {
         const legacyCreateAbi = [
           {
             type: "function",
@@ -4868,6 +5184,12 @@ export default function App() {
         category,
         createdAt: Math.floor(Date.now() / 1000),
         closeTime: Number(closeTime),
+        resolutionTime: Number(resolutionTime),
+        settlementToken: contractVersion === "v3" ? (createForm.settlementToken || defaultSettlementToken) : undefined,
+        settlementSymbol: contractVersion === "v3" ? createdSettlementSymbol : "USDC",
+        settlementDecimals: contractVersion === "v3" ? createdSettlementDecimals : ARC_NATIVE_USDC_DECIMALS,
+        resolutionMode: contractVersion === "v3" ? Number(createForm.resolutionMode) : undefined,
+        termsDisputeGracePeriod: contractVersion === "v3" ? disputeGracePeriod : undefined,
         creator: account,
         resolver: account,
         yesPool: 0n,
@@ -4948,6 +5270,9 @@ export default function App() {
         question: "",
         category: "Crypto",
         closeTime: "",
+        resolutionTime: "",
+        settlementToken: "",
+        resolutionMode: "0",
         resolutionSource: "",
         resolutionRule: "",
         fallbackSource: ""
@@ -4971,30 +5296,65 @@ export default function App() {
   const placeBet = async (marketId: number, side: Outcome) => {
     try {
       if (!account || !isAddress(account)) throw new Error("Connect wallet first.");
+      const market = markets.find((item) => item.id === marketId);
+      const amountDecimals = contractVersion === "v3" ? marketDecimals(market) : ARC_NATIVE_USDC_DECIMALS;
       const amount = stakeInputs[marketId] || "";
-      const value = parseUsdcInput(amount);
+      const value = parseUsdcInput(amount, amountDecimals);
       if (value <= 0n) throw new Error("Enter a valid USDC amount.");
       if (walletBalance > 0n && value > walletBalance) throw new Error("Stake amount is higher than your wallet USDC balance.");
 
       await switchToArc();
       const walletClient = getActiveWalletClient();
 
+      if (contractVersion === "v3") {
+        const token = market?.settlementToken as Address;
+        if (!token || !isAddress(token)) throw new Error("Market settlement token is unavailable.");
+        const allowance = await withRpcRetry(() => getPublicClient().readContract({
+          address: token,
+          abi: settlementTokenAbi,
+          functionName: "allowance",
+          args: [account as Address, contractAddress]
+        }));
+        if (allowance < value) {
+          const approved = await runTransaction(
+            () => walletClient.writeContract({
+              account: account as Address,
+              chain: arcTestnet,
+              address: token,
+              abi: settlementTokenAbi,
+              functionName: "approve",
+              args: [contractAddress, value]
+            }),
+            `Approving ${formatMarketAmount(value, market)} ${marketSymbol(market)} stake...`
+          );
+          if (!approved) return;
+        }
+      }
+
       const completed = await runTransaction(
         () =>
-          walletClient.writeContract({
-            account: account as Address,
-            chain: arcTestnet,
-            address: contractAddress,
-            abi: arcPredictionMarketAbi,
-            functionName: "bet",
-            args: [BigInt(marketId), side],
-            value
-          }),
+          contractVersion === "v3"
+            ? walletClient.writeContract({
+                account: account as Address,
+                chain: arcTestnet,
+                address: contractAddress,
+                abi: arcPredictionMarketV3Abi,
+                functionName: "bet",
+                args: [BigInt(marketId), side, value]
+              })
+            : walletClient.writeContract({
+                account: account as Address,
+                chain: arcTestnet,
+                address: contractAddress,
+                abi: arcPredictionMarketAbi,
+                functionName: "bet",
+                args: [BigInt(marketId), side],
+                value
+              }),
         `Staking ${amount} USDC...`,
         false
       );
       if (completed) {
-        const market = markets.find((item) => item.id === marketId);
         const isNewParticipant = market ? market.yesPosition + market.noPosition === 0n : false;
         const nowSeconds = Math.floor(Date.now() / 1000);
         const isLiveMarket =
@@ -5075,18 +5435,32 @@ export default function App() {
     }
     await switchToArc();
     const walletClient = getActiveWalletClient();
+    const evidenceHash = keccak256(stringToHex(JSON.stringify(marketEvidence[String(marketId)] || [])));
+    const storedReceiptHash =
+      typeof aiReceipt?.receiptHash === "string" && /^0x[a-fA-F0-9]{64}$/.test(aiReceipt.receiptHash)
+        ? aiReceipt.receiptHash as Hash
+        : ZERO_HASH as Hash;
     setMarketActionPending("resolve", marketId, true);
     try {
       const success = await runTransaction(
         () =>
-          walletClient.writeContract({
-            account: account as Address,
-            chain: arcTestnet,
-            address: contractAddress,
-            abi: arcPredictionMarketAbi,
-            functionName: "resolve",
-            args: [BigInt(marketId), outcome]
-          }),
+          contractVersion === "v3"
+            ? walletClient.writeContract({
+                account: account as Address,
+                chain: arcTestnet,
+                address: contractAddress,
+                abi: arcPredictionMarketV3Abi,
+                functionName: "resolve",
+                args: [BigInt(marketId), outcome, evidenceHash, storedReceiptHash]
+              })
+            : walletClient.writeContract({
+                account: account as Address,
+                chain: arcTestnet,
+                address: contractAddress,
+                abi: arcPredictionMarketAbi,
+                functionName: "resolve",
+                args: [BigInt(marketId), outcome]
+              }),
         "Proposing market result...",
         true,
         (receipt) => {
@@ -5094,7 +5468,7 @@ export default function App() {
             .map((log) => {
               try {
                 return decodeEventLog({
-                  abi: arcPredictionMarketAbi,
+                  abi: contractVersion === "v3" ? arcPredictionMarketV3Abi : arcPredictionMarketAbi,
                   data: log.data,
                   topics: log.topics
                 });
@@ -5128,21 +5502,56 @@ export default function App() {
 
   const disputeMarket = async (marketId: number) => {
     if (!account || !isAddress(account)) throw new Error("Connect wallet first.");
-    if (disputeBond <= 0n) throw new Error("Dispute bond is not loaded. Refresh contract data first.");
+    const market = markets.find((item) => item.id === marketId);
+    const requiredBond = contractVersion === "v3" ? market?.termsDisputeBond ?? disputeBond : disputeBond;
+    if (requiredBond <= 0n) throw new Error("Dispute bond is not loaded. Refresh contract data first.");
     await switchToArc();
     const walletClient = getActiveWalletClient();
+    if (contractVersion === "v3") {
+      const token = market?.settlementToken as Address;
+      if (!token || !isAddress(token)) throw new Error("Market settlement token is unavailable.");
+      const allowance = await withRpcRetry(() => getPublicClient().readContract({
+        address: token,
+        abi: settlementTokenAbi,
+        functionName: "allowance",
+        args: [account as Address, contractAddress]
+      }));
+      if (allowance < requiredBond) {
+        const approved = await runTransaction(
+          () => walletClient.writeContract({
+            account: account as Address,
+            chain: arcTestnet,
+            address: token,
+            abi: settlementTokenAbi,
+            functionName: "approve",
+            args: [contractAddress, requiredBond]
+          }),
+          `Approving ${formatMarketAmount(requiredBond, market)} ${marketSymbol(market)} dispute bond...`
+        );
+        if (!approved) return;
+      }
+    }
     await runTransaction(
       () =>
-        walletClient.writeContract({
-          account: account as Address,
-          chain: arcTestnet,
-          address: contractAddress,
-          abi: arcPredictionMarketAbi,
-          functionName: "dispute",
-          args: [BigInt(marketId)],
-          value: disputeBond
-        }),
-      `Disputing result with ${formatUsdc(disputeBond)} USDC bond...`
+        contractVersion === "v3"
+          ? walletClient.writeContract({
+              account: account as Address,
+              chain: arcTestnet,
+              address: contractAddress,
+              abi: arcPredictionMarketV3Abi,
+              functionName: "dispute",
+              args: [BigInt(marketId)]
+            })
+          : walletClient.writeContract({
+              account: account as Address,
+              chain: arcTestnet,
+              address: contractAddress,
+              abi: arcPredictionMarketAbi,
+              functionName: "dispute",
+              args: [BigInt(marketId)],
+              value: requiredBond
+            }),
+      `Disputing result with ${formatMarketAmount(requiredBond, market)} ${marketSymbol(market)} bond...`
     );
   };
 
@@ -5193,16 +5602,31 @@ export default function App() {
     if (!account || !isAddress(account)) throw new Error("Connect resolution authority wallet first.");
     await switchToArc();
     const walletClient = getActiveWalletClient();
+    const aiReceipt = aiResolutionReceipts[String(marketId)];
+    const evidenceHash = keccak256(stringToHex(JSON.stringify(marketEvidence[String(marketId)] || [])));
+    const receiptHash =
+      typeof aiReceipt?.receiptHash === "string" && /^0x[a-fA-F0-9]{64}$/.test(aiReceipt.receiptHash)
+        ? aiReceipt.receiptHash as Hash
+        : ZERO_HASH as Hash;
     await runTransaction(
       () =>
-        walletClient.writeContract({
-          account: account as Address,
-          chain: arcTestnet,
-          address: contractAddress,
-          abi: arcPredictionMarketAbi,
-          functionName: "finalizeDispute",
-          args: [BigInt(marketId), outcome]
-        }),
+        contractVersion === "v3"
+          ? walletClient.writeContract({
+              account: account as Address,
+              chain: arcTestnet,
+              address: contractAddress,
+              abi: arcPredictionMarketV3Abi,
+              functionName: "finalizeDispute",
+              args: [BigInt(marketId), outcome, evidenceHash, receiptHash]
+            })
+          : walletClient.writeContract({
+              account: account as Address,
+              chain: arcTestnet,
+              address: contractAddress,
+              abi: arcPredictionMarketAbi,
+              functionName: "finalizeDispute",
+              args: [BigInt(marketId), outcome]
+            }),
       "Finalizing disputed market..."
     );
   };
@@ -5254,26 +5678,57 @@ export default function App() {
     if (isMarketActionPending("resolve", marketId)) return;
     await switchToArc();
     const walletClient = getActiveWalletClient();
+    const market = markets.find((item) => item.id === marketId);
+    const aiReceipt = aiResolutionReceipts[String(marketId)];
+    const evidenceHash = keccak256(stringToHex(JSON.stringify(marketEvidence[String(marketId)] || [])));
+    const receiptHash =
+      typeof aiReceipt?.receiptHash === "string" && /^0x[a-fA-F0-9]{64}$/.test(aiReceipt.receiptHash)
+        ? aiReceipt.receiptHash as Hash
+        : ZERO_HASH as Hash;
     setMarketActionPending("resolve", marketId, true);
     try {
       const success = await runTransaction(
         () =>
-          walletClient.writeContract({
-            account: account as Address,
-            chain: arcTestnet,
-            address: contractAddress,
-            abi: arcPredictionMarketAbi,
-            functionName: "cancel",
-            args: [BigInt(marketId)]
-          }),
-        "Proposing market cancel...",
+          contractVersion === "v3" && market && hasNoLiquidity(market)
+            ? walletClient.writeContract({
+                account: account as Address,
+                chain: arcTestnet,
+                address: contractAddress,
+                abi: arcPredictionMarketV3Abi,
+                functionName: "cancelEmptyMarket",
+                args: [BigInt(marketId)]
+              })
+            : contractVersion === "v3"
+              ? walletClient.writeContract({
+                  account: account as Address,
+                  chain: arcTestnet,
+                  address: contractAddress,
+                  abi: arcPredictionMarketV3Abi,
+                  functionName: "cancel",
+                  args: [BigInt(marketId), evidenceHash, receiptHash]
+                })
+              : walletClient.writeContract({
+                  account: account as Address,
+                  chain: arcTestnet,
+                  address: contractAddress,
+                  abi: arcPredictionMarketAbi,
+                  functionName: "cancel",
+                  args: [BigInt(marketId)]
+                }),
+        contractVersion === "v3" && market && hasNoLiquidity(market)
+          ? "Canceling empty market and releasing creator bond..."
+          : "Proposing market cancel...",
         true,
         (receipt) => {
+          if (contractVersion === "v3" && market && hasNoLiquidity(market)) {
+            markMarketFinalized(marketId, Outcome.Canceled);
+            return;
+          }
           const proposedEvent = receipt.logs
             .map((log) => {
               try {
                 return decodeEventLog({
-                  abi: arcPredictionMarketAbi,
+                  abi: contractVersion === "v3" ? arcPredictionMarketV3Abi : arcPredictionMarketAbi,
                   data: log.data,
                   topics: log.topics
                 });
@@ -5314,6 +5769,55 @@ export default function App() {
         }),
       "Claiming payout..."
     );
+  };
+
+  const withdrawPendingBalance = async (market: MarketView) => {
+    if (!account || !isAddress(account)) throw new Error("Connect wallet first.");
+    if (contractVersion !== "v3" || !market.settlementToken || !isAddress(market.settlementToken)) return;
+    await switchToArc();
+    const walletClient = getActiveWalletClient();
+    const completed = await runTransaction(
+      () => walletClient.writeContract({
+        account: account as Address,
+        chain: arcTestnet,
+        address: contractAddress,
+        abi: arcPredictionMarketV3Abi,
+        functionName: "withdrawBalance",
+        args: [market.settlementToken as Address]
+      }),
+      `Withdrawing pending ${marketSymbol(market)} balance...`
+    );
+    if (completed) {
+      setPendingWithdrawalsByToken((current) => ({ ...current, [market.settlementToken!.toLowerCase()]: 0n }));
+      void refreshWalletBalance();
+    }
+  };
+
+  const requestAuthorityReview = async (market: MarketView) => {
+    if (!account || !isAddress(account)) throw new Error("Connect authority wallet first.");
+    if (contractVersion !== "v3") return;
+    const aiReceipt = aiResolutionReceipts[String(market.id)];
+    const reasonHash = keccak256(stringToHex(JSON.stringify({
+      proposedOutcome: market.proposedOutcome,
+      aiSuggestion: aiOutcomeFromReceipt(aiReceipt),
+      receiptHash: aiReceipt?.receiptHash || ""
+    })));
+    await switchToArc();
+    const walletClient = getActiveWalletClient();
+    const completed = await runTransaction(
+      () => walletClient.writeContract({
+        account: account as Address,
+        chain: arcTestnet,
+        address: contractAddress,
+        abi: arcPredictionMarketV3Abi,
+        functionName: "requestAuthorityReview",
+        args: [BigInt(market.id), reasonHash]
+      }),
+      "Flagging proposal for authority review..."
+    );
+    if (completed) {
+      setMarkets((current) => current.map((item) => item.id === market.id ? { ...item, authorityReviewRequired: true } : item));
+    }
   };
 
   const claimAll = async () => {
@@ -5565,9 +6069,12 @@ export default function App() {
           market.outcome === Outcome.Unresolved &&
           market.proposedAt === 0 &&
           isResolutionReady &&
-          (sameAddress(market.resolver, account) ||
-            (!!owner && sameAddress(owner, account)) ||
-            (!!resolutionAuthority && sameAddress(resolutionAuthority, account)));
+          (market.resolutionMode === 2
+            ? (!!owner && sameAddress(owner, account)) ||
+              (!!market.authority && sameAddress(market.authority, account))
+            : sameAddress(market.resolver, account) ||
+              (!!owner && sameAddress(owner, account)) ||
+              (!!(market.authority || resolutionAuthority) && sameAddress(market.authority || resolutionAuthority, account)));
         const canBet =
           account &&
           market.outcome === Outcome.Unresolved &&
@@ -5579,6 +6086,7 @@ export default function App() {
           market.outcome === Outcome.Unresolved &&
           market.proposedAt > 0 &&
           !market.disputed &&
+          !market.authorityReviewRequired &&
           market.disputeDeadline > 0 &&
           Date.now() / 1000 < market.disputeDeadline &&
           hasUserPosition(market);
@@ -5588,23 +6096,24 @@ export default function App() {
           market.outcome === Outcome.Unresolved &&
           market.proposedAt > 0 &&
           !market.disputed &&
+          !market.authorityReviewRequired &&
           market.disputeDeadline > 0 &&
           Date.now() / 1000 >= market.disputeDeadline;
         const canFinalizeDispute =
           canUseDisputeFlow &&
           account &&
           market.outcome === Outcome.Unresolved &&
-          market.disputed &&
+          (market.disputed || Boolean(market.authorityReviewRequired)) &&
           ((!!owner && sameAddress(account, owner)) ||
-            (!!resolutionAuthority && sameAddress(account, resolutionAuthority)));
+            (!!(market.authority || resolutionAuthority) && sameAddress(account, market.authority || resolutionAuthority)));
         const canCancelStaleDispute =
           canUseDisputeFlow &&
           account &&
           market.outcome === Outcome.Unresolved &&
-          market.disputed &&
+          (market.disputed || Boolean(market.authorityReviewRequired)) &&
           market.disputeDeadline > 0 &&
-          disputeGracePeriod > 0 &&
-          Date.now() / 1000 >= market.disputeDeadline + disputeGracePeriod;
+          (market.termsDisputeGracePeriod ?? disputeGracePeriod) > 0 &&
+          Date.now() / 1000 >= market.disputeDeadline + (market.termsDisputeGracePeriod ?? disputeGracePeriod);
         const canClaim = account && market.potentialPayout > 0n && !market.claimed;
         const canLegacyResolve =
           contractVersion === "legacy" &&
@@ -5669,7 +6178,7 @@ export default function App() {
             <div className="market-meta">
               <div>
                 <span>Volume</span>
-                <strong>{formatUsdc(totalPool)} USDC</strong>
+                <strong>{formatMarketAmount(totalPool, market)} {marketSymbol(market)}</strong>
               </div>
               <div>
                 <span>Participants</span>
@@ -5683,6 +6192,12 @@ export default function App() {
                 <span>Closes</span>
                 <strong>{closeDate(market.closeTime)}</strong>
               </div>
+              {resolutionTimeFor(market) !== market.closeTime && (
+                <div>
+                  <span>Resolves after</span>
+                  <strong>{closeDate(resolutionTimeFor(market))}</strong>
+                </div>
+              )}
               <div>
                 <span>Creator</span>
                 <strong>{displayNameForAddress(market.creator)}</strong>
@@ -5703,7 +6218,7 @@ export default function App() {
 
             {account && (
               <div className="position-chip">
-                YES {formatUsdc(market.yesPosition)} / NO {formatUsdc(market.noPosition)}
+                YES {formatMarketAmount(market.yesPosition, market)} / NO {formatMarketAmount(market.noPosition, market)} {marketSymbol(market)}
               </div>
             )}
 
@@ -5726,7 +6241,7 @@ export default function App() {
                 disabled={!canBet}
               >
                 <span>YES</span>
-                <small>{formatUsdc(market.yesPool)} USDC</small>
+                <small>{formatMarketAmount(market.yesPool, market)} {marketSymbol(market)}</small>
               </button>
               <button
                 className="no-button"
@@ -5737,7 +6252,7 @@ export default function App() {
                 disabled={!canBet}
               >
                 <span>NO</span>
-                <small>{formatUsdc(market.noPool)} USDC</small>
+                <small>{formatMarketAmount(market.noPool, market)} {marketSymbol(market)}</small>
               </button>
             </div>
 
@@ -5795,7 +6310,7 @@ export default function App() {
                 {finalizeHint && <small>{finalizeHint}</small>}
                 {canDispute && (
                   <button className="secondary" onClick={() => disputeMarket(market.id)}>
-                    Dispute {formatUsdc(disputeBond)} USDC
+                    Dispute {formatMarketAmount(market.termsDisputeBond ?? disputeBond, market)} {marketSymbol(market)}
                   </button>
                 )}
                 {canFinalize && (
@@ -5823,7 +6338,7 @@ export default function App() {
                 )}
                 {canClaim && (
                   <button onClick={() => claim(market.id)}>
-                    Claim {formatUsdc(market.potentialPayout)} USDC
+                    Claim {formatMarketAmount(market.potentialPayout, market)} {marketSymbol(market)}
                   </button>
                 )}
               </div>
@@ -5864,15 +6379,19 @@ export default function App() {
       selectedMarket.outcome === Outcome.Unresolved &&
       selectedMarket.proposedAt === 0 &&
       selectedResolutionReady &&
-      (sameAddress(selectedMarket.resolver, account) ||
-        (!!owner && sameAddress(owner, account)) ||
-        (!!resolutionAuthority && sameAddress(resolutionAuthority, account)));
+      (selectedMarket.resolutionMode === 2
+        ? (!!owner && sameAddress(owner, account)) ||
+          (!!selectedMarket.authority && sameAddress(selectedMarket.authority, account))
+        : sameAddress(selectedMarket.resolver, account) ||
+          (!!owner && sameAddress(owner, account)) ||
+          (!!(selectedMarket.authority || resolutionAuthority) && sameAddress(selectedMarket.authority || resolutionAuthority, account)));
     const canDispute =
       canUseDisputeFlow &&
       account &&
       selectedMarket.outcome === Outcome.Unresolved &&
       selectedMarket.proposedAt > 0 &&
       !selectedMarket.disputed &&
+      !selectedMarket.authorityReviewRequired &&
       selectedMarket.disputeDeadline > 0 &&
       Date.now() / 1000 < selectedMarket.disputeDeadline &&
       hasUserPosition(selectedMarket);
@@ -5882,23 +6401,32 @@ export default function App() {
       selectedMarket.outcome === Outcome.Unresolved &&
       selectedMarket.proposedAt > 0 &&
       !selectedMarket.disputed &&
+      !selectedMarket.authorityReviewRequired &&
       selectedMarket.disputeDeadline > 0 &&
       Date.now() / 1000 >= selectedMarket.disputeDeadline;
     const canFinalizeDispute =
       canUseDisputeFlow &&
       account &&
       selectedMarket.outcome === Outcome.Unresolved &&
-      selectedMarket.disputed &&
+      (selectedMarket.disputed || Boolean(selectedMarket.authorityReviewRequired)) &&
       ((!!owner && sameAddress(account, owner)) ||
-        (!!resolutionAuthority && sameAddress(account, resolutionAuthority)));
+        (!!(selectedMarket.authority || resolutionAuthority) && sameAddress(account, selectedMarket.authority || resolutionAuthority)));
+    const canRequestAuthorityReview =
+      contractVersion === "v3" &&
+      Boolean(account) &&
+      selectedMarket.outcome === Outcome.Unresolved &&
+      selectedMarket.proposedAt > 0 &&
+      !selectedMarket.authorityReviewRequired &&
+      ((!!owner && sameAddress(account, owner)) ||
+        (!!selectedMarket.authority && sameAddress(account, selectedMarket.authority)));
     const canCancelStaleDispute =
       canUseDisputeFlow &&
       account &&
       selectedMarket.outcome === Outcome.Unresolved &&
-      selectedMarket.disputed &&
+      (selectedMarket.disputed || Boolean(selectedMarket.authorityReviewRequired)) &&
       selectedMarket.disputeDeadline > 0 &&
-      disputeGracePeriod > 0 &&
-      Date.now() / 1000 >= selectedMarket.disputeDeadline + disputeGracePeriod;
+      (selectedMarket.termsDisputeGracePeriod ?? disputeGracePeriod) > 0 &&
+      Date.now() / 1000 >= selectedMarket.disputeDeadline + (selectedMarket.termsDisputeGracePeriod ?? disputeGracePeriod);
     const canLegacyResolve =
       contractVersion === "legacy" &&
       account &&
@@ -5910,9 +6438,12 @@ export default function App() {
     const proposeHint = resolveActionHint(selectedMarket);
     const finalizeHint = finalizeWaitingHint(selectedMarket);
     const canClaim = account && selectedMarket.potentialPayout > 0n && !selectedMarket.claimed;
-    const tradeAmount = parseUsdcInput(stakeInputs[selectedMarket.id] || "");
-    const yesEstimate = betEstimate(selectedMarket, Outcome.Yes, tradeAmount, protocolFeeBps);
-    const noEstimate = betEstimate(selectedMarket, Outcome.No, tradeAmount, protocolFeeBps);
+    const pendingTokenWithdrawal =
+      selectedMarket.settlementToken ? pendingWithdrawalsByToken[selectedMarket.settlementToken.toLowerCase()] || 0n : 0n;
+    const tradeAmount = parseUsdcInput(stakeInputs[selectedMarket.id] || "", marketDecimals(selectedMarket));
+    const selectedMarketFeeBps = selectedMarket.termsProtocolFeeBps ?? protocolFeeBps;
+    const yesEstimate = betEstimate(selectedMarket, Outcome.Yes, tradeAmount, selectedMarketFeeBps);
+    const noEstimate = betEstimate(selectedMarket, Outcome.No, tradeAmount, selectedMarketFeeBps);
     const selectedTradeSide = selectedTradeSides[selectedMarket.id];
     const selectedEstimate = selectedTradeSide === Outcome.No ? noEstimate : yesEstimate;
     const selectedSideLabel = selectedTradeSide === Outcome.No ? "NO" : "YES";
@@ -6013,7 +6544,7 @@ export default function App() {
           shortAddress(activity.user),
           displayNameForAddress(activity.user),
           activity.side === Outcome.Yes ? "yes" : "no",
-          formatUsdc(activity.amount)
+          formatMarketAmount(activity.amount, selectedMarket)
         ]
           .join(" ")
           .toLowerCase();
@@ -6025,7 +6556,7 @@ export default function App() {
       setSelectedTradeSides((current) => ({ ...current, [selectedMarket.id]: side }));
       setStakeInputs((current) => ({
         ...current,
-        [selectedMarket.id]: copyAmount > 0n ? formatUsdcInput(copyAmount) : ""
+        [selectedMarket.id]: copyAmount > 0n ? formatUsdcInput(copyAmount, marketDecimals(selectedMarket)) : ""
       }));
       setNotice(`Copied ${displayNameForAddress(trader.address)} ${side === Outcome.Yes ? "YES" : "NO"} setup.`);
     };
@@ -6085,7 +6616,7 @@ export default function App() {
             </div>
             <div>
               <span>Volume</span>
-              <strong>{formatUsdc(totalPool)} USDC</strong>
+              <strong>{formatMarketAmount(totalPool, selectedMarket)} {marketSymbol(selectedMarket)}</strong>
             </div>
             <div>
               <span>Participants</span>
@@ -6222,12 +6753,17 @@ export default function App() {
                     )}
                     {canDispute && (
                       <button className="secondary action-dispute" onClick={() => disputeMarket(selectedMarket.id)}>
-                        Dispute {formatUsdc(disputeBond)} USDC
+                        Dispute {formatMarketAmount(selectedMarket.termsDisputeBond ?? disputeBond, selectedMarket)} {marketSymbol(selectedMarket)}
                       </button>
                     )}
                     {canFinalize && (
                       <button className="secondary action-use-ai" onClick={() => finalizeMarket(selectedMarket.id)}>
                         Finalize result
+                      </button>
+                    )}
+                    {canRequestAuthorityReview && (
+                      <button className="secondary action-dispute" onClick={() => requestAuthorityReview(selectedMarket)}>
+                        Send to authority review
                       </button>
                     )}
                     {canFinalizeDispute && (
@@ -6250,7 +6786,12 @@ export default function App() {
                     )}
                     {canClaim && (
                       <button onClick={() => claim(selectedMarket.id)}>
-                        Claim {formatUsdc(selectedMarket.potentialPayout)} USDC
+                        Claim {formatMarketAmount(selectedMarket.potentialPayout, selectedMarket)} {marketSymbol(selectedMarket)}
+                      </button>
+                    )}
+                    {pendingTokenWithdrawal > 0n && (
+                      <button className="secondary action-use-ai" onClick={() => withdrawPendingBalance(selectedMarket)}>
+                        Withdraw {formatMarketAmount(pendingTokenWithdrawal, selectedMarket)} {marketSymbol(selectedMarket)}
                       </button>
                     )}
                   </div>
@@ -6264,6 +6805,7 @@ export default function App() {
                       </small>
                     )}
                     {finalizeHint && <small>{finalizeHint}</small>}
+                    {selectedMarket.authorityReviewRequired && <small>This proposal is held for authority review before final settlement.</small>}
                   </div>
                 </div>
               )}
@@ -6280,17 +6822,17 @@ export default function App() {
             <div className="detail-outcome-row">
               <span className="outcome-dot yes" />
               <strong>YES</strong>
-              <span>{selectedMarketYesPercent.toFixed(1)}% / {formatUsdc(selectedMarket.yesPool)} USDC</span>
+              <span>{selectedMarketYesPercent.toFixed(1)}% / {formatMarketAmount(selectedMarket.yesPool, selectedMarket)} {marketSymbol(selectedMarket)}</span>
             </div>
             <div className="detail-outcome-row">
               <span className="outcome-dot no" />
               <strong>NO</strong>
-              <span>{selectedMarketNoPercent.toFixed(1)}% / {formatUsdc(selectedMarket.noPool)} USDC</span>
+              <span>{selectedMarketNoPercent.toFixed(1)}% / {formatMarketAmount(selectedMarket.noPool, selectedMarket)} {marketSymbol(selectedMarket)}</span>
             </div>
             <div className="trade-balance-line">
               <span>Available</span>
               <button onClick={() => refreshWalletBalance()} type="button">
-                {formatUsdc(walletBalance)} USDC
+                {formatUsdc(walletBalance, defaultSettlementDecimals)} {defaultSettlementSymbol}
               </button>
             </div>
             <div className="trade-input-row">
@@ -6353,8 +6895,8 @@ export default function App() {
               {selectedTradeSide ? (
                 <div>
                   <span>{selectedSideLabel} payout if correct</span>
-                  <strong>{formatUsdc(selectedEstimate.payout)} USDC</strong>
-                  <small>Profit {formatUsdc(selectedEstimate.profit)} / price {selectedEstimate.pricePercent.toFixed(1)}%</small>
+                  <strong>{formatMarketAmount(selectedEstimate.payout, selectedMarket)} {marketSymbol(selectedMarket)}</strong>
+                  <small>Profit {formatMarketAmount(selectedEstimate.profit, selectedMarket)} / price {selectedEstimate.pricePercent.toFixed(1)}%</small>
                 </div>
               ) : (
                 <span>Select YES or NO to focus the chart and preview payout. No side selected shows both lines.</span>
@@ -6362,7 +6904,7 @@ export default function App() {
             </div>
             {account && (
               <div className="position-chip">
-                Your position: YES {formatUsdc(selectedMarket.yesPosition)} / NO {formatUsdc(selectedMarket.noPosition)}
+                Your position: YES {formatMarketAmount(selectedMarket.yesPosition, selectedMarket)} / NO {formatMarketAmount(selectedMarket.noPosition, selectedMarket)} {marketSymbol(selectedMarket)}
               </div>
             )}
           </aside>
@@ -6373,7 +6915,7 @@ export default function App() {
               <div className="public-market-stats">
                 <div>
                   <span>Volume</span>
-                  <strong>{formatUsdc(totalPool)} USDC</strong>
+                  <strong>{formatMarketAmount(totalPool, selectedMarket)} {marketSymbol(selectedMarket)}</strong>
                 </div>
                 <div>
                   <span>Participants</span>
@@ -6560,7 +7102,7 @@ export default function App() {
                 <span className={activity.side === Outcome.Yes ? "history-side yes" : "history-side no"}>
                   {activity.side === Outcome.Yes ? "YES" : "NO"}
                 </span>
-                <strong>{formatUsdc(activity.amount)} USDC</strong>
+                <strong>{formatMarketAmount(activity.amount, selectedMarket)} {marketSymbol(selectedMarket)}</strong>
                 {activity.txHash && (
                   <a href={`${ARC_EXPLORER_URL}/tx/${activity.txHash}`} target="_blank" rel="noreferrer">
                     Tx
@@ -6577,6 +7119,7 @@ export default function App() {
             { label: "Created", active: true, detail: `Market #${selectedMarket.id}` },
             { label: "Trading open", active: Date.now() / 1000 < selectedMarket.closeTime, detail: countdownText(selectedMarket.closeTime, currentTime) },
             { label: "Trading closed", active: Date.now() / 1000 >= selectedMarket.closeTime, detail: closeDate(selectedMarket.closeTime) },
+            { label: "Resolution time", active: Date.now() / 1000 >= resolutionTimeFor(selectedMarket), detail: closeDate(resolutionTimeFor(selectedMarket)) },
             { label: "Resolving", active: selectedMarket.proposedAt > 0 || selectedMarket.outcome !== Outcome.Unresolved, detail: selectedMarket.proposedAt > 0 ? outcomeLabel(selectedMarket.proposedOutcome) : "Waiting" },
             { label: "Resolved", active: selectedMarket.outcome !== Outcome.Unresolved, detail: outcomeLabel(selectedMarket.outcome) }
           ].map((step, index) => (
@@ -6827,7 +7370,7 @@ export default function App() {
                     {claimNotifications.length > 1 && (
                       <div className="notification-bulk-actions">
                         <button onClick={claimAll} disabled={transactionPending} type="button">
-                          Claim all {formatUsdc(claimableTotal)} USDC
+                          Claim all {formatUsdc(claimableTotal, defaultSettlementDecimals)} {aggregateAssetLabel}
                         </button>
                       </div>
                     )}
@@ -6891,26 +7434,28 @@ export default function App() {
                     })}
                     {disputeReviewNotifications.map((market) => (
                       <article className="notification-card" key={`review-${market.id}`}>
-                        <span>Dispute review</span>
+                        <span>{market.disputed ? "Dispute review" : "Authority review"}</span>
                         <strong>{shortQuestion(market.question)}</strong>
                         <small>
-                          Proposed {outcomeLabel(market.proposedOutcome)}. Disputer {displayNameForAddress(market.disputer)}.
+                          {market.disputed
+                            ? `Proposed ${outcomeLabel(market.proposedOutcome)}. Disputer ${displayNameForAddress(market.disputer)}.`
+                            : `Proposed ${outcomeLabel(market.proposedOutcome)}. This result is held for authority review.`}
                         </small>
                         <div className="notification-actions">
                           <button className="secondary" onClick={() => openMarket(market.id, true)} type="button">
-                            Open Dispute
+                            Open Review
                           </button>
                         </div>
                       </article>
                     ))}
                     {staleDisputeNotifications.map((market) => (
                       <article className="notification-card" key={`stale-${market.id}`}>
-                        <span>Stale dispute</span>
+                        <span>Stale review</span>
                         <strong>{shortQuestion(market.question)}</strong>
-                        <small>Resolution authority did not finalize after the grace period. Cancel refunds both sides.</small>
+                        <small>Authority did not finalize after the grace period. Cancel refunds positions.</small>
                         <div className="notification-actions">
                           <button className="secondary" onClick={() => openMarket(market.id, true)} type="button">
-                            Open Dispute
+                            Open Review
                           </button>
                         </div>
                       </article>
@@ -6928,9 +7473,9 @@ export default function App() {
                             {aiSuggestedOutcome !== Outcome.Unresolved ? `. AI suggested ${outcomeLabel(aiSuggestedOutcome)}.` : "."}
                           </small>
                           <div className="notification-actions">
-                            {!market.disputed && market.disputeDeadline > nowSeconds && (
+                            {!market.disputed && !market.authorityReviewRequired && market.disputeDeadline > nowSeconds && (
                               <button className="secondary" onClick={() => disputeMarket(market.id)}>
-                                Dispute {formatUsdc(disputeBond)} USDC
+                                Dispute {formatMarketAmount(market.termsDisputeBond ?? disputeBond, market)} {marketSymbol(market)}
                               </button>
                             )}
                             <button className="secondary" onClick={() => openMarket(market.id)} type="button">
@@ -6965,7 +7510,7 @@ export default function App() {
                       <article className="notification-card" key={`claim-${market.id}`}>
                         <span>Claim available</span>
                         <strong>{shortQuestion(market.question)}</strong>
-                        <small>{formatUsdc(market.potentialPayout)} USDC ready</small>
+                        <small>{formatMarketAmount(market.potentialPayout, market)} {marketSymbol(market)} ready</small>
                         <button onClick={() => claim(market.id)}>Claim payout</button>
                       </article>
                     ))}
@@ -7015,8 +7560,8 @@ export default function App() {
                     </div>
                     <div className="wallet-balance-row">
                       <div>
-                        <span>Available USDC</span>
-                        <strong>{formatUsdc(walletBalance)}</strong>
+                        <span>Available {defaultSettlementSymbol}</span>
+                        <strong>{formatUsdc(walletBalance, defaultSettlementDecimals)}</strong>
                       </div>
                       <button className="wallet-refresh-button" onClick={() => refreshWalletBalance()} type="button">
                         Refresh
@@ -7065,7 +7610,7 @@ export default function App() {
               const yesPercent = percent(market.yesPool, marketVolume(market));
               return (
                 <span className="ticker-item" key={`fallback-${market.id}-${index}`}>
-                  <strong>Market #{market.id}</strong> has {formatUsdc(marketVolume(market))} USDC live liquidity on{" "}
+                  <strong>Market #{market.id}</strong> has {formatMarketAmount(marketVolume(market), market)} {marketSymbol(market)} live liquidity on{" "}
                   {shortQuestion(market.question)} - YES {yesPercent.toFixed(0)}%
                 </span>
               );
@@ -7082,10 +7627,10 @@ export default function App() {
         <section className="hero-band">
           <div className="hero-copy">
             <p className="network-kicker">Arc Testnet prediction markets</p>
-            <h1>Trade the future with native USDC.</h1>
+            <h1>Trade outcomes on Arc.</h1>
             <p>
-              A fast Arc testnet venue for YES/NO markets settled onchain.
-              Market creators are the resolvers, and every stake settles onchain.
+              Create and trade YES/NO markets with transparent settlement, evidence review,
+              and Aura-assisted resolution on Arc Testnet.
             </p>
             <div className="hero-actions">
               <button onClick={account ? undefined : openWalletModal} disabled={connecting}>
@@ -7100,7 +7645,7 @@ export default function App() {
             <div className="hero-hot-head">
               <div>
                 <span className="section-label">Hot markets</span>
-                <strong>{liveMarkets} live / {formatUsdc(totalLiquidity)} USDC</strong>
+                <strong>{liveMarkets} live / {formatUsdc(totalLiquidity, defaultSettlementDecimals)} {aggregateAssetLabel}</strong>
               </div>
               <button className="see-all-button" onClick={() => openCollection("hot")} type="button">
                 See all
@@ -7129,7 +7674,7 @@ export default function App() {
                         <span style={{ width: `${yesPercent}%` }} />
                       </div>
                       <small>
-                        YES {yesPercent.toFixed(0)}% / {formatUsdc(totalPool)} USDC / {countdownText(market.closeTime, currentTime)}
+                        YES {yesPercent.toFixed(0)}% / {formatMarketAmount(totalPool, market)} {marketSymbol(market)} / {countdownText(market.closeTime, currentTime)}
                       </small>
                     </button>
                   );
@@ -7258,7 +7803,7 @@ export default function App() {
                 </div>
                 {claimNotifications.length > 1 && (
                   <button onClick={claimAll} disabled={transactionPending} type="button">
-                    Claim all {formatUsdc(claimableTotal)} USDC
+                    Claim all {formatUsdc(claimableTotal, defaultSettlementDecimals)} {aggregateAssetLabel}
                   </button>
                 )}
               </div>
@@ -7322,21 +7867,25 @@ export default function App() {
               })}
               {disputeReviewNotifications.map((market) => (
                 <article className="notification-card" key={`page-review-${market.id}`}>
-                  <span>Dispute review</span>
+                  <span>{market.disputed ? "Dispute review" : "Authority review"}</span>
                   <strong>{shortQuestion(market.question)}</strong>
-                  <small>Proposed {outcomeLabel(market.proposedOutcome)}. Disputer {displayNameForAddress(market.disputer)}.</small>
+                  <small>
+                    {market.disputed
+                      ? `Proposed ${outcomeLabel(market.proposedOutcome)}. Disputer ${displayNameForAddress(market.disputer)}.`
+                      : `Proposed ${outcomeLabel(market.proposedOutcome)}. This result is held for authority review.`}
+                  </small>
                   <div className="notification-actions">
-                    <button className="secondary" onClick={() => openMarket(market.id, true)} type="button">Open Dispute</button>
+                    <button className="secondary" onClick={() => openMarket(market.id, true)} type="button">Open Review</button>
                   </div>
                 </article>
               ))}
               {staleDisputeNotifications.map((market) => (
                 <article className="notification-card" key={`page-stale-${market.id}`}>
-                  <span>Stale dispute</span>
+                  <span>Stale review</span>
                   <strong>{shortQuestion(market.question)}</strong>
-                  <small>Resolution authority did not finalize after the grace period. Cancel refunds both sides.</small>
+                  <small>Authority did not finalize after the grace period. Cancel refunds positions.</small>
                   <div className="notification-actions">
-                    <button className="secondary" onClick={() => openMarket(market.id, true)} type="button">Open Dispute</button>
+                    <button className="secondary" onClick={() => openMarket(market.id, true)} type="button">Open Review</button>
                   </div>
                 </article>
               ))}
@@ -7353,9 +7902,9 @@ export default function App() {
                       {aiSuggestedOutcome !== Outcome.Unresolved ? `. AI suggested ${outcomeLabel(aiSuggestedOutcome)}.` : "."}
                     </small>
                     <div className="notification-actions">
-                      {!market.disputed && market.disputeDeadline > nowSeconds && (
+                      {!market.disputed && !market.authorityReviewRequired && market.disputeDeadline > nowSeconds && (
                         <button className="secondary" onClick={() => disputeMarket(market.id)}>
-                          Dispute {formatUsdc(disputeBond)} USDC
+                          Dispute {formatMarketAmount(market.termsDisputeBond ?? disputeBond, market)} {marketSymbol(market)}
                         </button>
                       )}
                       <button className="secondary" onClick={() => openMarket(market.id)} type="button">View market</button>
@@ -7382,7 +7931,7 @@ export default function App() {
                 <article className="notification-card" key={`page-claim-${market.id}`}>
                   <span>Claim available</span>
                   <strong>{shortQuestion(market.question)}</strong>
-                  <small>{formatUsdc(market.potentialPayout)} USDC ready</small>
+                  <small>{formatMarketAmount(market.potentialPayout, market)} {marketSymbol(market)} ready</small>
                   <div className="notification-actions">
                     <button onClick={() => claim(market.id)}>Claim payout</button>
                     <button className="secondary" onClick={() => openMarket(market.id)} type="button">View market</button>
@@ -7566,7 +8115,7 @@ export default function App() {
                     </div>
                     <div className="profile-chip-row">
                       <span>Arc Testnet</span>
-                      {isOwnProfile && <span>Balance {formatUsdc(walletBalance)} USDC</span>}
+                      {isOwnProfile && <span>Balance {formatUsdc(walletBalance, defaultSettlementDecimals)} {defaultSettlementSymbol}</span>}
                       <span>{createdMarkets} created</span>
                       <span>{participatedProfileMarkets.length} participated</span>
                     </div>
@@ -7606,15 +8155,15 @@ export default function App() {
               <section className="profile-stat-grid">
                 {isOwnProfile && (
                   <article className="profile-stat-card profile-balance-card">
-                    <span>Available USDC</span>
-                    <strong>{formatUsdc(walletBalance)}</strong>
+                    <span>Available {defaultSettlementSymbol}</span>
+                    <strong>{formatUsdc(walletBalance, defaultSettlementDecimals)}</strong>
                     <small>Arc Testnet wallet balance</small>
                   </article>
                 )}
                 <article className="profile-stat-card">
                   <span>Your edge</span>
                   <strong className={displayedProfilePnl >= 0n ? "profile-positive" : "profile-negative"}>
-                    {formatSignedUsdc(displayedProfilePnl)} USDC
+                    {formatSignedUsdc(displayedProfilePnl, defaultSettlementDecimals)} {aggregateAssetLabel}
                   </strong>
                   <small>{profileEdgePercent.toFixed(1)}% realized return</small>
                 </article>
@@ -7663,12 +8212,12 @@ export default function App() {
                   <div>
                     <h3>What's your edge?</h3>
                     <span>
-                      Realized PNL from settled markets. Current payout available: {formatUsdc(claimable)} USDC.
+                      Realized PNL from settled markets. Current payout available: {formatUsdc(claimable, defaultSettlementDecimals)} {aggregateAssetLabel}.
                     </span>
                   </div>
                   {isOwnProfile && claimNotifications.length > 1 && (
                     <button onClick={claimAll} disabled={transactionPending} type="button">
-                      Claim all {formatUsdc(claimableTotal)} USDC
+                      Claim all {formatUsdc(claimableTotal, defaultSettlementDecimals)} {aggregateAssetLabel}
                     </button>
                   )}
                 </div>
@@ -7711,7 +8260,7 @@ export default function App() {
                 </article>
                 <article>
                   <span>Total volume</span>
-                  <strong>{formatUsdc(displayedProfileVolume)} USDC</strong>
+                  <strong>{formatUsdc(displayedProfileVolume, defaultSettlementDecimals)} {aggregateAssetLabel}</strong>
                   <small>all active wallet positions</small>
                 </article>
                 <article>
@@ -7722,7 +8271,7 @@ export default function App() {
                 <article>
                   <span>PNL</span>
                   <strong className={displayedProfilePnl >= 0n ? "profile-positive" : "profile-negative"}>
-                    {formatSignedUsdc(displayedProfilePnl)} USDC
+                    {formatSignedUsdc(displayedProfilePnl, defaultSettlementDecimals)} {aggregateAssetLabel}
                   </strong>
                   <small>settled markets only</small>
                 </article>
@@ -7758,15 +8307,19 @@ export default function App() {
                     market.outcome === Outcome.Unresolved &&
                     market.proposedAt === 0 &&
                     isResolutionReady &&
-                    (sameAddress(market.resolver, account) ||
-                      (!!owner && sameAddress(owner, account)) ||
-                      (!!resolutionAuthority && sameAddress(resolutionAuthority, account)));
+                    (market.resolutionMode === 2
+                      ? (!!owner && sameAddress(owner, account)) ||
+                        (!!market.authority && sameAddress(market.authority, account))
+                      : sameAddress(market.resolver, account) ||
+                        (!!owner && sameAddress(owner, account)) ||
+                        (!!(market.authority || resolutionAuthority) && sameAddress(market.authority || resolutionAuthority, account)));
                   const canFinalize =
                     isOwnProfile &&
                     canUseDisputeFlow &&
                     market.outcome === Outcome.Unresolved &&
                     market.proposedAt > 0 &&
                     !market.disputed &&
+                    !market.authorityReviewRequired &&
                     market.disputeDeadline > 0 &&
                     Date.now() / 1000 >= market.disputeDeadline;
                   const canFinalizeDispute =
@@ -7774,18 +8327,18 @@ export default function App() {
                     canUseDisputeFlow &&
                     account &&
                     market.outcome === Outcome.Unresolved &&
-                    market.disputed &&
+                    (market.disputed || Boolean(market.authorityReviewRequired)) &&
                     ((!!owner && sameAddress(account, owner)) ||
-                      (!!resolutionAuthority && sameAddress(account, resolutionAuthority)));
+                      (!!(market.authority || resolutionAuthority) && sameAddress(account, market.authority || resolutionAuthority)));
                   const canCancelStaleDispute =
                     isOwnProfile &&
                     canUseDisputeFlow &&
                     account &&
                     market.outcome === Outcome.Unresolved &&
-                    market.disputed &&
+                    (market.disputed || Boolean(market.authorityReviewRequired)) &&
                     market.disputeDeadline > 0 &&
-                    disputeGracePeriod > 0 &&
-                    Date.now() / 1000 >= market.disputeDeadline + disputeGracePeriod;
+                    (market.termsDisputeGracePeriod ?? disputeGracePeriod) > 0 &&
+                    Date.now() / 1000 >= market.disputeDeadline + (market.termsDisputeGracePeriod ?? disputeGracePeriod);
                   const canLegacyResolve =
                     isOwnProfile &&
                     contractVersion === "legacy" &&
@@ -7805,7 +8358,7 @@ export default function App() {
                     (aiSuggestedOutcome === Outcome.No && !canProposeNo);
                   const meta = categoryMeta(market.category || "Other");
                   const result = personalMarketResult(market, isOwnProfile ? "You" : "Profile");
-                  const settlement = userSettlement(market, protocolFeeBps);
+                  const settlement = userSettlement(market, market.termsProtocolFeeBps ?? protocolFeeBps);
                   const claimStatus = claimStatusFor(market, settlement, isOwnProfile);
                   const claimableValue = isOwnProfile ? market.potentialPayout : settlement.payout;
 
@@ -7821,11 +8374,11 @@ export default function App() {
                       <div className="history-metrics">
                         <div>
                           <span>YES</span>
-                          <strong>{formatUsdc(market.yesPosition)} USDC</strong>
+                          <strong>{formatMarketAmount(market.yesPosition, market)} {marketSymbol(market)}</strong>
                         </div>
                         <div>
                           <span>NO</span>
-                          <strong>{formatUsdc(market.noPosition)} USDC</strong>
+                          <strong>{formatMarketAmount(market.noPosition, market)} {marketSymbol(market)}</strong>
                         </div>
                         <div>
                           <span>Market result</span>
@@ -7841,11 +8394,11 @@ export default function App() {
                         </div>
                         <div>
                           <span>Est. payout</span>
-                          <strong>{formatUsdc(settlement.payout)} USDC</strong>
+                          <strong>{formatMarketAmount(settlement.payout, market)} {marketSymbol(market)}</strong>
                         </div>
                         <div>
                           <span>{isOwnProfile ? "Claimable" : "Est. claim"}</span>
-                          <strong>{formatUsdc(claimableValue)} USDC</strong>
+                          <strong>{formatMarketAmount(claimableValue, market)} {marketSymbol(market)}</strong>
                         </div>
                         <div>
                           <span>Claim status</span>
@@ -7946,7 +8499,7 @@ export default function App() {
                           )}
                           {isOwnProfile && market.potentialPayout > 0n && !market.claimed && (
                             <button onClick={() => claim(market.id)}>
-                              Claim {formatUsdc(market.potentialPayout)} USDC
+                              Claim {formatMarketAmount(market.potentialPayout, market)} {marketSymbol(market)}
                             </button>
                           )}
                           {firstTxUrl && (
@@ -8097,7 +8650,7 @@ export default function App() {
                 )}
                 {leaderboardRows.map((row, index) => {
                   const tier = reputationTierFor(row.auraPoints);
-                  const badges = reputationBadgesFor(row);
+                  const badges = reputationBadgesFor(row, defaultSettlementDecimals);
                   const profileName = displayNameForAddress(row.address);
 
                   return (
@@ -8113,12 +8666,12 @@ export default function App() {
                           ))}
                         </div>
                       </div>
-                      <span>{formatUsdc(row.volume)} USDC</span>
+                      <span>{formatUsdc(row.volume, defaultSettlementDecimals)} {aggregateAssetLabel}</span>
                       <span>
                         {row.winRate.toFixed(1)}% ({row.wonMarkets}/{row.resolvedMarkets})
                       </span>
                       <span className={row.pnl >= 0n ? "pnl-positive" : "pnl-negative"}>
-                        {formatSignedUsdc(row.pnl)} USDC
+                        {formatSignedUsdc(row.pnl, defaultSettlementDecimals)} {aggregateAssetLabel}
                       </span>
                       <span>{row.auraPoints.toLocaleString("en-US")}</span>
                     </div>
@@ -8296,7 +8849,7 @@ export default function App() {
             <span className="section-label">Project stats</span>
             <div className="protocol-stat-feature">
               <span>Total volume</span>
-              <strong>{formatStatUsdc(statsSummary.totalVolume)} USDC</strong>
+              <strong>{formatStatUsdc(statsSummary.totalVolume, defaultSettlementDecimals)} {aggregateAssetLabel}</strong>
             </div>
             <div className="protocol-metric-grid">
               <div>
@@ -8329,11 +8882,11 @@ export default function App() {
               </div>
               <div>
                 <span>Live liquidity</span>
-                <strong>{formatStatUsdc(statsSummary.liveLiquidity)} USDC</strong>
+                <strong>{formatStatUsdc(statsSummary.liveLiquidity, defaultSettlementDecimals)} {aggregateAssetLabel}</strong>
               </div>
               <div>
                 <span>Avg market</span>
-                <strong>{formatStatUsdc(statsSummary.averageMarketVolume)} USDC</strong>
+                <strong>{formatStatUsdc(statsSummary.averageMarketVolume, defaultSettlementDecimals)} {aggregateAssetLabel}</strong>
               </div>
             </div>
           </section>
@@ -8353,19 +8906,19 @@ export default function App() {
             </div>
             <div>
               <span>Min stake</span>
-              <strong>{formatUsdc(minStake)} USDC</strong>
+              <strong>{formatUsdc(minStake, defaultSettlementDecimals)} {defaultSettlementSymbol}</strong>
             </div>
             <div>
               <span>Creation fee</span>
-              <strong>{formatUsdc(marketCreationFee)} USDC</strong>
+              <strong>{formatUsdc(marketCreationFee, defaultSettlementDecimals)} {defaultSettlementSymbol}</strong>
             </div>
             <div>
               <span>Creator bond</span>
-              <strong>{formatUsdc(creatorBond)} USDC</strong>
+              <strong>{formatUsdc(creatorBond, defaultSettlementDecimals)} {defaultSettlementSymbol}</strong>
             </div>
             <div>
               <span>Dispute bond</span>
-              <strong>{formatUsdc(disputeBond)} USDC</strong>
+              <strong>{formatUsdc(disputeBond, defaultSettlementDecimals)} {defaultSettlementSymbol}</strong>
             </div>
             <div>
               <span>Dispute window</span>
@@ -8381,7 +8934,7 @@ export default function App() {
             </div>
             <div>
               <span>Fee balance</span>
-              <strong>{formatUsdc(accumulatedProtocolFees)} USDC</strong>
+              <strong>{formatUsdc(accumulatedProtocolFees, defaultSettlementDecimals)} {defaultSettlementSymbol}</strong>
             </div>
             {account && owner && sameAddress(account, owner) && accumulatedProtocolFees > 0n && (
               <button onClick={withdrawFees}>Withdraw fees</button>
@@ -8568,14 +9121,89 @@ export default function App() {
                   </button>
                 </div>
                 <small className="time-format-hint">
-                  UTC only. Min close time: {minimumCloseInput}. Date and time are selected separately.
+                  UTC only. Betting stops at this time. Min close time: {minimumCloseInput}.
                 </small>
-                {hasRuleCloseMismatch && (
+                {hasRuleCloseMismatch && contractVersion !== "v3" && (
                   <small className="time-format-hint error-hint">
                     Close time does not match rule time: {ruleReferenceCloseTime} UTC.
                   </small>
                 )}
               </label>
+              {contractVersion === "v3" && (
+                <label>
+                  <span className="field-label">
+                    Resolution time (UTC) <span className="required-mark">*</span>
+                  </span>
+                  <div className="close-time-fields">
+                    <input
+                      type="date"
+                      value={selectedResolutionParts?.date || ""}
+                      min={selectedCloseParts?.date || minimumCloseParts?.date}
+                      onChange={(event) =>
+                        setCreateForm((current) => {
+                          const parts = parseUtcDateTimeParts(current.resolutionTime);
+                          return { ...current, resolutionTime: combineUtcDateTimeParts(event.target.value, parts?.time || "00:00") };
+                        })
+                      }
+                    />
+                    <input
+                      type="time"
+                      step={60}
+                      value={selectedResolutionParts?.time || ""}
+                      onChange={(event) =>
+                        setCreateForm((current) => ({
+                          ...current,
+                          resolutionTime: combineUtcDateTimeParts(
+                            parseUtcDateTimeParts(current.resolutionTime)?.date || selectedCloseParts?.date || minimumCloseParts?.date || "",
+                            event.target.value
+                          )
+                        }))
+                      }
+                    />
+                  </div>
+                  <small className="time-format-hint">Results cannot be proposed before this event timestamp.</small>
+                  {hasRuleCloseMismatch && (
+                    <small className="time-format-hint error-hint">
+                      Resolution time does not match rule time: {ruleReferenceCloseTime} UTC.
+                    </small>
+                  )}
+                </label>
+              )}
+              {contractVersion === "v3" && (
+                <label>
+                  <span className="field-label">
+                    Settlement asset <span className="required-mark">*</span>
+                  </span>
+                  <select
+                    value={createForm.settlementToken || defaultSettlementToken}
+                    onChange={(event) => setCreateForm({ ...createForm, settlementToken: event.target.value })}
+                  >
+                    {isAddress(defaultSettlementToken) && (
+                      <option value={defaultSettlementToken}>{defaultSettlementSymbol}</option>
+                    )}
+                    {isAddress(EURC_TOKEN_ADDRESS) && !sameAddress(EURC_TOKEN_ADDRESS, defaultSettlementToken) && (
+                      <option value={EURC_TOKEN_ADDRESS}>EURC</option>
+                    )}
+                  </select>
+                  <small className="time-format-hint">All stakes and payouts for this market use one token.</small>
+                </label>
+              )}
+              {contractVersion === "v3" && (
+                <label>
+                  <span className="field-label">
+                    Resolution mode <span className="required-mark">*</span>
+                  </span>
+                  <select
+                    value={createForm.resolutionMode}
+                    onChange={(event) => setCreateForm({ ...createForm, resolutionMode: event.target.value as "0" | "1" | "2" })}
+                  >
+                    <option value="0">Creator + dispute review</option>
+                    <option value="1">Creator + required authority review</option>
+                    <option value="2">Authority / oracle only</option>
+                  </select>
+                  <small className="time-format-hint">The selected control path is fixed for this market.</small>
+                </label>
+              )}
               <label>
                 <span className="field-label">
                   Resolution source URL <span className="required-mark">*</span>
@@ -8617,11 +9245,12 @@ export default function App() {
               Question must be at least 8 characters.
               Resolution source and rule are required before launch.
               Market close time is saved in UTC and must be at least 5 minutes after the current UTC time.
+              {contractVersion === "v3" && " Resolution time is enforced onchain and cannot be earlier than close time."}
               {contractVersion === "legacy"
                 ? " This legacy contract does not use creator bonds or dispute windows."
                 : marketCreationFee > 0n
-                  ? ` Creating a market costs ${formatUsdc(creatorBond + marketCreationFee)} USDC total: ${formatUsdc(creatorBond)} bond plus ${formatUsdc(marketCreationFee)} creation fee.`
-                  : ` Creating a market locks a ${formatUsdc(creatorBond)} USDC creator bond until the result is finalized.`}
+                  ? ` Creating a market costs ${formatUsdc(creatorBond + marketCreationFee, defaultSettlementDecimals)} ${defaultSettlementSymbol} total: ${formatUsdc(creatorBond, defaultSettlementDecimals)} bond plus ${formatUsdc(marketCreationFee, defaultSettlementDecimals)} creation fee.`
+                  : ` Creating a market locks a ${formatUsdc(creatorBond, defaultSettlementDecimals)} ${defaultSettlementSymbol} creator bond until the result is finalized.`}
             </div>
             {aiMarketDraft?.duplicateRisk && aiMarketDraft.duplicateRisk !== "LOW" && (
               <label className="duplicate-acknowledge">
@@ -8647,6 +9276,7 @@ export default function App() {
                   createForm.question.trim().length < 8 ||
                   createForm.resolutionSource.trim().length === 0 ||
                   createForm.resolutionRule.trim().length === 0 ||
+                  (contractVersion === "v3" && createForm.resolutionTime.trim().length === 0) ||
                   hasRuleCloseMismatch ||
                   !canCreateAfterAura ||
                   (!!aiMarketDraft?.duplicateRisk && aiMarketDraft.duplicateRisk !== "LOW" && !duplicateAcknowledged)
@@ -8814,7 +9444,7 @@ export default function App() {
           <img src="/aurapredict-logo.png" alt="AuraPredict" />
           <div>
             <strong>AuraPredict</strong>
-            <p>Prediction markets built for Arc Testnet and native USDC settlement.</p>
+            <p>Prediction markets built for Arc Testnet with transparent stablecoin settlement.</p>
           </div>
         </section>
         <section className="footer-arc">
