@@ -828,6 +828,9 @@ function compactErrorMessage(error: unknown) {
   const lower = raw.toLowerCase();
   if (lower.includes("user rejected") || lower.includes("user denied")) return "Transaction rejected in wallet.";
   if (lower.includes("insufficient funds")) return "Insufficient USDC balance for this transaction.";
+  if (lower.includes("transferfailed")) {
+    return "Token transfer failed. Check the selected token balance and allowance before trying again.";
+  }
   if (lower.includes("execution reverted")) {
     return "Transaction reverted by the contract. Check market status, amount, wallet permission, or open the transaction on Arcscan.";
   }
@@ -5150,6 +5153,20 @@ export default function App() {
         createdSettlementSymbol = String(asset[1] || "TOKEN");
         createdSettlementDecimals = Number(asset[2] || V3_STABLECOIN_DECIMALS);
         const createCost = asset[4] + asset[6];
+        const tokenBalance = await withRpcRetry(() => getPublicClient().readContract({
+          address: settlementToken,
+          abi: settlementTokenAbi,
+          functionName: "balanceOf",
+          args: [account as Address]
+        }));
+        if (tokenBalance < createCost) {
+          throw new Error(
+            `Not enough ${createdSettlementSymbol} to create this market. Need ${formatUsdc(
+              createCost,
+              createdSettlementDecimals
+            )} ${createdSettlementSymbol}, wallet has ${formatUsdc(tokenBalance, createdSettlementDecimals)} ${createdSettlementSymbol}.`
+          );
+        }
         const allowance = await withRpcRetry(() => getPublicClient().readContract({
           address: settlementToken,
           abi: settlementTokenAbi,
@@ -5446,8 +5463,11 @@ export default function App() {
       const amountDecimals = isStablecoinContractVersion(contractVersion) ? marketDecimals(market) : ARC_NATIVE_USDC_DECIMALS;
       const amount = stakeInputs[marketId] || "";
       const value = parseUsdcInput(amount, amountDecimals);
-      if (value <= 0n) throw new Error("Enter a valid USDC amount.");
-      if (walletBalance > 0n && value > walletBalance) throw new Error("Stake amount is higher than your wallet USDC balance.");
+      if (!market) throw new Error("Market not found.");
+      if (value <= 0n) throw new Error("Enter a valid amount.");
+      if (!isStablecoinContractVersion(contractVersion) && walletBalance > 0n && value > walletBalance) {
+        throw new Error("Stake amount is higher than your wallet USDC balance.");
+      }
 
       await switchToArc();
       const walletClient = getActiveWalletClient();
@@ -5455,6 +5475,20 @@ export default function App() {
       if (isStablecoinContractVersion(contractVersion)) {
         const token = market?.settlementToken as Address;
         if (!token || !isAddress(token)) throw new Error("Market settlement token is unavailable.");
+        const tokenBalance = await withRpcRetry(() => getPublicClient().readContract({
+          address: token,
+          abi: settlementTokenAbi,
+          functionName: "balanceOf",
+          args: [account as Address]
+        }));
+        if (value > tokenBalance) {
+          throw new Error(
+            `Stake amount is higher than your wallet ${marketSymbol(market)} balance. Wallet has ${formatMarketAmount(
+              tokenBalance,
+              market
+            )} ${marketSymbol(market)}.`
+          );
+        }
         const allowance = await withRpcRetry(() => getPublicClient().readContract({
           address: token,
           abi: settlementTokenAbi,
@@ -5680,6 +5714,20 @@ export default function App() {
     if (isStablecoinContractVersion(contractVersion)) {
       const token = market?.settlementToken as Address;
       if (!token || !isAddress(token)) throw new Error("Market settlement token is unavailable.");
+      const tokenBalance = await withRpcRetry(() => getPublicClient().readContract({
+        address: token,
+        abi: settlementTokenAbi,
+        functionName: "balanceOf",
+        args: [account as Address]
+      }));
+      if (tokenBalance < requiredBond) {
+        throw new Error(
+          `Not enough ${marketSymbol(market)} to dispute this market. Need ${formatMarketAmount(
+            requiredBond,
+            market
+          )} ${marketSymbol(market)}, wallet has ${formatMarketAmount(tokenBalance, market)} ${marketSymbol(market)}.`
+        );
+      }
       const allowance = await withRpcRetry(() => getPublicClient().readContract({
         address: token,
         abi: settlementTokenAbi,
