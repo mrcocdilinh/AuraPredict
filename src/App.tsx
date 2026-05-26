@@ -1424,8 +1424,16 @@ function aiOutcomeFromReceipt(receipt?: AiResolutionReceipt | null) {
 
 function isUnknownChainError(error: unknown) {
   const code = (error as { code?: number }).code;
-  const message = error instanceof Error ? error.message : JSON.stringify(error);
-  return code === 4902 || message.includes("4902") || message.includes("not added");
+  const message = errorMessage(error).toLowerCase();
+  return (
+    code === 4902 ||
+    message.includes("4902") ||
+    message.includes("not added") ||
+    message.includes("unknown chain") ||
+    message.includes("unrecognized chain") ||
+    message.includes("try adding") ||
+    message.includes("wallet_addethereumchain")
+  );
 }
 
 function isDuplicateRpcNetworkError(error: unknown) {
@@ -1443,6 +1451,24 @@ function errorMessage(error: unknown) {
     return String((error as { message?: unknown }).message);
   }
   return String(error);
+}
+
+function walletConnectionErrorMessage(prefix: string, error: unknown) {
+  const message = errorMessage(error);
+  const lowerMessage = message.toLowerCase();
+  if (lowerMessage.includes("same rpc endpoint as existing network")) {
+    return `${prefix}: this wallet already has an Arc network saved with a conflicting chain ID. Remove the old Arc network in wallet settings, then reconnect.`;
+  }
+  if (
+    lowerMessage.includes("unrecognized chain") ||
+    lowerMessage.includes("unknown chain") ||
+    lowerMessage.includes("wallet_addethereumchain") ||
+    lowerMessage.includes("not added") ||
+    lowerMessage.includes("try adding")
+  ) {
+    return `${prefix}: Arc Testnet is not added in this wallet. Approve Add network when prompted, then reconnect.`;
+  }
+  return `${prefix}: ${message}`;
 }
 
 function isRateLimitError(error: unknown) {
@@ -1696,19 +1722,19 @@ function LandingPage() {
     },
     {
       title: "Stablecoin settlement",
-      text: "The deployed V4 contract supports 6-decimal settlement assets by market, including Arc Testnet USDC and EURC."
+      text: "The current contract supports 6-decimal settlement assets by market, including Arc Testnet USDC and EURC."
     },
     {
       title: "Onchain market terms",
-      text: "V4 stores each market's primary source, fallback source, and resolution rule onchain so the settlement criteria stay tied to the market."
+      text: "Each market's primary source, fallback source, and resolution rule are stored onchain so settlement criteria stay tied to the market."
     },
     {
       title: "Oracle-ready authority",
-      text: "The deployed V4 contract supports creator review, required authority review, authority-only resolution, and an adapter-only path for a future oracle or committee."
+      text: "The contract supports creator review, required authority review, authority-only resolution, and an adapter-only path for a future oracle or committee."
     },
     {
       title: "Policy controls",
-      text: "V4 can pause new activity, allow approved creators, or block new positions without preventing existing markets from settling."
+      text: "Operational controls can pause new activity, allow approved creators, or block new positions without preventing existing markets from settling."
     },
     {
       title: "Protocol revenue",
@@ -1741,10 +1767,6 @@ function LandingPage() {
     {
       title: "Live indexer",
       text: "Read market history, wallet-searchable bet activity, stats, and leaderboard data from the Render indexer before falling back to Arc RPC."
-    },
-    {
-      title: "Archive-safe migration",
-      text: "New markets run on V4 while V3 markets remain reachable through the archive path for settlement and claims."
     }
   ];
   const flow = ["Create a market", "Stake YES or NO", "Track odds", "Resolve result", "Claim payout"];
@@ -1767,7 +1789,7 @@ function LandingPage() {
     "After the rule timestamp, Aura displays a suggested outcome and confidence in Resolution actions",
     "A saved AI receipt can be viewed without running a new AI request; Ask or Refresh requests a new review",
     "Resolver decisions that differ from Aura and user disputes are flagged for owner/authority review",
-    "Aura analysis remains off-chain; V4 anchors source/rule terms, evidence hashes, and receipt hashes in wallet-signed proposal actions",
+    "Aura analysis remains off-chain; the contract anchors source/rule terms, evidence hashes, and receipt hashes in wallet-signed proposal actions",
     "Wallet actions still sign directly against the Arc contract, with Arcscan as the verification layer"
   ];
   const roadmapItems = [
@@ -1914,7 +1936,7 @@ function LandingPage() {
           </div>
           <div className="landing-proof">
             <span>{indexerIsRealtime ? "Render indexer live" : "Indexer fallback active"}</span>
-            <span>V4 deployed on Arc Testnet</span>
+            <span>Deployed on Arc Testnet</span>
             <span>{updatedText}</span>
             <span>{pendingMarketsText} pending resolution</span>
           </div>
@@ -1960,7 +1982,7 @@ function LandingPage() {
             The app keeps the trading surface simple while making evidence, profiles, and leaderboard
             performance visible enough for social forecasting. AuraPredict combines onchain YES/NO
             staking, an indexer-backed data layer, AI-assisted market quality checks, and AI resolution
-            receipts. V4 is deployed on Arc Testnet with onchain source/rule terms, resolution timing, configurable settlement assets, signed-Aura hooks, and authority/oracle controls.
+            receipts. The current contract is deployed on Arc Testnet with onchain source/rule terms, resolution timing, configurable settlement assets, signed-Aura hooks, and authority/oracle controls.
           </p>
         </div>
         <div className="landing-feature-grid">
@@ -2038,7 +2060,7 @@ function LandingPage() {
             AuraPredict is live as an Arc Testnet MVP with a public Render indexer. The current product
             proves market creation, staking, dispute-aware settlement, profiles, comments, evidence,
             AI resolution receipts, live stats, notifications, and public reputation while wallet
-            actions remain fully onchain. Production now uses V4 at 0x3c853...1536; prior V3 markets remain onchain and can be opened with ?deployment=v3 for settlement and claims.
+            actions remain fully onchain. Production reads the active Arc Testnet contract through the public Render indexer and wallet transactions remain verifiable on Arcscan.
           </p>
           <div className="landing-docs-actions">
             <a className="landing-primary" href={DOCS_URL}>
@@ -2140,7 +2162,7 @@ function LandingPage() {
             <strong>YES/NO questions with UTC close time, separate resolution time, category labels, required source URL, and required resolution rule.</strong>
           </article>
           <article>
-            <span>V4 terms</span>
+            <span>Market terms</span>
             <strong>Primary source, fallback source, and resolution rule are stored onchain for every new market.</strong>
           </article>
           <article>
@@ -2161,7 +2183,7 @@ function LandingPage() {
           </article>
           <article>
             <span>Oracle path</span>
-            <strong>V4 includes approved adapter and signed-Aura hooks so future oracle or committee markets do not require another core migration.</strong>
+            <strong>The contract includes approved adapter and signed-Aura hooks so future oracle or committee markets do not require another core migration.</strong>
           </article>
           <article>
             <span>Deadline outcomes</span>
@@ -2169,7 +2191,7 @@ function LandingPage() {
           </article>
           <article>
             <span>Timeout safety</span>
-            <strong>V4 can cancel and refund markets that pass the proposal grace period without a result proposal.</strong>
+            <strong>Timed-out markets can be canceled and refunded after the proposal grace period when no result is proposed.</strong>
           </article>
           <article>
             <span>Profiles</span>
@@ -2182,10 +2204,6 @@ function LandingPage() {
           <article>
             <span>Admin controls</span>
             <strong>Operational credentials and automation policies stay private; public docs only show user-facing behavior and rules.</strong>
-          </article>
-          <article>
-            <span>V3 archive</span>
-            <strong>Old V3 markets remain onchain and accessible from the app archive path for final settlement and claims.</strong>
           </article>
           <article>
             <span>Docs domain</span>
@@ -3520,25 +3538,52 @@ export default function App() {
 
   const switchToArc = useCallback(async (provider?: EthereumProvider | null) => {
     const injected = getInjectedProvider(provider ?? selectedWalletProvider);
+    const switchChain = async () => {
+      const chainIds = [arcTestnetParams.chainId, arcTestnetParams.chainId.toLowerCase()];
+      let lastError: unknown;
+      for (const chainId of chainIds) {
+        try {
+          await injected.request({
+            method: "wallet_switchEthereumChain",
+            params: [{ chainId }]
+          });
+          return;
+        } catch (error) {
+          lastError = error;
+        }
+      }
+      throw lastError;
+    };
+    const addChain = async () => {
+      const addAttempts = [
+        arcTestnetParams,
+        { ...arcTestnetParams, chainId: arcTestnetParams.chainId.toLowerCase() },
+        ...ARC_RPC_URLS.map((rpcUrl) => ({
+          ...arcTestnetParams,
+          rpcUrls: [rpcUrl]
+        }))
+      ];
+      let lastError: unknown;
+      for (const params of addAttempts) {
+        try {
+          await injected.request({
+            method: "wallet_addEthereumChain",
+            params: [params]
+          });
+          return;
+        } catch (error) {
+          lastError = error;
+          if (isDuplicateRpcNetworkError(error)) continue;
+        }
+      }
+      if (lastError && !isDuplicateRpcNetworkError(lastError)) throw lastError;
+    };
     try {
-      await injected.request({
-        method: "wallet_switchEthereumChain",
-        params: [{ chainId: arcTestnetParams.chainId }]
-      });
+      await switchChain();
     } catch (error) {
       if (!isUnknownChainError(error)) throw error;
-      try {
-        await injected.request({
-          method: "wallet_addEthereumChain",
-          params: [arcTestnetParams]
-        });
-      } catch (addError) {
-        if (!isDuplicateRpcNetworkError(addError)) throw addError;
-      }
-      await injected.request({
-        method: "wallet_switchEthereumChain",
-        params: [{ chainId: arcTestnetParams.chainId }]
-      });
+      await addChain();
+      await switchChain();
     }
     setIsArcNetwork(true);
   }, [selectedWalletProvider]);
@@ -3560,7 +3605,7 @@ export default function App() {
       await refreshNetworkState(provider);
       setNotice("Arc Testnet network is ready.");
     } catch (error) {
-      setNotice(`Network switch failed: ${errorMessage(error)}`);
+      setNotice(walletConnectionErrorMessage("Network switch failed", error));
     } finally {
       setSwitchingNetwork(false);
     }
@@ -3668,7 +3713,7 @@ export default function App() {
       setWalletModalOpen(false);
     } catch (error) {
       setConnecting(false);
-      setNotice(`Connect failed: ${errorMessage(error)}`);
+      setNotice(walletConnectionErrorMessage("Connect failed", error));
     }
   }, [connectWallet]);
 
@@ -3681,7 +3726,7 @@ export default function App() {
       setWalletModalOpen(false);
     } catch (error) {
       setConnecting(false);
-      setNotice(`WalletConnect failed: ${errorMessage(error)}`);
+      setNotice(walletConnectionErrorMessage("WalletConnect failed", error));
     }
   }, [connectWallet]);
 
@@ -5173,7 +5218,7 @@ export default function App() {
                     Number(createForm.resolutionMode)
                   ]
                 }),
-          `Creating ${contractVersion.toUpperCase()} market with ${formatUsdc(createCost, createdSettlementDecimals)} ${createdSettlementSymbol} locked/charged...`,
+          `Creating market with ${formatUsdc(createCost, createdSettlementDecimals)} ${createdSettlementSymbol} locked/charged...`,
           true,
           (receipt) => {
             const createdEvent = receipt.logs
@@ -7343,11 +7388,6 @@ export default function App() {
   return (
     <main className="app-shell" id="top">
       <AppUpdateNotice />
-      {VIEWING_V3_ARCHIVE && (
-        <div className="deployment-notice" role="status">
-          Viewing V3 markets retained onchain for settlement and claims. New markets are created in V4.
-        </div>
-      )}
       <nav className="topbar">
         <a
           className="brand"
@@ -7414,11 +7454,6 @@ export default function App() {
               >
                 Owner Review
               </button>
-            )}
-            {PRIMARY_CONTRACT_ADDRESS.toLowerCase() !== ACTIVE_V3_CONTRACT_ADDRESS.toLowerCase() && (
-              <a className={VIEWING_V3_ARCHIVE ? "tab active" : "tab"} href={VIEWING_V3_ARCHIVE ? window.location.pathname : `${window.location.pathname}?deployment=v3`}>
-                {VIEWING_V3_ARCHIVE ? "V3 Archive" : "V3 Markets"}
-              </a>
             )}
           </div>
           <div className="market-search">
@@ -7809,12 +7844,15 @@ export default function App() {
               and Aura-assisted resolution on Arc Testnet.
             </p>
             <div className="hero-actions">
-              <button onClick={account ? undefined : openWalletModal} disabled={connecting}>
-                {account ? "Wallet Connected" : connecting ? "Connecting..." : "Connect Wallet"}
+              <button className="button-link hero-launch-button" onClick={account ? openCreateMarket : openWalletModal} disabled={connecting}>
+                {connecting ? "Connecting..." : "Launch Market"}
               </button>
-              <button className="button-link" onClick={openCreateMarket}>
-                Launch Market
-              </button>
+              {!account && (
+                <small className="hero-action-note">Connect a wallet to launch a market on Arc Testnet.</small>
+              )}
+              {account && !isArcNetwork && (
+                <small className="hero-action-note">Wallet is connected. Switch to Arc Testnet before signing.</small>
+              )}
             </div>
           </div>
           <aside className="hero-hot-panel">
