@@ -7875,6 +7875,9 @@ export default function App() {
                         Refresh
                       </button>
                     </div>
+                    <a className="wallet-faucet-link" href={ARC_FAUCET_URL} target="_blank" rel="noreferrer">
+                      Faucet
+                    </a>
                     <button onClick={openProfile}>View Profile</button>
                     <button onClick={disconnectWallet}>Disconnect</button>
                   </div>
@@ -8467,11 +8470,6 @@ export default function App() {
                   <button className="secondary" type="button" onClick={copyProfileLink} disabled={isOwnProfile && !isProfilePublic}>
                     Share profile
                   </button>
-                  {isOwnProfile && (
-                    <a className="secondary faucet-link" href={ARC_FAUCET_URL} target="_blank" rel="noreferrer">
-                      Faucet
-                    </a>
-                  )}
                   {!isOwnProfile && viewedProfileAddress && (
                     <button className="secondary" type="button" onClick={() => toggleFollowCreator(viewedProfileAddress)}>
                       {followedCreators.includes(viewedProfileKey) ? "Following" : "Follow user"}

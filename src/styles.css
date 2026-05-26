@@ -1611,6 +1611,26 @@ h3 {
   justify-content: flex-start;
 }
 
+.wallet-faucet-link {
+  align-items: center;
+  background: #f8fafc;
+  border: 1px solid #d6deeb;
+  border-radius: 8px;
+  color: #172033;
+  display: inline-flex;
+  font-size: 0.85rem;
+  font-weight: 800;
+  justify-content: flex-start;
+  min-height: 38px;
+  padding: 0 12px;
+  text-decoration: none;
+}
+
+.wallet-faucet-link:hover {
+  background: #eef2ff;
+  color: #172033;
+}
+
 .wallet-dropdown button:hover:not(:disabled) {
   background: #eef2ff;
   color: #172033;
@@ -5312,6 +5332,7 @@ label {
 [data-theme="dark"] .secondary,
 [data-theme="dark"] .notification-button,
 [data-theme="dark"] .wallet-panel a,
+[data-theme="dark"] .wallet-faucet-link,
 [data-theme="dark"] .clock-widget,
 [data-theme="dark"] .wallet-button,
 [data-theme="dark"] .see-all-button {
