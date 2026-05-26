@@ -383,6 +383,7 @@ const PROFILE_NAME_QUERY_KEY = "name";
 const LANDING_HOSTS = new Set(["aurapredict.xyz", "www.aurapredict.xyz"]);
 const APP_URL = "https://app.aurapredict.xyz";
 const DOCS_URL = "https://docs.aurapredict.xyz";
+const ARC_FAUCET_URL = "https://faucet.circle.com";
 const X_URL = "https://x.com/AuraPredict";
 const DISCORD_URL = "https://discord.gg/3wTYhdsr";
 const DEMO_VIDEO_URL = "https://www.youtube.com/watch?v=tdYqpAIG82s";
@@ -2368,6 +2369,7 @@ export default function App() {
   const [marketCreationFee, setMarketCreationFee] = useState<bigint>(0n);
   const [accumulatedProtocolFees, setAccumulatedProtocolFees] = useState<bigint>(0n);
   const [walletBalance, setWalletBalance] = useState<bigint>(0n);
+  const [walletTokenBalances, setWalletTokenBalances] = useState<Record<string, bigint>>({});
   const [pendingWithdrawalsByToken, setPendingWithdrawalsByToken] = useState<Record<string, bigint>>({});
   const [markets, setMarkets] = useState<MarketView[]>(() => readCachedMarkets());
   const [activities, setActivities] = useState<ActivityItem[]>([]);
@@ -2627,6 +2629,12 @@ export default function App() {
   const profileDisplayName = viewedProfileAddress
     ? profileNames[viewedProfileKey] || shortAddress(viewedProfileAddress)
     : "Connect wallet";
+  const walletUsdcBalance = isAddress(defaultSettlementToken)
+    ? walletTokenBalances[defaultSettlementToken.toLowerCase()] ?? walletBalance
+    : walletBalance;
+  const walletEurcBalance = isAddress(EURC_TOKEN_ADDRESS)
+    ? walletTokenBalances[EURC_TOKEN_ADDRESS.toLowerCase()] ?? 0n
+    : 0n;
   const displayNameForAddress = useCallback(
     (address: string) => {
       const key = address.toLowerCase();
@@ -3628,6 +3636,7 @@ export default function App() {
   const refreshWalletBalance = useCallback(async (address = account) => {
     if (!address || !isAddress(address)) {
       setWalletBalance(0n);
+      setWalletTokenBalances({});
       return;
     }
 
@@ -3642,8 +3651,29 @@ export default function App() {
             }))
           : await withRpcRetry(() => getPublicClient().getBalance({ address: address as Address }));
       setWalletBalance(balance);
+
+      if (isStablecoinContractVersion(contractVersion)) {
+        const tokenSet = new Set<string>();
+        if (isAddress(defaultSettlementToken)) tokenSet.add(defaultSettlementToken.toLowerCase());
+        if (isAddress(EURC_TOKEN_ADDRESS)) tokenSet.add(EURC_TOKEN_ADDRESS.toLowerCase());
+        const balances = await Promise.all(
+          Array.from(tokenSet).map(async (token) => {
+            const value = await withRpcRetry(() => getPublicClient().readContract({
+              address: token as Address,
+              abi: settlementTokenAbi,
+              functionName: "balanceOf",
+              args: [address as Address]
+            }));
+            return [token, value] as const;
+          })
+        );
+        setWalletTokenBalances(Object.fromEntries(balances));
+      } else {
+        setWalletTokenBalances({});
+      }
     } catch {
       setWalletBalance(0n);
+      setWalletTokenBalances({});
     }
   }, [account, contractVersion, defaultSettlementToken]);
 
@@ -6520,27 +6550,27 @@ export default function App() {
                 {canPropose && (
                   <>
                     {!hasNoLiquidity(market) && (
-                      <button className="secondary" disabled={aiBusy} onClick={() => askAuraForResolution(market)} type="button">
-                        {aiBusy ? "Aura thinking..." : aiCanPropose ? "Refresh Aura" : "Ask Aura"}
+                      <button className="secondary" disabled={aiBusy || transactionPending} onClick={() => askAuraForResolution(market)} type="button">
+                        {aiBusy ? "Aura thinking..." : transactionPending ? "Processing..." : aiCanPropose ? "Refresh Aura" : "Ask Aura"}
                       </button>
                     )}
                     {aiCanPropose && (
                       <button
                         className="secondary"
                         onClick={() => resolveMarket(market.id, aiSuggestedOutcome as Outcome.Yes | Outcome.No)}
-                        disabled={!canResolveAfterAura(market.id) || aiSuggestionBlockedByPool}
+                        disabled={transactionPending || !canResolveAfterAura(market.id) || aiSuggestionBlockedByPool}
                         type="button"
                       >
                         Use AI
                       </button>
                     )}
-                    <button className="secondary" onClick={() => resolveMarket(market.id, Outcome.Yes)} disabled={!canProposeYes || !canResolveAfterAura(market.id)}>
+                    <button className="secondary" onClick={() => resolveMarket(market.id, Outcome.Yes)} disabled={transactionPending || !canProposeYes || !canResolveAfterAura(market.id)}>
                       Propose YES
                     </button>
-                    <button className="secondary" onClick={() => resolveMarket(market.id, Outcome.No)} disabled={!canProposeNo || !canResolveAfterAura(market.id)}>
+                    <button className="secondary" onClick={() => resolveMarket(market.id, Outcome.No)} disabled={transactionPending || !canProposeNo || !canResolveAfterAura(market.id)}>
                       Propose NO
                     </button>
-                    <button className="secondary" disabled={!canResolveAfterAura(market.id) && !hasNoLiquidity(market)} onClick={() => cancelMarket(market.id)}>
+                    <button className="secondary" disabled={transactionPending || (!canResolveAfterAura(market.id) && !hasNoLiquidity(market))} onClick={() => cancelMarket(market.id)}>
                       Propose Cancel
                     </button>
                   </>
@@ -6747,6 +6777,10 @@ export default function App() {
     const aiResolutionReceipt = aiResolutionReceipts[String(selectedMarket.id)];
     const selectedMarketIsSettled = selectedMarket.outcome !== Outcome.Unresolved;
     const showResolutionAssistant = !selectedMarketIsSettled || Boolean(aiResolutionReport);
+    const resolutionActionBusy =
+      transactionPending ||
+      isMarketActionPending("resolve", selectedMarket.id) ||
+      isMarketActionPending("finalize", selectedMarket.id);
     const reportAiSuggestedOutcome = aiOutcomeFromText(aiResolutionReport?.suggestedOutcome);
     const receiptAiSuggestedOutcome = aiOutcomeFromReceipt(aiResolutionReceipt);
     const selectedAiSuggestedOutcome =
@@ -6980,27 +7014,27 @@ export default function App() {
                     {canPropose && (
                       <>
                         {!hasNoLiquidity(selectedMarket) && (
-                          <button className="secondary action-refresh-aura" disabled={aiBusy} onClick={() => askAuraForResolution(selectedMarket)} type="button">
-                            {aiBusy ? "Aura thinking..." : selectedAiCanPropose ? "Refresh Aura" : "Ask Aura"}
+                          <button className="secondary action-refresh-aura" disabled={aiBusy || resolutionActionBusy} onClick={() => askAuraForResolution(selectedMarket)} type="button">
+                            {aiBusy ? "Aura thinking..." : resolutionActionBusy ? "Processing..." : selectedAiCanPropose ? "Refresh Aura" : "Ask Aura"}
                           </button>
                         )}
                         {selectedAiCanPropose && (
                           <button
                             className="secondary action-use-ai"
                             onClick={() => resolveMarket(selectedMarket.id, selectedAiSuggestedOutcome as Outcome.Yes | Outcome.No)}
-                            disabled={!canResolveAfterAura(selectedMarket.id) || selectedAiSuggestionBlockedByPool}
+                            disabled={resolutionActionBusy || !canResolveAfterAura(selectedMarket.id) || selectedAiSuggestionBlockedByPool}
                             type="button"
                           >
                             Use AI: {outcomeLabel(selectedAiSuggestedOutcome)}
                           </button>
                         )}
-                        <button className="secondary action-propose-yes" onClick={() => resolveMarket(selectedMarket.id, Outcome.Yes)} disabled={!canProposeYes || !canResolveAfterAura(selectedMarket.id)}>
+                        <button className="secondary action-propose-yes" onClick={() => resolveMarket(selectedMarket.id, Outcome.Yes)} disabled={resolutionActionBusy || !canProposeYes || !canResolveAfterAura(selectedMarket.id)}>
                           Propose YES
                         </button>
-                        <button className="secondary action-propose-no" onClick={() => resolveMarket(selectedMarket.id, Outcome.No)} disabled={!canProposeNo || !canResolveAfterAura(selectedMarket.id)}>
+                        <button className="secondary action-propose-no" onClick={() => resolveMarket(selectedMarket.id, Outcome.No)} disabled={resolutionActionBusy || !canProposeNo || !canResolveAfterAura(selectedMarket.id)}>
                           Propose NO
                         </button>
-                        <button className="secondary action-propose-cancel" disabled={!canResolveAfterAura(selectedMarket.id) && !hasNoLiquidity(selectedMarket)} onClick={() => cancelMarket(selectedMarket.id)}>
+                        <button className="secondary action-propose-cancel" disabled={resolutionActionBusy || (!canResolveAfterAura(selectedMarket.id) && !hasNoLiquidity(selectedMarket))} onClick={() => cancelMarket(selectedMarket.id)}>
                           Cancel
                         </button>
                       </>
@@ -7802,7 +7836,16 @@ export default function App() {
                   <div className="wallet-dropdown">
                     <div className="wallet-dropdown-head">
                       <span>Connected wallet</span>
-                      <strong>{shortAddress(account)}</strong>
+                      <div className="wallet-address-row">
+                        <strong>{shortAddress(account)}</strong>
+                        <button
+                          className="wallet-refresh-button"
+                          onClick={() => copyTextToClipboard(account, "Wallet address copied.")}
+                          type="button"
+                        >
+                          Copy
+                        </button>
+                      </div>
                     </div>
                     <div className={`wallet-network-state ${isArcNetwork ? "ok" : "warning"}`}>
                       <span>{isArcNetwork ? "Network: Arc Testnet" : "Network: Not Arc Testnet"}</span>
@@ -7819,8 +7862,14 @@ export default function App() {
                     </div>
                     <div className="wallet-balance-row">
                       <div>
-                        <span>Available {defaultSettlementSymbol}</span>
-                        <strong>{formatUsdc(walletBalance, defaultSettlementDecimals)}</strong>
+                        <span>Available USDC</span>
+                        <strong>{formatUsdc(walletUsdcBalance, defaultSettlementDecimals)}</strong>
+                      </div>
+                    </div>
+                    <div className="wallet-balance-row">
+                      <div>
+                        <span>Available EURC</span>
+                        <strong>{formatUsdc(walletEurcBalance, defaultSettlementDecimals)}</strong>
                       </div>
                       <button className="wallet-refresh-button" onClick={() => refreshWalletBalance()} type="button">
                         Refresh
@@ -8371,13 +8420,25 @@ export default function App() {
                     </form>
                     <h2>{profileDisplayName}</h2>
                     <div className="profile-id-row">
-                      <span>{viewedProfileAddress ? shortAddress(viewedProfileAddress) : "No wallet connected"}</span>
+                      <span>
+                        {viewedProfileAddress ? shortAddress(viewedProfileAddress) : "No wallet connected"}
+                        {viewedProfileAddress && (
+                          <button
+                            className="copy-inline-button"
+                            onClick={() => copyTextToClipboard(viewedProfileAddress, "Wallet address copied.")}
+                            type="button"
+                          >
+                            Copy
+                          </button>
+                        )}
+                      </span>
                       <span>Joined {profileJoinedLabel}</span>
                       {!isOwnProfile && <span>Shared profile</span>}
                     </div>
                     <div className="profile-chip-row">
                       <span>Arc Testnet</span>
-                      {isOwnProfile && <span>Balance {formatUsdc(walletBalance, defaultSettlementDecimals)} {defaultSettlementSymbol}</span>}
+                      {isOwnProfile && <span>USDC {formatUsdc(walletUsdcBalance, defaultSettlementDecimals)}</span>}
+                      {isOwnProfile && <span>EURC {formatUsdc(walletEurcBalance, defaultSettlementDecimals)}</span>}
                       <span>{createdMarkets} created</span>
                       <span>{participatedProfileMarkets.length} participated</span>
                     </div>
@@ -8406,6 +8467,11 @@ export default function App() {
                   <button className="secondary" type="button" onClick={copyProfileLink} disabled={isOwnProfile && !isProfilePublic}>
                     Share profile
                   </button>
+                  {isOwnProfile && (
+                    <a className="secondary faucet-link" href={ARC_FAUCET_URL} target="_blank" rel="noreferrer">
+                      Faucet
+                    </a>
+                  )}
                   {!isOwnProfile && viewedProfileAddress && (
                     <button className="secondary" type="button" onClick={() => toggleFollowCreator(viewedProfileAddress)}>
                       {followedCreators.includes(viewedProfileKey) ? "Following" : "Follow user"}
@@ -8417,8 +8483,9 @@ export default function App() {
               <section className="profile-stat-grid">
                 {isOwnProfile && (
                   <article className="profile-stat-card profile-balance-card">
-                    <span>Available {defaultSettlementSymbol}</span>
-                    <strong>{formatUsdc(walletBalance, defaultSettlementDecimals)}</strong>
+                    <span>Available balances</span>
+                    <strong>USDC {formatUsdc(walletUsdcBalance, defaultSettlementDecimals)}</strong>
+                    <strong>EURC {formatUsdc(walletEurcBalance, defaultSettlementDecimals)}</strong>
                     <small>Arc Testnet wallet balance</small>
                   </article>
                 )}
@@ -8702,27 +8769,27 @@ export default function App() {
                           {canPropose && (
                             <>
                               {!hasNoLiquidity(market) && (
-                                <button className="secondary" disabled={aiBusy} onClick={() => askAuraForResolution(market)} type="button">
-                                  {aiBusy ? "Aura thinking..." : aiCanPropose ? "Refresh Aura" : "Ask Aura"}
+                                <button className="secondary" disabled={aiBusy || transactionPending} onClick={() => askAuraForResolution(market)} type="button">
+                                  {aiBusy ? "Aura thinking..." : transactionPending ? "Processing..." : aiCanPropose ? "Refresh Aura" : "Ask Aura"}
                                 </button>
                               )}
                               {aiCanPropose && (
                                 <button
                                   className="secondary"
                                   onClick={() => resolveMarket(market.id, aiSuggestedOutcome as Outcome.Yes | Outcome.No)}
-                                  disabled={!canResolveAfterAura(market.id) || aiSuggestionBlockedByPool}
+                                  disabled={transactionPending || !canResolveAfterAura(market.id) || aiSuggestionBlockedByPool}
                                   type="button"
                                 >
                                   Use AI
                                 </button>
                               )}
-                              <button className="secondary" onClick={() => resolveMarket(market.id, Outcome.Yes)} disabled={!canProposeYes || !canResolveAfterAura(market.id)}>
+                              <button className="secondary" onClick={() => resolveMarket(market.id, Outcome.Yes)} disabled={transactionPending || !canProposeYes || !canResolveAfterAura(market.id)}>
                                 Propose YES
                               </button>
-                              <button className="secondary" onClick={() => resolveMarket(market.id, Outcome.No)} disabled={!canProposeNo || !canResolveAfterAura(market.id)}>
+                              <button className="secondary" onClick={() => resolveMarket(market.id, Outcome.No)} disabled={transactionPending || !canProposeNo || !canResolveAfterAura(market.id)}>
                                 Propose NO
                               </button>
-                              <button className="secondary" disabled={!canResolveAfterAura(market.id) && !hasNoLiquidity(market)} onClick={() => cancelMarket(market.id)}>
+                              <button className="secondary" disabled={transactionPending || (!canResolveAfterAura(market.id) && !hasNoLiquidity(market))} onClick={() => cancelMarket(market.id)}>
                                 Propose Cancel
                               </button>
                             </>

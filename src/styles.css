@@ -1597,6 +1597,13 @@ h3 {
   color: #101827;
 }
 
+.wallet-address-row {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+}
+
 .wallet-dropdown button {
   background: #f8fafc;
   box-shadow: none;
@@ -4852,6 +4859,23 @@ label {
   font-weight: 760;
 }
 
+.copy-inline-button {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  color: #4568e8;
+  font-size: 0.75rem;
+  font-weight: 800;
+  margin-left: 6px;
+  min-height: 0;
+  padding: 0;
+}
+
+.copy-inline-button:hover:not(:disabled) {
+  background: transparent;
+  color: #1f3bd9;
+}
+
 .profile-chip-row span,
 .profile-public {
   background: #f8fafc;
@@ -4866,6 +4890,12 @@ label {
 
 .profile-actions {
   justify-content: flex-end;
+}
+
+.faucet-link {
+  align-items: center;
+  display: inline-flex;
+  text-decoration: none;
 }
 
 .profile-public {
@@ -5973,6 +6003,14 @@ label {
 [data-theme="dark"] .timeline-step,
 [data-theme="dark"] .timeline-step small {
   color: #9aa7bd;
+}
+
+[data-theme="dark"] .copy-inline-button {
+  color: #9fb7ff;
+}
+
+[data-theme="dark"] .copy-inline-button:hover:not(:disabled) {
+  color: #d4defe;
 }
 
 [data-theme="dark"] .profile-chip-row span,
