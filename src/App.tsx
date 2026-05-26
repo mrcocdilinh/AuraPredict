@@ -2286,7 +2286,7 @@ export default function App() {
   const silentLoadRef = useRef(false);
   const [account, setAccount] = useState("");
   const [owner, setOwner] = useState("");
-  const [contractVersion, setContractVersion] = useState<MarketContractVersion>("unknown");
+  const [contractVersion, setContractVersion] = useState<MarketContractVersion>("v3");
   const [resolutionAuthority, setResolutionAuthority] = useState("");
   const [defaultSettlementToken, setDefaultSettlementToken] = useState("");
   const [defaultSettlementDecimals, setDefaultSettlementDecimals] = useState(ARC_NATIVE_USDC_DECIMALS);
@@ -4268,14 +4268,12 @@ export default function App() {
         setCreatorBond(contractCreatorBond);
         setDisputeBond(contractDisputeBond);
         setDisputeWindow(Number(contractDisputeWindow));
-        setContractVersion("dispute");
       } catch {
         setCreatorBond(0n);
         setDisputeBond(0n);
         setDisputeWindow(0);
         setDisputeGracePeriod(0);
         setMarketCreationFee(0n);
-        setContractVersion("legacy");
       }
       try {
         const [contractVersionName, contractResolutionAuthority, contractDisputeGracePeriod, contractMarketCreationFee] =
@@ -4615,7 +4613,7 @@ export default function App() {
         }
       );
 
-      if (totalMarketCount === 0) setContractVersion("unknown");
+      if (totalMarketCount === 0 && detectedContractVersion !== "v3") setContractVersion("unknown");
       const loadedRows = rows.filter((row): row is MarketView => Boolean(row));
 
       if (totalMarketCount > 0 && marketIds.length > 0 && loadedRows.length === 0) {
