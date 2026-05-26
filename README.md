@@ -26,13 +26,15 @@ Tinh nang hien tai:
 - Market khong co thanh khoan co the cancel sau resolution time ma khong can ton luot goi AI; bond/refund duoc rut theo pull-withdrawal.
 - Tung market co lich su bet va o tim kiem vi rieng; tab Ended cung co tim kiem rieng cho market da ket thuc.
 
-Trang production hien co the van dang tro vao deployment V2. Code frontend va indexer doc duoc ca V2/V3; cac control V3 chi hoat dong sau khi deploy contract moi va cap nhat dia chi contract.
+Contract V3 da deploy tren Arc Testnet tai `0x4399ea3f59AA14e4D19217f1af2aD0681f5FafFd`, bat dau tu block `44074836`. Frontend va indexer doc duoc ca V2/V3; production chi chuyen sang V3 sau khi cac environment variable cua Vercel/Render tro vao dia chi nay.
+Khong cat production khoi V2 khi van con market V2 dang live hoac chua claim; tien va trang thai onchain cua market V2 khong the di chuyen sang V3.
 
 ## Arc Testnet
 
 - Chain ID: `5042002` (`0x4CEF52`)
 - RPC: `https://rpc.testnet.arc.network`
 - Explorer: `https://testnet.arcscan.app`
+- Active V3 contract: `0x4399ea3f59AA14e4D19217f1af2aD0681f5FafFd`
 - Gas token: native `USDC`; V3 dung cung tai san USDC qua ERC-20 interface `0x3600000000000000000000000000000000000000` (6 decimals) cho allowance/transfer.
 - Faucet: `https://faucet.circle.com`
 
@@ -49,19 +51,20 @@ npm run indexer
 npm run dev
 ```
 
-Muon frontend ket noi contract that tren Arc Testnet, ban can deploy contract truoc:
+Deployment V3 dang hoat dong tren Arc Testnet:
 
 ```bash
-ARC_USDC_TOKEN_ADDRESS=0x...
-ARC_EURC_TOKEN_ADDRESS=0x... # optional
-npm run deploy:arc
+VITE_PREDICTION_MARKET_ADDRESS=0x4399ea3f59AA14e4D19217f1af2aD0681f5FafFd
+VITE_PREDICTION_MARKET_START_BLOCK=44074836
+ARC_USDC_TOKEN_ADDRESS=0x3600000000000000000000000000000000000000
+ARC_EURC_TOKEN_ADDRESS=0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a
 ```
 
-Sau do dien dia chi contract vao:
+De chay local hoac chuyen production sang V3, dien:
 
 ```bash
-VITE_PREDICTION_MARKET_ADDRESS=0x...
-VITE_ARC_EURC_TOKEN_ADDRESS=0x... # optional after V3 deployment
+VITE_PREDICTION_MARKET_ADDRESS=0x4399ea3f59AA14e4D19217f1af2aD0681f5FafFd
+VITE_ARC_EURC_TOKEN_ADDRESS=0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a
 VITE_AURA_INDEXER_URL=http://127.0.0.1:8787
 VITE_WALLETCONNECT_PROJECT_ID=...
 ```

@@ -46,9 +46,9 @@
           <p>
             AuraPredict is a YES/NO prediction market dapp on Arc Testnet. It combines stablecoin
             staking, AI-assisted evidence review, dispute protection, protocol fees, a public Render
-            indexer, wallet profiles, searchable bet history, and Aura Points. The prepared V3
-            contract upgrade adds enforced resolution timing, configurable settlement assets, and
-            authority modes suitable for a future oracle or committee.
+            indexer, wallet profiles, searchable bet history, and Aura Points. Its deployed V3
+            contract adds enforced resolution timing, configurable settlement assets, and authority
+            modes suitable for a future oracle or committee.
           </p>
           <div class="hero-actions">
             <a class="primary-action" href="#users">Start using</a>
@@ -82,6 +82,10 @@
             <div>
               <dt>USDC ERC-20 interface</dt>
               <dd>0x3600...0000 (6 decimals)</dd>
+            </div>
+            <div>
+              <dt>V3 contract</dt>
+              <dd>0x4399...FafFd</dd>
             </div>
           </dl>
         </aside>
@@ -264,7 +268,7 @@
             <article><span>V3 controls</span><strong>resolutionTime, asset terms, authority review, policy gates, receipt hashes, pull withdrawals</strong></article>
           </div>
           <div class="note">
-            Deployment status: the live app can continue reading the existing V2 deployment. V3 controls become active only after the new contract is deployed and the app/indexer contract address is updated.
+            Deployment status: V3 was deployed on Arc Testnet at <code>0x4399ea3f59AA14e4D19217f1af2aD0681f5FafFd</code> from block <code>44074836</code>. Legacy V2 markets remain on their original contract and are not migrated onchain.
           </div>
           <div class="note">
             Arc USDC has a native gas representation and an ERC-20 interface for the same asset. V3 uses the official ERC-20 interface at <code>0x3600000000000000000000000000000000000000</code> for allowance-based settlement and keeps amounts at 6 decimals.
@@ -392,10 +396,10 @@ npm run build</code></pre>
           <div class="two-column">
             <article>
               <h3>Frontend environment</h3>
-              <pre><code>VITE_PREDICTION_MARKET_ADDRESS=0x...
-VITE_ARC_EURC_TOKEN_ADDRESS=0x...   # optional after V3 deployment
+              <pre><code>VITE_PREDICTION_MARKET_ADDRESS=0x4399ea3f59AA14e4D19217f1af2aD0681f5FafFd
+VITE_ARC_EURC_TOKEN_ADDRESS=0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a
 VITE_AURA_INDEXER_URL=https://aurapredict-indexer.onrender.com
-VITE_PREDICTION_MARKET_START_BLOCK=43295581
+VITE_PREDICTION_MARKET_START_BLOCK=44074836
 VITE_WALLETCONNECT_PROJECT_ID=your_project_id</code></pre>
             </article>
             <article>
@@ -409,7 +413,7 @@ VITE_WALLETCONNECT_PROJECT_ID=your_project_id</code></pre>
             <pre><code>PRIVATE_KEY=0x...
 ARC_RPC_URL=https://rpc.testnet.arc.network
 ARC_USDC_TOKEN_ADDRESS=0x3600000000000000000000000000000000000000
-ARC_EURC_TOKEN_ADDRESS=0x...        # optional V3 asset
+ARC_EURC_TOKEN_ADDRESS=0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a
 npm run deploy:arc</code></pre>
           </div>
         </div>

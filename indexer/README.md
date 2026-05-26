@@ -161,8 +161,8 @@ Recommended flow:
 4. Set these environment variables on the indexer service:
 
 ```bash
-VITE_PREDICTION_MARKET_ADDRESS=0x_your_active_contract_address
-AURA_INDEXER_START_BLOCK=the_deployment_block_for_that_contract
+VITE_PREDICTION_MARKET_ADDRESS=0x4399ea3f59AA14e4D19217f1af2aD0681f5FafFd
+AURA_INDEXER_START_BLOCK=44074836
 AURA_INDEXER_CHUNK_SIZE=9000
 AURA_INDEXER_POLL_MS=12000
 ```
@@ -180,10 +180,10 @@ Then set this on the frontend deployment, for example in Vercel:
 
 ```bash
 VITE_AURA_INDEXER_URL=https://your-indexer-domain
-VITE_PREDICTION_MARKET_START_BLOCK=43295581
+VITE_PREDICTION_MARKET_START_BLOCK=44074836
 ```
 
 Redeploy the frontend after changing env vars.
 
-`render.yaml` intentionally does not hard-code the active contract address or deployment block; set both per deployment so switching V2 to V3 cannot silently point the indexer at stale markets.
+`render.yaml` intentionally leaves the active contract address and deployment block as dashboard settings. Do not switch the production indexer away from V2 until existing V2 markets have a maintained resolution and claim path.
 For smooth production behavior, avoid free plans that sleep. If the host sleeps or has ephemeral storage, the indexer will recover by backfilling from `AURA_INDEXER_START_BLOCK`, but users may see slow data during cold starts.

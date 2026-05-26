@@ -1674,11 +1674,11 @@ function LandingPage() {
     },
     {
       title: "Stablecoin settlement",
-      text: "Current testnet markets settle in USDC; the V3 upgrade prepares configurable settlement assets such as USDC and EURC."
+      text: "The deployed V3 contract supports 6-decimal settlement assets by market, including Arc Testnet USDC and EURC."
     },
     {
       title: "Resolution authority",
-      text: "The V3 upgrade supports creator review, required authority review, or authority-only resolution for a future oracle or committee."
+      text: "The deployed V3 contract supports creator review, required authority review, or authority-only resolution for a future oracle or committee."
     },
     {
       title: "Policy controls",
@@ -1737,14 +1737,14 @@ function LandingPage() {
     "After the rule timestamp, Aura displays a suggested outcome and confidence in Resolution actions",
     "A saved AI receipt can be viewed without running a new AI request; Ask or Refresh requests a new review",
     "Resolver decisions that differ from Aura and user disputes are flagged for owner/authority review",
-    "Aura analysis remains off-chain; V3 can anchor evidence and receipt hashes in wallet-signed proposal actions",
+    "Aura analysis remains off-chain; V3 anchors evidence and receipt hashes in wallet-signed proposal actions",
     "Wallet actions still sign directly against the Arc contract, with Arcscan as the verification layer"
   ];
   const roadmapItems = [
     "Add websocket or event streaming for absolute realtime odds and cross-user updates",
     "Harden AI receipt review with better evidence policy, audit logs, and operator dashboards",
     "Persist social identity, comments, follows, evidence, and notifications beyond local browser storage",
-    "Deploy the V3 contract after review, then configure an oracle or committee authority as operations mature"
+    "Configure an oracle or committee authority after its evidence and operating policy are ready"
   ];
   const nextTheme = landingTheme === "dark" ? "light" : "dark";
   const heroMarketCount = landingHealth?.marketCount ?? landingStats?.totalMarkets ?? 0;
@@ -1884,7 +1884,7 @@ function LandingPage() {
           </div>
           <div className="landing-proof">
             <span>{indexerIsRealtime ? "Render indexer live" : "Indexer fallback active"}</span>
-            <span>V3 upgrade prepared</span>
+            <span>V3 deployed on Arc Testnet</span>
             <span>{updatedText}</span>
             <span>{pendingMarketsText} pending resolution</span>
           </div>
@@ -1930,7 +1930,7 @@ function LandingPage() {
             The app keeps the trading surface simple while making evidence, profiles, and leaderboard
             performance visible enough for social forecasting. AuraPredict combines onchain YES/NO
             staking, an indexer-backed data layer, AI-assisted market quality checks, and AI resolution
-            receipts. The prepared V3 upgrade adds onchain timing and authority controls before a future deployment switch.
+            receipts. V3 is deployed on Arc Testnet with onchain resolution timing, configurable settlement assets, and authority controls.
           </p>
         </div>
         <div className="landing-feature-grid">
@@ -2008,7 +2008,7 @@ function LandingPage() {
             AuraPredict is live as an Arc Testnet MVP with a public Render indexer. The current product
             proves market creation, staking, dispute-aware settlement, profiles, comments, evidence,
             AI resolution receipts, live stats, notifications, and public reputation while wallet
-            actions remain fully onchain. A V3 contract upgrade is prepared in code and requires a new deployment before its new controls become live.
+            actions remain fully onchain. V3 is deployed at 0x4399...FafFd; production reads it after the frontend and indexer configuration switch.
           </p>
           <div className="landing-docs-actions">
             <a className="landing-primary" href={DOCS_URL}>

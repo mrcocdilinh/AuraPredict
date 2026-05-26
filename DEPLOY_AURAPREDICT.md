@@ -169,15 +169,24 @@ Explorer: https://testnet.arcscan.app/address/0x...
 
 Copy dia chi `0x...`.
 
-Contract V3 la mot deployment moi: no them `resolutionTime` duoc cuong che onchain, settlement asset theo market, fee/bond snapshot, authority review modes, evidence/AI receipt hash va pull-withdrawal. Frontend/indexer doc duoc ca V2 va V3, nhung market cua contract cu khong tu chuyen sang V3. Chi doi dia chi production sau khi da test deployment V3.
+Deployment V3 hien tai tren Arc Testnet:
+
+```text
+Contract: 0x4399ea3f59AA14e4D19217f1af2aD0681f5FafFd
+Block:    44074836
+USDC:     0x3600000000000000000000000000000000000000
+EURC:     0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a
+```
+
+Contract V3 them `resolutionTime` duoc cuong che onchain, settlement asset theo market, fee/bond snapshot, authority review modes, evidence/AI receipt hash va pull-withdrawal. Frontend/indexer doc duoc ca V2 va V3, nhung market cua contract cu khong tu chuyen sang V3.
 
 ### 3.4. Dua dia chi contract vao frontend local
 
 Mo `.env` va dien:
 
 ```env
-VITE_PREDICTION_MARKET_ADDRESS=0x_dia_chi_contract_vua_deploy
-VITE_ARC_EURC_TOKEN_ADDRESS=0x_dia_chi_eurc_neu_dung
+VITE_PREDICTION_MARKET_ADDRESS=0x4399ea3f59AA14e4D19217f1af2aD0681f5FafFd
+VITE_ARC_EURC_TOKEN_ADDRESS=0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a
 ```
 
 Dung dev server neu dang chay bang `Ctrl + C`, roi chay lai:
