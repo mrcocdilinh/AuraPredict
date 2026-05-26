@@ -1699,7 +1699,11 @@ function LandingPage() {
       text: "The deployed V4 contract supports 6-decimal settlement assets by market, including Arc Testnet USDC and EURC."
     },
     {
-      title: "Resolution authority",
+      title: "Onchain market terms",
+      text: "V4 stores each market's primary source, fallback source, and resolution rule onchain so the settlement criteria stay tied to the market."
+    },
+    {
+      title: "Oracle-ready authority",
       text: "The deployed V4 contract supports creator review, required authority review, authority-only resolution, and an adapter-only path for a future oracle or committee."
     },
     {
@@ -1732,11 +1736,15 @@ function LandingPage() {
     },
     {
       title: "AI resolution receipts",
-      text: "View a suggested YES or NO outcome with confidence and supporting detail while final settlement remains in the onchain dispute flow."
+      text: "View a suggested YES or NO outcome with confidence and supporting detail. Saved receipts can be reopened without spending another AI request."
     },
     {
       title: "Live indexer",
       text: "Read market history, wallet-searchable bet activity, stats, and leaderboard data from the Render indexer before falling back to Arc RPC."
+    },
+    {
+      title: "Archive-safe migration",
+      text: "New markets run on V4 while V3 markets remain reachable through the archive path for settlement and claims."
     }
   ];
   const flow = ["Create a market", "Stake YES or NO", "Track odds", "Resolve result", "Claim payout"];
@@ -2129,7 +2137,11 @@ function LandingPage() {
         <div className="docs-feature-table">
           <article>
             <span>Market creation</span>
-            <strong>YES/NO questions with UTC close time, category labels, required source URL, and required resolution rule.</strong>
+            <strong>YES/NO questions with UTC close time, separate resolution time, category labels, required source URL, and required resolution rule.</strong>
+          </article>
+          <article>
+            <span>V4 terms</span>
+            <strong>Primary source, fallback source, and resolution rule are stored onchain for every new market.</strong>
           </article>
           <article>
             <span>Trading</span>
@@ -2144,8 +2156,20 @@ function LandingPage() {
             <strong>Aura-first flow: the suggested result is visible before proposal, with mismatch alerts and dispute review when needed.</strong>
           </article>
           <article>
+            <span>AI efficiency</span>
+            <strong>Saved resolution receipts can be displayed again without rerunning Aura; only Ask or Refresh spends AI quota.</strong>
+          </article>
+          <article>
+            <span>Oracle path</span>
+            <strong>V4 includes approved adapter and signed-Aura hooks so future oracle or committee markets do not require another core migration.</strong>
+          </article>
+          <article>
             <span>Deadline outcomes</span>
             <strong>For a clearly defined event due by a fixed time, Aura may suggest NO after the deadline when reviewed evidence provides no credible confirmation, while displaying its confidence and risk.</strong>
+          </article>
+          <article>
+            <span>Timeout safety</span>
+            <strong>V4 can cancel and refund markets that pass the proposal grace period without a result proposal.</strong>
           </article>
           <article>
             <span>Profiles</span>
@@ -2158,6 +2182,10 @@ function LandingPage() {
           <article>
             <span>Admin controls</span>
             <strong>Operational credentials and automation policies stay private; public docs only show user-facing behavior and rules.</strong>
+          </article>
+          <article>
+            <span>V3 archive</span>
+            <strong>Old V3 markets remain onchain and accessible from the app archive path for final settlement and claims.</strong>
           </article>
           <article>
             <span>Docs domain</span>
