@@ -1831,6 +1831,7 @@ function LandingPage() {
     }
   });
   const [landingStats, setLandingStats] = useState<ProjectStats | null>(null);
+  const [landingMarketAssetStats, setLandingMarketAssetStats] = useState<AssetStats[]>([]);
   const [landingHealth, setLandingHealth] = useState<LandingHealth | null>(null);
   const [demoOpen, setDemoOpen] = useState(false);
   const indexerIsRealtime = INDEXER_URL && !INDEXER_URL.includes("github.io");
@@ -1923,9 +1924,14 @@ function LandingPage() {
   const nextTheme = landingTheme === "dark" ? "light" : "dark";
   const heroMarketCount = landingHealth?.marketCount ?? landingStats?.totalMarkets ?? 0;
   const heroMarketText = heroMarketCount > 0 ? heroMarketCount.toLocaleString("en-US") : "--";
-  const landingAssetStats = fallbackAssetStatsFromProject(landingStats);
-  const indexedVolumeText = landingStats ? formatAssetSummary(landingAssetStats, "totalVolume") : "--";
-  const landingLiveLiquidityText = landingStats ? formatAssetSummary(landingAssetStats, "liveLiquidity") : "--";
+  const landingAssetRows =
+    landingStats?.assetBreakdown && landingStats.assetBreakdown.length > 0
+      ? landingStats.assetBreakdown
+      : landingMarketAssetStats.length > 0
+        ? landingMarketAssetStats
+        : fallbackAssetStatsFromProject(landingStats);
+  const indexedVolumeText = landingStats ? formatAssetSummary(landingAssetRows, "totalVolume") : "--";
+  const landingLiveLiquidityText = landingStats ? formatAssetSummary(landingAssetRows, "liveLiquidity") : "--";
   const participantsText = landingStats ? landingStats.participantEntries.toLocaleString("en-US") : "--";
   const knownPlayersText = landingStats ? landingStats.knownPlayers.toLocaleString("en-US") : "--";
   const liveMarketsText = landingStats ? landingStats.liveMarkets.toLocaleString("en-US") : "--";
@@ -1967,7 +1973,26 @@ function LandingPage() {
         fetchIndexerJson<LandingHealth>("/health")
       ]);
       if (canceled) return;
-      if (statsResponse?.stats) setLandingStats(indexedStatsToProjectStats(statsResponse.stats));
+      if (statsResponse?.stats) {
+        const nextStats = indexedStatsToProjectStats(statsResponse.stats);
+        setLandingStats(nextStats);
+        if (!nextStats.assetBreakdown || nextStats.assetBreakdown.length === 0) {
+          const marketResponse = await fetchIndexerJson<{ markets: IndexedMarket[] }>("/api/markets");
+          if (!canceled && marketResponse?.markets) {
+            setLandingMarketAssetStats(
+              assetStatsFromMarkets(
+                marketResponse.markets.map(indexedMarketToView),
+                Math.floor(Date.now() / 1000),
+                "",
+                "USDC",
+                ARC_NATIVE_USDC_DECIMALS
+              )
+            );
+          }
+        } else {
+          setLandingMarketAssetStats([]);
+        }
+      }
       if (healthResponse?.ok) setLandingHealth(healthResponse);
     };
     void loadLandingData();
