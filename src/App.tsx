@@ -828,7 +828,7 @@ function compactErrorMessage(error: unknown) {
   const firstLine = raw.split("\n").find(Boolean) || raw;
   const lower = raw.toLowerCase();
   if (lower.includes("user rejected") || lower.includes("user denied")) return "Transaction rejected in wallet.";
-  if (lower.includes("insufficient funds")) return "Insufficient USDC balance for this transaction.";
+  if (lower.includes("insufficient funds")) return "Insufficient wallet balance for this transaction. Check USDC for gas and the selected market token.";
   if (lower.includes("transferfailed")) {
     return "Token transfer failed. Check the selected token balance and allowance before trying again.";
   }
@@ -1726,7 +1726,7 @@ function LandingPage() {
     },
     {
       title: "Stablecoin settlement",
-      text: "The current contract supports 6-decimal settlement assets by market, including Arc Testnet USDC and EURC."
+      text: "The current contract supports 6-decimal settlement assets by market, including Arc Testnet USDC and EURC, with selected-token balance checks before actions."
     },
     {
       title: "Onchain market terms",
@@ -1746,7 +1746,7 @@ function LandingPage() {
     },
     {
       title: "Profiles and reputation",
-      text: "Set a username, share your profile, track PNL, win rate, created markets, and prediction history."
+      text: "Set a username, share your profile, view USDC/EURC balances, track PNL, win rate, created markets, and prediction history."
     },
     {
       title: "Aura Points",
@@ -1758,7 +1758,7 @@ function LandingPage() {
     },
     {
       title: "Social forecasting",
-      text: "Follow creators, share to X, embed market links, and study top traders before staking."
+      text: "Follow creators, copy wallet addresses, share to X, embed market links, and study top traders before staking."
     },
     {
       title: "Aura Agent",
@@ -1789,6 +1789,8 @@ function LandingPage() {
   ];
   const dataFlow = [
     "Live Render indexer now powers market history, volume, participants, activity, and leaderboards",
+    "Wallet UI shows USDC and EURC balances with copy-address and faucet shortcuts",
+    "The app checks selected-token balance and allowance before create, stake, or dispute transactions",
     "Aura Agent drafts clearer markets, checks similar questions, and prepares rules with source links",
     "After the rule timestamp, Aura displays a suggested outcome and confidence in Resolution actions",
     "A saved AI receipt can be viewed without running a new AI request; Ask or Refresh requests a new review",
@@ -2081,7 +2083,7 @@ function LandingPage() {
             <span className="docs-label">Purpose</span>
             <h3>Make forecasting social on Arc</h3>
             <p>
-              Users can create public markets, back YES or NO with testnet USDC, track odds, and
+              Users can create public markets, back YES or NO with the market's testnet stablecoin, track odds, and
               build a visible record through profiles, rankings, PNL, win rate, and Aura Points.
             </p>
           </article>
@@ -2171,7 +2173,11 @@ function LandingPage() {
           </article>
           <article>
             <span>Trading</span>
-            <strong>Users stake native Arc USDC on YES or NO directly from their wallet.</strong>
+            <strong>Users stake the market's configured Arc testnet stablecoin, such as USDC or EURC, directly from their wallet.</strong>
+          </article>
+          <article>
+            <span>Wallet UX</span>
+            <strong>The wallet menu shows USDC/EURC balances, copy-address access, faucet shortcut, and selected-token balance checks before transactions.</strong>
           </article>
           <article>
             <span>Settlement</span>
@@ -2199,7 +2205,7 @@ function LandingPage() {
           </article>
           <article>
             <span>Profiles</span>
-            <strong>Wallet profile tracks participation, created markets, PNL, win rate, and claims.</strong>
+            <strong>Wallet profile tracks USDC/EURC balances, participation, created markets, PNL, win rate, and claims.</strong>
           </article>
           <article>
             <span>Leaderboard</span>
@@ -2257,7 +2263,7 @@ function LandingPage() {
         <div className="landing-benefit-grid">
           <article>
             <strong>For traders</strong>
-            <p>Discover fresh markets, back your view with USDC, track positions, and compete on leaderboard metrics.</p>
+            <p>Discover fresh markets, back your view with the market's stablecoin, track positions, and compete on leaderboard metrics.</p>
           </article>
           <article>
             <strong>For creators</strong>
@@ -5496,7 +5502,7 @@ export default function App() {
       if (!market) throw new Error("Market not found.");
       if (value <= 0n) throw new Error("Enter a valid amount.");
       if (!isStablecoinContractVersion(contractVersion) && walletBalance > 0n && value > walletBalance) {
-        throw new Error("Stake amount is higher than your wallet USDC balance.");
+        throw new Error("Stake amount is higher than your wallet balance.");
       }
 
       await switchToArc();
@@ -9086,7 +9092,7 @@ export default function App() {
                     </p>
                   </div>
                   <div className="onboarding-steps" aria-label="AuraPredict onboarding steps">
-                    {["Connect", "Pick side", "Stake USDC", "Track Aura"].map((step, index) => (
+                    {["Connect", "Pick side", "Stake token", "Track Aura"].map((step, index) => (
                       <span key={step}>{index + 1}. {step}</span>
                     ))}
                   </div>
@@ -9753,7 +9759,7 @@ export default function App() {
                 <span className="wallet-info-icon">1</span>
                 <div>
                   <strong>Your account for digital assets</strong>
-                  <p>Use it to sign transactions, stake USDC, and claim payouts on Arc Testnet.</p>
+                  <p>Use it to sign transactions, stake testnet stablecoins, and claim payouts on Arc Testnet.</p>
                 </div>
               </div>
               <div className="wallet-info-item">

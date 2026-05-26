@@ -165,8 +165,8 @@
             <li>Open <a href="https://app.aurapredict.xyz">app.aurapredict.xyz</a>.</li>
             <li>Connect MetaMask, Rabby, OKX, Zerion, or another injected EVM wallet.</li>
             <li>Switch to Arc Testnet when prompted, or add the network manually with the settings above.</li>
-            <li>Fund the wallet with Arc Testnet USDC from the Circle faucet.</li>
-            <li>Open a market, choose YES or NO, enter the USDC amount, confirm the wallet transaction.</li>
+            <li>Fund the wallet with Arc Testnet USDC or EURC from the faucet shortcut in the wallet menu.</li>
+            <li>Open a market, choose YES or NO, enter the market's settlement token amount, confirm the wallet transaction.</li>
             <li>Track the market in your profile. If your position wins after finalization, claim payout.</li>
           </ol>
           <div class="two-column">
@@ -174,7 +174,8 @@
               <h3>Profile data</h3>
               <ul>
                 <li>Wallet display name and public profile link.</li>
-                <li>Available USDC balance on Arc Testnet.</li>
+                <li>Available USDC and EURC balances on Arc Testnet.</li>
+                <li>Copy wallet address and faucet shortcut from the wallet menu.</li>
                 <li>Markets participated and markets created.</li>
                 <li>Resolved wins, losses, PNL, win streak, and claimable payout.</li>
               </ul>
@@ -241,7 +242,7 @@
             <article>
               <span>2</span>
               <h3>Trade</h3>
-              <p>Users stake the market's configured stablecoin on YES or NO before trading closes.</p>
+              <p>Users stake the market's configured stablecoin on YES or NO before trading closes. The app checks selected-token balance and allowance before sending the transaction.</p>
             </article>
             <article>
               <span>3</span>
@@ -280,10 +281,14 @@
           <div class="note">
             Multi-asset scope: the active contract accepts 6-decimal settlement stablecoins such as USDC and optional EURC. A market settles and refunds only in the token selected when it was created. AuraPredict does not perform FX conversion; when multiple assets are active, aggregate dashboard amounts are identified as stablecoin units.
           </div>
+          <div class="note">
+            Wallet UX: the app shows USDC and EURC balances side by side, exposes a faucet shortcut, and blocks predictable create/stake/dispute failures when the selected token balance is too low.
+          </div>
           <div class="reference-table">
             <article><span>Current state</span><strong>Live test markets are indexed on the public Render indexer.</strong></article>
             <article><span>Source/rule storage</span><strong>The contract stores the resolution source, fallback source, and rule for every new market.</strong></article>
             <article><span>Proposal timing</span><strong>Trading close time and result resolution time are separate; the contract rejects early proposals.</strong></article>
+            <article><span>Token safety</span><strong>Frontend checks balance and allowance for the selected settlement token before create, stake, or dispute actions.</strong></article>
             <article><span>No-liquidity markets</span><strong>If no one stakes, the resolver can cancel without spending an AI review.</strong></article>
             <article><span>No-proposal timeout</span><strong>If a market passes its proposal grace period without a result, it can be canceled/refunded instead of leaving funds stuck.</strong></article>
           </div>
