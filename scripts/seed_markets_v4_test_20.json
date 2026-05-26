@@ -1,0 +1,162 @@
+[
+  {
+    "question": "Will BTC/USDT be at or above $90,000 at this V4 test market's resolution time?",
+    "category": "Crypto",
+    "closeInHours": 2,
+    "resolutionSource": "https://www.binance.com/en/trade/BTC_USDT",
+    "fallbackSource": "https://www.coinbase.com/price/bitcoin",
+    "resolutionRule": "Resolve YES if Binance BTC/USDT spot price is $90,000.00 USD or higher at the market's onchain resolution time. Resolve NO if it is below $90,000.00 USD. Use the fallback source only if Binance is unavailable at that timestamp. Resolve CANCEL only if neither source can be verified."
+  },
+  {
+    "question": "Will ETH trade at or above $4,000 at this V4 test market's resolution time?",
+    "category": "Crypto",
+    "closeInHours": 5,
+    "resolutionSource": "https://www.coingecko.com/en/coins/ethereum",
+    "fallbackSource": "https://www.coinbase.com/price/ethereum",
+    "resolutionRule": "Resolve YES if the ETH/USD price shown by the primary source is $4,000.00 USD or higher at the market's onchain resolution time. Resolve NO if it is below $4,000.00 USD. Use the fallback source only if the primary source is unavailable. Resolve CANCEL only if both sources are unavailable or inconsistent enough that a fair result cannot be determined."
+  },
+  {
+    "question": "Will Solana rank in the top 5 crypto assets by market cap at this V4 test market's resolution time?",
+    "category": "Crypto",
+    "closeInHours": 9,
+    "resolutionSource": "https://coinmarketcap.com/currencies/solana/",
+    "fallbackSource": "https://www.coingecko.com/en/coins/solana",
+    "resolutionRule": "Resolve YES if Solana is ranked 5 or better by market capitalization on the primary source at the market's onchain resolution time. Resolve NO if Solana is ranked 6 or lower. Use the fallback source only if the primary source is unavailable. Resolve CANCEL only if both sources cannot be checked."
+  },
+  {
+    "question": "Will total DeFi TVL be at or above $120B at this V4 test market's resolution time?",
+    "category": "Crypto",
+    "closeInHours": 16,
+    "resolutionSource": "https://defillama.com/chains",
+    "fallbackSource": "https://defillama.com/",
+    "resolutionRule": "Resolve YES if DeFiLlama reports total DeFi TVL at $120B USD or higher at the market's onchain resolution time. Resolve NO if it is below $120B USD. Resolve CANCEL only if DeFiLlama is unavailable or the displayed total cannot be interpreted."
+  },
+  {
+    "question": "Will the US Dollar Index be at or above 105 at this V4 test market's resolution time?",
+    "category": "Macro",
+    "closeInHours": 23,
+    "resolutionSource": "https://www.investing.com/indices/usdollar",
+    "fallbackSource": "https://www.marketwatch.com/investing/index/dxy",
+    "resolutionRule": "Resolve YES if the US Dollar Index value on the primary source is 105.00 or higher at the market's onchain resolution time. Resolve NO if it is below 105.00. Use the fallback source only if the primary source is unavailable. Resolve CANCEL only if neither source can provide a readable value."
+  },
+  {
+    "question": "Will spot gold be at or above $2,400 per ounce at this V4 test market's resolution time?",
+    "category": "Macro",
+    "closeInHours": 31,
+    "resolutionSource": "https://www.cmegroup.com/markets/metals/precious/gold.html",
+    "fallbackSource": "https://www.investing.com/commodities/gold",
+    "resolutionRule": "Resolve YES if the gold price shown by the primary source is $2,400.00 USD per ounce or higher at the market's onchain resolution time. Resolve NO if it is below $2,400.00 USD. Use the fallback source only if the primary source is unavailable. Resolve CANCEL only if both sources are unavailable."
+  },
+  {
+    "question": "Will the Federal Reserve publish a new press release before this V4 test market's resolution time?",
+    "category": "Macro",
+    "closeInHours": 38,
+    "resolutionSource": "https://www.federalreserve.gov/newsevents/pressreleases.htm",
+    "fallbackSource": "https://www.federalreserve.gov/newsevents.htm",
+    "resolutionRule": "Resolve YES if the Federal Reserve press releases page shows a newly published press release with a timestamp after this market was created and before or at the market's onchain resolution time. Resolve NO if no such press release is shown by that time. Resolve CANCEL only if the official source is unavailable for review."
+  },
+  {
+    "question": "Will the White House publish a new official statement before this V4 test market's resolution time?",
+    "category": "Politics",
+    "closeInHours": 44,
+    "resolutionSource": "https://www.whitehouse.gov/briefing-room/statements-releases/",
+    "fallbackSource": "https://www.whitehouse.gov/briefing-room/",
+    "resolutionRule": "Resolve YES if the White House statements and releases page shows a new official statement published after this market was created and before or at the market's onchain resolution time. Resolve NO if no new statement is shown by that time. Resolve CANCEL only if the official source is unavailable."
+  },
+  {
+    "question": "Will Congress.gov show any bill action dated today before this V4 test market's resolution time?",
+    "category": "Politics",
+    "closeInHours": 57,
+    "resolutionSource": "https://www.congress.gov/",
+    "fallbackSource": "https://www.congress.gov/most-viewed-bills",
+    "resolutionRule": "Resolve YES if Congress.gov shows at least one bill action dated on the UTC date of this market's resolution time before or at the resolution timestamp. Resolve NO if no such action is visible on the official source. Resolve CANCEL only if Congress.gov is unavailable."
+  },
+  {
+    "question": "Will the NBA scores page list at least one live or final game at this V4 test market's resolution time?",
+    "category": "Sports",
+    "closeInHours": 63,
+    "resolutionSource": "https://www.nba.com/scores",
+    "fallbackSource": "https://www.espn.com/nba/scoreboard",
+    "resolutionRule": "Resolve YES if the primary source lists at least one NBA game as live or final for the date matching the market's onchain resolution time. Resolve NO if no live or final NBA game is listed. Use the fallback source only if the primary source is unavailable. Resolve CANCEL only if neither source can be checked."
+  },
+  {
+    "question": "Will ESPN soccer fixtures show at least one scheduled match at this V4 test market's resolution time?",
+    "category": "Sports",
+    "closeInHours": 71,
+    "resolutionSource": "https://www.espn.com/soccer/fixtures",
+    "fallbackSource": "https://www.espn.com/soccer/scoreboard",
+    "resolutionRule": "Resolve YES if the primary source shows at least one scheduled soccer match for the date matching the market's onchain resolution time. Resolve NO if no scheduled match is shown. Use the fallback source only if fixtures are unavailable. Resolve CANCEL only if neither source can be reviewed."
+  },
+  {
+    "question": "Will OpenAI status show all systems operational at this V4 test market's resolution time?",
+    "category": "AI",
+    "closeInHours": 80,
+    "resolutionSource": "https://status.openai.com/",
+    "fallbackSource": "https://status.openai.com/history",
+    "resolutionRule": "Resolve YES if OpenAI Status shows all systems operational at the market's onchain resolution time. Resolve NO if it shows a degraded, partial outage, major outage, or active incident state. Use the history page only if needed to verify the exact timestamp. Resolve CANCEL only if status data cannot be accessed."
+  },
+  {
+    "question": "Will the Gemini API models page list a Gemini 2.5 Flash model at this V4 test market's resolution time?",
+    "category": "AI",
+    "closeInHours": 92,
+    "resolutionSource": "https://ai.google.dev/gemini-api/docs/models",
+    "fallbackSource": "https://ai.google.dev/gemini-api/docs",
+    "resolutionRule": "Resolve YES if the primary source lists a Gemini 2.5 Flash model at the market's onchain resolution time. Resolve NO if no Gemini 2.5 Flash model is listed. Resolve CANCEL only if the official documentation is unavailable."
+  },
+  {
+    "question": "Will the Arc blog publish a new post before this V4 test market's resolution time?",
+    "category": "Arc",
+    "closeInHours": 103,
+    "resolutionSource": "https://www.arc.io/blog",
+    "fallbackSource": "https://www.arc.io/",
+    "resolutionRule": "Resolve YES if the Arc blog shows a newly published post after this market was created and before or at the market's onchain resolution time. Resolve NO if no such post appears. Resolve CANCEL only if the blog cannot be accessed."
+  },
+  {
+    "question": "Will the Arc community resources page be reachable at this V4 test market's resolution time?",
+    "category": "Arc",
+    "closeInHours": 116,
+    "resolutionSource": "https://community.arc.io/home/resources",
+    "fallbackSource": "https://community.arc.io/",
+    "resolutionRule": "Resolve YES if the primary source loads successfully and shows Arc community resources at the market's onchain resolution time. Resolve NO if it is unreachable or does not show the resources page. Use the fallback source only to verify whether the community site itself is reachable. Resolve CANCEL only if access is blocked by a platform outage that prevents fair verification."
+  },
+  {
+    "question": "Will Circle status show no active incident at this V4 test market's resolution time?",
+    "category": "Stablecoins",
+    "closeInHours": 129,
+    "resolutionSource": "https://status.circle.com/",
+    "fallbackSource": "https://status.circle.com/history",
+    "resolutionRule": "Resolve YES if Circle Status shows no active incident at the market's onchain resolution time. Resolve NO if an active incident is shown. Use the history page only if needed to verify the exact timestamp. Resolve CANCEL only if status data cannot be accessed."
+  },
+  {
+    "question": "Will Circle publish a new blog post before this V4 test market's resolution time?",
+    "category": "Stablecoins",
+    "closeInHours": 142,
+    "resolutionSource": "https://www.circle.com/blog",
+    "fallbackSource": "https://www.circle.com/",
+    "resolutionRule": "Resolve YES if Circle's blog shows a new post published after this market was created and before or at the market's onchain resolution time. Resolve NO if no such post appears. Resolve CANCEL only if the official blog cannot be accessed."
+  },
+  {
+    "question": "Will the AuraPredict indexer health endpoint return ok true at this V4 test market's resolution time?",
+    "category": "Other",
+    "closeInHours": 156,
+    "resolutionSource": "https://aurapredict-indexer.onrender.com/health",
+    "fallbackSource": "https://app.aurapredict.xyz",
+    "resolutionRule": "Resolve YES if the primary source returns a readable health response with ok true at the market's onchain resolution time. Resolve NO if it returns ok false, an error response, or cannot be reached. Use the fallback source only to verify whether the app is online. Resolve CANCEL only if external network access prevents fair verification."
+  },
+  {
+    "question": "Will the AuraPredict GitHub repository page be reachable at this V4 test market's resolution time?",
+    "category": "Other",
+    "closeInHours": 177,
+    "resolutionSource": "https://github.com/mrcocdilinh/AuraPredict",
+    "fallbackSource": "https://github.com/mrcocdilinh",
+    "resolutionRule": "Resolve YES if the primary source loads the AuraPredict repository page at the market's onchain resolution time. Resolve NO if the page is unavailable, removed, or inaccessible. Use the fallback source only to check whether the GitHub account is reachable. Resolve CANCEL only if GitHub has a broader outage preventing fair verification."
+  },
+  {
+    "question": "Will AuraPredict app load its public landing page at this V4 test market's resolution time?",
+    "category": "Other",
+    "closeInHours": 200,
+    "resolutionSource": "https://app.aurapredict.xyz",
+    "fallbackSource": "https://aurapredict.xyz",
+    "resolutionRule": "Resolve YES if the primary source loads the public AuraPredict app or landing shell at the market's onchain resolution time. Resolve NO if it is unreachable or returns an application-level failure. Use the fallback domain only if the app subdomain is unavailable. Resolve CANCEL only if the outage cannot be fairly distinguished from local network failure."
+  }
+]

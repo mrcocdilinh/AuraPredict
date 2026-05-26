@@ -25,7 +25,7 @@ import {
   arcTestnet,
   arcTestnetParams
 } from "./arc";
-import { arcPredictionMarketV3Abi, settlementTokenAbi } from "./contracts/arcPredictionMarketAbi";
+import { arcPredictionMarketV3Abi, arcPredictionMarketV4Abi, settlementTokenAbi } from "./contracts/arcPredictionMarketAbi";
 import { arcPredictionMarketV2Abi as arcPredictionMarketAbi } from "./contracts/arcPredictionMarketV2Abi";
 
 type EthereumProvider = {
@@ -65,11 +65,15 @@ type MarketView = {
   resolutionMode?: number;
   metadataHash?: string;
   metadataURI?: string;
+  fallbackSourceURI?: string;
+  resolutionRule?: string;
+  resolutionAdapter?: string;
   termsProtocolFeeBps?: number;
   termsCreatorBond?: bigint;
   termsDisputeBond?: bigint;
   termsDisputeWindow?: number;
   termsDisputeGracePeriod?: number;
+  termsProposalGracePeriod?: number;
   authorityReviewRequired?: boolean;
   creator: string;
   resolver: string;
@@ -88,7 +92,7 @@ type MarketView = {
   potentialPayout: bigint;
 };
 
-type MarketContractVersion = "unknown" | "legacy" | "dispute" | "v2" | "v3";
+type MarketContractVersion = "unknown" | "legacy" | "dispute" | "v2" | "v3" | "v4";
 
 type ActivityItem = {
   id: string;
@@ -236,6 +240,8 @@ type AiResolutionReceipt = {
   provider?: string;
   model?: string;
   receiptHash?: string;
+  attestation?: string;
+  attestationSigner?: string;
   status?: string;
   proposedOutcome?: string;
   proposedOutcomeValue?: number;
@@ -325,8 +331,17 @@ enum Outcome {
 
 const ACTIVE_V3_CONTRACT_ADDRESS = "0x4399ea3f59AA14e4D19217f1af2aD0681f5FafFd";
 const ACTIVE_V3_DEPLOYMENT_BLOCK = "44074836";
+const ACTIVE_V4_CONTRACT_ADDRESS = "0x3c853AE2eC705B453c9657569b6335e762631536";
+const ACTIVE_V4_DEPLOYMENT_BLOCK = "44083985";
 const ACTIVE_V3_EURC_TOKEN_ADDRESS = "0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a";
-const CONTRACT_ADDRESS = ACTIVE_V3_CONTRACT_ADDRESS;
+const PRIMARY_CONTRACT_ADDRESS = ACTIVE_V4_CONTRACT_ADDRESS;
+const PRIMARY_DEPLOYMENT_BLOCK = ACTIVE_V4_DEPLOYMENT_BLOCK;
+const REQUESTED_DEPLOYMENT =
+  typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("deployment") : null;
+const VIEWING_V3_ARCHIVE =
+  REQUESTED_DEPLOYMENT === "v3" &&
+  PRIMARY_CONTRACT_ADDRESS.toLowerCase() !== ACTIVE_V3_CONTRACT_ADDRESS.toLowerCase();
+const CONTRACT_ADDRESS = VIEWING_V3_ARCHIVE ? ACTIVE_V3_CONTRACT_ADDRESS : PRIMARY_CONTRACT_ADDRESS;
 const EURC_TOKEN_ADDRESS = ACTIVE_V3_EURC_TOKEN_ADDRESS;
 const V3_STABLECOIN_DECIMALS = 6;
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
@@ -405,7 +420,7 @@ const INDEXER_URL = String(
   import.meta.env.VITE_AURA_INDEXER_URL ||
     (import.meta.env.DEV ? "http://127.0.0.1:8787" : "https://aurapredict-indexer.onrender.com")
 ).replace(/\/$/, "");
-const EVENT_START_BLOCK = BigInt(ACTIVE_V3_DEPLOYMENT_BLOCK);
+const EVENT_START_BLOCK = BigInt(VIEWING_V3_ARCHIVE ? ACTIVE_V3_DEPLOYMENT_BLOCK : PRIMARY_DEPLOYMENT_BLOCK);
 const EVENT_LOG_CHUNK_SIZE = 9_000n;
 const CATEGORY_META: Record<string, { label: string; className: string }> = {
   All: { label: "All", className: "category-all" },
@@ -698,7 +713,7 @@ function mergeMarketRows(incomingRows: MarketView[], currentRows: MarketView[], 
 }
 
 async function fetchIndexerJson<T>(path: string): Promise<T | null> {
-  if (!INDEXER_URL) return null;
+  if (!INDEXER_URL || VIEWING_V3_ARCHIVE) return null;
   const [route, query = ""] = path.split("?");
   const urls = [
     `${INDEXER_URL}${path}`,
@@ -723,7 +738,7 @@ async function fetchIndexerJson<T>(path: string): Promise<T | null> {
 }
 
 async function postIndexerJson<T>(path: string, payload: unknown): Promise<T | null> {
-  if (!INDEXER_URL || INDEXER_URL.includes("github.io")) return null;
+  if (!INDEXER_URL || INDEXER_URL.includes("github.io") || VIEWING_V3_ARCHIVE) return null;
   try {
     const response = await fetch(`${INDEXER_URL}${path}`, {
       method: "POST",
@@ -1144,6 +1159,10 @@ function shortQuestion(question: string) {
 
 function sameAddress(left: string, right: string) {
   return left.toLowerCase() === right.toLowerCase();
+}
+
+function isStablecoinContractVersion(version: MarketContractVersion) {
+  return version === "v3" || version === "v4";
 }
 
 function hasUserPosition(market: MarketView) {
@@ -1677,15 +1696,15 @@ function LandingPage() {
     },
     {
       title: "Stablecoin settlement",
-      text: "The deployed V3 contract supports 6-decimal settlement assets by market, including Arc Testnet USDC and EURC."
+      text: "The deployed V4 contract supports 6-decimal settlement assets by market, including Arc Testnet USDC and EURC."
     },
     {
       title: "Resolution authority",
-      text: "The deployed V3 contract supports creator review, required authority review, or authority-only resolution for a future oracle or committee."
+      text: "The deployed V4 contract supports creator review, required authority review, authority-only resolution, and an adapter-only path for a future oracle or committee."
     },
     {
       title: "Policy controls",
-      text: "V3 can pause new activity, allow approved creators, or block new positions without preventing existing markets from settling."
+      text: "V4 can pause new activity, allow approved creators, or block new positions without preventing existing markets from settling."
     },
     {
       title: "Protocol revenue",
@@ -1740,7 +1759,7 @@ function LandingPage() {
     "After the rule timestamp, Aura displays a suggested outcome and confidence in Resolution actions",
     "A saved AI receipt can be viewed without running a new AI request; Ask or Refresh requests a new review",
     "Resolver decisions that differ from Aura and user disputes are flagged for owner/authority review",
-    "Aura analysis remains off-chain; V3 anchors evidence and receipt hashes in wallet-signed proposal actions",
+    "Aura analysis remains off-chain; V4 anchors source/rule terms, evidence hashes, and receipt hashes in wallet-signed proposal actions",
     "Wallet actions still sign directly against the Arc contract, with Arcscan as the verification layer"
   ];
   const roadmapItems = [
@@ -1887,7 +1906,7 @@ function LandingPage() {
           </div>
           <div className="landing-proof">
             <span>{indexerIsRealtime ? "Render indexer live" : "Indexer fallback active"}</span>
-            <span>V3 deployed on Arc Testnet</span>
+            <span>V4 deployed on Arc Testnet</span>
             <span>{updatedText}</span>
             <span>{pendingMarketsText} pending resolution</span>
           </div>
@@ -1933,7 +1952,7 @@ function LandingPage() {
             The app keeps the trading surface simple while making evidence, profiles, and leaderboard
             performance visible enough for social forecasting. AuraPredict combines onchain YES/NO
             staking, an indexer-backed data layer, AI-assisted market quality checks, and AI resolution
-            receipts. V3 is deployed on Arc Testnet with onchain resolution timing, configurable settlement assets, and authority controls.
+            receipts. V4 is deployed on Arc Testnet with onchain source/rule terms, resolution timing, configurable settlement assets, signed-Aura hooks, and authority/oracle controls.
           </p>
         </div>
         <div className="landing-feature-grid">
@@ -2011,7 +2030,7 @@ function LandingPage() {
             AuraPredict is live as an Arc Testnet MVP with a public Render indexer. The current product
             proves market creation, staking, dispute-aware settlement, profiles, comments, evidence,
             AI resolution receipts, live stats, notifications, and public reputation while wallet
-            actions remain fully onchain. Production now uses V3 at 0x4399...FafFd; prior V2 markets remain on their original contract outside this primary interface.
+            actions remain fully onchain. Production now uses V4 at 0x3c853...1536; prior V3 markets remain onchain and can be opened with ?deployment=v3 for settlement and claims.
           </p>
           <div className="landing-docs-actions">
             <a className="landing-primary" href={DOCS_URL}>
@@ -2286,7 +2305,7 @@ export default function App() {
   const silentLoadRef = useRef(false);
   const [account, setAccount] = useState("");
   const [owner, setOwner] = useState("");
-  const [contractVersion, setContractVersion] = useState<MarketContractVersion>("v3");
+  const [contractVersion, setContractVersion] = useState<MarketContractVersion>(VIEWING_V3_ARCHIVE ? "v3" : "unknown");
   const [resolutionAuthority, setResolutionAuthority] = useState("");
   const [defaultSettlementToken, setDefaultSettlementToken] = useState("");
   const [defaultSettlementDecimals, setDefaultSettlementDecimals] = useState(ARC_NATIVE_USDC_DECIMALS);
@@ -2450,7 +2469,7 @@ export default function App() {
   }, [marketEvidence, markets]);
   const resolutionUnlockTime = useCallback(
     (market: Pick<MarketView, "id" | "closeTime" | "resolutionTime">) =>
-      contractVersion === "v3"
+      isStablecoinContractVersion(contractVersion)
         ? market.resolutionTime || market.closeTime
         : resolutionUnlockByMarketId[market.id] ?? market.closeTime,
     [contractVersion, resolutionUnlockByMarketId]
@@ -2468,7 +2487,7 @@ export default function App() {
   const totalLiquidity = markets.reduce((sum, market) => sum + marketVolume(market), 0n);
   const liveLiquidity = activeMarkets.reduce((sum, market) => sum + marketVolume(market), 0n);
   const hasMixedSettlementAssets =
-    contractVersion === "v3" &&
+    isStablecoinContractVersion(contractVersion) &&
     new Set(markets.map((market) => (market.settlementToken || defaultSettlementToken).toLowerCase()).filter(Boolean)).size > 1;
   const aggregateAssetLabel = hasMixedSettlementAssets ? "stablecoin units" : defaultSettlementSymbol;
   const totalTradeVolume = activities.length > 0
@@ -3538,7 +3557,7 @@ export default function App() {
 
     try {
       const balance =
-        contractVersion === "v3" && isAddress(defaultSettlementToken)
+        isStablecoinContractVersion(contractVersion) && isAddress(defaultSettlementToken)
           ? await withRpcRetry(() => getPublicClient().readContract({
               address: defaultSettlementToken as Address,
               abi: settlementTokenAbi,
@@ -3563,7 +3582,7 @@ export default function App() {
   }, [account, refreshWalletBalance, registerUser]);
 
   useEffect(() => {
-    if (contractVersion !== "v3" || !account || !isAddress(account)) {
+    if (!isStablecoinContractVersion(contractVersion) || !account || !isAddress(account)) {
       setPendingWithdrawalsByToken({});
       return;
     }
@@ -3729,7 +3748,7 @@ export default function App() {
       setCreateForm((current) => ({
         ...current,
         closeTime: nextTime,
-        resolutionTime: contractVersion === "v3" ? nextTime : current.resolutionTime
+        resolutionTime: isStablecoinContractVersion(contractVersion) ? nextTime : current.resolutionTime
       }));
     },
     [contractVersion, currentTime]
@@ -3752,7 +3771,7 @@ export default function App() {
     const clamped = Math.max(0, Math.min(100, percentage));
     const value = (walletBalance * BigInt(Math.round(clamped * 100))) / 10000n;
     const market = markets.find((item) => item.id === marketId);
-    const decimals = contractVersion === "v3" ? marketDecimals(market) : ARC_NATIVE_USDC_DECIMALS;
+    const decimals = isStablecoinContractVersion(contractVersion) ? marketDecimals(market) : ARC_NATIVE_USDC_DECIMALS;
     setStakeInputs((current) => ({ ...current, [marketId]: value > 0n ? formatUsdcInput(value, decimals) : "" }));
   }, [contractVersion, markets, walletBalance]);
 
@@ -3929,8 +3948,8 @@ export default function App() {
   );
   const hasRuleCloseMismatch = Boolean(
     ruleReferenceCloseTime &&
-      (contractVersion === "v3" ? createForm.resolutionTime : createForm.closeTime) &&
-      ruleReferenceCloseTime !== (contractVersion === "v3" ? createForm.resolutionTime : createForm.closeTime)
+      (isStablecoinContractVersion(contractVersion) ? createForm.resolutionTime : createForm.closeTime) &&
+      ruleReferenceCloseTime !== (isStablecoinContractVersion(contractVersion) ? createForm.resolutionTime : createForm.closeTime)
   );
   const createAuraStatusLabel =
     auraCreateStatus === "ready"
@@ -4023,7 +4042,7 @@ export default function App() {
       try {
         const evidenceRows = marketEvidence[String(market.id)] || [];
         const effectiveCloseTime = resolutionUnlockTime(market);
-        const response = await postIndexerJson<{ report: AiResolutionReport }>("/api/ai/resolution-report", {
+        const response = await postIndexerJson<{ report: AiResolutionReport; receipt?: AiResolutionReceipt }>("/api/ai/resolution-report", {
           marketId: market.id,
           question: market.question,
           category: market.category,
@@ -4033,6 +4052,9 @@ export default function App() {
         });
         if (!response?.report) throw new Error("Aura Agent did not return a report.");
         setAiResolutionReports((current) => ({ ...current, [market.id]: response.report }));
+        if (response.receipt) {
+          setAiResolutionReceipts((current) => ({ ...current, [String(market.id)]: response.receipt ?? null }));
+        }
         setAuraResolutionStatusByMarket((current) => ({ ...current, [market.id]: "ready" }));
         setNotice("Aura Agent resolution report updated.");
       } catch (error) {
@@ -4300,8 +4322,10 @@ export default function App() {
             }))
           ]);
         detectedContractVersion =
-          String(contractVersionName) === "AURAPREDICT_V3"
-            ? "v3"
+          String(contractVersionName) === "AURAPREDICT_V4"
+            ? "v4"
+            : String(contractVersionName) === "AURAPREDICT_V3"
+              ? "v3"
             : String(contractVersionName) === "AURAPREDICT_V2"
               ? "v2"
               : "dispute";
@@ -4309,7 +4333,7 @@ export default function App() {
         setResolutionAuthority(contractResolutionAuthority);
         setDisputeGracePeriod(Number(contractDisputeGracePeriod));
         setMarketCreationFee(contractMarketCreationFee);
-        if (detectedContractVersion === "v3") {
+        if (isStablecoinContractVersion(detectedContractVersion)) {
           const token = await withRpcRetry(() => publicClient.readContract({
             address: contractAddress,
             abi: arcPredictionMarketV3Abi,
@@ -4434,7 +4458,7 @@ export default function App() {
       let failedMarketLoads = 0;
       setDataSource("rpc");
       const readMarketById = async (id: number, trackFailure: boolean) => {
-        if (detectedContractVersion === "v3") {
+        if (isStablecoinContractVersion(detectedContractVersion)) {
           try {
             const data = await withRpcRetry(() => publicClient.readContract({
               address: contractAddress,
@@ -4448,6 +4472,24 @@ export default function App() {
               functionName: "assetConfigs",
               args: [data[2]]
             }));
+            const terms =
+              detectedContractVersion === "v4"
+                ? await withRpcRetry(() => publicClient.readContract({
+                    address: contractAddress,
+                    abi: arcPredictionMarketV4Abi,
+                    functionName: "getMarketTerms",
+                    args: [BigInt(id)]
+                  }))
+                : null;
+            const policy =
+              detectedContractVersion === "v4"
+                ? await withRpcRetry(() => publicClient.readContract({
+                    address: contractAddress,
+                    abi: arcPredictionMarketV4Abi,
+                    functionName: "getMarketPolicy",
+                    args: [BigInt(id)]
+                  }))
+                : null;
             return {
               market: {
                 id,
@@ -4465,11 +4507,15 @@ export default function App() {
                 resolutionMode: Number(data[8]),
                 metadataHash: data[9],
                 metadataURI: data[10],
+                fallbackSourceURI: terms?.[2],
+                resolutionRule: terms?.[3],
+                resolutionAdapter: policy?.[0],
                 termsProtocolFeeBps: Number(data[11]),
                 termsCreatorBond: data[12],
                 termsDisputeBond: data[13],
                 termsDisputeWindow: Number(data[14]),
                 termsDisputeGracePeriod: Number(data[25]),
+                termsProposalGracePeriod: policy ? Number(policy[2]) : undefined,
                 yesPool: data[15],
                 noPool: data[16],
                 traderCount: Number(data[17]),
@@ -4489,7 +4535,7 @@ export default function App() {
             };
           } catch (error) {
             if (trackFailure) failedMarketLoads += 1;
-            console.warn(`Failed to load V3 market #${id}`, error);
+            console.warn(`Failed to load stablecoin market #${id}`, error);
             return null;
           }
         }
@@ -4613,7 +4659,7 @@ export default function App() {
         }
       );
 
-      if (totalMarketCount === 0 && detectedContractVersion !== "v3") setContractVersion("unknown");
+      if (totalMarketCount === 0 && !isStablecoinContractVersion(detectedContractVersion)) setContractVersion("unknown");
       const loadedRows = rows.filter((row): row is MarketView => Boolean(row));
 
       if (totalMarketCount > 0 && marketIds.length > 0 && loadedRows.length === 0) {
@@ -4992,15 +5038,15 @@ export default function App() {
       if (fallbackSource && !isValidHttpUrl(fallbackSource)) throw new Error("Fallback source must be a valid http(s) link.");
       if (!createForm.closeTime) throw new Error("Close time is required.");
       const ruleReferenceTime = parseResolutionReferenceTime(resolutionRule);
-      const declaredResolutionInput = contractVersion === "v3" ? createForm.resolutionTime : createForm.closeTime;
-      if (contractVersion === "v3" && !declaredResolutionInput) throw new Error("Resolution time is required.");
+      const declaredResolutionInput = isStablecoinContractVersion(contractVersion) ? createForm.resolutionTime : createForm.closeTime;
+      if (isStablecoinContractVersion(contractVersion) && !declaredResolutionInput) throw new Error("Resolution time is required.");
       if (ruleReferenceTime && declaredResolutionInput !== ruleReferenceTime) {
         throw new Error(
           `Resolution time must match rule time (${ruleReferenceTime} UTC). Update resolution time or the rule.`
         );
       }
       const closeTime = parseUtcDateTime(createForm.closeTime);
-      const resolutionTime = contractVersion === "v3" ? parseUtcDateTime(createForm.resolutionTime) : closeTime;
+      const resolutionTime = isStablecoinContractVersion(contractVersion) ? parseUtcDateTime(createForm.resolutionTime) : closeTime;
       const earliestCloseTime = BigInt(Math.floor(Date.now() / 1000) + 5 * 60);
       if (closeTime <= earliestCloseTime) {
         throw new Error("Close time must be at least 5 minutes after the current UTC time.");
@@ -5017,10 +5063,10 @@ export default function App() {
 
       const useLegacyCreate = contractVersion === "legacy" || (contractVersion === "unknown" && creatorBond === 0n);
 
-      if (contractVersion === "v3") {
+      if (isStablecoinContractVersion(contractVersion)) {
         const settlementToken =
           isAddress(createForm.settlementToken) ? createForm.settlementToken as Address : defaultSettlementToken as Address;
-        if (!isAddress(settlementToken)) throw new Error("Settlement token is not configured for V3.");
+        if (!isAddress(settlementToken)) throw new Error("Settlement token is not configured for this contract.");
         const asset = await withRpcRetry(() => getPublicClient().readContract({
           address: contractAddress,
           abi: arcPredictionMarketV3Abi,
@@ -5052,41 +5098,64 @@ export default function App() {
           );
           if (!approved) return;
         }
-        const metadataHash = keccak256(stringToHex(JSON.stringify({
-          question,
-          category,
-          resolutionSource,
-          resolutionRule,
-          fallbackSource,
-          closeTime: closeTime.toString(),
-          resolutionTime: resolutionTime.toString()
-        })));
         completed = await runTransaction(
           () =>
-            walletClient.writeContract({
-              account: account as Address,
-              chain: arcTestnet,
-              address: contractAddress,
-              abi: arcPredictionMarketV3Abi,
-              functionName: "createMarket",
-              args: [
-                question,
-                category,
-                settlementToken,
-                closeTime,
-                resolutionTime,
-                metadataHash,
-                resolutionSource,
-                Number(createForm.resolutionMode)
-              ]
-            }),
-          `Creating V3 market with ${formatUsdc(createCost, createdSettlementDecimals)} ${createdSettlementSymbol} locked/charged...`,
+            contractVersion === "v4"
+              ? walletClient.writeContract({
+                  account: account as Address,
+                  chain: arcTestnet,
+                  address: contractAddress,
+                  abi: arcPredictionMarketV4Abi,
+                  functionName: "createMarket",
+                  args: [
+                    question,
+                    category,
+                    settlementToken,
+                    closeTime,
+                    resolutionTime,
+                    resolutionSource,
+                    fallbackSource,
+                    resolutionRule,
+                    Number(createForm.resolutionMode),
+                    ZERO_ADDRESS
+                  ]
+                })
+              : walletClient.writeContract({
+                  account: account as Address,
+                  chain: arcTestnet,
+                  address: contractAddress,
+                  abi: arcPredictionMarketV3Abi,
+                  functionName: "createMarket",
+                  args: [
+                    question,
+                    category,
+                    settlementToken,
+                    closeTime,
+                    resolutionTime,
+                    keccak256(stringToHex(JSON.stringify({
+                      question,
+                      category,
+                      resolutionSource,
+                      resolutionRule,
+                      fallbackSource,
+                      closeTime: closeTime.toString(),
+                      resolutionTime: resolutionTime.toString()
+                    }))),
+                    resolutionSource,
+                    Number(createForm.resolutionMode)
+                  ]
+                }),
+          `Creating ${contractVersion.toUpperCase()} market with ${formatUsdc(createCost, createdSettlementDecimals)} ${createdSettlementSymbol} locked/charged...`,
           true,
           (receipt) => {
             const createdEvent = receipt.logs
               .map((log) => {
                 try {
-                  return decodeEventLog({ abi: arcPredictionMarketV3Abi, data: log.data, topics: log.topics });
+                  return decodeEventLog({
+                    abi: contractVersion === "v4" ? arcPredictionMarketV4Abi : arcPredictionMarketV3Abi,
+                    data: log.data,
+                    topics: log.topics
+                  });
                 } catch {
                   return null;
                 }
@@ -5186,11 +5255,14 @@ export default function App() {
         createdAt: Math.floor(Date.now() / 1000),
         closeTime: Number(closeTime),
         resolutionTime: Number(resolutionTime),
-        settlementToken: contractVersion === "v3" ? (createForm.settlementToken || defaultSettlementToken) : undefined,
-        settlementSymbol: contractVersion === "v3" ? createdSettlementSymbol : "USDC",
-        settlementDecimals: contractVersion === "v3" ? createdSettlementDecimals : ARC_NATIVE_USDC_DECIMALS,
-        resolutionMode: contractVersion === "v3" ? Number(createForm.resolutionMode) : undefined,
-        termsDisputeGracePeriod: contractVersion === "v3" ? disputeGracePeriod : undefined,
+        settlementToken: isStablecoinContractVersion(contractVersion) ? (createForm.settlementToken || defaultSettlementToken) : undefined,
+        settlementSymbol: isStablecoinContractVersion(contractVersion) ? createdSettlementSymbol : "USDC",
+        settlementDecimals: isStablecoinContractVersion(contractVersion) ? createdSettlementDecimals : ARC_NATIVE_USDC_DECIMALS,
+        resolutionMode: isStablecoinContractVersion(contractVersion) ? Number(createForm.resolutionMode) : undefined,
+        metadataURI: isStablecoinContractVersion(contractVersion) ? resolutionSource : undefined,
+        fallbackSourceURI: contractVersion === "v4" ? fallbackSource : undefined,
+        resolutionRule: contractVersion === "v4" ? resolutionRule : undefined,
+        termsDisputeGracePeriod: isStablecoinContractVersion(contractVersion) ? disputeGracePeriod : undefined,
         creator: account,
         resolver: account,
         yesPool: 0n,
@@ -5298,7 +5370,7 @@ export default function App() {
     try {
       if (!account || !isAddress(account)) throw new Error("Connect wallet first.");
       const market = markets.find((item) => item.id === marketId);
-      const amountDecimals = contractVersion === "v3" ? marketDecimals(market) : ARC_NATIVE_USDC_DECIMALS;
+      const amountDecimals = isStablecoinContractVersion(contractVersion) ? marketDecimals(market) : ARC_NATIVE_USDC_DECIMALS;
       const amount = stakeInputs[marketId] || "";
       const value = parseUsdcInput(amount, amountDecimals);
       if (value <= 0n) throw new Error("Enter a valid USDC amount.");
@@ -5307,7 +5379,7 @@ export default function App() {
       await switchToArc();
       const walletClient = getActiveWalletClient();
 
-      if (contractVersion === "v3") {
+      if (isStablecoinContractVersion(contractVersion)) {
         const token = market?.settlementToken as Address;
         if (!token || !isAddress(token)) throw new Error("Market settlement token is unavailable.");
         const allowance = await withRpcRetry(() => getPublicClient().readContract({
@@ -5334,12 +5406,12 @@ export default function App() {
 
       const completed = await runTransaction(
         () =>
-          contractVersion === "v3"
+          isStablecoinContractVersion(contractVersion)
             ? walletClient.writeContract({
                 account: account as Address,
                 chain: arcTestnet,
                 address: contractAddress,
-                abi: arcPredictionMarketV3Abi,
+                abi: contractVersion === "v4" ? arcPredictionMarketV4Abi : arcPredictionMarketV3Abi,
                 functionName: "bet",
                 args: [BigInt(marketId), side, value]
               })
@@ -5441,16 +5513,38 @@ export default function App() {
       typeof aiReceipt?.receiptHash === "string" && /^0x[a-fA-F0-9]{64}$/.test(aiReceipt.receiptHash)
         ? aiReceipt.receiptHash as Hash
         : ZERO_HASH as Hash;
+    const signedAiSuggestion =
+      contractVersion === "v4" &&
+      hasAiSuggestion &&
+      storedReceiptHash !== ZERO_HASH &&
+      typeof aiReceipt?.attestation === "string" &&
+      /^0x[a-fA-F0-9]{130}$/.test(aiReceipt.attestation);
     setMarketActionPending("resolve", marketId, true);
     try {
       const success = await runTransaction(
         () =>
-          contractVersion === "v3"
+          contractVersion === "v4" && signedAiSuggestion
             ? walletClient.writeContract({
                 account: account as Address,
                 chain: arcTestnet,
                 address: contractAddress,
-                abi: arcPredictionMarketV3Abi,
+                abi: arcPredictionMarketV4Abi,
+                functionName: "resolveWithAiAttestation",
+                args: [
+                  BigInt(marketId),
+                  outcome,
+                  evidenceHash,
+                  storedReceiptHash,
+                  aiSuggestedOutcome as Outcome.Yes | Outcome.No,
+                  aiReceipt!.attestation as `0x${string}`
+                ]
+              })
+            : isStablecoinContractVersion(contractVersion)
+            ? walletClient.writeContract({
+                account: account as Address,
+                chain: arcTestnet,
+                address: contractAddress,
+                abi: contractVersion === "v4" ? arcPredictionMarketV4Abi : arcPredictionMarketV3Abi,
                 functionName: "resolve",
                 args: [BigInt(marketId), outcome, evidenceHash, storedReceiptHash]
               })
@@ -5469,7 +5563,9 @@ export default function App() {
             .map((log) => {
               try {
                 return decodeEventLog({
-                  abi: contractVersion === "v3" ? arcPredictionMarketV3Abi : arcPredictionMarketAbi,
+                  abi: isStablecoinContractVersion(contractVersion)
+                    ? contractVersion === "v4" ? arcPredictionMarketV4Abi : arcPredictionMarketV3Abi
+                    : arcPredictionMarketAbi,
                   data: log.data,
                   topics: log.topics
                 });
@@ -5504,11 +5600,11 @@ export default function App() {
   const disputeMarket = async (marketId: number) => {
     if (!account || !isAddress(account)) throw new Error("Connect wallet first.");
     const market = markets.find((item) => item.id === marketId);
-    const requiredBond = contractVersion === "v3" ? market?.termsDisputeBond ?? disputeBond : disputeBond;
+    const requiredBond = isStablecoinContractVersion(contractVersion) ? market?.termsDisputeBond ?? disputeBond : disputeBond;
     if (requiredBond <= 0n) throw new Error("Dispute bond is not loaded. Refresh contract data first.");
     await switchToArc();
     const walletClient = getActiveWalletClient();
-    if (contractVersion === "v3") {
+    if (isStablecoinContractVersion(contractVersion)) {
       const token = market?.settlementToken as Address;
       if (!token || !isAddress(token)) throw new Error("Market settlement token is unavailable.");
       const allowance = await withRpcRetry(() => getPublicClient().readContract({
@@ -5534,12 +5630,12 @@ export default function App() {
     }
     await runTransaction(
       () =>
-        contractVersion === "v3"
+        isStablecoinContractVersion(contractVersion)
           ? walletClient.writeContract({
               account: account as Address,
               chain: arcTestnet,
               address: contractAddress,
-              abi: arcPredictionMarketV3Abi,
+              abi: contractVersion === "v4" ? arcPredictionMarketV4Abi : arcPredictionMarketV3Abi,
               functionName: "dispute",
               args: [BigInt(marketId)]
             })
@@ -5611,12 +5707,12 @@ export default function App() {
         : ZERO_HASH as Hash;
     await runTransaction(
       () =>
-        contractVersion === "v3"
+        isStablecoinContractVersion(contractVersion)
           ? walletClient.writeContract({
               account: account as Address,
               chain: arcTestnet,
               address: contractAddress,
-              abi: arcPredictionMarketV3Abi,
+              abi: contractVersion === "v4" ? arcPredictionMarketV4Abi : arcPredictionMarketV3Abi,
               functionName: "finalizeDispute",
               args: [BigInt(marketId), outcome, evidenceHash, receiptHash]
             })
@@ -5674,6 +5770,32 @@ export default function App() {
     }
   };
 
+  const cancelUnproposedMarket = async (marketId: number) => {
+    if (!account || !isAddress(account)) throw new Error("Connect wallet first.");
+    if (contractVersion !== "v4" || isMarketActionPending("unproposed-cancel", marketId)) return;
+    await switchToArc();
+    const walletClient = getActiveWalletClient();
+    setMarketActionPending("unproposed-cancel", marketId, true);
+    try {
+      await runTransaction(
+        () =>
+          walletClient.writeContract({
+            account: account as Address,
+            chain: arcTestnet,
+            address: contractAddress,
+            abi: arcPredictionMarketV4Abi,
+            functionName: "cancelUnproposedMarket",
+            args: [BigInt(marketId)]
+          }),
+        "Canceling timed-out unresolved market for refunds...",
+        true,
+        () => markMarketFinalized(marketId, Outcome.Canceled)
+      );
+    } finally {
+      setMarketActionPending("unproposed-cancel", marketId, false);
+    }
+  };
+
   const cancelMarket = async (marketId: number) => {
     if (!account || !isAddress(account)) throw new Error("Connect wallet first.");
     if (isMarketActionPending("resolve", marketId)) return;
@@ -5690,21 +5812,21 @@ export default function App() {
     try {
       const success = await runTransaction(
         () =>
-          contractVersion === "v3" && market && hasNoLiquidity(market)
+          isStablecoinContractVersion(contractVersion) && market && hasNoLiquidity(market)
             ? walletClient.writeContract({
                 account: account as Address,
                 chain: arcTestnet,
                 address: contractAddress,
-                abi: arcPredictionMarketV3Abi,
+                abi: contractVersion === "v4" ? arcPredictionMarketV4Abi : arcPredictionMarketV3Abi,
                 functionName: "cancelEmptyMarket",
                 args: [BigInt(marketId)]
               })
-            : contractVersion === "v3"
+            : isStablecoinContractVersion(contractVersion)
               ? walletClient.writeContract({
                   account: account as Address,
                   chain: arcTestnet,
                   address: contractAddress,
-                  abi: arcPredictionMarketV3Abi,
+                  abi: contractVersion === "v4" ? arcPredictionMarketV4Abi : arcPredictionMarketV3Abi,
                   functionName: "cancel",
                   args: [BigInt(marketId), evidenceHash, receiptHash]
                 })
@@ -5716,12 +5838,12 @@ export default function App() {
                   functionName: "cancel",
                   args: [BigInt(marketId)]
                 }),
-        contractVersion === "v3" && market && hasNoLiquidity(market)
+        isStablecoinContractVersion(contractVersion) && market && hasNoLiquidity(market)
           ? "Canceling empty market and releasing creator bond..."
           : "Proposing market cancel...",
         true,
         (receipt) => {
-          if (contractVersion === "v3" && market && hasNoLiquidity(market)) {
+          if (isStablecoinContractVersion(contractVersion) && market && hasNoLiquidity(market)) {
             markMarketFinalized(marketId, Outcome.Canceled);
             return;
           }
@@ -5729,7 +5851,9 @@ export default function App() {
             .map((log) => {
               try {
                 return decodeEventLog({
-                  abi: contractVersion === "v3" ? arcPredictionMarketV3Abi : arcPredictionMarketAbi,
+                  abi: isStablecoinContractVersion(contractVersion)
+                    ? contractVersion === "v4" ? arcPredictionMarketV4Abi : arcPredictionMarketV3Abi
+                    : arcPredictionMarketAbi,
                   data: log.data,
                   topics: log.topics
                 });
@@ -5774,7 +5898,7 @@ export default function App() {
 
   const withdrawPendingBalance = async (market: MarketView) => {
     if (!account || !isAddress(account)) throw new Error("Connect wallet first.");
-    if (contractVersion !== "v3" || !market.settlementToken || !isAddress(market.settlementToken)) return;
+    if (!isStablecoinContractVersion(contractVersion) || !market.settlementToken || !isAddress(market.settlementToken)) return;
     await switchToArc();
     const walletClient = getActiveWalletClient();
     const completed = await runTransaction(
@@ -5782,7 +5906,7 @@ export default function App() {
         account: account as Address,
         chain: arcTestnet,
         address: contractAddress,
-        abi: arcPredictionMarketV3Abi,
+        abi: contractVersion === "v4" ? arcPredictionMarketV4Abi : arcPredictionMarketV3Abi,
         functionName: "withdrawBalance",
         args: [market.settlementToken as Address]
       }),
@@ -5796,7 +5920,7 @@ export default function App() {
 
   const requestAuthorityReview = async (market: MarketView) => {
     if (!account || !isAddress(account)) throw new Error("Connect authority wallet first.");
-    if (contractVersion !== "v3") return;
+    if (!isStablecoinContractVersion(contractVersion)) return;
     const aiReceipt = aiResolutionReceipts[String(market.id)];
     const reasonHash = keccak256(stringToHex(JSON.stringify({
       proposedOutcome: market.proposedOutcome,
@@ -5810,7 +5934,7 @@ export default function App() {
         account: account as Address,
         chain: arcTestnet,
         address: contractAddress,
-        abi: arcPredictionMarketV3Abi,
+        abi: contractVersion === "v4" ? arcPredictionMarketV4Abi : arcPredictionMarketV3Abi,
         functionName: "requestAuthorityReview",
         args: [BigInt(market.id), reasonHash]
       }),
@@ -6413,7 +6537,7 @@ export default function App() {
       ((!!owner && sameAddress(account, owner)) ||
         (!!(selectedMarket.authority || resolutionAuthority) && sameAddress(account, selectedMarket.authority || resolutionAuthority)));
     const canRequestAuthorityReview =
-      contractVersion === "v3" &&
+      isStablecoinContractVersion(contractVersion) &&
       Boolean(account) &&
       selectedMarket.outcome === Outcome.Unresolved &&
       selectedMarket.proposedAt > 0 &&
@@ -6428,6 +6552,14 @@ export default function App() {
       selectedMarket.disputeDeadline > 0 &&
       (selectedMarket.termsDisputeGracePeriod ?? disputeGracePeriod) > 0 &&
       Date.now() / 1000 >= selectedMarket.disputeDeadline + (selectedMarket.termsDisputeGracePeriod ?? disputeGracePeriod);
+    const canCancelUnproposed =
+      contractVersion === "v4" &&
+      Boolean(account) &&
+      selectedMarket.outcome === Outcome.Unresolved &&
+      selectedMarket.proposedAt === 0 &&
+      nowSeconds >=
+        (selectedMarket.resolutionTime || selectedMarket.closeTime) +
+          (selectedMarket.termsProposalGracePeriod ?? 72 * 60 * 60);
     const canLegacyResolve =
       contractVersion === "legacy" &&
       account &&
@@ -6708,7 +6840,7 @@ export default function App() {
                   </button>
                 )}
               </div>
-              {(canLegacyResolve || canPropose || canDispute || canFinalize || canFinalizeDispute || canCancelStaleDispute || canClaim) && (
+              {(canLegacyResolve || canPropose || canDispute || canFinalize || canFinalizeDispute || canCancelStaleDispute || canCancelUnproposed || canClaim) && (
                 <div className="settlement-row resolution-actions">
                   <div className="resolution-button-grid">
                     {canLegacyResolve && (
@@ -6783,6 +6915,11 @@ export default function App() {
                     {canCancelStaleDispute && (
                       <button className="secondary action-propose-cancel" onClick={() => cancelStaleDispute(selectedMarket.id)}>
                         Cancel stale dispute
+                      </button>
+                    )}
+                    {canCancelUnproposed && (
+                      <button className="secondary action-propose-cancel" onClick={() => cancelUnproposedMarket(selectedMarket.id)}>
+                        Cancel timed-out market / refund
                       </button>
                     )}
                     {canClaim && (
@@ -7178,6 +7315,11 @@ export default function App() {
   return (
     <main className="app-shell" id="top">
       <AppUpdateNotice />
+      {VIEWING_V3_ARCHIVE && (
+        <div className="deployment-notice" role="status">
+          Viewing V3 markets retained onchain for settlement and claims. New markets are created in V4.
+        </div>
+      )}
       <nav className="topbar">
         <a
           className="brand"
@@ -7244,6 +7386,11 @@ export default function App() {
               >
                 Owner Review
               </button>
+            )}
+            {PRIMARY_CONTRACT_ADDRESS.toLowerCase() !== ACTIVE_V3_CONTRACT_ADDRESS.toLowerCase() && (
+              <a className={VIEWING_V3_ARCHIVE ? "tab active" : "tab"} href={VIEWING_V3_ARCHIVE ? window.location.pathname : `${window.location.pathname}?deployment=v3`}>
+                {VIEWING_V3_ARCHIVE ? "V3 Archive" : "V3 Markets"}
+              </a>
             )}
           </div>
           <div className="market-search">
@@ -8990,6 +9137,7 @@ export default function App() {
                 }}
                 placeholder="Will Arc Testnet pass 1M transactions this week?"
                 minLength={8}
+                maxLength={280}
                 rows={4}
               />
             </label>
@@ -9124,13 +9272,13 @@ export default function App() {
                 <small className="time-format-hint">
                   UTC only. Betting stops at this time. Min close time: {minimumCloseInput}.
                 </small>
-                {hasRuleCloseMismatch && contractVersion !== "v3" && (
+                {hasRuleCloseMismatch && !isStablecoinContractVersion(contractVersion) && (
                   <small className="time-format-hint error-hint">
                     Close time does not match rule time: {ruleReferenceCloseTime} UTC.
                   </small>
                 )}
               </label>
-              {contractVersion === "v3" && (
+              {isStablecoinContractVersion(contractVersion) && (
                 <label>
                   <span className="field-label">
                     Resolution time (UTC) <span className="required-mark">*</span>
@@ -9170,7 +9318,7 @@ export default function App() {
                   )}
                 </label>
               )}
-              {contractVersion === "v3" && (
+              {isStablecoinContractVersion(contractVersion) && (
                 <label>
                   <span className="field-label">
                     Settlement asset <span className="required-mark">*</span>
@@ -9189,7 +9337,7 @@ export default function App() {
                   <small className="time-format-hint">All stakes and payouts for this market use one token.</small>
                 </label>
               )}
-              {contractVersion === "v3" && (
+              {isStablecoinContractVersion(contractVersion) && (
                 <label>
                   <span className="field-label">
                     Resolution mode <span className="required-mark">*</span>
@@ -9214,6 +9362,7 @@ export default function App() {
                   value={createForm.resolutionSource}
                   onChange={(event) => setCreateForm({ ...createForm, resolutionSource: event.target.value })}
                   placeholder="https://www.coingecko.com/..."
+                  maxLength={512}
                 />
                 <small className="time-format-hint">Primary source used to resolve this market.</small>
               </label>
@@ -9226,6 +9375,7 @@ export default function App() {
                   onChange={(event) => setCreateForm({ ...createForm, resolutionRule: event.target.value })}
                   placeholder="Example: Use BTC/USD spot price at 09:30 UTC from primary source."
                   rows={3}
+                  maxLength={2048}
                 />
                 <small className="time-format-hint">Define exactly what value and timestamp are used.</small>
               </label>
@@ -9236,6 +9386,7 @@ export default function App() {
                   value={createForm.fallbackSource}
                   onChange={(event) => setCreateForm({ ...createForm, fallbackSource: event.target.value })}
                   placeholder="https://www.binance.com/..."
+                  maxLength={512}
                 />
                 <small className="time-format-hint">Secondary source if primary source is unavailable.</small>
               </label>
@@ -9246,7 +9397,8 @@ export default function App() {
               Question must be at least 8 characters.
               Resolution source and rule are required before launch.
               Market close time is saved in UTC and must be at least 5 minutes after the current UTC time.
-              {contractVersion === "v3" && " Resolution time is enforced onchain and cannot be earlier than close time."}
+              {isStablecoinContractVersion(contractVersion) && " Resolution time is enforced onchain and cannot be earlier than close time."}
+              {contractVersion === "v4" && " The primary source, fallback source, and resolution rule are stored onchain; current markets remain creator-led with Aura and owner review until an approved oracle adapter is selected for a future market."}
               {contractVersion === "legacy"
                 ? " This legacy contract does not use creator bonds or dispute windows."
                 : marketCreationFee > 0n
@@ -9277,7 +9429,7 @@ export default function App() {
                   createForm.question.trim().length < 8 ||
                   createForm.resolutionSource.trim().length === 0 ||
                   createForm.resolutionRule.trim().length === 0 ||
-                  (contractVersion === "v3" && createForm.resolutionTime.trim().length === 0) ||
+                  (isStablecoinContractVersion(contractVersion) && createForm.resolutionTime.trim().length === 0) ||
                   hasRuleCloseMismatch ||
                   !canCreateAfterAura ||
                   (!!aiMarketDraft?.duplicateRisk && aiMarketDraft.duplicateRisk !== "LOW" && !duplicateAcknowledged)

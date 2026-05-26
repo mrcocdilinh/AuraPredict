@@ -1151,6 +1151,18 @@ h3 {
   padding: 4px;
 }
 
+.deployment-notice {
+  background: #e8f7ff;
+  border: 1px solid #74d9ef;
+  border-radius: 8px;
+  color: #0b5168;
+  font-size: 0.84rem;
+  font-weight: 700;
+  margin: 0 auto 10px;
+  max-width: 1380px;
+  padding: 10px 14px;
+}
+
 .tab,
 .category-pill,
 .secondary {
@@ -1159,9 +1171,12 @@ h3 {
 }
 
 .tab {
+  align-items: center;
   color: #667085;
+  display: inline-flex;
   min-height: 34px;
   padding: 0 13px;
+  text-decoration: none;
 }
 
 .tab.active,
@@ -5207,6 +5222,12 @@ label {
 [data-theme="dark"] .nav-tabs {
   background: #0b1020;
   border-color: #202a3f;
+}
+
+[data-theme="dark"] .deployment-notice {
+  background: #101d2b;
+  border-color: #1f637a;
+  color: #9be8fa;
 }
 
 [data-theme="dark"] .tab {

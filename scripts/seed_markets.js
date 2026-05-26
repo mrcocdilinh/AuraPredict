@@ -26,16 +26,24 @@ async function main() {
   const factory = await ethers.getContractFactory("ArcPredictionMarket");
   const contract = factory.attach(contractAddress);
   const version = await contract.CONTRACT_VERSION().catch(() => "legacy");
-  const isV3 = version === "AURAPREDICT_V3";
-  const settlementToken = isV3 ? await contract.defaultSettlementToken() : ethers.ZeroAddress;
-  const asset = isV3 ? await contract.assetConfigs(settlementToken) : null;
-  const creatorBond = isV3 ? asset.creatorBond : await contract.creatorBond();
-  const marketCreationFee = isV3 ? asset.marketCreationFee : await contract.marketCreationFee();
+  const isStablecoinContract = version === "AURAPREDICT_V3" || version === "AURAPREDICT_V4";
+  const isV4 = version === "AURAPREDICT_V4";
+  const settlementToken = isStablecoinContract ? await contract.defaultSettlementToken() : ethers.ZeroAddress;
+  const asset = isStablecoinContract ? await contract.assetConfigs(settlementToken) : null;
+  const creatorBond = isStablecoinContract ? asset.creatorBond : await contract.creatorBond();
+  const marketCreationFee = isStablecoinContract ? asset.marketCreationFee : await contract.marketCreationFee();
   const requiredValue = creatorBond + marketCreationFee;
-  const tokenDecimals = isV3 ? Number(asset.decimals) : 18;
-  const symbol = isV3 ? asset.symbol : "USDC";
-  const token = isV3
-    ? new ethers.Contract(settlementToken, ["function approve(address spender,uint256 amount) returns (bool)"], signer)
+  const tokenDecimals = isStablecoinContract ? Number(asset.decimals) : 18;
+  const symbol = isStablecoinContract ? asset.symbol : "USDC";
+  const token = isStablecoinContract
+    ? new ethers.Contract(
+        settlementToken,
+        [
+          "function approve(address spender,uint256 amount) returns (bool)",
+          "function balanceOf(address owner) view returns (uint256)"
+        ],
+        signer
+      )
     : null;
 
   console.log("Seeder wallet:", signer.address);
@@ -52,6 +60,7 @@ async function main() {
   const startIndex = Number(process.env.START_INDEX || 0);
   const limit = Number(process.env.LIMIT || markets.length);
   const endExclusive = Math.min(markets.length, startIndex + limit);
+  const selectedCount = endExclusive - startIndex;
 
   if (!Number.isInteger(startIndex) || startIndex < 0 || startIndex >= markets.length) {
     throw new Error(`Invalid START_INDEX=${process.env.START_INDEX || "undefined"}`);
@@ -60,13 +69,25 @@ async function main() {
     throw new Error(`Invalid LIMIT=${process.env.LIMIT || "undefined"}`);
   }
 
-  console.log(`Seeding range: [${startIndex}..${endExclusive - 1}] (${endExclusive - startIndex} markets)`);
+  console.log(`Seeding range: [${startIndex}..${endExclusive - 1}] (${selectedCount} markets)`);
+
+  if (isStablecoinContract && !dryRun) {
+    const balance = await token.balanceOf(signer.address);
+    const requiredForRange = requiredValue * BigInt(selectedCount);
+    console.log("Wallet balance:", ethers.formatUnits(balance, tokenDecimals), symbol);
+    if (balance < requiredForRange) {
+      throw new Error(
+        `Insufficient ${symbol}: need ${ethers.formatUnits(requiredForRange, tokenDecimals)}, have ${ethers.formatUnits(balance, tokenDecimals)}`
+      );
+    }
+  }
 
   for (let i = startIndex; i < endExclusive; i += 1) {
     const item = markets[i];
     const question = String(item.question || "").trim();
     const category = String(item.category || "Other").trim() || "Other";
     const closeInHours = Number(item.closeInHours || 24);
+    const resolutionInHours = Number(item.resolutionInHours || closeInHours);
 
     if (question.length < 8) {
       throw new Error(`Invalid question at index ${i}: must be >= 8 chars`);
@@ -74,20 +95,54 @@ async function main() {
     if (!Number.isFinite(closeInHours) || closeInHours < 1) {
       throw new Error(`Invalid closeInHours at index ${i}`);
     }
+    if (!Number.isFinite(resolutionInHours) || resolutionInHours < closeInHours) {
+      throw new Error(`Invalid resolutionInHours at index ${i}`);
+    }
 
     const closeTime = BigInt(now + Math.floor(closeInHours * 3600));
-    console.log(`[${i + 1}/${markets.length}] ${question} | ${category} | closeInHours=${closeInHours}`);
+    const resolutionTime = BigInt(now + Math.floor(resolutionInHours * 3600));
+    console.log(
+      `[${i + 1}/${markets.length}] ${question} | ${category} | closeInHours=${closeInHours} | resolutionInHours=${resolutionInHours}`
+    );
 
     if (dryRun) continue;
 
     let tx;
-    if (isV3) {
+    if (isStablecoinContract) {
       const metadataHash = ethers.keccak256(
-        ethers.toUtf8Bytes(JSON.stringify({ question, category, closeTime: closeTime.toString(), resolutionTime: closeTime.toString() }))
+        ethers.toUtf8Bytes(JSON.stringify({ question, category, closeTime: closeTime.toString(), resolutionTime: resolutionTime.toString() }))
       );
       const approveTx = await token.approve(contractAddress, requiredValue);
       await approveTx.wait();
-      tx = await contract.createMarket(question, category, settlementToken, closeTime, closeTime, metadataHash, "", 0);
+      const resolutionSource = String(item.resolutionSource || item.source || "https://app.aurapredict.xyz").trim();
+      const fallbackSource = String(item.fallbackSource || "").trim();
+      const resolutionRule = String(
+        item.resolutionRule ||
+          "Resolve YES if the stated event is verified by the primary source by the market's onchain resolution time; otherwise resolve NO. Resolve CANCEL only if the source is unavailable or the rule is ambiguous."
+      ).trim();
+      const resolutionMode = Number(item.resolutionMode ?? 0);
+      const resolutionAdapter = String(item.resolutionAdapter || ethers.ZeroAddress).trim();
+
+      if (isV4 && (!resolutionSource || resolutionSource.length > 512)) {
+        throw new Error(`Invalid resolutionSource at index ${i}`);
+      }
+      if (isV4 && (!resolutionRule || resolutionRule.length > 2048)) {
+        throw new Error(`Invalid resolutionRule at index ${i}`);
+      }
+      tx = isV4
+        ? await contract.createMarket(
+            question,
+            category,
+            settlementToken,
+            closeTime,
+            resolutionTime,
+            resolutionSource,
+            fallbackSource,
+            resolutionRule,
+            resolutionMode,
+            resolutionAdapter
+          )
+        : await contract.createMarket(question, category, settlementToken, closeTime, resolutionTime, metadataHash, "", 0);
     } else {
       tx = await contract.createMarket(question, category, closeTime, { value: requiredValue });
     }

@@ -24,7 +24,7 @@ http://127.0.0.1:8787
 
 ## Environment
 
-The production indexer is pinned to AuraPredict V3 at `0x4399ea3f59AA14e4D19217f1af2aD0681f5FafFd` from block `44074836`, detects its ABI at startup, and indexes the primary V3 market surface. Optional runtime settings:
+The production indexer is pinned to AuraPredict V4 at `0x3c853AE2eC705B453c9657569b6335e762631536` from block `44083985`, detects its ABI at startup, and indexes the primary V4 market surface. Optional runtime settings:
 
 ```bash
 VITE_AURA_INDEXER_URL=http://127.0.0.1:8787
@@ -33,7 +33,7 @@ AURA_INDEXER_HOST=127.0.0.1
 AURA_INDEXER_CHUNK_SIZE=9000
 ```
 
-The active production contract and its initial block are pinned in `indexer/server.mjs` for the V3 cutover. Arc RPC currently limits `eth_getLogs` ranges, so the default chunk size stays below that limit.
+The active production contract and its initial block are pinned in `indexer/server.mjs` for the V4 cutover. Arc RPC currently limits `eth_getLogs` ranges, so the default chunk size stays below that limit.
 
 ## API
 
@@ -56,11 +56,13 @@ POST /api/social/profiles/:address/follows
 
 The frontend uses `VITE_AURA_INDEXER_URL` when available and falls back to direct Arc RPC reads if the indexer is offline.
 When `VITE_AURA_INDEXER_URL` points to a live web service, the frontend also persists comments, evidence, follows, and profile metadata through these social endpoints. Static GitHub Pages exports remain read-only, so the app falls back to browser-local storage for social actions on that setup.
-V3 settlement assets are restricted to 6-decimal stablecoins. If more than one asset such as USDC and EURC is used, cross-market totals are reported as stablecoin units; the indexer does not perform FX conversion.
+V4 settlement assets are restricted to 6-decimal stablecoins. If more than one asset such as USDC and EURC is used, cross-market totals are reported as stablecoin units; the indexer does not perform FX conversion.
 
-## AI Resolution And V3 Receipts
+## AI Resolution And V4 Receipts
 
-AuraPredict keeps AI calculation off-chain and stores detailed AI resolution receipts in the indexer state. The receipt is public through the indexer API, while the contract controls proposal, review/dispute, finalization, cancellation, and claim flow. With V3, a proposal also commits `evidenceHash` and `aiReceiptHash` onchain, supports authority-review modes, and cannot be proposed before the market's onchain `resolutionTime`.
+AuraPredict keeps AI calculation off-chain and stores detailed AI resolution receipts in the indexer state. The receipt is public through the indexer API, while the contract controls proposal, review/dispute, finalization, cancellation, and claim flow. With V4, each market stores its primary source, fallback source, and resolution rule onchain. A proposal can also commit `evidenceHash` and `aiReceiptHash`, supports authority-review modes, and cannot be proposed before the market's onchain `resolutionTime`.
+
+V4 supports an optional Aura attestation path. If `AURA_ATTESTATION_PRIVATE_KEY` is set on the indexer and the contract owner configures the matching public address with `setAiAttestationSigner`, the indexer can attach a signed AI suggestion to a receipt. A creator proposal that matches that signed suggestion can follow the normal dispute/finalize path. A proposal without a signed receipt, or a proposal that differs from Aura's signed suggestion, is routed to authority review. If the signer is not configured, the system stays in the current creator plus Aura plus owner-review mode.
 
 Public read:
 
@@ -84,7 +86,7 @@ Request body:
 }
 ```
 
-The indexer asks three AI reviewer roles for an evidence-based outcome, builds a consensus receipt, hashes the immutable decision payload, and stores it under `state.resolutions`. By default this only creates the receipt. It does not write onchain unless `propose` is true and `AURA_RESOLUTION_AUTO_PROPOSE=1`. For V3, zero-liquidity markets can be canceled without requesting AI and any automatic proposal waits for `resolutionTime`.
+The indexer asks three AI reviewer roles for an evidence-based outcome, builds a consensus receipt, hashes the immutable decision payload, and stores it under `state.resolutions`. By default this only creates the receipt. It does not write onchain unless `propose` is true and `AURA_RESOLUTION_AUTO_PROPOSE=1`. For V4, zero-liquidity markets can be canceled without requesting AI and any automatic proposal waits for `resolutionTime`.
 
 Required for AI receipts:
 
@@ -113,6 +115,7 @@ AURA_RESOLUTION_AUTO_PROPOSE=0
 AURA_RESOLVER_PRIVATE_KEY=0x...
 AURA_RESOLUTION_MIN_CONFIDENCE=72
 AURA_RESOLUTION_CONSENSUS_COUNT=2
+AURA_ATTESTATION_PRIVATE_KEY=0x_optional_dedicated_ai_signer_key
 ```
 
 Keep `AURA_RESOLUTION_AUTO_PROPOSE=0` until the resolver key and evidence policy are tested. If enabled, the private key must be the market resolver, contract owner, or configured `resolutionAuthority`.
@@ -145,7 +148,7 @@ Then set the frontend production env:
 
 ```bash
 VITE_AURA_INDEXER_URL=https://mrcocdilinh.github.io/AuraPredict
-VITE_PREDICTION_MARKET_START_BLOCK=44074836
+VITE_PREDICTION_MARKET_START_BLOCK=44083985
 ```
 
 This option is free and does not need a card. The tradeoff is that data refreshes on the GitHub Actions schedule, not instantly.
@@ -157,11 +160,11 @@ Recommended flow:
 1. Deploy this repo as a separate web service named `aurapredict-indexer`.
 2. Use Dockerfile: `Dockerfile.indexer`.
 3. Start command is already handled by Docker: `npm run indexer`.
-4. The current V3 address and block are pinned in source and recorded in `render.yaml`:
+4. The current V4 address and block are pinned in source and recorded in `render.yaml`:
 
 ```bash
-VITE_PREDICTION_MARKET_ADDRESS=0x4399ea3f59AA14e4D19217f1af2aD0681f5FafFd
-AURA_INDEXER_START_BLOCK=44074836
+VITE_PREDICTION_MARKET_ADDRESS=0x3c853AE2eC705B453c9657569b6335e762631536
+AURA_INDEXER_START_BLOCK=44083985
 AURA_INDEXER_CHUNK_SIZE=9000
 AURA_INDEXER_POLL_MS=12000
 ```
@@ -181,10 +184,10 @@ Then set this on the frontend deployment, for example in Vercel:
 
 ```bash
 VITE_AURA_INDEXER_URL=https://your-indexer-domain
-VITE_PREDICTION_MARKET_START_BLOCK=44074836
+VITE_PREDICTION_MARKET_START_BLOCK=44083985
 ```
 
 Redeploy the frontend after changing env vars.
 
-`render.yaml` and the production indexer code pin the active Arc Testnet V3 contract and deployment block. Legacy V2 markets remain onchain outside the primary V3 index.
+`render.yaml` and the production indexer code pin the active Arc Testnet V4 contract and deployment block. The V3 contract remains onchain for old market settlement and claims; the frontend exposes it through `?deployment=v3`, while the primary production indexer tracks V4.
 For smooth production behavior, avoid free plans that sleep. If the host sleeps or has ephemeral storage, the indexer will recover by backfilling from `AURA_INDEXER_START_BLOCK`, but users may see slow data during cold starts.

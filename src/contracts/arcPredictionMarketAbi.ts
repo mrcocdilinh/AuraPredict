@@ -519,6 +519,164 @@ export const arcPredictionMarketV3Abi = [
   }
 ] as const;
 
+export const arcPredictionMarketV4Abi = [
+  ...arcPredictionMarketV3Abi.filter(
+    (entry) =>
+      !(entry.type === "event" && entry.name === "MarketCreated") &&
+      !(entry.type === "function" && entry.name === "createMarket")
+  ),
+  {
+    type: "event",
+    name: "MarketCreated",
+    inputs: [
+      { type: "uint256", name: "marketId", indexed: true },
+      { type: "string", name: "question", indexed: false },
+      { type: "string", name: "category", indexed: false },
+      { type: "address", name: "settlementToken", indexed: true },
+      { type: "uint256", name: "closeTime", indexed: false },
+      { type: "uint256", name: "resolutionTime", indexed: false },
+      { type: "address", name: "creator", indexed: true },
+      { type: "address", name: "authority", indexed: false },
+      { type: "address", name: "resolutionAdapter", indexed: false },
+      { type: "uint8", name: "resolutionMode", indexed: false },
+      { type: "bytes32", name: "metadataHash", indexed: false },
+      { type: "string", name: "metadataURI", indexed: false },
+      { type: "string", name: "fallbackSourceURI", indexed: false },
+      { type: "string", name: "resolutionRule", indexed: false }
+    ]
+  },
+  {
+    type: "event",
+    name: "UnproposedMarketCanceled",
+    inputs: [{ type: "uint256", name: "marketId", indexed: true }]
+  },
+  {
+    type: "event",
+    name: "AiAttestationSignerUpdated",
+    inputs: [
+      { type: "address", name: "previousSigner", indexed: true },
+      { type: "address", name: "newSigner", indexed: true }
+    ]
+  },
+  {
+    type: "event",
+    name: "ResolutionAdapterApprovalUpdated",
+    inputs: [
+      { type: "address", name: "adapter", indexed: true },
+      { type: "bool", name: "approved", indexed: false }
+    ]
+  },
+  {
+    type: "function",
+    name: "aiAttestationSigner",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ type: "address" }]
+  },
+  {
+    type: "function",
+    name: "proposalGracePeriod",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ type: "uint256" }]
+  },
+  {
+    type: "function",
+    name: "approvedResolutionAdapters",
+    stateMutability: "view",
+    inputs: [{ type: "address", name: "adapter" }],
+    outputs: [{ type: "bool" }]
+  },
+  {
+    type: "function",
+    name: "setAiAttestationSigner",
+    stateMutability: "nonpayable",
+    inputs: [{ type: "address", name: "newSigner" }],
+    outputs: []
+  },
+  {
+    type: "function",
+    name: "setApprovedResolutionAdapter",
+    stateMutability: "nonpayable",
+    inputs: [
+      { type: "address", name: "adapter" },
+      { type: "bool", name: "approved" }
+    ],
+    outputs: []
+  },
+  {
+    type: "function",
+    name: "setProposalGracePeriod",
+    stateMutability: "nonpayable",
+    inputs: [{ type: "uint256", name: "newGracePeriod" }],
+    outputs: []
+  },
+  {
+    type: "function",
+    name: "createMarket",
+    stateMutability: "nonpayable",
+    inputs: [
+      { type: "string", name: "question" },
+      { type: "string", name: "category" },
+      { type: "address", name: "settlementToken" },
+      { type: "uint256", name: "closeTime" },
+      { type: "uint256", name: "resolutionTime" },
+      { type: "string", name: "metadataURI" },
+      { type: "string", name: "fallbackSourceURI" },
+      { type: "string", name: "resolutionRule" },
+      { type: "uint8", name: "resolutionMode" },
+      { type: "address", name: "resolutionAdapter" }
+    ],
+    outputs: [{ type: "uint256", name: "marketId" }]
+  },
+  {
+    type: "function",
+    name: "resolveWithAiAttestation",
+    stateMutability: "nonpayable",
+    inputs: [
+      { type: "uint256", name: "marketId" },
+      { type: "uint8", name: "outcome" },
+      { type: "bytes32", name: "evidenceHash" },
+      { type: "bytes32", name: "receiptHash" },
+      { type: "uint8", name: "suggestedOutcome" },
+      { type: "bytes", name: "attestation" }
+    ],
+    outputs: []
+  },
+  {
+    type: "function",
+    name: "cancelUnproposedMarket",
+    stateMutability: "nonpayable",
+    inputs: [{ type: "uint256", name: "marketId" }],
+    outputs: []
+  },
+  {
+    type: "function",
+    name: "getMarketTerms",
+    stateMutability: "view",
+    inputs: [{ type: "uint256", name: "marketId" }],
+    outputs: [
+      { type: "bytes32", name: "metadataHash" },
+      { type: "string", name: "primarySourceURI" },
+      { type: "string", name: "fallbackSourceURI" },
+      { type: "string", name: "resolutionRule" }
+    ]
+  },
+  {
+    type: "function",
+    name: "getMarketPolicy",
+    stateMutability: "view",
+    inputs: [{ type: "uint256", name: "marketId" }],
+    outputs: [
+      { type: "address", name: "resolutionAdapter" },
+      { type: "uint256", name: "termsMinStake" },
+      { type: "uint256", name: "termsProposalGracePeriod" },
+      { type: "uint256", name: "claimedWinningStake" },
+      { type: "uint256", name: "grossPayoutDistributed" }
+    ]
+  }
+] as const;
+
 export const settlementTokenAbi = [
   {
     type: "function",

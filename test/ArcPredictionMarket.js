@@ -11,10 +11,11 @@ const Outcome = {
 const ResolutionMode = {
   CreatorWithDispute: 0,
   AuthorityReview: 1,
-  AuthorityOnly: 2
+  AuthorityOnly: 2,
+  AdapterOnly: 3
 };
 
-describe("ArcPredictionMarket V3", function () {
+describe("ArcPredictionMarket V4", function () {
   async function deployFixture() {
     const [owner, resolver, alice, bob, committee] = await ethers.getSigners();
     const tokenFactory = await ethers.getContractFactory("MockERC20");
@@ -53,16 +54,37 @@ describe("ArcPredictionMarket V3", function () {
     return ethers.keccak256(ethers.toUtf8Bytes(label));
   }
 
-  async function createDefaultMarket(market, signer, token, closeTime, resolutionTime, mode = ResolutionMode.CreatorWithDispute) {
+  async function signAuraSuggestion(market, signer, marketId, outcome, receiptHash) {
+    const networkDetails = await ethers.provider.getNetwork();
+    const payload = ethers.keccak256(
+      ethers.AbiCoder.defaultAbiCoder().encode(
+        ["address", "uint256", "uint256", "uint8", "bytes32"],
+        [await market.getAddress(), networkDetails.chainId, marketId, outcome, receiptHash]
+      )
+    );
+    return signer.signMessage(ethers.getBytes(payload));
+  }
+
+  async function createDefaultMarket(
+    market,
+    signer,
+    token,
+    closeTime,
+    resolutionTime,
+    mode = ResolutionMode.CreatorWithDispute,
+    adapter = ethers.ZeroAddress
+  ) {
     return market.connect(signer).createMarket(
       "Will the referenced event occur by the stated deadline?",
       "Arc",
       await token.getAddress(),
       closeTime,
       resolutionTime,
-      metadataHash(),
       "ipfs://aurapredict/market-rules",
-      mode
+      "",
+      "YES if the referenced event occurs by the stated deadline. NO otherwise.",
+      mode,
+      adapter
     );
   }
 
@@ -89,8 +111,46 @@ describe("ArcPredictionMarket V3", function () {
 
     const row = await market.getMarket(0);
     assert.equal(row[2], await eurc.getAddress());
-    assert.equal(row[9], metadataHash());
     assert.equal(row[15], ethers.parseUnits("2.5", 6));
+    const terms = await market.getMarketTerms(0);
+    assert.equal(terms[1], "ipfs://aurapredict/market-rules");
+    assert.match(terms[3], /YES if/);
+  });
+
+  it("bounds public onchain market terms so a creator cannot publish oversized metadata", async function () {
+    const { market, usdc, resolver } = await deployFixture();
+    const now = await latestTimestamp();
+
+    await assert.rejects(
+      market.connect(resolver).createMarket(
+        `Will ${"x".repeat(280)} happen?`,
+        "Arc",
+        await usdc.getAddress(),
+        now + 3600,
+        now + 3600,
+        "https://example.com",
+        "",
+        "YES if verified; NO otherwise.",
+        ResolutionMode.CreatorWithDispute,
+        ethers.ZeroAddress
+      ),
+      /INVALID_QUESTION_LENGTH/
+    );
+    await assert.rejects(
+      market.connect(resolver).createMarket(
+        "Will this acceptable market resolve cleanly?",
+        "Arc",
+        await usdc.getAddress(),
+        now + 3600,
+        now + 3600,
+        "https://example.com",
+        "",
+        "r".repeat(2049),
+        ResolutionMode.CreatorWithDispute,
+        ethers.ZeroAddress
+      ),
+      /InvalidMetadata/
+    );
   });
 
   it("rejects settlement assets with incompatible decimal units", async function () {
@@ -124,8 +184,7 @@ describe("ArcPredictionMarket V3", function () {
 
     await increaseTime(3601);
     await market.connect(resolver).resolve(0, Outcome.Yes, metadataHash("result"), ethers.ZeroHash);
-    await increaseTime(disputeWindow + 1);
-    await market.finalize(0);
+    await market.finalizeDispute(0, Outcome.Yes, metadataHash("reviewed"), ethers.ZeroHash);
     await market.connect(alice).claim(0);
 
     assert.equal(await market.accumulatedProtocolFees(), ethers.parseUnits("0.04", 6));
@@ -160,8 +219,7 @@ describe("ArcPredictionMarket V3", function () {
     await market.connect(alice).bet(0, Outcome.Yes, ethers.parseUnits("1", 6));
     await increaseTime(3601);
     await market.connect(resolver).resolve(0, Outcome.Yes, metadataHash("result"), ethers.ZeroHash);
-    await increaseTime(disputeWindow + 1);
-    await market.finalize(0);
+    await market.finalizeDispute(0, Outcome.Yes, metadataHash("reviewed"), ethers.ZeroHash);
 
     assert.equal(await market.pendingWithdrawals(await usdc.getAddress(), resolver.address), creatorBond);
     const before = await usdc.balanceOf(resolver.address);
@@ -193,7 +251,6 @@ describe("ArcPredictionMarket V3", function () {
     await market.connect(alice).bet(0, Outcome.Yes, ethers.parseUnits("1", 6));
     await increaseTime(3601);
     await market.connect(resolver).resolve(0, Outcome.Yes, metadataHash("creator"), metadataHash("receipt"));
-    await market.requestAuthorityReview(0, metadataHash("mismatch"));
     await assert.rejects(market.finalize(0), /AuthorityReviewRequired/);
     await market.finalizeDispute(0, Outcome.Yes, metadataHash("reviewed"), metadataHash("receipt"));
     const row = await market.getMarket(0);
@@ -243,8 +300,7 @@ describe("ArcPredictionMarket V3", function () {
 
     await increaseTime(3601);
     await market.connect(resolver).resolve(0, Outcome.Yes, metadataHash("settled"), ethers.ZeroHash);
-    await increaseTime(disputeWindow + 1);
-    await market.finalize(0);
+    await market.finalizeDispute(0, Outcome.Yes, metadataHash("reviewed"), ethers.ZeroHash);
     await market.connect(alice).claim(0);
   });
 
@@ -264,5 +320,139 @@ describe("ArcPredictionMarket V3", function () {
       market.connect(alice).bet(0, Outcome.Yes, ethers.parseUnits("1", 6)),
       /AccountBlocked/
     );
+  });
+
+  it("requires authority review when a creator proposal has no signed Aura attestation", async function () {
+    const { market, usdc, resolver, alice } = await deployFixture();
+    const now = await latestTimestamp();
+    await createDefaultMarket(market, resolver, usdc, now + 3600, now + 3600);
+    await market.connect(alice).bet(0, Outcome.Yes, ethers.parseUnits("1", 6));
+    await increaseTime(3601);
+
+    await market.connect(resolver).resolve(0, Outcome.Yes, metadataHash("evidence"), ethers.ZeroHash);
+    const row = await market.getMarket(0);
+    assert.equal(row[21], true);
+    await assert.rejects(market.finalize(0), /AuthorityReviewRequired/);
+  });
+
+  it("permits normal dispute finalization when a creator follows a signed Aura suggestion", async function () {
+    const { market, usdc, resolver, alice, committee, disputeWindow } = await deployFixture();
+    await market.setAiAttestationSigner(committee.address);
+    const now = await latestTimestamp();
+    await createDefaultMarket(market, resolver, usdc, now + 3600, now + 3600);
+    await market.connect(alice).bet(0, Outcome.Yes, ethers.parseUnits("1", 6));
+    await increaseTime(3601);
+    const receiptHash = metadataHash("signed-ai-receipt");
+    const signature = await signAuraSuggestion(market, committee, 0, Outcome.Yes, receiptHash);
+
+    await market.connect(resolver).resolveWithAiAttestation(
+      0,
+      Outcome.Yes,
+      metadataHash("evidence"),
+      receiptHash,
+      Outcome.Yes,
+      signature
+    );
+    let row = await market.getMarket(0);
+    assert.equal(row[21], false);
+    await increaseTime(disputeWindow + 1);
+    await market.finalize(0);
+    row = await market.getMarket(0);
+    assert.equal(Number(row[24]), Outcome.Yes);
+  });
+
+  it("forces authority review when the creator contradicts a signed Aura suggestion", async function () {
+    const { market, usdc, resolver, alice, bob, committee } = await deployFixture();
+    await market.setAiAttestationSigner(committee.address);
+    const now = await latestTimestamp();
+    await createDefaultMarket(market, resolver, usdc, now + 3600, now + 3600);
+    await market.connect(alice).bet(0, Outcome.Yes, ethers.parseUnits("1", 6));
+    await market.connect(bob).bet(0, Outcome.No, ethers.parseUnits("1", 6));
+    await increaseTime(3601);
+    const receiptHash = metadataHash("signed-ai-no");
+    const signature = await signAuraSuggestion(market, committee, 0, Outcome.No, receiptHash);
+
+    await market.connect(resolver).resolveWithAiAttestation(
+      0,
+      Outcome.Yes,
+      metadataHash("creator-contradicts"),
+      receiptHash,
+      Outcome.No,
+      signature
+    );
+    const row = await market.getMarket(0);
+    assert.equal(row[21], true);
+  });
+
+  it("lets a registered oracle adapter resolve new adapter-only markets without redeploying the core", async function () {
+    const { market, usdc, resolver, alice, committee } = await deployFixture();
+    await market.setApprovedResolutionAdapter(committee.address, true);
+    const now = await latestTimestamp();
+    await createDefaultMarket(market, resolver, usdc, now + 3600, now + 3600, ResolutionMode.AdapterOnly, committee.address);
+    await market.connect(alice).bet(0, Outcome.Yes, ethers.parseUnits("1", 6));
+    await increaseTime(3601);
+
+    await assert.rejects(
+      market.connect(resolver).resolve(0, Outcome.Yes, metadataHash("creator"), ethers.ZeroHash),
+      /NotResolver/
+    );
+    await market.connect(committee).resolve(0, Outcome.Yes, metadataHash("oracle"), ethers.ZeroHash);
+  });
+
+  it("refunds a funded market that receives no proposal by its timeout", async function () {
+    const { market, usdc, resolver, alice, creatorBond } = await deployFixture();
+    const now = await latestTimestamp();
+    await createDefaultMarket(market, resolver, usdc, now + 3600, now + 3600);
+    const stake = ethers.parseUnits("2", 6);
+    await market.connect(alice).bet(0, Outcome.Yes, stake);
+    await increaseTime(3600 + 72 * 60 * 60 + 1);
+
+    await market.connect(alice).cancelUnproposedMarket(0);
+    const row = await market.getMarket(0);
+    assert.equal(Number(row[24]), Outcome.Canceled);
+    assert.equal(await market.pendingWithdrawals(await usdc.getAddress(), resolver.address), creatorBond);
+    assert.equal(await market.connect(alice).potentialPayout(0, alice.address), stake);
+  });
+
+  it("snapshots minimum stake per market even when asset settings later change", async function () {
+    const { market, usdc, resolver, alice, creatorBond, disputeBond } = await deployFixture();
+    const now = await latestTimestamp();
+    await createDefaultMarket(market, resolver, usdc, now + 3600, now + 3600);
+    await market.configureSettlementAsset(
+      await usdc.getAddress(),
+      true,
+      "USDC",
+      6,
+      ethers.parseUnits("5", 6),
+      creatorBond,
+      disputeBond,
+      0
+    );
+
+    await market.connect(alice).bet(0, Outcome.Yes, ethers.parseUnits("0.1", 6));
+    const policy = await market.getMarketPolicy(0);
+    assert.equal(policy[1], ethers.parseUnits("0.1", 6));
+  });
+
+  it("assigns rounding remainder to the final winning claimant instead of trapping funds", async function () {
+    const { market, usdc, resolver, alice, bob, committee } = await deployFixture();
+    await market.setProtocolFeeBps(0);
+    const now = await latestTimestamp();
+    await createDefaultMarket(market, resolver, usdc, now + 3600, now + 3600, ResolutionMode.AuthorityOnly);
+    const aliceStake = 100001n;
+    const bobStake = 100002n;
+    const losingStake = 100000n;
+    await market.connect(alice).bet(0, Outcome.Yes, aliceStake);
+    await market.connect(bob).bet(0, Outcome.Yes, bobStake);
+    await market.connect(committee).bet(0, Outcome.No, losingStake);
+    await increaseTime(3601);
+    await market.resolve(0, Outcome.Yes, metadataHash("authority"), ethers.ZeroHash);
+    await increaseTime(12 * 60 * 60 + 1);
+    await market.finalize(0);
+    await market.connect(alice).claim(0);
+    await market.connect(bob).claim(0);
+
+    const policy = await market.getMarketPolicy(0);
+    assert.equal(policy[4], aliceStake + bobStake + losingStake);
   });
 });

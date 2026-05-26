@@ -3,9 +3,9 @@ import { createServer } from "node:http";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { createPublicClient, createWalletClient, fallback, formatUnits, http, isAddress, keccak256, stringToHex } from "viem";
+import { createPublicClient, createWalletClient, encodeAbiParameters, fallback, formatUnits, http, isAddress, keccak256, stringToHex } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import { arcPredictionMarketV2Abi, arcPredictionMarketV3Abi } from "./arcPredictionMarketAbi.mjs";
+import { arcPredictionMarketV2Abi, arcPredictionMarketV3Abi, arcPredictionMarketV4Abi } from "./arcPredictionMarketAbi.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = path.join(__dirname, "data");
@@ -13,7 +13,9 @@ const DATA_FILE = path.join(DATA_DIR, "aurapredict-index.json");
 
 const ACTIVE_V3_CONTRACT_ADDRESS = "0x4399ea3f59AA14e4D19217f1af2aD0681f5FafFd";
 const ACTIVE_V3_DEPLOYMENT_BLOCK = 44074836n;
-const CONTRACT_ADDRESS = ACTIVE_V3_CONTRACT_ADDRESS;
+const ACTIVE_V4_CONTRACT_ADDRESS = "0x3c853AE2eC705B453c9657569b6335e762631536";
+const ACTIVE_V4_DEPLOYMENT_BLOCK = 44083985n;
+const CONTRACT_ADDRESS = ACTIVE_V4_CONTRACT_ADDRESS;
 const RPC_URLS = (
   process.env.AURA_INDEXER_RPC_URLS ||
   process.env.ARC_RPC_URL ||
@@ -25,7 +27,7 @@ const RPC_URLS = (
 const PORT = Number(process.env.PORT || process.env.AURA_INDEXER_PORT || 8787);
 const HOST = process.env.AURA_INDEXER_HOST || (process.env.PORT ? "0.0.0.0" : "127.0.0.1");
 const POLL_MS = Number(process.env.AURA_INDEXER_POLL_MS || 12_000);
-const START_BLOCK = ACTIVE_V3_DEPLOYMENT_BLOCK;
+const START_BLOCK = ACTIVE_V4_DEPLOYMENT_BLOCK;
 const CHUNK_SIZE = BigInt(process.env.AURA_INDEXER_CHUNK_SIZE || 9_000);
 const AI_PROVIDER = String(process.env.AI_PROVIDER || "").trim().toLowerCase();
 const AI_FALLBACK_PROVIDER = String(process.env.AI_FALLBACK_PROVIDER || "").trim().toLowerCase();
@@ -41,6 +43,7 @@ const RESOLUTION_ADMIN_TOKEN = String(process.env.AURA_RESOLUTION_ADMIN_TOKEN ||
 const RESOLUTION_AUTO_RUN = String(process.env.AURA_RESOLUTION_AUTO_RUN || "").trim() === "1";
 const RESOLUTION_AUTO_PROPOSE = String(process.env.AURA_RESOLUTION_AUTO_PROPOSE || "").trim() === "1";
 const RESOLVER_PRIVATE_KEY = String(process.env.AURA_RESOLVER_PRIVATE_KEY || "").trim();
+const AI_ATTESTATION_PRIVATE_KEY = String(process.env.AURA_ATTESTATION_PRIVATE_KEY || "").trim();
 const RESOLUTION_MIN_CONFIDENCE = Number(process.env.AURA_RESOLUTION_MIN_CONFIDENCE || 72);
 const RESOLUTION_CONSENSUS_COUNT = Number(process.env.AURA_RESOLUTION_CONSENSUS_COUNT || 2);
 const USDC_DECIMALS = 18;
@@ -80,6 +83,7 @@ const V3_EVENT_NAMES = [
   "MarketCreationFeeCollected",
   "Claimed"
 ];
+const V4_EVENT_NAMES = [...V3_EVENT_NAMES, "UnproposedMarketCanceled"];
 const legacyGetMarketAbi = [
   {
     type: "function",
@@ -116,6 +120,7 @@ const client = createPublicClient({
   })
 });
 const resolverAccount = RESOLVER_PRIVATE_KEY ? privateKeyToAccount(RESOLVER_PRIVATE_KEY) : null;
+const attestationAccount = AI_ATTESTATION_PRIVATE_KEY ? privateKeyToAccount(AI_ATTESTATION_PRIVATE_KEY) : null;
 const walletClient = resolverAccount
   ? createWalletClient({
       account: resolverAccount,
@@ -197,6 +202,8 @@ function emptyState() {
     disputeBond: "0",
     disputeWindow: 0,
     disputeGracePeriod: 0,
+    proposalGracePeriod: 0,
+    aiAttestationSigner: ZERO_ADDRESS,
     protocolFeeBps: 0,
     marketCreationFee: "0",
     accumulatedProtocolFees: "0",
@@ -279,11 +286,15 @@ function ensureMarket(marketId) {
       resolutionMode: 0,
       metadataHash: ZERO_HASH,
       metadataURI: "",
+      fallbackSourceURI: "",
+      resolutionRule: "",
+      resolutionAdapter: ZERO_ADDRESS,
       termsProtocolFeeBps: 0,
       termsCreatorBond: "0",
       termsDisputeBond: "0",
       termsDisputeWindow: 0,
       termsDisputeGracePeriod: 0,
+      termsProposalGracePeriod: 0,
       yesPool: "0",
       noPool: "0",
       traderCount: 0,
@@ -335,13 +346,18 @@ async function processEvent(eventName, log) {
     market.question = String(args.question ?? market.question);
     market.category = String(args.category ?? market.category ?? "Other");
     market.closeTime = toNumber(args.closeTime);
-    if (isV3Contract()) {
+    if (isStablecoinContract()) {
       market.resolutionTime = toNumber(args.resolutionTime);
       market.settlementToken = args.settlementToken ?? market.settlementToken;
       market.authority = args.authority ?? market.authority;
       market.resolutionMode = Number(args.resolutionMode ?? 0);
       market.metadataHash = args.metadataHash ?? ZERO_HASH;
       market.metadataURI = String(args.metadataURI ?? "");
+      if (isV4Contract()) {
+        market.resolutionAdapter = args.resolutionAdapter ?? ZERO_ADDRESS;
+        market.fallbackSourceURI = String(args.fallbackSourceURI ?? "");
+        market.resolutionRule = String(args.resolutionRule ?? "");
+      }
     } else {
       market.resolutionTime = market.closeTime;
     }
@@ -385,7 +401,7 @@ async function processEvent(eventName, log) {
     market.proposedOutcome = Number(args.outcome ?? Outcome.Unresolved);
     market.proposedAt = timestamp;
     market.disputeDeadline = toNumber(args.disputeDeadline);
-    if (isV3Contract()) {
+    if (isStablecoinContract()) {
       market.proposedBy = args.proposer ?? ZERO_ADDRESS;
       market.proposalEvidenceHash = args.evidenceHash ?? ZERO_HASH;
       market.aiReceiptHash = args.aiReceiptHash ?? ZERO_HASH;
@@ -453,6 +469,15 @@ async function processEvent(eventName, log) {
     return;
   }
 
+  if (eventName === "UnproposedMarketCanceled") {
+    const market = ensureMarket(Number(args.marketId ?? 0n));
+    market.outcome = Outcome.Canceled;
+    market.resolvedAt = timestamp;
+    market.updatedTxHash = txHash;
+    addSnapshot(market, timestamp, txHash, logIndex);
+    return;
+  }
+
   if (eventName === "MarketCreationFeeCollected") {
     state.accumulatedProtocolFees = toAmount(toBigint(state.accumulatedProtocolFees) + toBigint(args.fee));
     return;
@@ -478,7 +503,16 @@ function isV3Contract() {
   return state.contractVersion === "AURAPREDICT_V3";
 }
 
+function isV4Contract() {
+  return state.contractVersion === "AURAPREDICT_V4";
+}
+
+function isStablecoinContract() {
+  return isV3Contract() || isV4Contract();
+}
+
 function currentContractAbi() {
+  if (isV4Contract()) return arcPredictionMarketV4Abi;
   return isV3Contract() ? arcPredictionMarketV3Abi : arcPredictionMarketV2Abi;
 }
 
@@ -505,8 +539,10 @@ async function readContract(functionName, args = []) {
 }
 
 async function readMarketData(id) {
-  if (isV3Contract()) {
+  if (isStablecoinContract()) {
     const data = await readContract("getMarket", [BigInt(id)]);
+    const terms = isV4Contract() ? await readContract("getMarketTerms", [BigInt(id)]) : null;
+    const policy = isV4Contract() ? await readContract("getMarketPolicy", [BigInt(id)]) : null;
     return {
       question: data[0],
       category: data[1],
@@ -519,6 +555,9 @@ async function readMarketData(id) {
       resolutionMode: Number(data[8]),
       metadataHash: data[9],
       metadataURI: data[10],
+      fallbackSourceURI: terms?.[2] ?? "",
+      resolutionRule: terms?.[3] ?? "",
+      resolutionAdapter: policy?.[0] ?? ZERO_ADDRESS,
       termsProtocolFeeBps: Number(data[11]),
       termsCreatorBond: toAmount(data[12]),
       termsDisputeBond: toAmount(data[13]),
@@ -533,7 +572,8 @@ async function readMarketData(id) {
       disputed: Boolean(data[22]),
       disputer: data[23],
       outcome: Number(data[24]),
-      termsDisputeGracePeriod: Number(data[25])
+      termsDisputeGracePeriod: Number(data[25]),
+      termsProposalGracePeriod: policy ? Number(policy[2]) : 0
     };
   }
 
@@ -632,6 +672,17 @@ async function refreshContractState() {
     state.resolutionAuthority = resolutionAuthority || state.owner;
     state.disputeGracePeriod = Number(disputeGracePeriod);
     state.marketCreationFee = toAmount(marketCreationFee);
+    if (isV4Contract()) {
+      const [proposalGracePeriod, aiAttestationSigner] = await Promise.all([
+        readContract("proposalGracePeriod"),
+        readContract("aiAttestationSigner")
+      ]);
+      state.proposalGracePeriod = Number(proposalGracePeriod);
+      state.aiAttestationSigner = aiAttestationSigner;
+    } else {
+      state.proposalGracePeriod = 0;
+      state.aiAttestationSigner = ZERO_ADDRESS;
+    }
   } catch {
     state.contractVersion = state.creatorBond === "0" ? "legacy" : "dispute";
     state.resolutionAuthority = state.owner;
@@ -652,7 +703,7 @@ async function refreshContractState() {
   );
 
   state.markets = Object.fromEntries(markets.map((market) => [String(market.id), market]));
-  if (isV3Contract()) {
+  if (isStablecoinContract()) {
     const tokens = [...new Set(markets.map((market) => market.settlementToken).filter((token) => token && token !== ZERO_ADDRESS))];
     const assets = new Map();
     await Promise.all(
@@ -714,7 +765,7 @@ function buildLeaderboard(periodStart = 0) {
   const rows = new Map();
   const positions = new Map();
   const marketsById = new Map(Object.values(state.markets).map((market) => [market.id, market]));
-  const pointsDecimals = isV3Contract() ? V3_SETTLEMENT_DECIMALS : USDC_DECIMALS;
+  const pointsDecimals = isStablecoinContract() ? V3_SETTLEMENT_DECIMALS : USDC_DECIMALS;
 
   const getRow = (address) => {
     const key = address.toLowerCase();
@@ -1335,7 +1386,7 @@ function resolutionReviewerPrompt(market, evidenceRows, role) {
     notes: cleanText(item.notes || item.finding, 700),
     createdAt: item.createdAt
   }));
-  const criteria = cleanText(market.resolutionCriteria || "", 1000);
+  const criteria = cleanText(market.resolutionRule || market.resolutionCriteria || "", 1000);
   return [
     `Current UTC time: ${nowIso()}`,
     `Reviewer role: ${role}`,
@@ -1440,6 +1491,28 @@ function consensusFromReviews(reviews) {
   };
 }
 
+async function attachSignedAuraAttestation(receipt) {
+  if (!isV4Contract() || !attestationAccount || receipt.status !== "ready") return receipt;
+  if (!/^0x[a-fA-F0-9]{64}$/.test(String(receipt.receiptHash || ""))) return receipt;
+  const suggestedOutcome = Number(receipt.proposedOutcomeValue || Outcome.Unresolved);
+  if (![Outcome.Yes, Outcome.No, Outcome.Canceled].includes(suggestedOutcome)) return receipt;
+  const payload = keccak256(
+    encodeAbiParameters(
+      [
+        { type: "address" },
+        { type: "uint256" },
+        { type: "uint256" },
+        { type: "uint8" },
+        { type: "bytes32" }
+      ],
+      [CONTRACT_ADDRESS, BigInt(ARC_CHAIN.id), BigInt(receipt.marketId), suggestedOutcome, receipt.receiptHash]
+    )
+  );
+  receipt.attestationSigner = attestationAccount.address;
+  receipt.attestation = await attestationAccount.signMessage({ message: { raw: payload } });
+  return receipt;
+}
+
 async function buildResolutionReceipt(marketId, options = {}) {
   const market = state.markets[String(marketId)];
   if (!market) throw new Error("Market not found.");
@@ -1499,6 +1572,7 @@ async function buildResolutionReceipt(marketId, options = {}) {
     error: ""
   };
   receipt.receiptHash = receiptHashFor(receipt);
+  await attachSignedAuraAttestation(receipt);
   resolutionState()[String(marketId)] = receipt;
   await saveState();
   return receipt;
@@ -1525,12 +1599,29 @@ async function proposeResolutionOnchain(receipt) {
   const receiptHash = /^0x[a-fA-F0-9]{64}$/.test(String(receipt.receiptHash || "")) ? receipt.receiptHash : ZERO_HASH;
   const evidenceHash = keccak256(stringToHex(JSON.stringify(receipt.evidence || [])));
   const functionName =
-    isV3Contract() && noLiquidity
+    isStablecoinContract() && noLiquidity
       ? "cancelEmptyMarket"
+      : isV4Contract() && /^0x[a-fA-F0-9]{130}$/.test(String(receipt.attestation || "")) && receipt.proposedOutcomeValue !== Outcome.Canceled
+        ? "resolveWithAiAttestation"
       : receipt.proposedOutcomeValue === Outcome.Canceled
         ? "cancel"
         : "resolve";
-  const args = isV3Contract()
+  const args = isV4Contract()
+    ? functionName === "cancelEmptyMarket"
+      ? [BigInt(receipt.marketId)]
+      : functionName === "resolveWithAiAttestation"
+        ? [
+            BigInt(receipt.marketId),
+            receipt.proposedOutcomeValue,
+            evidenceHash,
+            receiptHash,
+            receipt.proposedOutcomeValue,
+            receipt.attestation
+          ]
+        : functionName === "cancel"
+          ? [BigInt(receipt.marketId), evidenceHash, receiptHash]
+          : [BigInt(receipt.marketId), receipt.proposedOutcomeValue, evidenceHash, receiptHash]
+    : isV3Contract()
     ? functionName === "cancelEmptyMarket"
       ? [BigInt(receipt.marketId)]
       : functionName === "cancel"
@@ -1581,7 +1672,7 @@ async function runAutoResolutionSweep() {
 async function syncRange(fromBlock, toBlock) {
   const logs = [];
   const abi = currentContractAbi();
-  const eventNames = isV3Contract() ? V3_EVENT_NAMES : V2_EVENT_NAMES;
+  const eventNames = isV4Contract() ? V4_EVENT_NAMES : isV3Contract() ? V3_EVENT_NAMES : V2_EVENT_NAMES;
   for (const eventName of eventNames) {
     const eventLogs = await client.getContractEvents({
       address: CONTRACT_ADDRESS,
@@ -1732,6 +1823,8 @@ async function route(req, res) {
           disputeBond: state.disputeBond,
           disputeWindow: state.disputeWindow,
           disputeGracePeriod: state.disputeGracePeriod,
+          proposalGracePeriod: state.proposalGracePeriod,
+          aiAttestationSigner: state.aiAttestationSigner,
           protocolFeeBps: state.protocolFeeBps,
           marketCreationFee: state.marketCreationFee,
           accumulatedProtocolFees: state.accumulatedProtocolFees
@@ -1780,6 +1873,28 @@ async function route(req, res) {
         const storedMarket = Number.isInteger(marketId) ? state.markets[String(marketId)] : null;
         if (storedMarket && storedMarket.outcome !== Outcome.Unresolved) {
           json(res, 409, { error: "Market is finalized. Saved Aura analysis is read-only; new AI reviews are disabled." });
+          return;
+        }
+        if (storedMarket && isV4Contract()) {
+          const receipt = await buildResolutionReceipt(marketId, {
+            force: false,
+            evidence: Array.isArray(body.evidence) ? body.evidence : undefined
+          });
+          const leadingReview = receipt.reviews?.[0] || {};
+          const report = {
+            suggestedOutcome: receipt.consensus?.outcome || receipt.proposedOutcome,
+            confidence: receipt.consensus?.confidence || 0,
+            summary:
+              leadingReview.reasoning ||
+              "Aura reviewers could not provide a sufficient evidence-based recommendation.",
+            evidence: receipt.evidence || [],
+            disputeRisks: (receipt.reviews || []).flatMap((review) => review.risks || []).slice(0, 4),
+            resolverAction:
+              receipt.status === "ready"
+                ? `Review the receipt and propose ${receipt.consensus.outcome}.`
+                : "Add stronger evidence or send the result to authority review."
+          };
+          json(res, 200, { report, receipt, provider: receipt.provider, model: receipt.model, updatedAt: nowIso() });
           return;
         }
         const report = await callAiJson(systemInstruction, resolutionPrompt(body));

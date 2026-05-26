@@ -88,10 +88,10 @@ Giai thich:
 - `ARC_RPC_URL`: RPC Arc Testnet.
 - `PRIVATE_KEY`: private key cua vi deploy contract. Chi dung local, khong dua len GitHub.
 - `MIN_STAKE_USDC`: so USDC toi thieu khi stake.
-- `ARC_USDC_TOKEN_ADDRESS`: dia chi ERC-20 USDC Arc Testnet dung lam settlement asset mac dinh cua contract V3.
+- `ARC_USDC_TOKEN_ADDRESS`: dia chi ERC-20 USDC Arc Testnet dung lam settlement asset mac dinh cua contract V4.
 - `ARC_EURC_TOKEN_ADDRESS`: dia chi ERC-20 EURC tuy chon neu muon mo them market EURC.
 - `VITE_PREDICTION_MARKET_ADDRESS`: dia chi contract sau khi deploy.
-- `VITE_ARC_EURC_TOKEN_ADDRESS`: dia chi EURC tuy chon de frontend hien lua chon asset khi tao market V3.
+- `VITE_ARC_EURC_TOKEN_ADDRESS`: dia chi EURC tuy chon de frontend hien lua chon asset khi tao market V4.
 
 ### 2.4. Kiem tra code
 
@@ -139,10 +139,10 @@ Can than:
 - Khong gui private key cho ai.
 - Khong commit `.env`.
 
-Tren Arc, USDC native dung lam gas va USDC ERC-20 interface la cung mot tai san. V3 dung ERC-20
+Tren Arc, USDC native dung lam gas va USDC ERC-20 interface la cung mot tai san. V4 dung ERC-20
 interface `0x3600000000000000000000000000000000000000` (6 decimals) de ho tro `approve` va
 `transferFrom`; khong tron so du native 18 decimals voi gia tri settlement 6 decimals.
-V3 chi nhan settlement asset co 6 decimals nhu USDC/EURC. Moi market thanh toan bang dung
+V4 chi nhan settlement asset co 6 decimals nhu USDC/EURC. Moi market thanh toan bang dung
 token da chon; dashboard co the cong cac don vi stablecoin nhung contract khong tu quy doi FX.
 
 ### 3.2. Lay USDC testnet
@@ -169,24 +169,32 @@ Explorer: https://testnet.arcscan.app/address/0x...
 
 Copy dia chi `0x...`.
 
-Deployment V3 hien tai tren Arc Testnet:
+Deployment V4 hien tai tren Arc Testnet:
 
 ```text
-Contract: 0x4399ea3f59AA14e4D19217f1af2aD0681f5FafFd
-Block:    44074836
+Contract: 0x3c853AE2eC705B453c9657569b6335e762631536
+Block:    44083985
 USDC:     0x3600000000000000000000000000000000000000
 EURC:     0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a
 ```
 
-Contract V3 them `resolutionTime` duoc cuong che onchain, settlement asset theo market, fee/bond snapshot, authority review modes, evidence/AI receipt hash va pull-withdrawal. Production hien duoc pin vao V3. Market cua contract V2 cu khong tu chuyen sang V3 va khong hien trong giao dien V3 chinh.
+Contract V4 them source/rule onchain, `resolutionTime` duoc cuong che onchain, settlement asset theo market, fee/bond/min-stake snapshot, authority review modes, optional Aura signed attestation, adapter-only mode cho oracle/committee sau nay va pull-withdrawal. Production hien duoc pin vao V4. Market cua contract V3 cu khong tu chuyen sang V4, nhung van co the xem/settle/claim bang link app them `?deployment=v3`.
 
-### 3.4. Dia chi production V3
+### 3.4. Dia chi production V4
 
 Frontend/indexer production hien pin truc tiep deployment nay trong source. Gia tri tham chieu de chay local hoac kiem tra cau hinh la:
 
 ```env
-VITE_PREDICTION_MARKET_ADDRESS=0x4399ea3f59AA14e4D19217f1af2aD0681f5FafFd
+VITE_PREDICTION_MARKET_ADDRESS=0x3c853AE2eC705B453c9657569b6335e762631536
+VITE_PREDICTION_MARKET_START_BLOCK=44083985
 VITE_ARC_EURC_TOKEN_ADDRESS=0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a
+```
+
+V3 archive:
+
+```env
+V3_PREDICTION_MARKET_ADDRESS=0x4399ea3f59AA14e4D19217f1af2aD0681f5FafFd
+V3_PREDICTION_MARKET_START_BLOCK=44074836
 ```
 
 Dung dev server neu dang chay bang `Ctrl + C`, roi chay lai:
@@ -299,7 +307,7 @@ Trong phan `Environment Variables`, them bien:
 
 ```text
 Name:  VITE_PREDICTION_MARKET_ADDRESS
-Value: 0x4399ea3f59AA14e4D19217f1af2aD0681f5FafFd
+Value: 0x3c853AE2eC705B453c9657569b6335e762631536
 
 Name:  VITE_ARC_EURC_TOKEN_ADDRESS
 Value: 0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a
@@ -311,7 +319,7 @@ Chon tat ca moi truong neu Vercel hoi:
 - Preview
 - Development
 
-Khong them `PRIVATE_KEY`, `ARC_USDC_TOKEN_ADDRESS` hoac `ARC_EURC_TOKEN_ADDRESS` dung cho deploy len Vercel neu khong can. Ban build production hien pin dia chi V3 trong source de cuong che cutover; cac bien frontend tren giu cau hinh dashboard nhat quan voi deployment dang dung. Private key chi dung de deploy contract tu may cua ban.
+Khong them `PRIVATE_KEY`, `ARC_USDC_TOKEN_ADDRESS` hoac `ARC_EURC_TOKEN_ADDRESS` dung cho deploy len Vercel neu khong can. Ban build production hien pin dia chi V4 trong source de cuong che cutover; cac bien frontend tren giu cau hinh dashboard nhat quan voi deployment dang dung. Private key chi dung de deploy contract tu may cua ban.
 
 Vercel docs ghi environment variables la key-value duoc cau hinh ngoai source code va thay doi moi chi ap dung cho deployment moi.
 
