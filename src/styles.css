@@ -3357,6 +3357,133 @@ textarea {
   font-size: 1.08rem;
 }
 
+.asset-breakdown-list {
+  display: grid;
+  gap: 8px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.asset-breakdown-list li {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.55);
+  border: 1px solid #dfe6f1;
+  border-radius: 8px;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+  padding: 9px 10px;
+}
+
+.asset-breakdown-list li span {
+  color: #3959d7;
+  font-weight: 950;
+}
+
+.owner-console {
+  display: grid;
+  gap: 16px;
+}
+
+.owner-console-head,
+.owner-panel,
+.owner-wallet-pill {
+  background: #ffffff;
+  border: 1px solid #dfe6f1;
+  border-radius: 8px;
+  color: #172033;
+}
+
+.owner-console-head {
+  align-items: flex-start;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+  padding: 18px;
+}
+
+.owner-console-head p {
+  color: #667085;
+  margin: 6px 0 0;
+  max-width: 760px;
+}
+
+.owner-wallet-pill {
+  display: grid;
+  gap: 4px;
+  min-width: 160px;
+  padding: 12px;
+}
+
+.owner-wallet-pill span,
+.owner-panel > .section-label {
+  color: #3959d7;
+}
+
+.owner-dashboard-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.owner-panel {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+}
+
+.owner-panel-wide {
+  grid-column: 1 / -1;
+}
+
+.owner-token-grid,
+.owner-report-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.owner-token-card,
+.owner-report-grid div,
+.owner-fee-row {
+  background: #f8fafc;
+  border: 1px solid #e5ebf4;
+  border-radius: 8px;
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  padding: 12px;
+}
+
+.owner-token-card span,
+.owner-report-grid span,
+.owner-fee-row span {
+  color: #667085;
+  font-size: 0.78rem;
+  font-weight: 850;
+}
+
+.owner-token-card small {
+  color: #667085;
+}
+
+.owner-fee-list {
+  display: grid;
+  gap: 10px;
+}
+
+.owner-fee-row {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+}
+
+.owner-fee-row div {
+  display: grid;
+  gap: 4px;
+}
+
 .modal-backdrop {
   align-items: center;
   background: rgba(8, 12, 28, 0.58);
@@ -5277,6 +5404,9 @@ label {
 [data-theme="dark"] .leaderboard-table,
 [data-theme="dark"] .create-market,
 [data-theme="dark"] .protocol-card,
+[data-theme="dark"] .owner-console-head,
+[data-theme="dark"] .owner-panel,
+[data-theme="dark"] .owner-wallet-pill,
 [data-theme="dark"] .profile-summary,
 [data-theme="dark"] .history-card,
 [data-theme="dark"] .empty-state,
@@ -5413,6 +5543,10 @@ label {
 [data-theme="dark"] .hero-hot-empty,
 [data-theme="dark"] .profile-summary div,
 [data-theme="dark"] .protocol-card div,
+[data-theme="dark"] .asset-breakdown-list li,
+[data-theme="dark"] .owner-token-card,
+[data-theme="dark"] .owner-report-grid div,
+[data-theme="dark"] .owner-fee-row,
 [data-theme="dark"] .odds-row div,
 [data-theme="dark"] .market-meta div,
 [data-theme="dark"] .position-chip,
@@ -5444,6 +5578,20 @@ label {
 [data-theme="dark"] .protocol-card .protocol-metric-grid {
   background: transparent;
   border: 0;
+}
+
+[data-theme="dark"] .owner-console-head p,
+[data-theme="dark"] .owner-token-card small,
+[data-theme="dark"] .owner-token-card span,
+[data-theme="dark"] .owner-report-grid span,
+[data-theme="dark"] .owner-fee-row span {
+  color: #9aa7bd;
+}
+
+[data-theme="dark"] .owner-wallet-pill span,
+[data-theme="dark"] .owner-panel > .section-label,
+[data-theme="dark"] .asset-breakdown-list li span {
+  color: #79dfff;
 }
 
 [data-theme="dark"] .personal-result.neutral,
@@ -6261,6 +6409,12 @@ label {
     grid-template-columns: minmax(0, 1fr);
   }
 
+  .owner-dashboard-grid,
+  .owner-token-grid,
+  .owner-report-grid {
+    grid-template-columns: 1fr;
+  }
+
   .side-rail {
     position: static;
   }
@@ -6344,8 +6498,17 @@ label {
   .docs-summary-grid,
   .docs-two-column,
   .docs-feature-table,
+  .owner-dashboard-grid,
+  .owner-token-grid,
+  .owner-report-grid,
   .landing-market-preview div {
     grid-template-columns: 1fr;
+  }
+
+  .owner-console-head,
+  .owner-fee-row {
+    align-items: stretch;
+    display: grid;
   }
 
   .landing-actions {

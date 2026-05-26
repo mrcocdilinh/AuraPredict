@@ -143,6 +143,21 @@ type ProjectStats = {
   knownPlayers: number;
   settlementSymbols?: string[];
   hasMixedSettlementAssets?: boolean;
+  assetBreakdown?: AssetStats[];
+};
+
+type AssetStats = {
+  token?: string;
+  symbol: string;
+  decimals: number;
+  marketCount: number;
+  liveMarkets: number;
+  endedMarkets: number;
+  pendingMarkets: number;
+  participantEntries: number;
+  totalVolume: bigint;
+  liveLiquidity: bigint;
+  averageMarketVolume: bigint;
 };
 
 type MarketComment = {
@@ -290,10 +305,17 @@ type IndexedActivity = Omit<ActivityItem, "amount" | "side"> & {
   side: number;
 };
 
-type IndexedProjectStats = Omit<ProjectStats, "totalVolume" | "liveLiquidity" | "averageMarketVolume"> & {
+type IndexedAssetStats = Omit<AssetStats, "totalVolume" | "liveLiquidity" | "averageMarketVolume"> & {
   totalVolume: string;
   liveLiquidity: string;
   averageMarketVolume: string;
+};
+
+type IndexedProjectStats = Omit<ProjectStats, "totalVolume" | "liveLiquidity" | "averageMarketVolume" | "assetBreakdown"> & {
+  totalVolume: string;
+  liveLiquidity: string;
+  averageMarketVolume: string;
+  assetBreakdown?: IndexedAssetStats[];
 };
 
 type IndexedSnapshot = {
@@ -664,7 +686,13 @@ function indexedStatsToProjectStats(stats: IndexedProjectStats): ProjectStats {
     ...stats,
     totalVolume: BigInt(stats.totalVolume || "0"),
     liveLiquidity: BigInt(stats.liveLiquidity || "0"),
-    averageMarketVolume: BigInt(stats.averageMarketVolume || "0")
+    averageMarketVolume: BigInt(stats.averageMarketVolume || "0"),
+    assetBreakdown: (stats.assetBreakdown || []).map((asset) => ({
+      ...asset,
+      totalVolume: BigInt(asset.totalVolume || "0"),
+      liveLiquidity: BigInt(asset.liveLiquidity || "0"),
+      averageMarketVolume: BigInt(asset.averageMarketVolume || "0")
+    }))
   };
 }
 
@@ -940,6 +968,93 @@ function marketSymbol(market?: Pick<MarketView, "settlementSymbol">) {
 
 function formatMarketAmount(value: bigint, market?: Pick<MarketView, "settlementDecimals">) {
   return formatUsdc(value, marketDecimals(market));
+}
+
+function assetStatsFromMarkets(
+  markets: MarketView[],
+  nowSeconds: number,
+  defaultToken: string,
+  defaultSymbol: string,
+  defaultDecimals: number
+) {
+  const rows = new Map<string, AssetStats>();
+
+  for (const market of markets) {
+    const token = (market.settlementToken || defaultToken || market.settlementSymbol || defaultSymbol || "USDC").toLowerCase();
+    const symbol = marketSymbol({ settlementSymbol: market.settlementSymbol || defaultSymbol });
+    const decimals = marketDecimals({ settlementDecimals: market.settlementDecimals ?? defaultDecimals });
+    const volume = marketVolume(market);
+    const isLive = market.outcome === Outcome.Unresolved && market.closeTime > nowSeconds;
+    const isPending = market.outcome === Outcome.Unresolved && market.closeTime <= nowSeconds;
+    const current = rows.get(token) ?? {
+      token: isAddress(market.settlementToken || "") ? market.settlementToken : isAddress(defaultToken) ? defaultToken : undefined,
+      symbol,
+      decimals,
+      marketCount: 0,
+      liveMarkets: 0,
+      endedMarkets: 0,
+      pendingMarkets: 0,
+      participantEntries: 0,
+      totalVolume: 0n,
+      liveLiquidity: 0n,
+      averageMarketVolume: 0n
+    };
+
+    current.marketCount += 1;
+    current.participantEntries += market.traderCount;
+    current.totalVolume += volume;
+    if (isLive) {
+      current.liveMarkets += 1;
+      current.liveLiquidity += volume;
+    } else if (isPending) {
+      current.pendingMarkets += 1;
+    } else {
+      current.endedMarkets += 1;
+    }
+    current.averageMarketVolume = current.marketCount > 0 ? current.totalVolume / BigInt(current.marketCount) : 0n;
+    rows.set(token, current);
+  }
+
+  return [...rows.values()].sort((a, b) => a.symbol.localeCompare(b.symbol));
+}
+
+function fallbackAssetStatsFromProject(stats: ProjectStats | null, defaultSymbol = "USDC", defaultDecimals = ARC_NATIVE_USDC_DECIMALS) {
+  if (!stats) return [];
+  if (stats.assetBreakdown && stats.assetBreakdown.length > 0) return stats.assetBreakdown;
+  const symbols = stats.settlementSymbols && stats.settlementSymbols.length > 0 ? stats.settlementSymbols : [defaultSymbol];
+  if (symbols.length === 1) {
+    return [{
+      symbol: symbols[0],
+      decimals: defaultDecimals,
+      marketCount: stats.totalMarkets,
+      liveMarkets: stats.liveMarkets,
+      endedMarkets: stats.endedMarkets,
+      pendingMarkets: stats.pendingMarkets,
+      participantEntries: stats.participantEntries,
+      totalVolume: stats.totalVolume,
+      liveLiquidity: stats.liveLiquidity,
+      averageMarketVolume: stats.averageMarketVolume
+    }];
+  }
+  return symbols.map((symbol) => ({
+    symbol,
+    decimals: defaultDecimals,
+    marketCount: 0,
+    liveMarkets: 0,
+    endedMarkets: 0,
+    pendingMarkets: 0,
+    participantEntries: 0,
+    totalVolume: 0n,
+    liveLiquidity: 0n,
+    averageMarketVolume: 0n
+  }));
+}
+
+function formatAssetSummary(assets: AssetStats[], field: "totalVolume" | "liveLiquidity" | "averageMarketVolume") {
+  if (assets.length === 0) return "--";
+  return assets
+    .map((asset) => `${formatUsdc(asset[field], asset.decimals)} ${asset.symbol}`)
+    .join(" / ");
 }
 
 function resolutionTimeFor(market: Pick<MarketView, "closeTime" | "resolutionTime">) {
@@ -1742,7 +1857,7 @@ function LandingPage() {
     },
     {
       title: "Protocol revenue",
-      text: "Configurable creation fees and winner-profit fees accrue onchain for the owner to withdraw transparently."
+      text: "Configurable creation fees and winner-profit fees accrue onchain for the owner to review and withdraw from an owner-only dashboard."
     },
     {
       title: "Profiles and reputation",
@@ -1770,7 +1885,7 @@ function LandingPage() {
     },
     {
       title: "Live indexer",
-      text: "Read market history, wallet-searchable bet activity, stats, and leaderboard data from the Render indexer before falling back to Arc RPC."
+      text: "Read market history, wallet-searchable bet activity, token-specific USDC/EURC stats, and leaderboard data from the Render indexer before falling back to Arc RPC."
     }
   ];
   const flow = ["Create a market", "Stake YES or NO", "Track odds", "Resolve result", "Claim payout"];
@@ -1788,13 +1903,14 @@ function LandingPage() {
     "Winners claim payout"
   ];
   const dataFlow = [
-    "Live Render indexer now powers market history, volume, participants, activity, and leaderboards",
+    "Live Render indexer now powers market history, per-token volume, participants, activity, and leaderboards",
     "Wallet UI shows USDC and EURC balances with copy-address and faucet shortcuts",
     "The app checks selected-token balance and allowance before create, stake, or dispute transactions",
     "Aura Agent drafts clearer markets, checks similar questions, and prepares rules with source links",
     "After the rule timestamp, Aura displays a suggested outcome and confidence in Resolution actions",
     "A saved AI receipt can be viewed without running a new AI request; Ask or Refresh requests a new review",
     "Resolver decisions that differ from Aura and user disputes are flagged for owner/authority review",
+    "Owner wallets get a private dashboard for reporting, user activity, protocol fees, and fee withdrawal",
     "Aura analysis remains off-chain; the contract anchors source/rule terms, evidence hashes, and receipt hashes in wallet-signed proposal actions",
     "Wallet actions still sign directly against the Arc contract, with Arcscan as the verification layer"
   ];
@@ -1807,10 +1923,9 @@ function LandingPage() {
   const nextTheme = landingTheme === "dark" ? "light" : "dark";
   const heroMarketCount = landingHealth?.marketCount ?? landingStats?.totalMarkets ?? 0;
   const heroMarketText = heroMarketCount > 0 ? heroMarketCount.toLocaleString("en-US") : "--";
-  const landingSettlementLabel = landingStats?.hasMixedSettlementAssets
-    ? "stablecoin units"
-    : landingStats?.settlementSymbols?.[0] || "USDC";
-  const indexedVolumeText = landingStats ? `${formatStatUsdc(landingStats.totalVolume)} ${landingSettlementLabel}` : "--";
+  const landingAssetStats = fallbackAssetStatsFromProject(landingStats);
+  const indexedVolumeText = landingStats ? formatAssetSummary(landingAssetStats, "totalVolume") : "--";
+  const landingLiveLiquidityText = landingStats ? formatAssetSummary(landingAssetStats, "liveLiquidity") : "--";
   const participantsText = landingStats ? landingStats.participantEntries.toLocaleString("en-US") : "--";
   const knownPlayersText = landingStats ? landingStats.knownPlayers.toLocaleString("en-US") : "--";
   const liveMarketsText = landingStats ? landingStats.liveMarkets.toLocaleString("en-US") : "--";
@@ -1828,7 +1943,7 @@ function LandingPage() {
     },
     {
       value: indexedVolumeText,
-      label: "Indexed volume"
+      label: "Indexed volume by token"
     },
     {
       value: participantsText,
@@ -1913,8 +2028,12 @@ function LandingPage() {
           </p>
           <div className="landing-hero-ledger" aria-label="AuraPredict live indexer metrics">
             <div>
-              <span>Total volume</span>
+              <span>Total volume by token</span>
               <strong>{indexedVolumeText}</strong>
+            </div>
+            <div>
+              <span>Live liquidity by token</span>
+              <strong>{landingLiveLiquidityText}</strong>
             </div>
             <div>
               <span>Participant entries</span>
@@ -1923,10 +2042,6 @@ function LandingPage() {
             <div>
               <span>Known players</span>
               <strong>{knownPlayersText}</strong>
-            </div>
-            <div>
-              <span>Last indexed block</span>
-              <strong>{indexedBlockText}</strong>
             </div>
           </div>
           <div className="landing-actions">
@@ -1953,8 +2068,8 @@ function LandingPage() {
             <strong>{liveMarketsText}</strong>
           </div>
           <div>
-            <span>Known players</span>
-            <strong>{knownPlayersText}</strong>
+            <span>Last indexed block</span>
+            <strong>{indexedBlockText}</strong>
           </div>
           <div>
             <span>Awaiting result</span>
@@ -2374,6 +2489,7 @@ export default function App() {
   const [protocolFeeBps, setProtocolFeeBps] = useState(0);
   const [marketCreationFee, setMarketCreationFee] = useState<bigint>(0n);
   const [accumulatedProtocolFees, setAccumulatedProtocolFees] = useState<bigint>(0n);
+  const [protocolFeesByToken, setProtocolFeesByToken] = useState<Record<string, bigint>>({});
   const [walletBalance, setWalletBalance] = useState<bigint>(0n);
   const [walletTokenBalances, setWalletTokenBalances] = useState<Record<string, bigint>>({});
   const [pendingWithdrawalsByToken, setPendingWithdrawalsByToken] = useState<Record<string, bigint>>({});
@@ -2543,10 +2659,10 @@ export default function App() {
   const hasMoreMarkets = knownMarketCount > loadedScopeCount;
   const totalLiquidity = markets.reduce((sum, market) => sum + marketVolume(market), 0n);
   const liveLiquidity = activeMarkets.reduce((sum, market) => sum + marketVolume(market), 0n);
-  const hasMixedSettlementAssets =
-    isStablecoinContractVersion(contractVersion) &&
-    new Set(markets.map((market) => (market.settlementToken || defaultSettlementToken).toLowerCase()).filter(Boolean)).size > 1;
-  const aggregateAssetLabel = hasMixedSettlementAssets ? "stablecoin units" : defaultSettlementSymbol;
+  const localAssetBreakdown = useMemo(
+    () => assetStatsFromMarkets(markets, nowSeconds, defaultSettlementToken, defaultSettlementSymbol, defaultSettlementDecimals),
+    [defaultSettlementDecimals, defaultSettlementSymbol, defaultSettlementToken, markets, nowSeconds]
+  );
   const totalTradeVolume = activities.length > 0
     ? activities.reduce((sum, activity) => sum + activity.amount, 0n)
     : totalLiquidity;
@@ -2570,8 +2686,37 @@ export default function App() {
     liveLiquidity,
     averageMarketVolume,
     participantEntries,
-    knownPlayers: uniquePlayerCount
+    knownPlayers: uniquePlayerCount,
+    assetBreakdown: localAssetBreakdown
   };
+  const statsAssetBreakdown =
+    localAssetBreakdown.length > 0
+      ? localAssetBreakdown
+      : statsSummary.assetBreakdown && statsSummary.assetBreakdown.length > 0
+        ? statsSummary.assetBreakdown
+        : [];
+  const totalVolumeByTokenText = formatAssetSummary(statsAssetBreakdown, "totalVolume");
+  const liveLiquidityByTokenText = formatAssetSummary(statsAssetBreakdown, "liveLiquidity");
+  const averageMarketByTokenText = formatAssetSummary(statsAssetBreakdown, "averageMarketVolume");
+  const aggregateAssetLabel =
+    statsAssetBreakdown.length > 1 ? "token units" : statsAssetBreakdown[0]?.symbol || defaultSettlementSymbol;
+  const knownSettlementTokens = useMemo(() => {
+    const byKey = new Map<string, { token: string; symbol: string; decimals: number }>();
+    const addToken = (token: string | undefined, symbol: string, decimals: number) => {
+      if (!token || !isAddress(token)) return;
+      byKey.set(token.toLowerCase(), { token, symbol, decimals });
+    };
+    addToken(defaultSettlementToken, defaultSettlementSymbol, defaultSettlementDecimals);
+    addToken(EURC_TOKEN_ADDRESS, "EURC", V3_STABLECOIN_DECIMALS);
+    for (const asset of statsAssetBreakdown) {
+      addToken(asset.token, asset.symbol, asset.decimals);
+    }
+    for (const market of markets) {
+      addToken(market.settlementToken, marketSymbol(market), marketDecimals(market));
+    }
+    return [...byKey.values()].sort((a, b) => a.symbol.localeCompare(b.symbol));
+  }, [defaultSettlementDecimals, defaultSettlementSymbol, defaultSettlementToken, markets, statsAssetBreakdown]);
+  const knownSettlementTokenKey = knownSettlementTokens.map((asset) => asset.token.toLowerCase()).join("|");
   const accountKey = account ? account.toLowerCase() : "";
   const viewedProfileAddress =
     selectedProfileAddress && isAddress(selectedProfileAddress) ? selectedProfileAddress : account;
@@ -3070,6 +3215,7 @@ export default function App() {
   const canReviewAsOwner =
     !!account &&
     ((!!owner && sameAddress(owner, account)) || (!!resolutionAuthority && sameAddress(resolutionAuthority, account)));
+  const isProtocolOwner = !!account && !!owner && sameAddress(account, owner);
   const ownerMismatchHistory = canReviewAsOwner
     ? markets.filter((market) => {
         if (market.proposedAt <= 0 || market.outcome === Outcome.Unresolved) return false;
@@ -3090,6 +3236,19 @@ export default function App() {
     disputeResolvedNotifications.length +
     claimNotifications.length +
     resultNotifications.length;
+  const ownerUsageMetrics = {
+    totalTrades: activities.length,
+    comments: Object.values(marketComments).reduce((sum, rows) => sum + rows.length, 0),
+    evidence: Object.values(marketEvidence).reduce((sum, rows) => sum + rows.length, 0),
+    publicProfiles: Object.values(profilePublicByAddress).filter((value) => value !== false).length,
+    namedProfiles: Object.values(profileNames).filter((name) => name.trim()).length
+  };
+  const ownerFeeRows = knownSettlementTokens.map((asset) => ({
+    ...asset,
+    amount:
+      protocolFeesByToken[asset.token.toLowerCase()] ??
+      (sameAddress(asset.token, defaultSettlementToken) ? accumulatedProtocolFees : 0n)
+  }));
   const walletOptions =
     walletProviders.length > 0
       ? walletProviders
@@ -3122,7 +3281,7 @@ export default function App() {
               : view === "notifications"
                 ? "Notifications"
               : view === "owner"
-                ? "Owner review"
+                ? isProtocolOwner ? "Owner dashboard" : "Owner review"
               : view === "security"
                 ? "Security and audit"
                 : "Live markets";
@@ -3417,6 +3576,41 @@ export default function App() {
       canceled = true;
     };
   }, [account, markets, owner, resolutionAuthority]);
+
+  useEffect(() => {
+    if (!isStablecoinContractVersion(contractVersion) || knownSettlementTokens.length === 0) return;
+    let canceled = false;
+    Promise.all(
+      knownSettlementTokens.map(async (asset) => {
+        try {
+          const value = await withRpcRetry(() =>
+            getPublicClient().readContract({
+              address: contractAddress,
+              abi: arcPredictionMarketV4Abi,
+              functionName: "accumulatedProtocolFeesByToken",
+              args: [asset.token as Address]
+            })
+          );
+          return [asset.token.toLowerCase(), value] as const;
+        } catch {
+          if (sameAddress(asset.token, defaultSettlementToken)) {
+            return [asset.token.toLowerCase(), accumulatedProtocolFees] as const;
+          }
+          return [asset.token.toLowerCase(), 0n] as const;
+        }
+      })
+    ).then((rows) => {
+      if (canceled) return;
+      const next = Object.fromEntries(rows);
+      setProtocolFeesByToken(next);
+      if (defaultSettlementToken && isAddress(defaultSettlementToken)) {
+        setAccumulatedProtocolFees(next[defaultSettlementToken.toLowerCase()] ?? 0n);
+      }
+    });
+    return () => {
+      canceled = true;
+    };
+  }, [accumulatedProtocolFees, contractAddress, contractVersion, defaultSettlementToken, knownSettlementTokenKey]);
 
   useEffect(() => {
     if (!viewedProfileAddress || !isAddress(viewedProfileAddress)) return;
@@ -4860,7 +5054,14 @@ export default function App() {
           liveLiquidity: projectLiveMarkets.reduce((sum, market) => sum + marketVolume(market), 0n),
           averageMarketVolume: projectMarkets.length > 0 ? projectTotalVolume / BigInt(projectMarkets.length) : 0n,
           participantEntries: projectMarkets.reduce((sum, market) => sum + market.traderCount, 0),
-          knownPlayers: projectCreatorAddresses.size
+          knownPlayers: projectCreatorAddresses.size,
+          assetBreakdown: assetStatsFromMarkets(
+            projectMarkets,
+            statsNow,
+            defaultSettlementToken,
+            defaultSettlementSymbol,
+            defaultSettlementDecimals
+          )
         });
       }
 
@@ -6132,23 +6333,35 @@ export default function App() {
     }
   };
 
-  const withdrawFees = async () => {
+  const withdrawFees = async (token?: string) => {
     if (!account || !isAddress(account)) throw new Error("Connect owner wallet first.");
     if (!owner || !sameAddress(account, owner)) throw new Error("Only the protocol owner can withdraw fees.");
+    const targetToken = token && isAddress(token) ? token as Address : defaultSettlementToken as Address;
+    if (isStablecoinContractVersion(contractVersion) && !isAddress(targetToken)) {
+      throw new Error("Fee token is not configured.");
+    }
+    const asset = knownSettlementTokens.find((item) => sameAddress(item.token, targetToken));
     await switchToArc();
     const walletClient = getActiveWalletClient();
-    await runTransaction(
+    const completed = await runTransaction(
       () =>
         walletClient.writeContract({
           account: account as Address,
           chain: arcTestnet,
           address: contractAddress,
-          abi: arcPredictionMarketAbi,
+          abi: contractVersion === "v4" ? arcPredictionMarketV4Abi : arcPredictionMarketAbi,
           functionName: "withdrawProtocolFees",
-          args: [account as Address, 0n]
+          args: isStablecoinContractVersion(contractVersion)
+            ? [targetToken, account as Address, 0n]
+            : [account as Address, 0n]
         }),
-      "Withdrawing protocol fees..."
+      `Withdrawing ${asset?.symbol || defaultSettlementSymbol} protocol fees...`
     );
+    if (completed && isAddress(targetToken)) {
+      setProtocolFeesByToken((current) => ({ ...current, [targetToken.toLowerCase()]: 0n }));
+      if (sameAddress(targetToken, defaultSettlementToken)) setAccumulatedProtocolFees(0n);
+      void refreshWalletBalance();
+    }
   };
 
   useEffect(() => {
@@ -7540,7 +7753,7 @@ export default function App() {
                   setView("owner");
                 }}
               >
-                Owner Review
+                {isProtocolOwner ? "Owner" : "Review"}
               </button>
             )}
           </div>
@@ -8271,10 +8484,113 @@ export default function App() {
               ))}
             </section>
           ) : view === "owner" ? (
-            <section className="notifications-page">
+            <section className="owner-console">
+              {isProtocolOwner ? (
+                <>
+                  <div className="owner-console-head">
+                    <div>
+                      <span className="section-label">Owner dashboard</span>
+                      <h3>Project management and reporting</h3>
+                      <p>Visible only to the protocol owner wallet. Review usage, token volume, fees, and escalated markets from one page.</p>
+                    </div>
+                    <div className="owner-wallet-pill">
+                      <span>Owner</span>
+                      <strong>{shortAddress(owner)}</strong>
+                    </div>
+                  </div>
+
+                  <div className="owner-dashboard-grid">
+                    <article className="owner-panel owner-panel-wide">
+                      <span className="section-label">Volume by token</span>
+                      <div className="owner-token-grid">
+                        {statsAssetBreakdown.length > 0 ? (
+                          statsAssetBreakdown.map((asset) => (
+                            <div key={`${asset.token || asset.symbol}-owner-volume`} className="owner-token-card">
+                              <span>{asset.symbol}</span>
+                              <strong>{formatUsdc(asset.totalVolume, asset.decimals)}</strong>
+                              <small>Live {formatUsdc(asset.liveLiquidity, asset.decimals)} / Avg {formatUsdc(asset.averageMarketVolume, asset.decimals)}</small>
+                              <small>{asset.marketCount} markets / {asset.participantEntries} entries</small>
+                            </div>
+                          ))
+                        ) : (
+                          <div className="owner-token-card">
+                            <span>Token volume</span>
+                            <strong>--</strong>
+                            <small>Waiting for indexer data</small>
+                          </div>
+                        )}
+                      </div>
+                    </article>
+
+                    <article className="owner-panel">
+                      <span className="section-label">Market report</span>
+                      <div className="owner-report-grid">
+                        <div><span>Total markets</span><strong>{statsSummary.totalMarkets}</strong></div>
+                        <div><span>Indexed</span><strong>{statsSummary.indexedMarkets}</strong></div>
+                        <div><span>Live</span><strong>{statsSummary.liveMarkets}</strong></div>
+                        <div><span>Ended</span><strong>{statsSummary.endedMarkets}</strong></div>
+                        <div><span>Awaiting result</span><strong>{statsSummary.pendingMarkets}</strong></div>
+                        <div><span>Known players</span><strong>{statsSummary.knownPlayers}</strong></div>
+                      </div>
+                    </article>
+
+                    <article className="owner-panel">
+                      <span className="section-label">User activity</span>
+                      <div className="owner-report-grid">
+                        <div><span>Trades</span><strong>{ownerUsageMetrics.totalTrades}</strong></div>
+                        <div><span>Entries</span><strong>{statsSummary.participantEntries}</strong></div>
+                        <div><span>Named profiles</span><strong>{ownerUsageMetrics.namedProfiles}</strong></div>
+                        <div><span>Public profiles</span><strong>{ownerUsageMetrics.publicProfiles}</strong></div>
+                        <div><span>Comments</span><strong>{ownerUsageMetrics.comments}</strong></div>
+                        <div><span>Evidence links</span><strong>{ownerUsageMetrics.evidence}</strong></div>
+                      </div>
+                    </article>
+
+                    <article className="owner-panel">
+                      <span className="section-label">Protocol fees</span>
+                      <div className="owner-fee-list">
+                        {ownerFeeRows.map((asset) => (
+                          <div key={`${asset.token}-fee`} className="owner-fee-row">
+                            <div>
+                              <span>{asset.symbol}</span>
+                              <strong>{formatUsdc(asset.amount, asset.decimals)}</strong>
+                            </div>
+                            <button
+                              className="secondary"
+                              disabled={asset.amount <= 0n || transactionPending}
+                              onClick={() => withdrawFees(asset.token)}
+                              type="button"
+                            >
+                              Withdraw
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </article>
+
+                    <article className="owner-panel">
+                      <span className="section-label">Contract controls</span>
+                      <div className="owner-report-grid">
+                        <div><span>Contract</span><strong>{shortAddress(CONTRACT_ADDRESS)}</strong></div>
+                        <div><span>Authority</span><strong>{resolutionAuthority ? shortAddress(resolutionAuthority) : shortAddress(owner)}</strong></div>
+                        <div><span>Creation fee</span><strong>{formatUsdc(marketCreationFee, defaultSettlementDecimals)} {defaultSettlementSymbol}</strong></div>
+                        <div><span>Creator bond</span><strong>{formatUsdc(creatorBond, defaultSettlementDecimals)} {defaultSettlementSymbol}</strong></div>
+                        <div><span>Dispute bond</span><strong>{formatUsdc(disputeBond, defaultSettlementDecimals)} {defaultSettlementSymbol}</strong></div>
+                        <div><span>Project fee</span><strong>{(protocolFeeBps / 100).toFixed(2)}%</strong></div>
+                      </div>
+                    </article>
+                  </div>
+                </>
+              ) : (
+                <div className="empty-state">
+                  <strong>Owner wallet required</strong>
+                  <span>This management dashboard is only visible to the protocol owner. Authority wallets can still review escalated markets below.</span>
+                </div>
+              )}
+
               <div className="notifications-page-head">
                 <div>
-                  <span className="section-label">Owner review</span>
+                  <span className="section-label">Review queue</span>
                   <h3>{ownerAiMismatchNotifications.length} active mismatch alerts</h3>
                 </div>
               </div>
@@ -9181,8 +9497,22 @@ export default function App() {
           <section className="protocol-card protocol-stats-card">
             <span className="section-label">Project stats</span>
             <div className="protocol-stat-feature">
-              <span>Total volume</span>
-              <strong>{formatStatUsdc(statsSummary.totalVolume, defaultSettlementDecimals)} {aggregateAssetLabel}</strong>
+              <span>Total volume by token</span>
+              <ul className="asset-breakdown-list">
+                {statsAssetBreakdown.length > 0 ? (
+                  statsAssetBreakdown.map((asset) => (
+                    <li key={`${asset.token || asset.symbol}-total`}>
+                      <strong>{formatUsdc(asset.totalVolume, asset.decimals)}</strong>
+                      <span>{asset.symbol}</span>
+                    </li>
+                  ))
+                ) : (
+                  <li>
+                    <strong>--</strong>
+                    <span>Token</span>
+                  </li>
+                )}
+              </ul>
             </div>
             <div className="protocol-metric-grid">
               <div>
@@ -9215,11 +9545,11 @@ export default function App() {
               </div>
               <div>
                 <span>Live liquidity</span>
-                <strong>{formatStatUsdc(statsSummary.liveLiquidity, defaultSettlementDecimals)} {aggregateAssetLabel}</strong>
+                <strong>{liveLiquidityByTokenText}</strong>
               </div>
               <div>
                 <span>Avg market</span>
-                <strong>{formatStatUsdc(statsSummary.averageMarketVolume, defaultSettlementDecimals)} {aggregateAssetLabel}</strong>
+                <strong>{averageMarketByTokenText}</strong>
               </div>
             </div>
           </section>
@@ -9270,7 +9600,7 @@ export default function App() {
               <strong>{formatUsdc(accumulatedProtocolFees, defaultSettlementDecimals)} {defaultSettlementSymbol}</strong>
             </div>
             {account && owner && sameAddress(account, owner) && accumulatedProtocolFees > 0n && (
-              <button onClick={withdrawFees}>Withdraw fees</button>
+              <button onClick={() => withdrawFees(defaultSettlementToken)}>Withdraw fees</button>
             )}
           </section>
           <section className="protocol-card security-card">

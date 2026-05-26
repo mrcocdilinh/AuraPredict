@@ -257,6 +257,13 @@ export const arcPredictionMarketV3Abi = [
   },
   {
     type: "function",
+    name: "accumulatedProtocolFeesByToken",
+    stateMutability: "view",
+    inputs: [{ type: "address", name: "token" }],
+    outputs: [{ type: "uint256" }]
+  },
+  {
+    type: "function",
     name: "assetConfigs",
     stateMutability: "view",
     inputs: [{ type: "address", name: "token" }],
@@ -332,6 +339,17 @@ export const arcPredictionMarketV3Abi = [
     inputs: [
       { type: "address", name: "account" },
       { type: "bool", name: "blocked" }
+    ],
+    outputs: []
+  },
+  {
+    type: "function",
+    name: "withdrawProtocolFees",
+    stateMutability: "nonpayable",
+    inputs: [
+      { type: "address", name: "token" },
+      { type: "address", name: "recipient" },
+      { type: "uint256", name: "amount" }
     ],
     outputs: []
   },

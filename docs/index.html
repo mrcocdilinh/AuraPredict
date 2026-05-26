@@ -131,7 +131,7 @@
             </article>
             <article>
               <h3>Fast read layer</h3>
-              <p>The indexer reads Arc events and exposes market stats, activity, wallet-searchable history, and leaderboard data.</p>
+              <p>The indexer reads Arc events and exposes market stats, per-token USDC/EURC volume, activity, wallet-searchable history, and leaderboard data.</p>
             </article>
             <article>
               <h3>Social layer</h3>
@@ -152,6 +152,10 @@
             <article>
               <h3>Policy controls</h3>
               <p>Operational controls can pause new market exposure, allowlist creators, or block new positions while preserving settlement and claims for existing markets.</p>
+            </article>
+            <article>
+              <h3>Owner dashboard</h3>
+              <p>The protocol owner wallet can open a private management view for project metrics, user activity, token volume, fee balances, and fee withdrawal.</p>
             </article>
           </div>
         </div>
@@ -279,7 +283,10 @@
             Arc USDC has a native gas representation and an ERC-20 interface for the same asset. The active contract uses the official ERC-20 interface at <code>0x3600000000000000000000000000000000000000</code> for allowance-based settlement and keeps amounts at 6 decimals.
           </div>
           <div class="note">
-            Multi-asset scope: the active contract accepts 6-decimal settlement stablecoins such as USDC and optional EURC. A market settles and refunds only in the token selected when it was created. AuraPredict does not perform FX conversion; when multiple assets are active, aggregate dashboard amounts are identified as stablecoin units.
+            Multi-asset scope: the active contract accepts 6-decimal settlement stablecoins such as USDC and optional EURC. A market settles and refunds only in the token selected when it was created. AuraPredict does not perform FX conversion; dashboards report USDC and EURC volume separately.
+          </div>
+          <div class="note">
+            Reporting update: the app and indexer expose token-specific volume and liquidity rows, so USDC and EURC activity is shown separately instead of being merged into one generic total.
           </div>
           <div class="note">
             Wallet UX: the app shows USDC and EURC balances side by side, exposes a faucet shortcut, and blocks predictable create/stake/dispute failures when the selected token balance is too low.
@@ -394,7 +401,7 @@ npm run dev</code></pre>
           </div>
           <div class="reference-table">
             <article><span>Health</span><strong>/health</strong></article>
-            <article><span>Stats</span><strong>/api/stats</strong></article>
+            <article><span>Stats</span><strong>/api/stats includes per-token assetBreakdown for USDC/EURC volume reporting</strong></article>
             <article><span>Markets</span><strong>/api/markets</strong></article>
             <article><span>Activity</span><strong>/api/activity</strong></article>
             <article><span>AI receipts</span><strong>/api/resolutions/:marketId</strong></article>
@@ -406,7 +413,12 @@ npm run dev</code></pre>
       <section id="operators" class="docs-section">
         <div class="section-label">Operators</div>
         <div class="section-body">
-          <h2>Local development</h2>
+          <h2>Local development and owner operations</h2>
+          <p>
+            Owner-only operations live behind the connected protocol owner wallet in the app. The Owner page shows
+            market counts, player activity, trades, comments, evidence rows, USDC/EURC volume, protocol fee balances,
+            contract controls, and fee withdrawal actions.
+          </p>
           <div class="command-block">
             <span>Project checks</span>
             <pre><code>npm install

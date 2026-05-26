@@ -231,7 +231,21 @@ function emptyState() {
       participantEntries: 0,
       knownPlayers: 0,
       settlementSymbols: ["USDC"],
-      hasMixedSettlementAssets: false
+      hasMixedSettlementAssets: false,
+      assetBreakdown: [
+        {
+          symbol: "USDC",
+          decimals: 6,
+          marketCount: 0,
+          liveMarkets: 0,
+          endedMarkets: 0,
+          pendingMarkets: 0,
+          participantEntries: 0,
+          totalVolume: "0",
+          liveLiquidity: "0",
+          averageMarketVolume: "0"
+        }
+      ]
     }
   };
 }
@@ -731,10 +745,41 @@ function computeStats() {
   const liveMarkets = markets.filter((market) => market.outcome === Outcome.Unresolved && market.closeTime > now);
   const endedMarkets = markets.filter((market) => market.outcome !== Outcome.Unresolved);
   const pendingMarkets = markets.filter((market) => market.outcome === Outcome.Unresolved && market.closeTime <= now);
+  const assetRows = new Map();
   const users = new Set();
 
   for (const market of markets) {
     if (market.creator) users.add(market.creator.toLowerCase());
+    const token = String(market.settlementToken || market.settlementSymbol || "USDC").toLowerCase();
+    const symbol = String(market.settlementSymbol || "USDC");
+    const decimals = Number(market.settlementDecimals || 6);
+    const volume = toBigint(market.yesPool) + toBigint(market.noPool);
+    const row = assetRows.get(token) || {
+      token: market.settlementToken,
+      symbol,
+      decimals,
+      marketCount: 0,
+      liveMarkets: 0,
+      endedMarkets: 0,
+      pendingMarkets: 0,
+      participantEntries: 0,
+      totalVolume: 0n,
+      liveLiquidity: 0n,
+      averageMarketVolume: 0n
+    };
+    row.marketCount += 1;
+    row.participantEntries += Number(market.traderCount || 0);
+    row.totalVolume += volume;
+    if (market.outcome === Outcome.Unresolved && market.closeTime > now) {
+      row.liveMarkets += 1;
+      row.liveLiquidity += volume;
+    } else if (market.outcome === Outcome.Unresolved && market.closeTime <= now) {
+      row.pendingMarkets += 1;
+    } else {
+      row.endedMarkets += 1;
+    }
+    row.averageMarketVolume = row.marketCount > 0 ? row.totalVolume / BigInt(row.marketCount) : 0n;
+    assetRows.set(token, row);
   }
   for (const trade of state.trades) {
     if (trade.user) users.add(trade.user.toLowerCase());
@@ -757,7 +802,15 @@ function computeStats() {
     participantEntries: markets.reduce((sum, market) => sum + Number(market.traderCount || 0), 0),
     knownPlayers: users.size,
     settlementSymbols,
-    hasMixedSettlementAssets: settlementSymbols.length > 1
+    hasMixedSettlementAssets: settlementSymbols.length > 1,
+    assetBreakdown: [...assetRows.values()]
+      .sort((a, b) => a.symbol.localeCompare(b.symbol))
+      .map((row) => ({
+        ...row,
+        totalVolume: row.totalVolume.toString(),
+        liveLiquidity: row.liveLiquidity.toString(),
+        averageMarketVolume: row.averageMarketVolume.toString()
+      }))
   };
 }
 

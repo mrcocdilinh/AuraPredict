@@ -167,5 +167,5 @@ Sau do redeploy frontend.
 - Khong dua `PRIVATE_KEY` len GitHub hoac Vercel.
 - Contract hien la ban MVP testnet, chua audit.
 - V4 da mo duong cho authority/oracle/committee va adapter-only market sau nay, nhung chua thay the quy trinh compliance, audit, multisig va giam sat production.
-- Neu mo ca USDC va EURC, moi market chi settle trong token da chon; dashboard co the hien tong `stablecoin units` nhung day khong phai la gia tri FX quy doi.
+- Neu mo ca USDC va EURC, moi market chi settle trong token da chon; dashboard va `/api/stats` hien volume/liquidity rieng theo tung token, khong gop thanh mot tong FX.
 - Production dang dung deployment V4 da pin trong source; market V3 cu khong tu di chuyen sang contract moi nhung co the truy cap qua `?deployment=v3` de settle/claim.
