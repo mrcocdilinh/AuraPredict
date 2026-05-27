@@ -1502,14 +1502,17 @@ function marketStatus(market: MarketView) {
 function resolveActionHint(market: Pick<MarketView, "yesPool" | "noPool">) {
   const noYesPool = market.yesPool <= 0n;
   const noNoPool = market.noPool <= 0n;
-  if (noYesPool && noNoPool) return "Cannot propose YES/NO: both YES pool and NO pool are zero. Use Propose Cancel.";
-  if (noYesPool) return "Cannot propose YES: YES pool is zero.";
-  if (noNoPool) return "Cannot propose NO: NO pool is zero.";
+  if (noYesPool && noNoPool) return "No positions were placed. Use Cancel to release the creator bond.";
+  if (noYesPool || noNoPool) return "Only one outcome was funded. YES/NO resolution is disabled; use Cancel to refund the funded position.";
   return "";
 }
 
 function hasNoLiquidity(market: Pick<MarketView, "yesPool" | "noPool">) {
   return market.yesPool === 0n && market.noPool === 0n;
+}
+
+function requiresCancelForLiquidity(market: Pick<MarketView, "yesPool" | "noPool">) {
+  return market.yesPool === 0n || market.noPool === 0n;
 }
 
 function finalizeWaitingHint(market: Pick<MarketView, "proposedAt" | "outcome" | "disputed" | "disputeDeadline">) {
@@ -4085,17 +4088,23 @@ export default function App() {
   }, [knownMarketCount]);
 
   const setStakeByPercent = useCallback((marketId: number, percentage: number) => {
-    if (walletBalance <= 0n) {
+    const market = markets.find((item) => item.id === marketId);
+    const balance =
+      isStablecoinContractVersion(contractVersion) && market?.settlementToken && isAddress(market.settlementToken)
+        ? walletTokenBalances[market.settlementToken.toLowerCase()] ??
+          (isAddress(defaultSettlementToken) && sameAddress(market.settlementToken, defaultSettlementToken) ? walletBalance : 0n)
+        : walletBalance;
+
+    if (balance <= 0n) {
       setStakeInputs((current) => ({ ...current, [marketId]: "" }));
       return;
     }
 
     const clamped = Math.max(0, Math.min(100, percentage));
-    const value = (walletBalance * BigInt(Math.round(clamped * 100))) / 10000n;
-    const market = markets.find((item) => item.id === marketId);
+    const value = (balance * BigInt(Math.round(clamped * 100))) / 10000n;
     const decimals = isStablecoinContractVersion(contractVersion) ? marketDecimals(market) : ARC_NATIVE_USDC_DECIMALS;
     setStakeInputs((current) => ({ ...current, [marketId]: value > 0n ? formatUsdcInput(value, decimals) : "" }));
-  }, [contractVersion, markets, walletBalance]);
+  }, [contractVersion, defaultSettlementToken, markets, walletBalance, walletTokenBalances]);
 
   const chooseTradeSide = useCallback((marketId: number, side: Outcome.Yes | Outcome.No) => {
     setSelectedTradeSides((current) => {
@@ -4359,11 +4368,23 @@ export default function App() {
         setNotice("This market is finalized. Saved Aura analysis is read-only and no new AI review will run.");
         return;
       }
+      const effectiveCloseTime = resolutionUnlockTime(market);
+      if (Math.floor(Date.now() / 1000) < effectiveCloseTime) {
+        setNotice("Aura resolution review is available only after the market resolution time.");
+        return;
+      }
+      if (requiresCancelForLiquidity(market)) {
+        setNotice(
+          hasNoLiquidity(market)
+            ? "This market has no positions. Cancel it to release the creator bond; Aura review is not needed."
+            : "This market has positions on only one outcome. Cancel it to refund the funded position; Aura review is not needed."
+        );
+        return;
+      }
       setAiBusy(true);
       setAuraResolutionStatusByMarket((current) => ({ ...current, [market.id]: "idle" }));
       try {
         const evidenceRows = marketEvidence[String(market.id)] || [];
-        const effectiveCloseTime = resolutionUnlockTime(market);
         const response = await postIndexerJson<{ report: AiResolutionReport; receipt?: AiResolutionReceipt }>("/api/ai/resolution-report", {
           marketId: market.id,
           question: market.question,
@@ -5566,8 +5587,8 @@ export default function App() {
               value: createCost
             }),
           marketCreationFee > 0n
-            ? `Creating market with ${formatUsdc(creatorBond)} USDC bond and ${formatUsdc(marketCreationFee)} USDC creation fee...`
-            : `Creating market with ${formatUsdc(creatorBond)} USDC creator bond...`,
+            ? `Creating market with ${formatUsdc(creatorBond, createdSettlementDecimals)} ${createdSettlementSymbol} bond and ${formatUsdc(marketCreationFee, createdSettlementDecimals)} ${createdSettlementSymbol} creation fee...`
+            : `Creating market with ${formatUsdc(creatorBond, createdSettlementDecimals)} ${createdSettlementSymbol} creator bond...`,
           true,
           (receipt) => {
             const createdEvent = receipt.logs
@@ -5784,7 +5805,7 @@ export default function App() {
                 args: [BigInt(marketId), side],
                 value
               }),
-        `Staking ${amount} USDC...`,
+        `Staking ${amount} ${marketSymbol(market)}...`,
         false
       );
       if (completed) {
@@ -5850,6 +5871,11 @@ export default function App() {
   const resolveMarket = async (marketId: number, outcome: Outcome, skipMismatchConfirm = false) => {
     if (!account || !isAddress(account)) throw new Error("Connect wallet first.");
     if (isMarketActionPending("resolve", marketId)) return;
+    const market = markets.find((item) => item.id === marketId);
+    if (market && requiresCancelForLiquidity(market)) {
+      setNotice("This market is cancel-only because both YES and NO were not funded. Use Cancel to refund positions.");
+      return;
+    }
     const auraStatus = auraResolutionStatusByMarket[marketId] || "idle";
     const aiReceipt = aiResolutionReceipts[String(marketId)];
     const aiSuggestedOutcome = aiOutcomeFromReceipt(aiReceipt);
@@ -6071,6 +6097,12 @@ export default function App() {
 
   const finalizeDispute = async (marketId: number, outcome: Outcome) => {
     if (!account || !isAddress(account)) throw new Error("Connect resolution authority wallet first.");
+    if (isMarketActionPending("finalize-dispute", marketId)) return;
+    const market = markets.find((item) => item.id === marketId);
+    if (market && requiresCancelForLiquidity(market) && outcome !== Outcome.Canceled) {
+      setNotice("This market is cancel-only because both YES and NO were not funded. Use Final Cancel to refund positions.");
+      return;
+    }
     await switchToArc();
     const walletClient = getActiveWalletClient();
     const aiReceipt = aiResolutionReceipts[String(marketId)];
@@ -6079,27 +6111,34 @@ export default function App() {
       typeof aiReceipt?.receiptHash === "string" && /^0x[a-fA-F0-9]{64}$/.test(aiReceipt.receiptHash)
         ? aiReceipt.receiptHash as Hash
         : ZERO_HASH as Hash;
-    await runTransaction(
-      () =>
-        isStablecoinContractVersion(contractVersion)
-          ? walletClient.writeContract({
-              account: account as Address,
-              chain: arcTestnet,
-              address: contractAddress,
-              abi: contractVersion === "v4" ? arcPredictionMarketV4Abi : arcPredictionMarketV3Abi,
-              functionName: "finalizeDispute",
-              args: [BigInt(marketId), outcome, evidenceHash, receiptHash]
-            })
-          : walletClient.writeContract({
-              account: account as Address,
-              chain: arcTestnet,
-              address: contractAddress,
-              abi: arcPredictionMarketAbi,
-              functionName: "finalizeDispute",
-              args: [BigInt(marketId), outcome]
-            }),
-      "Finalizing disputed market..."
-    );
+    setMarketActionPending("finalize-dispute", marketId, true);
+    try {
+      await runTransaction(
+        () =>
+          isStablecoinContractVersion(contractVersion)
+            ? walletClient.writeContract({
+                account: account as Address,
+                chain: arcTestnet,
+                address: contractAddress,
+                abi: contractVersion === "v4" ? arcPredictionMarketV4Abi : arcPredictionMarketV3Abi,
+                functionName: "finalizeDispute",
+                args: [BigInt(marketId), outcome, evidenceHash, receiptHash]
+              })
+            : walletClient.writeContract({
+                account: account as Address,
+                chain: arcTestnet,
+                address: contractAddress,
+                abi: arcPredictionMarketAbi,
+                functionName: "finalizeDispute",
+                args: [BigInt(marketId), outcome]
+              }),
+        "Finalizing disputed market...",
+        true,
+        () => markMarketFinalized(marketId, outcome)
+      );
+    } finally {
+      setMarketActionPending("finalize-dispute", marketId, false);
+    }
   };
 
   const cancelStaleDispute = async (marketId: number) => {
@@ -6632,8 +6671,9 @@ export default function App() {
           market.outcome === Outcome.Unresolved &&
           isResolutionReady &&
           [market.resolver.toLowerCase(), owner.toLowerCase()].includes(account.toLowerCase());
-        const canProposeYes = market.yesPool > 0n;
-        const canProposeNo = market.noPool > 0n;
+        const cancelOnlyResolution = isResolutionReady && requiresCancelForLiquidity(market);
+        const canProposeYes = !cancelOnlyResolution && market.yesPool > 0n;
+        const canProposeNo = !cancelOnlyResolution && market.noPool > 0n;
         const proposeHint = resolveActionHint(market);
         const finalizeHint = finalizeWaitingHint(market);
         const aiReceipt = aiResolutionReceipts[String(market.id)];
@@ -6784,12 +6824,12 @@ export default function App() {
                 )}
                 {canPropose && (
                   <>
-                    {!hasNoLiquidity(market) && (
+                    {!cancelOnlyResolution && (
                       <button className="secondary" disabled={aiBusy || transactionPending} onClick={() => askAuraForResolution(market)} type="button">
                         {aiBusy ? "Aura thinking..." : transactionPending ? "Processing..." : aiCanPropose ? "Refresh Aura" : "Ask Aura"}
                       </button>
                     )}
-                    {aiCanPropose && (
+                    {!cancelOnlyResolution && aiCanPropose && (
                       <button
                         className="secondary"
                         onClick={() => resolveMarket(market.id, aiSuggestedOutcome as Outcome.Yes | Outcome.No)}
@@ -6805,14 +6845,14 @@ export default function App() {
                     <button className="secondary" onClick={() => resolveMarket(market.id, Outcome.No)} disabled={transactionPending || !canProposeNo || !canResolveAfterAura(market.id)}>
                       Propose NO
                     </button>
-                    <button className="secondary" disabled={transactionPending || (!canResolveAfterAura(market.id) && !hasNoLiquidity(market))} onClick={() => cancelMarket(market.id)}>
-                      Propose Cancel
+                    <button className="secondary" disabled={transactionPending || (!canResolveAfterAura(market.id) && !cancelOnlyResolution)} onClick={() => cancelMarket(market.id)}>
+                      {cancelOnlyResolution ? "Cancel / Refund" : "Propose Cancel"}
                     </button>
                   </>
                 )}
                 {canPropose && proposeHint && <small>{proposeHint}</small>}
-                {canPropose && <small>{resolveAuraStatusLabel(market)}</small>}
-                {canPropose && aiCanPropose && (
+                {canPropose && <small>{cancelOnlyResolution ? "Aura is not needed because this market must be canceled and refunded." : resolveAuraStatusLabel(market)}</small>}
+                {canPropose && !cancelOnlyResolution && aiCanPropose && (
                   <small>
                     AI suggests {outcomeLabel(aiSuggestedOutcome)}
                     {typeof aiReceipt?.consensus?.confidence === "number" ? ` (${aiReceipt.consensus.confidence}% confidence)` : ""}.
@@ -6825,20 +6865,24 @@ export default function App() {
                   </button>
                 )}
                 {canFinalize && (
-                  <button className="secondary" onClick={() => finalizeMarket(market.id)}>
+                  <button className="secondary" disabled={transactionPending} onClick={() => finalizeMarket(market.id)}>
                     Finalize
                   </button>
                 )}
                 {canFinalizeDispute && (
                   <>
-                    <button className="secondary" onClick={() => finalizeDispute(market.id, Outcome.Yes)}>
-                      Final YES
-                    </button>
-                    <button className="secondary" onClick={() => finalizeDispute(market.id, Outcome.No)}>
-                      Final NO
-                    </button>
-                    <button className="secondary" onClick={() => finalizeDispute(market.id, Outcome.Canceled)}>
-                      Final Cancel
+                    {!cancelOnlyResolution && (
+                      <>
+                        <button className="secondary" disabled={transactionPending} onClick={() => finalizeDispute(market.id, Outcome.Yes)}>
+                          Final YES
+                        </button>
+                        <button className="secondary" disabled={transactionPending} onClick={() => finalizeDispute(market.id, Outcome.No)}>
+                          Final NO
+                        </button>
+                      </>
+                    )}
+                    <button className="secondary" disabled={transactionPending} onClick={() => finalizeDispute(market.id, Outcome.Canceled)}>
+                      Final Cancel / Refund
                     </button>
                   </>
                 )}
@@ -6952,13 +6996,19 @@ export default function App() {
       selectedMarket.outcome === Outcome.Unresolved &&
       selectedResolutionReady &&
       [selectedMarket.resolver.toLowerCase(), owner.toLowerCase()].includes(account.toLowerCase());
-    const canProposeYes = selectedMarket.yesPool > 0n;
-    const canProposeNo = selectedMarket.noPool > 0n;
+    const cancelOnlyResolution = selectedResolutionReady && requiresCancelForLiquidity(selectedMarket);
+    const canProposeYes = !cancelOnlyResolution && selectedMarket.yesPool > 0n;
+    const canProposeNo = !cancelOnlyResolution && selectedMarket.noPool > 0n;
     const proposeHint = resolveActionHint(selectedMarket);
     const finalizeHint = finalizeWaitingHint(selectedMarket);
     const canClaim = account && selectedMarket.potentialPayout > 0n && !selectedMarket.claimed;
     const pendingTokenWithdrawal =
       selectedMarket.settlementToken ? pendingWithdrawalsByToken[selectedMarket.settlementToken.toLowerCase()] || 0n : 0n;
+    const selectedMarketBalance =
+      isStablecoinContractVersion(contractVersion) && selectedMarket.settlementToken && isAddress(selectedMarket.settlementToken)
+        ? walletTokenBalances[selectedMarket.settlementToken.toLowerCase()] ??
+          (isAddress(defaultSettlementToken) && sameAddress(selectedMarket.settlementToken, defaultSettlementToken) ? walletBalance : 0n)
+        : walletBalance;
     const tradeAmount = parseUsdcInput(stakeInputs[selectedMarket.id] || "", marketDecimals(selectedMarket));
     const selectedMarketFeeBps = selectedMarket.termsProtocolFeeBps ?? protocolFeeBps;
     const yesEstimate = betEstimate(selectedMarket, Outcome.Yes, tradeAmount, selectedMarketFeeBps);
@@ -6967,7 +7017,7 @@ export default function App() {
     const selectedEstimate = selectedTradeSide === Outcome.No ? noEstimate : yesEstimate;
     const selectedSideLabel = selectedTradeSide === Outcome.No ? "NO" : "YES";
     const balancePercent =
-      walletBalance > 0n ? Math.min(100, Number((tradeAmount * 10000n) / walletBalance) / 100) : 0;
+      selectedMarketBalance > 0n ? Math.min(100, Number((tradeAmount * 10000n) / selectedMarketBalance) / 100) : 0;
     const meta = categoryMeta(selectedMarket.category || "Other");
     const selectedMarketImage = marketImageFor(selectedMarket);
     const selectedMarketImageVariant = marketImageVariant(selectedMarket);
@@ -7012,10 +7062,12 @@ export default function App() {
     const aiResolutionReceipt = aiResolutionReceipts[String(selectedMarket.id)];
     const selectedMarketIsSettled = selectedMarket.outcome !== Outcome.Unresolved;
     const showResolutionAssistant = !selectedMarketIsSettled || Boolean(aiResolutionReport);
+    const awaitingResolutionTime = !selectedMarketIsSettled && !selectedResolutionReady;
     const resolutionActionBusy =
       transactionPending ||
       isMarketActionPending("resolve", selectedMarket.id) ||
-      isMarketActionPending("finalize", selectedMarket.id);
+      isMarketActionPending("finalize", selectedMarket.id) ||
+      isMarketActionPending("finalize-dispute", selectedMarket.id);
     const reportAiSuggestedOutcome = aiOutcomeFromText(aiResolutionReport?.suggestedOutcome);
     const receiptAiSuggestedOutcome = aiOutcomeFromReceipt(aiResolutionReceipt);
     const selectedAiSuggestedOutcome =
@@ -7030,14 +7082,30 @@ export default function App() {
     const selectedAiSuggestionBlockedByPool =
       (selectedAiSuggestedOutcome === Outcome.Yes && !canProposeYes) ||
       (selectedAiSuggestedOutcome === Outcome.No && !canProposeNo);
-    const displayedAgentLabel = aiResolutionReport?.suggestedOutcome || agentReport.suggestedLabel;
+    const displayedAgentLabel = awaitingResolutionTime
+      ? "NOT READY"
+      : cancelOnlyResolution
+      ? "CANCEL / REFUND"
+      : aiResolutionReport?.suggestedOutcome || agentReport.suggestedLabel;
     const displayedAgentConfidence =
-      typeof aiResolutionReport?.confidence === "number" ? aiResolutionReport.confidence : agentReport.confidence;
-    const displayedAgentSummary = aiResolutionReport?.summary || agentReport.summary;
+      awaitingResolutionTime
+        ? 0
+        : cancelOnlyResolution
+        ? 100
+        : typeof aiResolutionReport?.confidence === "number" ? aiResolutionReport.confidence : agentReport.confidence;
+    const displayedAgentSummary = awaitingResolutionTime
+      ? "Aura resolution review becomes available only after the market resolution time has passed."
+      : cancelOnlyResolution
+      ? "Only one outcome received positions. This market cannot be resolved as YES or NO in the app; use Cancel / Refund."
+      : aiResolutionReport?.summary || agentReport.summary;
     const displayedAgentChecklist =
-      aiResolutionReport?.disputeRisks && aiResolutionReport.disputeRisks.length > 0
-        ? aiResolutionReport.disputeRisks
-        : agentReport.checklist;
+      awaitingResolutionTime
+        ? ["Trading and the underlying event may still change before resolution time.", "Return after resolution time to request an Aura review."]
+        : cancelOnlyResolution
+        ? ["No Aura request is needed for this settlement rule.", "Cancellation returns the funded position through the market refund flow."]
+        : aiResolutionReport?.disputeRisks && aiResolutionReport.disputeRisks.length > 0
+          ? aiResolutionReport.disputeRisks
+          : agentReport.checklist;
     const scrollToAuraDetails = () => {
       document.getElementById("aura-resolution-details")?.scrollIntoView({ block: "start", behavior: "smooth" });
     };
@@ -7075,7 +7143,7 @@ export default function App() {
       });
     const copyTraderPosition = (trader: { address: string; yes: bigint; no: bigint; total: bigint }) => {
       const side = trader.no > trader.yes ? Outcome.No : Outcome.Yes;
-      const copyAmount = walletBalance > 0n && trader.total > walletBalance ? walletBalance : trader.total;
+      const copyAmount = trader.total > selectedMarketBalance ? selectedMarketBalance : trader.total;
       setSelectedTradeSides((current) => ({ ...current, [selectedMarket.id]: side }));
       setStakeInputs((current) => ({
         ...current,
@@ -7218,7 +7286,7 @@ export default function App() {
                   <span className="section-label">Settlement</span>
                   <strong>Resolution actions</strong>
                 </div>
-                {selectedAiCanPropose && (
+                {!cancelOnlyResolution && selectedAiCanPropose && (
                   <button
                     className={`resolution-ai-banner ${selectedAiSuggestedOutcome === Outcome.Yes ? "yes" : "no"}`}
                     onClick={scrollToAuraDetails}
@@ -7248,12 +7316,12 @@ export default function App() {
                     )}
                     {canPropose && (
                       <>
-                        {!hasNoLiquidity(selectedMarket) && (
+                        {!cancelOnlyResolution && (
                           <button className="secondary action-refresh-aura" disabled={aiBusy || resolutionActionBusy} onClick={() => askAuraForResolution(selectedMarket)} type="button">
                             {aiBusy ? "Aura thinking..." : resolutionActionBusy ? "Processing..." : selectedAiCanPropose ? "Refresh Aura" : "Ask Aura"}
                           </button>
                         )}
-                        {selectedAiCanPropose && (
+                        {!cancelOnlyResolution && selectedAiCanPropose && (
                           <button
                             className="secondary action-use-ai"
                             onClick={() => resolveMarket(selectedMarket.id, selectedAiSuggestedOutcome as Outcome.Yes | Outcome.No)}
@@ -7269,8 +7337,8 @@ export default function App() {
                         <button className="secondary action-propose-no" onClick={() => resolveMarket(selectedMarket.id, Outcome.No)} disabled={resolutionActionBusy || !canProposeNo || !canResolveAfterAura(selectedMarket.id)}>
                           Propose NO
                         </button>
-                        <button className="secondary action-propose-cancel" disabled={resolutionActionBusy || (!canResolveAfterAura(selectedMarket.id) && !hasNoLiquidity(selectedMarket))} onClick={() => cancelMarket(selectedMarket.id)}>
-                          Cancel
+                        <button className="secondary action-propose-cancel" disabled={resolutionActionBusy || (!canResolveAfterAura(selectedMarket.id) && !cancelOnlyResolution)} onClick={() => cancelMarket(selectedMarket.id)}>
+                          {cancelOnlyResolution ? "Cancel / Refund" : "Cancel"}
                         </button>
                       </>
                     )}
@@ -7280,7 +7348,7 @@ export default function App() {
                       </button>
                     )}
                     {canFinalize && (
-                      <button className="secondary action-use-ai" onClick={() => finalizeMarket(selectedMarket.id)}>
+                      <button className="secondary action-use-ai" disabled={resolutionActionBusy} onClick={() => finalizeMarket(selectedMarket.id)}>
                         Finalize result
                       </button>
                     )}
@@ -7291,14 +7359,18 @@ export default function App() {
                     )}
                     {canFinalizeDispute && (
                       <>
-                        <button className="secondary action-propose-yes" onClick={() => finalizeDispute(selectedMarket.id, Outcome.Yes)}>
-                          Final YES
-                        </button>
-                        <button className="secondary action-propose-no" onClick={() => finalizeDispute(selectedMarket.id, Outcome.No)}>
-                          Final NO
-                        </button>
-                        <button className="secondary action-propose-cancel" onClick={() => finalizeDispute(selectedMarket.id, Outcome.Canceled)}>
-                          Final Cancel
+                        {!cancelOnlyResolution && (
+                          <>
+                            <button className="secondary action-propose-yes" disabled={resolutionActionBusy} onClick={() => finalizeDispute(selectedMarket.id, Outcome.Yes)}>
+                              Final YES
+                            </button>
+                            <button className="secondary action-propose-no" disabled={resolutionActionBusy} onClick={() => finalizeDispute(selectedMarket.id, Outcome.No)}>
+                              Final NO
+                            </button>
+                          </>
+                        )}
+                        <button className="secondary action-propose-cancel" disabled={resolutionActionBusy} onClick={() => finalizeDispute(selectedMarket.id, Outcome.Canceled)}>
+                          Final Cancel / Refund
                         </button>
                       </>
                     )}
@@ -7327,7 +7399,9 @@ export default function App() {
                     {canPropose && proposeHint && <small>{proposeHint}</small>}
                     {canPropose && (
                       <small>
-                        {selectedAiCanPropose
+                        {cancelOnlyResolution
+                          ? "Aura is not needed because this market must be canceled and refunded."
+                          : selectedAiCanPropose
                           ? `Aura suggests ${outcomeLabel(selectedAiSuggestedOutcome)}. Use the banner above to read the analysis.`
                           : resolveAuraStatusLabel(selectedMarket)}
                       </small>
@@ -7338,8 +7412,8 @@ export default function App() {
                 </div>
               )}
               <div className="resolver-note">
-                Only propose YES when YES pool &gt; 0, and only propose NO when NO pool &gt; 0.
-                If both pools are zero, use Cancel. A proposed result moves to Ended only after Finalize.
+                YES/NO resolution requires funded positions on both outcomes. If either side has no positions,
+                use Cancel to refund. A proposed result moves to Ended only after Finalize.
               </div>
             </section>
           )}
@@ -7360,7 +7434,7 @@ export default function App() {
             <div className="trade-balance-line">
               <span>Available</span>
               <button onClick={() => refreshWalletBalance()} type="button">
-                {formatUsdc(walletBalance, defaultSettlementDecimals)} {defaultSettlementSymbol}
+                {formatMarketAmount(selectedMarketBalance, selectedMarket)} {marketSymbol(selectedMarket)}
               </button>
             </div>
             <div className="trade-input-row">
@@ -7376,7 +7450,7 @@ export default function App() {
             </div>
             <div className="stake-shortcuts">
               {[0, 25, 50, 100].map((value) => (
-                <button key={value} onClick={() => setStakeByPercent(selectedMarket.id, value)} disabled={!canBet || walletBalance <= 0n} type="button">
+                <button key={value} onClick={() => setStakeByPercent(selectedMarket.id, value)} disabled={!canBet || selectedMarketBalance <= 0n} type="button">
                   {value}%
                 </button>
               ))}
@@ -7390,7 +7464,7 @@ export default function App() {
                 type="range"
                 value={balancePercent}
                 onChange={(event) => setStakeByPercent(selectedMarket.id, Number(event.target.value))}
-                disabled={!canBet || walletBalance <= 0n}
+                disabled={!canBet || selectedMarketBalance <= 0n}
               />
             </label>
             <div className="trade-side-buttons">
@@ -7471,8 +7545,8 @@ export default function App() {
             <section className="agent-panel" id="aura-resolution-details">
               <div className="panel-heading">
                 <div>
-                  <span className="section-label">Aura Agent</span>
-                  <h3>Resolution assistant</h3>
+                  <span className="section-label">{cancelOnlyResolution ? "Settlement rule" : "Aura Agent"}</span>
+                  <h3>{awaitingResolutionTime ? "Resolution review locked" : cancelOnlyResolution ? "Cancel / refund required" : "Resolution assistant"}</h3>
                 </div>
                 <span className="agent-confidence">{displayedAgentConfidence}% confidence</span>
               </div>
@@ -7502,7 +7576,11 @@ export default function App() {
                   ))}
                 </div>
               )}
-              {!selectedMarketIsSettled ? (
+              {awaitingResolutionTime ? (
+                <div className="resolver-note">Aura can review the outcome after the stated resolution time. No AI request is sent yet.</div>
+              ) : cancelOnlyResolution ? (
+                <div className="resolver-note">This market is cancel-only because both outcomes were not funded. Aura is not called for this action.</div>
+              ) : !selectedMarketIsSettled ? (
                 <button className="secondary" disabled={aiBusy} onClick={() => askAuraForResolution(selectedMarket)} type="button">
                   {aiBusy ? "Aura thinking..." : aiResolutionReport || selectedAiCanPropose ? "Refresh Aura Agent" : "Ask Aura Agent"}
                 </button>
@@ -7515,7 +7593,7 @@ export default function App() {
             </section>
             )}
 
-            {aiResolutionReceipt && (
+            {aiResolutionReceipt && !cancelOnlyResolution && !awaitingResolutionTime && (
               <section className="agent-panel" id={!showResolutionAssistant ? "aura-resolution-details" : undefined}>
                 <div className="panel-heading">
                   <div>
@@ -7574,10 +7652,10 @@ export default function App() {
                     <div>
                       <strong>#{index + 1} {displayNameForAddress(trader.address)}</strong>
                       <small>
-                        YES {formatUsdc(trader.yes)} / NO {formatUsdc(trader.no)}
+                        YES {formatMarketAmount(trader.yes, selectedMarket)} / NO {formatMarketAmount(trader.no, selectedMarket)}
                       </small>
                     </div>
-                    <span>{formatUsdc(trader.total)} USDC</span>
+                    <span>{formatMarketAmount(trader.total, selectedMarket)} {marketSymbol(selectedMarket)}</span>
                     <button className="secondary" onClick={() => copyTraderPosition(trader)} type="button">
                       Copy
                     </button>
@@ -7690,7 +7768,7 @@ export default function App() {
                       <span style={{ width: `${relatedYes}%` }} />
                     </div>
                     <small>
-                      YES {relatedYes.toFixed(0)}% / {formatUsdc(relatedTotal)} USDC / {countdownText(market.closeTime, currentTime)}
+                      YES {relatedYes.toFixed(0)}% / {formatMarketAmount(relatedTotal, market)} {marketSymbol(market)} / {countdownText(market.closeTime, currentTime)}
                     </small>
                   </button>
                 );
@@ -7810,7 +7888,7 @@ export default function App() {
                       </span>
                       <strong>{shortQuestion(market.question)}</strong>
                       <small>
-                        {marketStatus(market)} / {formatUsdc(marketVolume(market))} USDC / {closeDate(market.closeTime)}
+                        {marketStatus(market)} / {formatMarketAmount(marketVolume(market), market)} {marketSymbol(market)} / {closeDate(market.closeTime)}
                       </small>
                     </button>
                   );
@@ -7904,11 +7982,14 @@ export default function App() {
                     )}
                     {resolveNotifications.map((market) => {
                       const hint = resolveActionHint(market);
+                      const cancelOnlyResolution = requiresCancelForLiquidity(market);
                       const resolutionReadyAt = resolutionUnlockTime(market);
                       const aiReceipt = aiResolutionReceipts[String(market.id)];
                       const aiSuggestedOutcome = aiOutcomeFromReceipt(aiReceipt);
                       const aiCanPropose = aiSuggestedOutcome === Outcome.Yes || aiSuggestedOutcome === Outcome.No;
-                      const auraStatusText = aiCanPropose
+                      const auraStatusText = cancelOnlyResolution
+                        ? "Cancel / refund required. Aura review is not needed."
+                        : aiCanPropose
                         ? `AI suggests ${outcomeLabel(aiSuggestedOutcome)}`
                         : resolveAuraStatusLabel(market);
                       return (
@@ -8141,16 +8222,20 @@ export default function App() {
       <section className="activity-ticker" aria-label="Recent market activity">
         <div className="ticker-track">
           {tickerActivities.length > 0 &&
-            tickerActivities.map((activity, index) => (
-              <span className="ticker-item" key={`${activity.id}-${index}`}>
-                <strong>{displayNameForAddress(activity.user)}</strong> bought{" "}
-                <b className={activity.side === Outcome.Yes ? "ticker-yes" : "ticker-no"}>
-                  {activity.side === Outcome.Yes ? "YES" : "NO"}
-                </b>{" "}
-                {formatUsdc(activity.amount)} USDC on {shortQuestion(activity.question)}
-                {activity.timestamp > 0 ? ` - ${timeAgo(activity.timestamp, currentTime)}` : ""}
-              </span>
-            ))}
+            tickerActivities.map((activity, index) => {
+              const activityMarket = markets.find((market) => market.id === activity.marketId);
+              return (
+                <span className="ticker-item" key={`${activity.id}-${index}`}>
+                  <strong>{displayNameForAddress(activity.user)}</strong> bought{" "}
+                  <b className={activity.side === Outcome.Yes ? "ticker-yes" : "ticker-no"}>
+                    {activity.side === Outcome.Yes ? "YES" : "NO"}
+                  </b>{" "}
+                  {activityMarket ? formatMarketAmount(activity.amount, activityMarket) : formatUsdc(activity.amount)}{" "}
+                  {activityMarket ? marketSymbol(activityMarket) : defaultSettlementSymbol} on {shortQuestion(activity.question)}
+                  {activity.timestamp > 0 ? ` - ${timeAgo(activity.timestamp, currentTime)}` : ""}
+                </span>
+              );
+            })}
           {tickerActivities.length === 0 &&
             tickerFallbackLoop.map((market, index) => {
               const yesPercent = percent(market.yesPool, marketVolume(market));
@@ -8364,11 +8449,14 @@ export default function App() {
               )}
               {resolveNotifications.map((market) => {
                 const hint = resolveActionHint(market);
+                const cancelOnlyResolution = requiresCancelForLiquidity(market);
                 const resolutionReadyAt = resolutionUnlockTime(market);
                 const aiReceipt = aiResolutionReceipts[String(market.id)];
                 const aiSuggestedOutcome = aiOutcomeFromReceipt(aiReceipt);
                 const aiCanPropose = aiSuggestedOutcome === Outcome.Yes || aiSuggestedOutcome === Outcome.No;
-                const auraStatusText = aiCanPropose
+                const auraStatusText = cancelOnlyResolution
+                  ? "Cancel / refund required. Aura review is not needed."
+                  : aiCanPropose
                   ? `AI suggests ${outcomeLabel(aiSuggestedOutcome)}`
                   : resolveAuraStatusLabel(market);
                 return (
@@ -9011,8 +9099,9 @@ export default function App() {
                     market.outcome === Outcome.Unresolved &&
                     isResolutionReady &&
                     [market.resolver.toLowerCase(), owner.toLowerCase()].includes(account.toLowerCase());
-                  const canProposeYes = market.yesPool > 0n;
-                  const canProposeNo = market.noPool > 0n;
+                  const cancelOnlyResolution = isResolutionReady && requiresCancelForLiquidity(market);
+                  const canProposeYes = !cancelOnlyResolution && market.yesPool > 0n;
+                  const canProposeNo = !cancelOnlyResolution && market.noPool > 0n;
                   const proposeHint = resolveActionHint(market);
                   const finalizeHint = finalizeWaitingHint(market);
                   const aiReceipt = aiResolutionReceipts[String(market.id)];
@@ -9104,12 +9193,12 @@ export default function App() {
                           )}
                           {canPropose && (
                             <>
-                              {!hasNoLiquidity(market) && (
+                              {!cancelOnlyResolution && (
                                 <button className="secondary" disabled={aiBusy || transactionPending} onClick={() => askAuraForResolution(market)} type="button">
                                   {aiBusy ? "Aura thinking..." : transactionPending ? "Processing..." : aiCanPropose ? "Refresh Aura" : "Ask Aura"}
                                 </button>
                               )}
-                              {aiCanPropose && (
+                              {!cancelOnlyResolution && aiCanPropose && (
                                 <button
                                   className="secondary"
                                   onClick={() => resolveMarket(market.id, aiSuggestedOutcome as Outcome.Yes | Outcome.No)}
@@ -9125,14 +9214,14 @@ export default function App() {
                               <button className="secondary" onClick={() => resolveMarket(market.id, Outcome.No)} disabled={transactionPending || !canProposeNo || !canResolveAfterAura(market.id)}>
                                 Propose NO
                               </button>
-                              <button className="secondary" disabled={transactionPending || (!canResolveAfterAura(market.id) && !hasNoLiquidity(market))} onClick={() => cancelMarket(market.id)}>
-                                Propose Cancel
+                              <button className="secondary" disabled={transactionPending || (!canResolveAfterAura(market.id) && !cancelOnlyResolution)} onClick={() => cancelMarket(market.id)}>
+                                {cancelOnlyResolution ? "Cancel / Refund" : "Propose Cancel"}
                               </button>
                             </>
                           )}
                           {canPropose && proposeHint && <small>{proposeHint}</small>}
-                          {canPropose && <small>{resolveAuraStatusLabel(market)}</small>}
-                          {canPropose && aiCanPropose && (
+                          {canPropose && <small>{cancelOnlyResolution ? "Aura is not needed because this market must be canceled and refunded." : resolveAuraStatusLabel(market)}</small>}
+                          {canPropose && !cancelOnlyResolution && aiCanPropose && (
                             <small>
                               AI suggests {outcomeLabel(aiSuggestedOutcome)}
                               {typeof aiReceipt?.consensus?.confidence === "number" ? ` (${aiReceipt.consensus.confidence}% confidence)` : ""}.
@@ -9140,20 +9229,24 @@ export default function App() {
                           )}
                           {finalizeHint && <small>{finalizeHint}</small>}
                           {canFinalize && (
-                            <button className="secondary" onClick={() => finalizeMarket(market.id)}>
+                            <button className="secondary" disabled={transactionPending} onClick={() => finalizeMarket(market.id)}>
                               Finalize
                             </button>
                           )}
                           {canFinalizeDispute && (
                             <>
-                              <button className="secondary" onClick={() => finalizeDispute(market.id, Outcome.Yes)}>
-                                Final YES
-                              </button>
-                              <button className="secondary" onClick={() => finalizeDispute(market.id, Outcome.No)}>
-                                Final NO
-                              </button>
-                              <button className="secondary" onClick={() => finalizeDispute(market.id, Outcome.Canceled)}>
-                                Final Cancel
+                              {!cancelOnlyResolution && (
+                                <>
+                                  <button className="secondary" disabled={transactionPending} onClick={() => finalizeDispute(market.id, Outcome.Yes)}>
+                                    Final YES
+                                  </button>
+                                  <button className="secondary" disabled={transactionPending} onClick={() => finalizeDispute(market.id, Outcome.No)}>
+                                    Final NO
+                                  </button>
+                                </>
+                              )}
+                              <button className="secondary" disabled={transactionPending} onClick={() => finalizeDispute(market.id, Outcome.Canceled)}>
+                                Final Cancel / Refund
                               </button>
                             </>
                           )}
