@@ -289,17 +289,17 @@
             Reporting update: the app and indexer expose token-specific volume and liquidity rows, so USDC and EURC activity is shown separately instead of being merged into one generic total.
           </div>
           <div class="note">
-            Wallet UX: the app shows USDC and EURC balances side by side, exposes a faucet shortcut, and blocks predictable create/stake/dispute failures when the selected token balance is too low.
+            Wallet UX: the app shows USDC and EURC balances side by side, provides LI.FI swap access from the market panel and Profile, exposes a faucet shortcut, and blocks predictable create/stake/dispute failures when the selected token balance is too low.
           </div>
           <div class="note">
-            Swap access: an active market can offer a LI.FI quote for <code>USDC &lt;-&gt; EURC</code> on Arc Testnet. The trader signs that swap in their wallet before staking; the market still settles, refunds, and pays winners only in its configured token.
+            Swap access: an active market or the user's Profile can offer a LI.FI quote for <code>USDC &lt;-&gt; EURC</code> on Arc Testnet. The trader signs that swap in their wallet before staking; the market still settles, refunds, and pays winners only in its configured token.
           </div>
           <div class="reference-table">
             <article><span>Current state</span><strong>Live test markets are indexed at api.aurapredict.xyz.</strong></article>
             <article><span>Source/rule storage</span><strong>The contract stores the resolution source, fallback source, and rule for every new market.</strong></article>
             <article><span>Proposal timing</span><strong>Trading close time and result resolution time are separate; the contract rejects early proposals.</strong></article>
             <article><span>Token safety</span><strong>Frontend checks balance and allowance for the selected settlement token before create, stake, or dispute actions.</strong></article>
-            <article><span>Optional swap</span><strong>LI.FI route quoting helps a wallet obtain a market's USDC or EURC settlement token without changing that market's payout denomination.</strong></article>
+            <article><span>Optional swap</span><strong>LI.FI route quoting in a market or Profile helps a wallet obtain USDC or EURC without changing any market's payout denomination.</strong></article>
             <article><span>No-liquidity markets</span><strong>If no one stakes, the resolver can cancel without spending an AI review.</strong></article>
             <article><span>No-proposal timeout</span><strong>If a market passes its proposal grace period without a result, it can be canceled/refunded instead of leaving funds stuck.</strong></article>
           </div>

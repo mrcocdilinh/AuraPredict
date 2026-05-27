@@ -46,6 +46,18 @@ type Eip6963ProviderDetail = {
 };
 
 type LifiSwapRoute = Awaited<ReturnType<(typeof import("@lifi/sdk"))["getRoutes"]>>["routes"][number];
+type StablecoinSwapDirection = "USDC_TO_EURC" | "EURC_TO_USDC";
+type StablecoinSwapPair = {
+  fromToken: Address;
+  fromSymbol: string;
+  toToken: Address;
+  toSymbol: string;
+  decimals: number;
+};
+
+function stablecoinSwapPairKey(pair: StablecoinSwapPair) {
+  return `${pair.fromToken.toLowerCase()}:${pair.toToken.toLowerCase()}`;
+}
 
 declare global {
   interface Window {
@@ -1849,8 +1861,8 @@ function LandingPage() {
       text: "The current contract supports 6-decimal settlement assets by market, including Arc Testnet USDC and EURC, with selected-token balance checks before actions."
     },
     {
-      title: "In-market swap access",
-      text: "If a wallet holds the other supported stablecoin, it can request a LI.FI USDC/EURC quote on Arc Testnet and swap before staking."
+      title: "Stablecoin swap access",
+      text: "Wallets can request a LI.FI USDC/EURC quote on Arc Testnet from a market or their profile, then sign the swap before staking."
     },
     {
       title: "Onchain market terms",
@@ -1913,7 +1925,7 @@ function LandingPage() {
   ];
   const dataFlow = [
     "The live AuraPredict indexer now powers market history, per-token volume, participants, activity, and leaderboards",
-    "Wallet UI shows USDC and EURC balances with copy-address, faucet, and in-market LI.FI swap access",
+    "Wallet UI shows USDC and EURC balances with copy-address, faucet, and LI.FI swap access from markets or the user's profile",
     "The app checks selected-token balance and allowance before create, stake, or dispute transactions",
     "Aura Agent drafts clearer markets, checks similar questions, and prepares rules with source links",
     "After the rule timestamp, Aura displays a suggested outcome and confidence in Resolution actions",
@@ -2317,11 +2329,11 @@ function LandingPage() {
           </article>
           <article>
             <span>Wallet UX</span>
-            <strong>The wallet menu shows USDC/EURC balances, copy-address access, faucet shortcut, and selected-token balance checks before transactions.</strong>
+            <strong>The wallet menu and profile show USDC/EURC balances, copy-address access, faucet shortcut, swap access, and selected-token balance checks before transactions.</strong>
           </article>
           <article>
             <span>Swap access</span>
-            <strong>A trader can obtain the market's required USDC or EURC through an in-market LI.FI quote and wallet-signed swap on Arc Testnet before staking.</strong>
+            <strong>A trader can obtain USDC or EURC through a LI.FI quote in the market panel or profile, then sign the swap on Arc Testnet before staking.</strong>
           </article>
           <article>
             <span>Settlement</span>
@@ -2549,7 +2561,9 @@ export default function App() {
   const [swapMarketId, setSwapMarketId] = useState<number | null>(null);
   const [swapAmountInput, setSwapAmountInput] = useState("");
   const [swapQuote, setSwapQuote] = useState<LifiSwapRoute | null>(null);
+  const [swapQuotePairKey, setSwapQuotePairKey] = useState("");
   const [swapBusy, setSwapBusy] = useState<"idle" | "quote" | "execute">("idle");
+  const [profileSwapDirection, setProfileSwapDirection] = useState<StablecoinSwapDirection>("USDC_TO_EURC");
   const [activeCategory, setActiveCategory] = useState("All");
   const [marketViewMode, setMarketViewMode] = useState<MarketViewMode>("grid");
   const [detailChartWindow, setDetailChartWindow] = useState<ChartWindowKey>("all");
@@ -4024,6 +4038,10 @@ export default function App() {
     setView("profile");
     setWalletMenuOpen(false);
     setNotificationMenuOpen(false);
+    setSwapMarketId(null);
+    setSwapAmountInput("");
+    setSwapQuote(null);
+    setSwapQuotePairKey("");
   }, [account]);
 
   const openNotifications = useCallback(() => {
@@ -4138,11 +4156,12 @@ export default function App() {
     });
   }, []);
 
-  const swapPairForMarket = useCallback(
-    (market: MarketView) => {
-      const marketToken = market.settlementToken || defaultSettlementToken;
-      if (!isAddress(marketToken) || !isAddress(defaultSettlementToken) || !isAddress(EURC_TOKEN_ADDRESS)) return null;
-      if (sameAddress(marketToken, EURC_TOKEN_ADDRESS) && !sameAddress(defaultSettlementToken, EURC_TOKEN_ADDRESS)) {
+  const swapPairForDirection = useCallback(
+    (direction: StablecoinSwapDirection): StablecoinSwapPair | null => {
+      if (!isAddress(defaultSettlementToken) || !isAddress(EURC_TOKEN_ADDRESS) || sameAddress(defaultSettlementToken, EURC_TOKEN_ADDRESS)) {
+        return null;
+      }
+      if (direction === "USDC_TO_EURC") {
         return {
           fromToken: defaultSettlementToken as Address,
           fromSymbol: defaultSettlementSymbol || "USDC",
@@ -4151,32 +4170,39 @@ export default function App() {
           decimals: V3_STABLECOIN_DECIMALS
         };
       }
-      if (sameAddress(marketToken, defaultSettlementToken) && !sameAddress(defaultSettlementToken, EURC_TOKEN_ADDRESS)) {
-        return {
-          fromToken: EURC_TOKEN_ADDRESS as Address,
-          fromSymbol: "EURC",
-          toToken: defaultSettlementToken as Address,
-          toSymbol: defaultSettlementSymbol || "USDC",
-          decimals: V3_STABLECOIN_DECIMALS
-        };
-      }
-      return null;
+      return {
+        fromToken: EURC_TOKEN_ADDRESS as Address,
+        fromSymbol: "EURC",
+        toToken: defaultSettlementToken as Address,
+        toSymbol: defaultSettlementSymbol || "USDC",
+        decimals: V3_STABLECOIN_DECIMALS
+      };
     },
     [defaultSettlementSymbol, defaultSettlementToken]
+  );
+
+  const swapPairForMarket = useCallback(
+    (market: MarketView): StablecoinSwapPair | null => {
+      const marketToken = market.settlementToken || defaultSettlementToken;
+      if (!isAddress(marketToken)) return null;
+      if (sameAddress(marketToken, EURC_TOKEN_ADDRESS)) return swapPairForDirection("USDC_TO_EURC");
+      if (sameAddress(marketToken, defaultSettlementToken)) return swapPairForDirection("EURC_TO_USDC");
+      return null;
+    },
+    [defaultSettlementToken, swapPairForDirection]
   );
 
   const openMarketSwap = useCallback((market: MarketView) => {
     setSwapMarketId((current) => (current === market.id ? null : market.id));
     setSwapAmountInput("");
     setSwapQuote(null);
+    setSwapQuotePairKey("");
   }, []);
 
   const requestSwapQuote = useCallback(
-    async (market: MarketView) => {
+    async (pair: StablecoinSwapPair) => {
       try {
         if (!account || !isAddress(account)) throw new Error("Connect wallet before swapping.");
-        const pair = swapPairForMarket(market);
-        if (!pair) throw new Error("Swap is currently available only between USDC and EURC markets.");
         const amount = parseUsdcInput(swapAmountInput, pair.decimals);
         if (amount <= 0n) throw new Error("Enter an amount to swap.");
         const fromBalance =
@@ -4185,6 +4211,7 @@ export default function App() {
         if (amount > fromBalance) throw new Error(`Not enough ${pair.fromSymbol} for this swap.`);
         setSwapBusy("quote");
         setSwapQuote(null);
+        setSwapQuotePairKey("");
         setNotice(`Finding a ${pair.fromSymbol} to ${pair.toSymbol} swap route on Arc...`);
         const { createConfig, getRoutes } = await import("@lifi/sdk");
         createConfig({ integrator: "aurapredict", disableVersionCheck: true });
@@ -4201,6 +4228,7 @@ export default function App() {
         const route = result.routes[0];
         if (!route) throw new Error(`No LI.FI route is available for ${pair.fromSymbol} to ${pair.toSymbol} right now.`);
         setSwapQuote(route);
+        setSwapQuotePairKey(stablecoinSwapPairKey(pair));
         setNotice(
           `Swap quote ready: ${formatUsdcInput(amount, pair.decimals)} ${pair.fromSymbol} to approximately ${formatUsdcInput(
             BigInt(route.toAmount),
@@ -4209,18 +4237,18 @@ export default function App() {
         );
       } catch (error) {
         setSwapQuote(null);
+        setSwapQuotePairKey("");
         setNotice(`Swap quote unavailable: ${compactErrorMessage(error)}`);
       } finally {
         setSwapBusy("idle");
       }
     },
-    [account, defaultSettlementToken, setNotice, swapAmountInput, swapPairForMarket, walletBalance, walletTokenBalances]
+    [account, defaultSettlementToken, setNotice, swapAmountInput, walletBalance, walletTokenBalances]
   );
 
-  const executeMarketSwap = useCallback(
-    async (market: MarketView) => {
-      const pair = swapPairForMarket(market);
-      if (!pair || !swapQuote || swapMarketId !== market.id) return;
+  const executeStablecoinSwap = useCallback(
+    async (pair: StablecoinSwapPair) => {
+      if (!swapQuote || swapQuotePairKey !== stablecoinSwapPairKey(pair)) return;
       if (!account || !isAddress(account)) {
         setNotice("Connect wallet before swapping.");
         return;
@@ -4265,6 +4293,7 @@ export default function App() {
         setNotice(`Swap completed. Received approximately ${received} ${pair.toSymbol}.`, swapHash);
         setSwapAmountInput("");
         setSwapQuote(null);
+        setSwapQuotePairKey("");
         await refreshWalletBalance();
       } catch (error) {
         setNotice(`Swap failed: ${compactErrorMessage(error)}`);
@@ -4274,8 +4303,16 @@ export default function App() {
         setSwapBusy("idle");
       }
     },
-    [account, refreshWalletBalance, selectedWalletProvider, setNotice, swapMarketId, swapPairForMarket, swapQuote, switchToArc]
+    [account, refreshWalletBalance, selectedWalletProvider, setNotice, swapQuote, swapQuotePairKey, switchToArc]
   );
+
+  const profileSwapPair = swapPairForDirection(profileSwapDirection);
+  const profileSwapSourceBalance = profileSwapPair
+    ? walletTokenBalances[profileSwapPair.fromToken.toLowerCase()] ??
+      (sameAddress(profileSwapPair.fromToken, defaultSettlementToken) ? walletBalance : 0n)
+    : 0n;
+  const activeProfileSwapQuote =
+    profileSwapPair && swapQuotePairKey === stablecoinSwapPairKey(profileSwapPair) ? swapQuote : null;
 
   const copyTextToClipboard = useCallback(async (text: string, successMessage: string) => {
     try {
@@ -7174,7 +7211,8 @@ export default function App() {
       ? walletTokenBalances[selectedSwapPair.fromToken.toLowerCase()] ??
         (sameAddress(selectedSwapPair.fromToken, defaultSettlementToken) ? walletBalance : 0n)
       : 0n;
-    const activeSwapQuote = selectedSwapOpen ? swapQuote : null;
+    const activeSwapQuote =
+      selectedSwapOpen && selectedSwapPair && swapQuotePairKey === stablecoinSwapPairKey(selectedSwapPair) ? swapQuote : null;
     const tradeAmount = parseUsdcInput(stakeInputs[selectedMarket.id] || "", marketDecimals(selectedMarket));
     const selectedMarketFeeBps = selectedMarket.termsProtocolFeeBps ?? protocolFeeBps;
     const yesEstimate = betEstimate(selectedMarket, Outcome.Yes, tradeAmount, selectedMarketFeeBps);
@@ -7633,7 +7671,7 @@ export default function App() {
                       />
                       <button
                         disabled={swapBusy !== "idle" || transactionPending || parseUsdcInput(swapAmountInput, selectedSwapPair.decimals) <= 0n}
-                        onClick={() => requestSwapQuote(selectedMarket)}
+                        onClick={() => requestSwapQuote(selectedSwapPair)}
                         type="button"
                       >
                         {swapBusy === "quote" ? "Quoting..." : "Get quote"}
@@ -7650,7 +7688,7 @@ export default function App() {
                         <button
                           className="market-swap-execute"
                           disabled={swapBusy !== "idle" || transactionPending}
-                          onClick={() => executeMarketSwap(selectedMarket)}
+                          onClick={() => executeStablecoinSwap(selectedSwapPair)}
                           type="button"
                         >
                           {swapBusy === "execute" ? "Swapping..." : `Swap to ${selectedSwapPair.toSymbol}`}
@@ -9150,11 +9188,95 @@ export default function App() {
 
               <section className="profile-stat-grid">
                 {isOwnProfile && (
-                  <article className="profile-stat-card profile-balance-card">
+                  <article className="profile-stat-card profile-balance-card profile-liquidity-card">
                     <span>Available balances</span>
                     <strong>USDC {formatUsdc(walletUsdcBalance, defaultSettlementDecimals)}</strong>
                     <strong>EURC {formatUsdc(walletEurcBalance, defaultSettlementDecimals)}</strong>
                     <small>Arc Testnet wallet balance</small>
+                    {profileSwapPair && (
+                      <div className="profile-swap-panel">
+                        <div className="profile-swap-title">
+                          <strong>Swap stablecoins</strong>
+                          <small>LI.FI route on Arc Testnet</small>
+                        </div>
+                        <div className="profile-swap-direction" role="group" aria-label="Swap direction">
+                          <button
+                            className={profileSwapDirection === "USDC_TO_EURC" ? "active" : ""}
+                            disabled={swapBusy !== "idle" || transactionPending}
+                            onClick={() => {
+                              setProfileSwapDirection("USDC_TO_EURC");
+                              setSwapAmountInput("");
+                              setSwapQuote(null);
+                              setSwapQuotePairKey("");
+                            }}
+                            type="button"
+                          >
+                            USDC to EURC
+                          </button>
+                          <button
+                            className={profileSwapDirection === "EURC_TO_USDC" ? "active" : ""}
+                            disabled={swapBusy !== "idle" || transactionPending}
+                            onClick={() => {
+                              setProfileSwapDirection("EURC_TO_USDC");
+                              setSwapAmountInput("");
+                              setSwapQuote(null);
+                              setSwapQuotePairKey("");
+                            }}
+                            type="button"
+                          >
+                            EURC to USDC
+                          </button>
+                        </div>
+                        <div className="market-swap-balance">
+                          <span>Available {profileSwapPair.fromSymbol}</span>
+                          <strong>{formatUsdcInput(profileSwapSourceBalance, profileSwapPair.decimals)}</strong>
+                        </div>
+                        <div className="market-swap-input">
+                          <input
+                            inputMode="decimal"
+                            placeholder={`${profileSwapPair.fromSymbol} amount`}
+                            value={swapAmountInput}
+                            disabled={swapBusy !== "idle" || transactionPending}
+                            onChange={(event) => {
+                              setSwapAmountInput(event.target.value);
+                              setSwapQuote(null);
+                              setSwapQuotePairKey("");
+                            }}
+                          />
+                          <button
+                            disabled={
+                              swapBusy !== "idle" ||
+                              transactionPending ||
+                              parseUsdcInput(swapAmountInput, profileSwapPair.decimals) <= 0n
+                            }
+                            onClick={() => requestSwapQuote(profileSwapPair)}
+                            type="button"
+                          >
+                            {swapBusy === "quote" ? "Quoting..." : "Get quote"}
+                          </button>
+                        </div>
+                        {activeProfileSwapQuote && (
+                          <div className="market-swap-quote">
+                            <span>Estimated receive</span>
+                            <strong>
+                              {formatUsdcInput(BigInt(activeProfileSwapQuote.toAmount), profileSwapPair.decimals)} {profileSwapPair.toSymbol}
+                            </strong>
+                            <small>
+                              Minimum {formatUsdcInput(BigInt(activeProfileSwapQuote.toAmountMin), profileSwapPair.decimals)} {profileSwapPair.toSymbol}
+                              {activeProfileSwapQuote.gasCostUSD ? ` / network cost about $${activeProfileSwapQuote.gasCostUSD}` : ""}
+                            </small>
+                            <button
+                              className="market-swap-execute"
+                              disabled={swapBusy !== "idle" || transactionPending}
+                              onClick={() => executeStablecoinSwap(profileSwapPair)}
+                              type="button"
+                            >
+                              {swapBusy === "execute" ? "Swapping..." : `Swap to ${profileSwapPair.toSymbol}`}
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </article>
                 )}
                 <article className="profile-stat-card">
