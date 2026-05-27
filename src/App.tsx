@@ -55,8 +55,16 @@ type StablecoinSwapPair = {
   decimals: number;
 };
 
+const SWAP_TOLERANCE_OPTIONS = [50, 100, 300, 500] as const;
+const DEFAULT_SWAP_TOLERANCE_BPS = 300;
+const SWAP_QUOTE_MAX_AGE_MS = 30_000;
+
 function stablecoinSwapPairKey(pair: StablecoinSwapPair) {
   return `${pair.fromToken.toLowerCase()}:${pair.toToken.toLowerCase()}`;
+}
+
+function formatSwapTolerance(bps: number) {
+  return `${bps / 100}%`;
 }
 
 declare global {
@@ -871,6 +879,9 @@ function compactErrorMessage(error: unknown) {
   const lower = raw.toLowerCase();
   if (lower.includes("user rejected") || lower.includes("user denied")) return "Transaction rejected in wallet.";
   if (lower.includes("insufficient funds")) return "Insufficient wallet balance for this transaction. Check USDC for gas and the selected market token.";
+  if (lower.includes("insufficientamountout") || lower.includes("0xe52970aa")) {
+    return "Swap rate moved below the minimum receive amount. Nothing was exchanged. Get a fresh quote or select a higher price tolerance.";
+  }
   if (lower.includes("transferfailed")) {
     return "Token transfer failed. Check the selected token balance and allowance before trying again.";
   }
@@ -1862,7 +1873,7 @@ function LandingPage() {
     },
     {
       title: "Stablecoin swap access",
-      text: "Wallets can request a LI.FI USDC/EURC quote on Arc Testnet from a market or their profile, then sign the swap before staking."
+      text: "Wallets can request a LI.FI USDC/EURC quote with visible minimum receive and adjustable price tolerance from a market or profile, then sign before staking."
     },
     {
       title: "Onchain market terms",
@@ -2333,7 +2344,7 @@ function LandingPage() {
           </article>
           <article>
             <span>Swap access</span>
-            <strong>A trader can obtain USDC or EURC through a LI.FI quote in the market panel or profile, then sign the swap on Arc Testnet before staking.</strong>
+            <strong>A trader can obtain USDC or EURC through a LI.FI quote with visible minimum receive and adjustable tolerance in the market panel or profile, then sign on Arc Testnet before staking.</strong>
           </article>
           <article>
             <span>Settlement</span>
@@ -2562,6 +2573,8 @@ export default function App() {
   const [swapAmountInput, setSwapAmountInput] = useState("");
   const [swapQuote, setSwapQuote] = useState<LifiSwapRoute | null>(null);
   const [swapQuotePairKey, setSwapQuotePairKey] = useState("");
+  const [swapQuoteTime, setSwapQuoteTime] = useState(0);
+  const [swapToleranceBps, setSwapToleranceBps] = useState(DEFAULT_SWAP_TOLERANCE_BPS);
   const [swapBusy, setSwapBusy] = useState<"idle" | "quote" | "execute">("idle");
   const [profileSwapDirection, setProfileSwapDirection] = useState<StablecoinSwapDirection>("USDC_TO_EURC");
   const [activeCategory, setActiveCategory] = useState("All");
@@ -4042,6 +4055,7 @@ export default function App() {
     setSwapAmountInput("");
     setSwapQuote(null);
     setSwapQuotePairKey("");
+    setSwapQuoteTime(0);
   }, [account]);
 
   const openNotifications = useCallback(() => {
@@ -4197,6 +4211,7 @@ export default function App() {
     setSwapAmountInput("");
     setSwapQuote(null);
     setSwapQuotePairKey("");
+    setSwapQuoteTime(0);
   }, []);
 
   const requestSwapQuote = useCallback(
@@ -4212,6 +4227,7 @@ export default function App() {
         setSwapBusy("quote");
         setSwapQuote(null);
         setSwapQuotePairKey("");
+        setSwapQuoteTime(0);
         setNotice(`Finding a ${pair.fromSymbol} to ${pair.toSymbol} swap route on Arc...`);
         const { createConfig, getRoutes } = await import("@lifi/sdk");
         createConfig({ integrator: "aurapredict", disableVersionCheck: true });
@@ -4223,27 +4239,29 @@ export default function App() {
           fromAmount: amount.toString(),
           fromAddress: account,
           toAddress: account,
-          options: { integrator: "aurapredict", order: "RECOMMENDED", slippage: 0.005 }
+          options: { integrator: "aurapredict", order: "RECOMMENDED", slippage: swapToleranceBps / 10_000 }
         });
         const route = result.routes[0];
         if (!route) throw new Error(`No LI.FI route is available for ${pair.fromSymbol} to ${pair.toSymbol} right now.`);
         setSwapQuote(route);
         setSwapQuotePairKey(stablecoinSwapPairKey(pair));
+        setSwapQuoteTime(Date.now());
         setNotice(
           `Swap quote ready: ${formatUsdcInput(amount, pair.decimals)} ${pair.fromSymbol} to approximately ${formatUsdcInput(
             BigInt(route.toAmount),
             pair.decimals
-          )} ${pair.toSymbol}.`
+          )} ${pair.toSymbol} with ${formatSwapTolerance(swapToleranceBps)} price tolerance.`
         );
       } catch (error) {
         setSwapQuote(null);
         setSwapQuotePairKey("");
+        setSwapQuoteTime(0);
         setNotice(`Swap quote unavailable: ${compactErrorMessage(error)}`);
       } finally {
         setSwapBusy("idle");
       }
     },
-    [account, defaultSettlementToken, setNotice, swapAmountInput, walletBalance, walletTokenBalances]
+    [account, defaultSettlementToken, setNotice, swapAmountInput, swapToleranceBps, walletBalance, walletTokenBalances]
   );
 
   const executeStablecoinSwap = useCallback(
@@ -4251,6 +4269,13 @@ export default function App() {
       if (!swapQuote || swapQuotePairKey !== stablecoinSwapPairKey(pair)) return;
       if (!account || !isAddress(account)) {
         setNotice("Connect wallet before swapping.");
+        return;
+      }
+      if (!swapQuoteTime || Date.now() - swapQuoteTime > SWAP_QUOTE_MAX_AGE_MS) {
+        setSwapQuote(null);
+        setSwapQuotePairKey("");
+        setSwapQuoteTime(0);
+        setNotice("Swap quote expired. Get a fresh quote before signing so the minimum receive amount is current.");
         return;
       }
       if (transactionLockRef.current) {
@@ -4294,8 +4319,12 @@ export default function App() {
         setSwapAmountInput("");
         setSwapQuote(null);
         setSwapQuotePairKey("");
+        setSwapQuoteTime(0);
         await refreshWalletBalance();
       } catch (error) {
+        setSwapQuote(null);
+        setSwapQuotePairKey("");
+        setSwapQuoteTime(0);
         setNotice(`Swap failed: ${compactErrorMessage(error)}`);
       } finally {
         transactionLockRef.current = false;
@@ -4303,7 +4332,7 @@ export default function App() {
         setSwapBusy("idle");
       }
     },
-    [account, refreshWalletBalance, selectedWalletProvider, setNotice, swapQuote, swapQuotePairKey, switchToArc]
+    [account, refreshWalletBalance, selectedWalletProvider, setNotice, swapQuote, swapQuotePairKey, swapQuoteTime, switchToArc]
   );
 
   const profileSwapPair = swapPairForDirection(profileSwapDirection);
@@ -7667,6 +7696,8 @@ export default function App() {
                         onChange={(event) => {
                           setSwapAmountInput(event.target.value);
                           setSwapQuote(null);
+                          setSwapQuotePairKey("");
+                          setSwapQuoteTime(0);
                         }}
                       />
                       <button
@@ -7676,6 +7707,27 @@ export default function App() {
                       >
                         {swapBusy === "quote" ? "Quoting..." : "Get quote"}
                       </button>
+                    </div>
+                    <div className="market-swap-tolerance">
+                      <span>Price tolerance</span>
+                      <div role="group" aria-label="Swap price tolerance">
+                        {SWAP_TOLERANCE_OPTIONS.map((bps) => (
+                          <button
+                            className={swapToleranceBps === bps ? "active" : ""}
+                            disabled={swapBusy !== "idle" || transactionPending}
+                            key={bps}
+                            onClick={() => {
+                              setSwapToleranceBps(bps);
+                              setSwapQuote(null);
+                              setSwapQuotePairKey("");
+                              setSwapQuoteTime(0);
+                            }}
+                            type="button"
+                          >
+                            {formatSwapTolerance(bps)}
+                          </button>
+                        ))}
+                      </div>
                     </div>
                     {activeSwapQuote && (
                       <div className="market-swap-quote">
@@ -7697,6 +7749,9 @@ export default function App() {
                     )}
                     <small className="market-swap-note">
                       Routed by LI.FI on Arc Testnet. This market still settles only in {selectedSwapPair.toSymbol}.
+                    </small>
+                    <small className="market-swap-note">
+                      Testnet liquidity can move quickly. Higher tolerance reduces failed swaps but can lower the amount received.
                     </small>
                   </div>
                 )}
@@ -9208,6 +9263,7 @@ export default function App() {
                               setSwapAmountInput("");
                               setSwapQuote(null);
                               setSwapQuotePairKey("");
+                              setSwapQuoteTime(0);
                             }}
                             type="button"
                           >
@@ -9221,6 +9277,7 @@ export default function App() {
                               setSwapAmountInput("");
                               setSwapQuote(null);
                               setSwapQuotePairKey("");
+                              setSwapQuoteTime(0);
                             }}
                             type="button"
                           >
@@ -9241,6 +9298,7 @@ export default function App() {
                               setSwapAmountInput(event.target.value);
                               setSwapQuote(null);
                               setSwapQuotePairKey("");
+                              setSwapQuoteTime(0);
                             }}
                           />
                           <button
@@ -9254,6 +9312,27 @@ export default function App() {
                           >
                             {swapBusy === "quote" ? "Quoting..." : "Get quote"}
                           </button>
+                        </div>
+                        <div className="market-swap-tolerance">
+                          <span>Price tolerance</span>
+                          <div role="group" aria-label="Swap price tolerance">
+                            {SWAP_TOLERANCE_OPTIONS.map((bps) => (
+                              <button
+                                className={swapToleranceBps === bps ? "active" : ""}
+                                disabled={swapBusy !== "idle" || transactionPending}
+                                key={bps}
+                                onClick={() => {
+                                  setSwapToleranceBps(bps);
+                                  setSwapQuote(null);
+                                  setSwapQuotePairKey("");
+                                  setSwapQuoteTime(0);
+                                }}
+                                type="button"
+                              >
+                                {formatSwapTolerance(bps)}
+                              </button>
+                            ))}
+                          </div>
                         </div>
                         {activeProfileSwapQuote && (
                           <div className="market-swap-quote">
@@ -9275,6 +9354,9 @@ export default function App() {
                             </button>
                           </div>
                         )}
+                        <small className="market-swap-note">
+                          Testnet liquidity can move quickly. Higher tolerance reduces failed swaps but can lower the amount received.
+                        </small>
                       </div>
                     )}
                   </article>

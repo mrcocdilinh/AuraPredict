@@ -4126,6 +4126,39 @@ label {
   color: #667085;
 }
 
+.market-swap-tolerance {
+  align-items: center;
+  color: #536178;
+  display: flex;
+  font-size: 0.68rem;
+  font-weight: 850;
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.market-swap-tolerance > div {
+  display: flex;
+  gap: 4px;
+}
+
+.market-swap-tolerance button {
+  background: #ffffff;
+  border: 1px solid #d5e8ee;
+  border-radius: 6px;
+  box-shadow: none;
+  color: #536178;
+  font-size: 0.68rem;
+  font-weight: 850;
+  min-height: 27px;
+  padding: 0 7px;
+}
+
+.market-swap-tolerance button.active {
+  background: #d5f7fd;
+  border-color: #18d7ff;
+  color: #075f70;
+}
+
 .market-swap-quote {
   background: #ffffff;
   border: 1px solid #d5e8ee;
@@ -6354,6 +6387,7 @@ label {
 
 [data-theme="dark"] .market-swap-toggle span,
 [data-theme="dark"] .market-swap-balance,
+[data-theme="dark"] .market-swap-tolerance,
 [data-theme="dark"] .market-swap-note,
 [data-theme="dark"] .market-swap-quote span,
 [data-theme="dark"] .market-swap-quote small {
@@ -6380,6 +6414,18 @@ label {
 [data-theme="dark"] .market-swap-quote {
   background: #0b1020;
   border-color: #202a3f;
+}
+
+[data-theme="dark"] .market-swap-tolerance button {
+  background: #0b1020;
+  border-color: #26334a;
+  color: #9aa7bd;
+}
+
+[data-theme="dark"] .market-swap-tolerance button.active {
+  background: #123948;
+  border-color: #18d7ff;
+  color: #18d7ff;
 }
 
 [data-theme="dark"] .profile-swap-panel {
