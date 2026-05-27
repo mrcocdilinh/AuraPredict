@@ -2551,6 +2551,7 @@ export default function App() {
   const [collectionView, setCollectionView] = useState<MarketSectionKey>("fresh");
   const [collectionSortKey, setCollectionSortKey] = useState<MarketSortKey>("created");
   const [collectionSortDirection, setCollectionSortDirection] = useState<SortDirection>("desc");
+  const [collectionSettlementToken, setCollectionSettlementToken] = useState("All");
   const [collectionPage, setCollectionPage] = useState(1);
   const [selectedMarketId, setSelectedMarketId] = useState<number | null>(null);
   const [selectedProfileAddress, setSelectedProfileAddress] = useState("");
@@ -2925,12 +2926,17 @@ export default function App() {
     })
     .slice(0, 10);
   const heroHotLoop = heroHotMarkets.length > 0 ? [...heroHotMarkets, ...heroHotMarkets] : [];
-  const baseCollectionMarkets =
+  const unfilteredCollectionMarkets =
     collectionView === "hot"
       ? allHottestMarkets
       : collectionView === "closing"
         ? allClosingSoonMarkets
         : allFreshMarkets;
+  const baseCollectionMarkets = unfilteredCollectionMarkets.filter((market) => {
+    if (collectionSettlementToken === "All") return true;
+    const settlementToken = market.settlementToken || defaultSettlementToken;
+    return isAddress(settlementToken) && sameAddress(settlementToken, collectionSettlementToken);
+  });
   const collectionMarkets = [...baseCollectionMarkets].sort((a, b) => {
     let result = 0;
     if (collectionSortKey === "volume") {
@@ -8794,6 +8800,23 @@ export default function App() {
                   >
                     <option value="desc">High to low</option>
                     <option value="asc">Low to high</option>
+                  </select>
+                </label>
+                <label>
+                  <span>Currency</span>
+                  <select
+                    value={collectionSettlementToken}
+                    onChange={(event) => {
+                      setCollectionSettlementToken(event.target.value);
+                      setCollectionPage(1);
+                    }}
+                  >
+                    <option value="All">All assets</option>
+                    {knownSettlementTokens.map((asset) => (
+                      <option key={asset.token} value={asset.token}>
+                        {asset.symbol}
+                      </option>
+                    ))}
                   </select>
                 </label>
                 <div className="collection-page-summary">
