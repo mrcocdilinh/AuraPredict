@@ -21,6 +21,7 @@ Tinh nang hien tai:
 - V4 luu primary source, fallback source va resolution rule onchain de dieu khoan market khong bi phu thuoc vao frontend/indexer.
 - V4 snapshot dieu khoan phi, creator bond, dispute bond, dispute window, min stake va proposal grace period theo tung market de thay doi cau hinh sau nay khong lam doi market cu.
 - V4 cho phep settlement asset 6 decimals cau hinh theo market, vi du USDC hoac EURC, va quan ly phi theo tung token; khong quy doi FX giua cac token.
+- Trong trang market dang giao dich, nguoi dung co the lay quote LI.FI va tu ky swap `USDC <-> EURC` tren Arc Testnet neu can dung token settlement cua market truoc khi stake. Swap khong thay doi token tra thuong cua market.
 - V4 co bon huong resolution: creator + dispute review, creator + required authority review, authority/oracle only, va adapter-only cho oracle/committee sau nay.
 - Proposal V4 co the dung Aura signed attestation neu cau hinh signer. Neu chua bat signer hoac creator di nguoc Aura, contract day proposal vao authority review.
 - V4 co policy gate co ban: tam dung tao/cuoc moi, gioi han vi duoc tao market va chan account mo position moi; resolve, refund va claim cua market dang ton tai van hoat dong.
@@ -146,4 +147,5 @@ curl https://api.aurapredict.xyz/health
 - Contract hien la ban MVP testnet, chua audit.
 - V4 da mo duong cho authority/oracle/committee va adapter-only market sau nay, nhung chua thay the quy trinh compliance, audit, multisig va giam sat production.
 - Neu mo ca USDC va EURC, moi market chi settle trong token da chon; dashboard va `/api/stats` hien volume/liquidity rieng theo tung token, khong gop thanh mot tong FX.
+- Nut swap trong trading panel chi la tien ich cho vi nguoi dung doi USDC/EURC truoc giao dich; route va so nhan uoc tinh den tu LI.FI, giao dich swap duoc ky trong vi.
 - Production dang dung deployment V4 da pin trong source; market V3 cu khong tu di chuyen sang contract moi nhung co the truy cap qua `?deployment=v3` de settle/claim.

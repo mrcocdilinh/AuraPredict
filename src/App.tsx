@@ -45,6 +45,8 @@ type Eip6963ProviderDetail = {
   provider: EthereumProvider;
 };
 
+type LifiSwapRoute = Awaited<ReturnType<(typeof import("@lifi/sdk"))["getRoutes"]>>["routes"][number];
+
 declare global {
   interface Window {
     ethereum?: EthereumProvider;
@@ -1847,6 +1849,10 @@ function LandingPage() {
       text: "The current contract supports 6-decimal settlement assets by market, including Arc Testnet USDC and EURC, with selected-token balance checks before actions."
     },
     {
+      title: "In-market swap access",
+      text: "If a wallet holds the other supported stablecoin, it can request a LI.FI USDC/EURC quote on Arc Testnet and swap before staking."
+    },
+    {
       title: "Onchain market terms",
       text: "Each market's primary source, fallback source, and resolution rule are stored onchain so settlement criteria stay tied to the market."
     },
@@ -1907,7 +1913,7 @@ function LandingPage() {
   ];
   const dataFlow = [
     "The live AuraPredict indexer now powers market history, per-token volume, participants, activity, and leaderboards",
-    "Wallet UI shows USDC and EURC balances with copy-address and faucet shortcuts",
+    "Wallet UI shows USDC and EURC balances with copy-address, faucet, and in-market LI.FI swap access",
     "The app checks selected-token balance and allowance before create, stake, or dispute transactions",
     "Aura Agent drafts clearer markets, checks similar questions, and prepares rules with source links",
     "After the rule timestamp, Aura displays a suggested outcome and confidence in Resolution actions",
@@ -2307,11 +2313,15 @@ function LandingPage() {
           </article>
           <article>
             <span>Trading</span>
-            <strong>Users stake the market's configured Arc testnet stablecoin, such as USDC or EURC, directly from their wallet.</strong>
+            <strong>Users stake the market's configured Arc testnet stablecoin, such as USDC or EURC, directly from their wallet. Markets never convert payout currency.</strong>
           </article>
           <article>
             <span>Wallet UX</span>
             <strong>The wallet menu shows USDC/EURC balances, copy-address access, faucet shortcut, and selected-token balance checks before transactions.</strong>
+          </article>
+          <article>
+            <span>Swap access</span>
+            <strong>A trader can obtain the market's required USDC or EURC through an in-market LI.FI quote and wallet-signed swap on Arc Testnet before staking.</strong>
           </article>
           <article>
             <span>Settlement</span>
@@ -2536,6 +2546,10 @@ export default function App() {
   const [pendingMarketActions, setPendingMarketActions] = useState<Record<string, boolean>>({});
   const [stakeInputs, setStakeInputs] = useState<Record<number, string>>({});
   const [selectedTradeSides, setSelectedTradeSides] = useState<Record<number, Outcome.Yes | Outcome.No>>({});
+  const [swapMarketId, setSwapMarketId] = useState<number | null>(null);
+  const [swapAmountInput, setSwapAmountInput] = useState("");
+  const [swapQuote, setSwapQuote] = useState<LifiSwapRoute | null>(null);
+  const [swapBusy, setSwapBusy] = useState<"idle" | "quote" | "execute">("idle");
   const [activeCategory, setActiveCategory] = useState("All");
   const [marketViewMode, setMarketViewMode] = useState<MarketViewMode>("grid");
   const [detailChartWindow, setDetailChartWindow] = useState<ChartWindowKey>("all");
@@ -4123,6 +4137,145 @@ export default function App() {
       return next;
     });
   }, []);
+
+  const swapPairForMarket = useCallback(
+    (market: MarketView) => {
+      const marketToken = market.settlementToken || defaultSettlementToken;
+      if (!isAddress(marketToken) || !isAddress(defaultSettlementToken) || !isAddress(EURC_TOKEN_ADDRESS)) return null;
+      if (sameAddress(marketToken, EURC_TOKEN_ADDRESS) && !sameAddress(defaultSettlementToken, EURC_TOKEN_ADDRESS)) {
+        return {
+          fromToken: defaultSettlementToken as Address,
+          fromSymbol: defaultSettlementSymbol || "USDC",
+          toToken: EURC_TOKEN_ADDRESS as Address,
+          toSymbol: "EURC",
+          decimals: V3_STABLECOIN_DECIMALS
+        };
+      }
+      if (sameAddress(marketToken, defaultSettlementToken) && !sameAddress(defaultSettlementToken, EURC_TOKEN_ADDRESS)) {
+        return {
+          fromToken: EURC_TOKEN_ADDRESS as Address,
+          fromSymbol: "EURC",
+          toToken: defaultSettlementToken as Address,
+          toSymbol: defaultSettlementSymbol || "USDC",
+          decimals: V3_STABLECOIN_DECIMALS
+        };
+      }
+      return null;
+    },
+    [defaultSettlementSymbol, defaultSettlementToken]
+  );
+
+  const openMarketSwap = useCallback((market: MarketView) => {
+    setSwapMarketId((current) => (current === market.id ? null : market.id));
+    setSwapAmountInput("");
+    setSwapQuote(null);
+  }, []);
+
+  const requestSwapQuote = useCallback(
+    async (market: MarketView) => {
+      try {
+        if (!account || !isAddress(account)) throw new Error("Connect wallet before swapping.");
+        const pair = swapPairForMarket(market);
+        if (!pair) throw new Error("Swap is currently available only between USDC and EURC markets.");
+        const amount = parseUsdcInput(swapAmountInput, pair.decimals);
+        if (amount <= 0n) throw new Error("Enter an amount to swap.");
+        const fromBalance =
+          walletTokenBalances[pair.fromToken.toLowerCase()] ??
+          (sameAddress(pair.fromToken, defaultSettlementToken) ? walletBalance : 0n);
+        if (amount > fromBalance) throw new Error(`Not enough ${pair.fromSymbol} for this swap.`);
+        setSwapBusy("quote");
+        setSwapQuote(null);
+        setNotice(`Finding a ${pair.fromSymbol} to ${pair.toSymbol} swap route on Arc...`);
+        const { createConfig, getRoutes } = await import("@lifi/sdk");
+        createConfig({ integrator: "aurapredict", disableVersionCheck: true });
+        const result = await getRoutes({
+          fromChainId: ARC_CHAIN_ID_NUMBER,
+          toChainId: ARC_CHAIN_ID_NUMBER,
+          fromTokenAddress: pair.fromToken,
+          toTokenAddress: pair.toToken,
+          fromAmount: amount.toString(),
+          fromAddress: account,
+          toAddress: account,
+          options: { integrator: "aurapredict", order: "RECOMMENDED", slippage: 0.005 }
+        });
+        const route = result.routes[0];
+        if (!route) throw new Error(`No LI.FI route is available for ${pair.fromSymbol} to ${pair.toSymbol} right now.`);
+        setSwapQuote(route);
+        setNotice(
+          `Swap quote ready: ${formatUsdcInput(amount, pair.decimals)} ${pair.fromSymbol} to approximately ${formatUsdcInput(
+            BigInt(route.toAmount),
+            pair.decimals
+          )} ${pair.toSymbol}.`
+        );
+      } catch (error) {
+        setSwapQuote(null);
+        setNotice(`Swap quote unavailable: ${compactErrorMessage(error)}`);
+      } finally {
+        setSwapBusy("idle");
+      }
+    },
+    [account, defaultSettlementToken, setNotice, swapAmountInput, swapPairForMarket, walletBalance, walletTokenBalances]
+  );
+
+  const executeMarketSwap = useCallback(
+    async (market: MarketView) => {
+      const pair = swapPairForMarket(market);
+      if (!pair || !swapQuote || swapMarketId !== market.id) return;
+      if (!account || !isAddress(account)) {
+        setNotice("Connect wallet before swapping.");
+        return;
+      }
+      if (transactionLockRef.current) {
+        setNotice("A wallet confirmation is already open. Confirm or reject it before sending another transaction.");
+        return;
+      }
+      transactionLockRef.current = true;
+      setTransactionPending(true);
+      setSwapBusy("execute");
+      try {
+        await switchToArc();
+        const walletClient = createWalletClient({
+          account: account as Address,
+          chain: arcTestnet,
+          transport: custom(getInjectedProvider(selectedWalletProvider) as never)
+        });
+        const { createConfig, EVM, executeRoute } = await import("@lifi/sdk");
+        createConfig({
+          integrator: "aurapredict",
+          disableVersionCheck: true,
+          providers: [
+            EVM({
+              getWalletClient: async () => walletClient as never,
+              switchChain: async (chainId) => {
+                if (chainId !== ARC_CHAIN_ID_NUMBER) throw new Error("This swap must stay on Arc Testnet.");
+                await switchToArc();
+                return walletClient as never;
+              }
+            })
+          ]
+        });
+        setNotice(`Confirm the ${pair.fromSymbol} to ${pair.toSymbol} swap in your wallet.`);
+        const executed = await executeRoute(swapQuote, {
+          updateRouteHook: (updatedRoute) => setSwapQuote(updatedRoute),
+          acceptExchangeRateUpdateHook: async () => false
+        });
+        const hashes = executed.steps.flatMap((step) => step.execution?.process || []).map((process) => process.txHash);
+        const swapHash = hashes.reverse().find((hash): hash is Hash => Boolean(hash && /^0x[a-fA-F0-9]{64}$/.test(hash)));
+        const received = formatUsdcInput(BigInt(executed.toAmount), pair.decimals);
+        setNotice(`Swap completed. Received approximately ${received} ${pair.toSymbol}.`, swapHash);
+        setSwapAmountInput("");
+        setSwapQuote(null);
+        await refreshWalletBalance();
+      } catch (error) {
+        setNotice(`Swap failed: ${compactErrorMessage(error)}`);
+      } finally {
+        transactionLockRef.current = false;
+        setTransactionPending(false);
+        setSwapBusy("idle");
+      }
+    },
+    [account, refreshWalletBalance, selectedWalletProvider, setNotice, swapMarketId, swapPairForMarket, swapQuote, switchToArc]
+  );
 
   const copyTextToClipboard = useCallback(async (text: string, successMessage: string) => {
     try {
@@ -7015,6 +7168,13 @@ export default function App() {
         ? walletTokenBalances[selectedMarket.settlementToken.toLowerCase()] ??
           (isAddress(defaultSettlementToken) && sameAddress(selectedMarket.settlementToken, defaultSettlementToken) ? walletBalance : 0n)
         : walletBalance;
+    const selectedSwapPair = canBet ? swapPairForMarket(selectedMarket) : null;
+    const selectedSwapOpen = Boolean(selectedSwapPair && swapMarketId === selectedMarket.id);
+    const selectedSwapSourceBalance = selectedSwapPair
+      ? walletTokenBalances[selectedSwapPair.fromToken.toLowerCase()] ??
+        (sameAddress(selectedSwapPair.fromToken, defaultSettlementToken) ? walletBalance : 0n)
+      : 0n;
+    const activeSwapQuote = selectedSwapOpen ? swapQuote : null;
     const tradeAmount = parseUsdcInput(stakeInputs[selectedMarket.id] || "", marketDecimals(selectedMarket));
     const selectedMarketFeeBps = selectedMarket.termsProtocolFeeBps ?? protocolFeeBps;
     const yesEstimate = betEstimate(selectedMarket, Outcome.Yes, tradeAmount, selectedMarketFeeBps);
@@ -7443,6 +7603,67 @@ export default function App() {
                 {formatMarketAmount(selectedMarketBalance, selectedMarket)} {marketSymbol(selectedMarket)}
               </button>
             </div>
+            {selectedSwapPair && (
+              <section className="market-swap-panel">
+                <button
+                  className="market-swap-toggle"
+                  disabled={transactionPending}
+                  onClick={() => openMarketSwap(selectedMarket)}
+                  type="button"
+                >
+                  <span>Need {selectedSwapPair.toSymbol}?</span>
+                  <strong>Swap {selectedSwapPair.fromSymbol} to {selectedSwapPair.toSymbol}</strong>
+                </button>
+                {selectedSwapOpen && (
+                  <div className="market-swap-body">
+                    <div className="market-swap-balance">
+                      <span>Available {selectedSwapPair.fromSymbol}</span>
+                      <strong>{formatUsdcInput(selectedSwapSourceBalance, selectedSwapPair.decimals)}</strong>
+                    </div>
+                    <div className="market-swap-input">
+                      <input
+                        inputMode="decimal"
+                        placeholder={`${selectedSwapPair.fromSymbol} amount`}
+                        value={swapAmountInput}
+                        disabled={swapBusy !== "idle" || transactionPending}
+                        onChange={(event) => {
+                          setSwapAmountInput(event.target.value);
+                          setSwapQuote(null);
+                        }}
+                      />
+                      <button
+                        disabled={swapBusy !== "idle" || transactionPending || parseUsdcInput(swapAmountInput, selectedSwapPair.decimals) <= 0n}
+                        onClick={() => requestSwapQuote(selectedMarket)}
+                        type="button"
+                      >
+                        {swapBusy === "quote" ? "Quoting..." : "Get quote"}
+                      </button>
+                    </div>
+                    {activeSwapQuote && (
+                      <div className="market-swap-quote">
+                        <span>Estimated receive</span>
+                        <strong>{formatUsdcInput(BigInt(activeSwapQuote.toAmount), selectedSwapPair.decimals)} {selectedSwapPair.toSymbol}</strong>
+                        <small>
+                          Minimum {formatUsdcInput(BigInt(activeSwapQuote.toAmountMin), selectedSwapPair.decimals)} {selectedSwapPair.toSymbol}
+                          {activeSwapQuote.gasCostUSD ? ` / network cost about $${activeSwapQuote.gasCostUSD}` : ""}
+                        </small>
+                        <button
+                          className="market-swap-execute"
+                          disabled={swapBusy !== "idle" || transactionPending}
+                          onClick={() => executeMarketSwap(selectedMarket)}
+                          type="button"
+                        >
+                          {swapBusy === "execute" ? "Swapping..." : `Swap to ${selectedSwapPair.toSymbol}`}
+                        </button>
+                      </div>
+                    )}
+                    <small className="market-swap-note">
+                      Routed by LI.FI on Arc Testnet. This market still settles only in {selectedSwapPair.toSymbol}.
+                    </small>
+                  </div>
+                )}
+              </section>
+            )}
             <div className="trade-input-row">
               <input
                 inputMode="decimal"

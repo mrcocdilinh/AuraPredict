@@ -92,6 +92,7 @@ Giai thich:
 - `ARC_EURC_TOKEN_ADDRESS`: dia chi ERC-20 EURC tuy chon neu muon mo them market EURC.
 - `VITE_PREDICTION_MARKET_ADDRESS`: dia chi contract sau khi deploy.
 - `VITE_ARC_EURC_TOKEN_ADDRESS`: dia chi EURC tuy chon de frontend hien lua chon asset khi tao market V4.
+- Frontend co the dung LI.FI de lay quote va ky swap USDC/EURC tren Arc Testnet trong trang market. Luong nay khong can env secret va khong doi token settlement da duoc market luu onchain.
 
 ### 2.4. Kiem tra code
 
