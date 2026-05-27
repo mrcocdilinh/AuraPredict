@@ -127,40 +127,16 @@ When Gemini returns `429` (rate limit), the indexer puts that key on cooldown an
 
 The production app at `https://app.aurapredict.xyz` needs a public indexer URL, not `127.0.0.1`.
 
-## Free No-Card Option: GitHub Pages Static Indexer
+## Current VPS Service
 
-This repo includes `.github/workflows/static-indexer.yml`.
-
-Steps:
-
-1. In GitHub, open `Settings` -> `Pages`.
-2. Set `Build and deployment` source to `GitHub Actions`.
-3. Open `Actions`.
-4. Run `Publish static indexer`.
-5. After it completes, test:
+The current public service runs on a VPS behind Nginx and HTTPS:
 
 ```text
-https://mrcocdilinh.github.io/AuraPredict/api/stats.json
-https://mrcocdilinh.github.io/AuraPredict/api/markets.json
+https://api.aurapredict.xyz/health
+https://api.aurapredict.xyz/api/stats
 ```
 
-Then set the frontend production env:
-
-```bash
-VITE_AURA_INDEXER_URL=https://mrcocdilinh.github.io/AuraPredict
-VITE_PREDICTION_MARKET_START_BLOCK=44083985
-```
-
-This option is free and does not need a card. The tradeoff is that data refreshes on the GitHub Actions schedule, not instantly.
-
-## Web Service Option
-
-Recommended flow:
-
-1. Deploy this repo as a separate web service named `aurapredict-indexer`.
-2. Use Dockerfile: `Dockerfile.indexer`.
-3. Start command is already handled by Docker: `npm run indexer`.
-4. The current V4 address and block are pinned in source and recorded in `render.yaml`:
+The current V4 address and block are pinned in `indexer/server.mjs`:
 
 ```bash
 VITE_PREDICTION_MARKET_ADDRESS=0x3c853AE2eC705B453c9657569b6335e762631536
@@ -169,25 +145,21 @@ AURA_INDEXER_CHUNK_SIZE=9000
 AURA_INDEXER_POLL_MS=12000
 ```
 
-For a future contract migration, update the pin in `indexer/server.mjs` and `render.yaml` together before deployment.
-
-Most hosts set `PORT` automatically. The indexer listens on `0.0.0.0` when `PORT` is present.
-
-After the service is live, open:
-
-```text
-https://your-indexer-domain/health
-https://your-indexer-domain/api/stats
-```
-
-Then set this on the frontend deployment, for example in Vercel:
+The VPS stores server-only configuration at `/opt/aurapredict/.env` because `npm run indexer` is started from `/opt/aurapredict`. The process is managed by PM2 and listens internally on `127.0.0.1:8787`; Nginx exposes the HTTPS API domain.
 
 ```bash
-VITE_AURA_INDEXER_URL=https://your-indexer-domain
+cd /opt/aurapredict
+pm2 restart aurapredict-indexer
+curl https://api.aurapredict.xyz/health
+```
+
+Set this on the frontend deployment:
+
+```bash
+VITE_AURA_INDEXER_URL=https://api.aurapredict.xyz
 VITE_PREDICTION_MARKET_START_BLOCK=44083985
 ```
 
 Redeploy the frontend after changing env vars.
 
-`render.yaml` and the production indexer code pin the active Arc Testnet V4 contract and deployment block. The V3 contract remains onchain for old market settlement and claims; the frontend exposes it through `?deployment=v3`, while the primary production indexer tracks V4.
-For smooth production behavior, avoid free plans that sleep. If the host sleeps or has ephemeral storage, the indexer will recover by backfilling from `AURA_INDEXER_START_BLOCK`, but users may see slow data during cold starts.
+The V3 contract remains onchain for old market settlement and claims; the frontend exposes it through `?deployment=v3`, while the primary production indexer tracks V4.

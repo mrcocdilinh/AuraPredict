@@ -68,7 +68,7 @@ Deployment production duoc pin truc tiep trong frontend va indexer. Cac gia tri 
 ```bash
 VITE_PREDICTION_MARKET_ADDRESS=0x3c853AE2eC705B453c9657569b6335e762631536
 VITE_ARC_EURC_TOKEN_ADDRESS=0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a
-VITE_AURA_INDEXER_URL=http://127.0.0.1:8787
+VITE_AURA_INDEXER_URL=https://api.aurapredict.xyz
 VITE_WALLETCONNECT_PROJECT_ID=...
 ```
 
@@ -117,49 +117,27 @@ Khong tro project app chinh sang `docs/`; app chinh van dung repo root cho `aura
 
 ## Production indexer
 
-De `https://app.aurapredict.xyz` chay muot nhu local, deploy `indexer/` thanh mot web service public rieng.
-
-- No-card/free path: GitHub Actions publish static JSON to GitHub Pages via `.github/workflows/static-indexer.yml`.
-- Dockerfile: `Dockerfile.indexer`
-- Render blueprint: `render.yaml`
-- Health check: `/health`
-- API stats: `/api/stats`
-
-### GitHub Pages static indexer, khong can card
-
-1. Vao GitHub repo `mrcocdilinh/AuraPredict`.
-2. Vao `Settings` -> `Pages`.
-3. O `Build and deployment`, chon `Source: GitHub Actions`.
-4. Vao tab `Actions`.
-5. Chon workflow `Publish static indexer`.
-6. Bam `Run workflow`.
-7. Cho workflow chay xong.
-8. Mo URL:
+Production hien tai dung indexer tu host tren VPS va public qua Nginx + HTTPS:
 
 ```text
-https://mrcocdilinh.github.io/AuraPredict/api/stats.json
-https://mrcocdilinh.github.io/AuraPredict/api/markets.json
+https://api.aurapredict.xyz/health
+https://api.aurapredict.xyz/api/stats
 ```
 
-Sau khi co data, them env cho frontend production tren Vercel:
+Frontend production tren Vercel su dung:
 
 ```bash
-VITE_AURA_INDEXER_URL=https://mrcocdilinh.github.io/AuraPredict
+VITE_AURA_INDEXER_URL=https://api.aurapredict.xyz
 VITE_PREDICTION_MARKET_START_BLOCK=44083985
 ```
 
-Sau do redeploy frontend.
-
-Luu y: cach nay free va khong can card, nhung data cap nhat theo lich GitHub Actions, mac dinh moi 15 phut. Neu can realtime hon, dung web service indexer public.
-
-Sau khi co URL public cua indexer, them env cho frontend production:
+Indexer chay bang `pm2` trong `/opt/aurapredict`, doc bien moi truong tu `/opt/aurapredict/.env`, va duoc Nginx proxy tu `api.aurapredict.xyz` ve `127.0.0.1:8787`. Sau khi sua `.env` hoac cap nhat code indexer tren VPS, restart:
 
 ```bash
-VITE_AURA_INDEXER_URL=https://your-indexer-domain
-VITE_PREDICTION_MARKET_START_BLOCK=44083985
+cd /opt/aurapredict
+pm2 restart aurapredict-indexer
+curl https://api.aurapredict.xyz/health
 ```
-
-Sau do redeploy frontend.
 
 ## Luu y an toan
 

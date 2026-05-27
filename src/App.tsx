@@ -441,7 +441,7 @@ const WALLET_DEEP_LINKS = [
 ];
 const INDEXER_URL = String(
   import.meta.env.VITE_AURA_INDEXER_URL ||
-    (import.meta.env.DEV ? "http://127.0.0.1:8787" : "https://aurapredict-indexer.onrender.com")
+    (import.meta.env.DEV ? "http://127.0.0.1:8787" : "https://api.aurapredict.xyz")
 ).replace(/\/$/, "");
 const EVENT_START_BLOCK = BigInt(VIEWING_V3_ARCHIVE ? ACTIVE_V3_DEPLOYMENT_BLOCK : PRIMARY_DEPLOYMENT_BLOCK);
 const EVENT_LOG_CHUNK_SIZE = 9_000n;
@@ -1833,7 +1833,6 @@ function LandingPage() {
   const [landingStats, setLandingStats] = useState<ProjectStats | null>(null);
   const [landingMarketAssetStats, setLandingMarketAssetStats] = useState<AssetStats[]>([]);
   const [landingHealth, setLandingHealth] = useState<LandingHealth | null>(null);
-  const [demoOpen, setDemoOpen] = useState(false);
   const indexerIsRealtime = INDEXER_URL && !INDEXER_URL.includes("github.io");
   const featureCards = [
     {
@@ -1886,11 +1885,11 @@ function LandingPage() {
     },
     {
       title: "Live indexer",
-      text: "Read market history, wallet-searchable bet activity, token-specific USDC/EURC stats, and leaderboard data from the Render indexer before falling back to Arc RPC."
+      text: "Read market history, wallet-searchable bet activity, token-specific USDC/EURC stats, and leaderboard data from the live AuraPredict indexer before falling back to Arc RPC."
     }
   ];
   const flow = ["Create a market", "Stake YES or NO", "Track odds", "Resolve result", "Claim payout"];
-  const architectureSteps = ["Wallet", "AuraPredict UI", "Render Indexer", "Arc RPC", "Market Contract", "Arcscan"];
+  const architectureSteps = ["Wallet", "AuraPredict UI", "AuraPredict Indexer", "Arc RPC", "Market Contract", "Arcscan"];
   const settlementSteps = [
     "Trading closes at the published UTC time",
     "Resolution opens only after the rule's event timestamp",
@@ -1904,7 +1903,7 @@ function LandingPage() {
     "Winners claim payout"
   ];
   const dataFlow = [
-    "Live Render indexer now powers market history, per-token volume, participants, activity, and leaderboards",
+    "The live AuraPredict indexer now powers market history, per-token volume, participants, activity, and leaderboards",
     "Wallet UI shows USDC and EURC balances with copy-address and faucet shortcuts",
     "The app checks selected-token balance and allowance before create, stake, or dispute transactions",
     "Aura Agent drafts clearer markets, checks similar questions, and prepares rules with source links",
@@ -2047,7 +2046,7 @@ function LandingPage() {
             <span>{heroMarketText}</span> prediction markets indexed.
           </h1>
           <p>
-            Trade YES/NO markets with Arc testnet stablecoins while a live Render indexer keeps market
+            Trade YES/NO markets with Arc testnet stablecoins while the live AuraPredict indexer keeps market
             history, volume, participants, leaderboards, comments, evidence, AI resolution receipts,
             and profile reputation fast enough for public forecasting.
           </p>
@@ -2081,7 +2080,7 @@ function LandingPage() {
             </a>
           </div>
           <div className="landing-proof">
-            <span>{indexerIsRealtime ? "Render indexer live" : "Indexer fallback active"}</span>
+            <span>{indexerIsRealtime ? "AuraPredict indexer live" : "Indexer fallback active"}</span>
             <span>Deployed on Arc Testnet</span>
             <span>{updatedText}</span>
             <span>{pendingMarketsText} pending resolution</span>
@@ -2106,7 +2105,7 @@ function LandingPage() {
           </div>
           <div className="landing-network-wide">
             <span>Realtime data path</span>
-            <strong>Render indexer to AuraPredict UI to wallet-signed Arc transactions</strong>
+            <strong>AuraPredict indexer to UI to wallet-signed Arc transactions</strong>
           </div>
         </aside>
       </section>
@@ -2151,23 +2150,15 @@ function LandingPage() {
             risk, stake YES/NO, and resolve outcomes on Arc Testnet.
           </p>
         </div>
-        <div className="landing-visual landing-video-card">
+        <div className="landing-video-card">
           <div className="landing-video-frame">
-            {demoOpen ? (
-              <iframe
-                src={`${DEMO_EMBED_URL}?autoplay=1&rel=0&modestbranding=1`}
-                title="AuraPredict demo video"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                allowFullScreen
-              />
-            ) : (
-              <button className="landing-demo-cover" onClick={() => setDemoOpen(true)} type="button">
-                <img src="/aurapredict-logo.png" alt="" />
-                <span>Watch AuraPredict demo</span>
-                <strong>Preview the market creation, trading, profile, and resolution flow.</strong>
-                <b>Play video</b>
-              </button>
-            )}
+            <iframe
+              src={`${DEMO_EMBED_URL}?rel=0&modestbranding=1`}
+              title="AuraPredict demo video"
+              loading="lazy"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+              allowFullScreen
+            />
           </div>
         </div>
       </section>
@@ -2203,10 +2194,10 @@ function LandingPage() {
           <p className="landing-kicker">Project docs</p>
           <h2>Transparent testnet mechanics without hiding the roadmap.</h2>
           <p>
-            AuraPredict is live as an Arc Testnet MVP with a public Render indexer. The current product
+            AuraPredict is live as an Arc Testnet MVP with its public indexer hosted at api.aurapredict.xyz. The current product
             proves market creation, staking, dispute-aware settlement, profiles, comments, evidence,
             AI resolution receipts, live stats, notifications, and public reputation while wallet
-            actions remain fully onchain. Production reads the active Arc Testnet contract through the public Render indexer and wallet transactions remain verifiable on Arcscan.
+            actions remain fully onchain. Production reads the active Arc Testnet contract through the AuraPredict indexer and wallet transactions remain verifiable on Arcscan.
           </p>
           <div className="landing-docs-actions">
             <a className="landing-primary" href={DOCS_URL}>
@@ -2258,7 +2249,7 @@ function LandingPage() {
             <span className="docs-label">System architecture</span>
             <h3>Live indexer, wallet signed</h3>
             <p>
-              The public app reads the Render indexer first for low-latency market state, social data,
+              The public app reads the AuraPredict indexer first for low-latency market state, social data,
               and AI receipts. Wallets still sign transactions against the prediction market contract,
               and Arcscan remains the verification layer.
             </p>

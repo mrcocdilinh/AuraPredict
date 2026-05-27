@@ -596,9 +596,9 @@ h3 {
 }
 
 .landing-video-card {
-  gap: 14px;
-  opacity: 0.92;
-  padding: 12px;
+  margin: 0 auto;
+  max-width: 1040px;
+  width: 100%;
 }
 
 .landing-demo-section {
@@ -606,85 +606,14 @@ h3 {
   gap: 22px;
 }
 
-.landing-demo-section .landing-visual {
-  margin: 0;
-  max-width: none;
-  padding: 0;
-  width: 100%;
-}
-
 .landing-video-frame {
   background: #030611;
   border: 1px solid rgba(83, 105, 143, 0.36);
   border-radius: 8px;
+  box-shadow: 0 22px 56px rgba(0, 0, 0, 0.34);
   overflow: hidden;
   position: relative;
   width: 100%;
-}
-
-.landing-demo-cover {
-  align-content: end;
-  background:
-    linear-gradient(180deg, rgba(3, 6, 17, 0.08), rgba(3, 6, 17, 0.18) 45%, rgba(3, 6, 17, 0.92)),
-    #07101d;
-  border: 0;
-  color: #ffffff;
-  display: grid;
-  gap: 12px;
-  height: 100%;
-  inset: 0;
-  justify-items: start;
-  padding: clamp(22px, 4vw, 48px);
-  position: absolute;
-  text-align: left;
-  width: 100%;
-}
-
-.landing-demo-cover img {
-  height: 100%;
-  inset: 0;
-  object-fit: cover;
-  opacity: 0.82;
-  position: absolute;
-  width: 100%;
-  z-index: 0;
-}
-
-.landing-demo-cover span {
-  color: #18d7ff;
-  font-size: 0.82rem;
-  font-weight: 950;
-  position: relative;
-  text-transform: uppercase;
-  z-index: 1;
-}
-
-.landing-demo-cover strong {
-  color: #ffffff;
-  font-size: clamp(1.28rem, 3vw, 2rem);
-  line-height: 1.08;
-  max-width: 420px;
-  position: relative;
-  z-index: 1;
-}
-
-.landing-demo-cover b {
-  background: #18d7ff;
-  border-radius: 8px;
-  color: #06111e;
-  display: inline-flex;
-  font-size: 0.9rem;
-  font-weight: 950;
-  min-height: 40px;
-  padding: 11px 14px;
-  position: relative;
-  z-index: 1;
-}
-
-.landing-demo-cover:hover {
-  background:
-    linear-gradient(180deg, rgba(3, 6, 17, 0.02), rgba(3, 6, 17, 0.1) 42%, rgba(3, 6, 17, 0.88)),
-    #07101d;
 }
 
 .landing-video-frame::before {
@@ -6549,10 +6478,6 @@ label {
 
   .landing-visual img {
     height: 260px;
-  }
-
-  .landing-video-card {
-    padding: 8px;
   }
 
   .landing-dark-panel {

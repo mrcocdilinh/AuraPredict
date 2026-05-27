@@ -139,7 +139,7 @@
     "question": "Will the AuraPredict indexer health endpoint return ok true at this V4 test market's resolution time?",
     "category": "Other",
     "closeInHours": 156,
-    "resolutionSource": "https://aurapredict-indexer.onrender.com/health",
+    "resolutionSource": "https://api.aurapredict.xyz/health",
     "fallbackSource": "https://app.aurapredict.xyz",
     "resolutionRule": "Resolve YES if the primary source returns a readable health response with ok true at the market's onchain resolution time. Resolve NO if it returns ok false, an error response, or cannot be reached. Use the fallback source only to verify whether the app is online. Resolve CANCEL only if external network access prevents fair verification."
   },

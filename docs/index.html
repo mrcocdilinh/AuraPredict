@@ -45,8 +45,8 @@
           <h1>Everything needed to use, deploy, and understand AuraPredict.</h1>
           <p>
             AuraPredict is a YES/NO prediction market dapp on Arc Testnet. It combines stablecoin
-            staking, AI-assisted evidence review, dispute protection, protocol fees, a public Render
-            indexer, wallet profiles, searchable bet history, and Aura Points. Its current
+            staking, AI-assisted evidence review, dispute protection, protocol fees, a public
+            AuraPredict indexer, wallet profiles, searchable bet history, and Aura Points. Its current
             contract adds onchain source/rule terms, enforced resolution timing, configurable
             settlement assets, signed-Aura hooks, and adapter modes suitable for a future oracle or committee.
           </p>
@@ -292,7 +292,7 @@
             Wallet UX: the app shows USDC and EURC balances side by side, exposes a faucet shortcut, and blocks predictable create/stake/dispute failures when the selected token balance is too low.
           </div>
           <div class="reference-table">
-            <article><span>Current state</span><strong>Live test markets are indexed on the public Render indexer.</strong></article>
+            <article><span>Current state</span><strong>Live test markets are indexed at api.aurapredict.xyz.</strong></article>
             <article><span>Source/rule storage</span><strong>The contract stores the resolution source, fallback source, and rule for every new market.</strong></article>
             <article><span>Proposal timing</span><strong>Trading close time and result resolution time are separate; the contract rejects early proposals.</strong></article>
             <article><span>Token safety</span><strong>Frontend checks balance and allowance for the selected settlement token before create, stake, or dispute actions.</strong></article>
@@ -385,7 +385,7 @@
             fast read endpoints for stats, market rows, activity, leaderboard views, social data,
             and AI resolution receipts.
           </p>
-          <div class="note">Current production indexer endpoint: <code>https://aurapredict-indexer.onrender.com</code></div>
+          <div class="note">Current production indexer endpoint: <code>https://api.aurapredict.xyz</code></div>
           <div class="flow-diagram" aria-label="AuraPredict data flow">
             <div>Wallet</div>
             <div>Frontend</div>
@@ -431,7 +431,7 @@ npm run build</code></pre>
               <h3>Frontend environment</h3>
               <pre><code>VITE_PREDICTION_MARKET_ADDRESS=0x3c853AE2eC705B453c9657569b6335e762631536
 VITE_ARC_EURC_TOKEN_ADDRESS=0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a
-VITE_AURA_INDEXER_URL=https://aurapredict-indexer.onrender.com
+VITE_AURA_INDEXER_URL=https://api.aurapredict.xyz
 VITE_PREDICTION_MARKET_START_BLOCK=44083985
 VITE_WALLETCONNECT_PROJECT_ID=your_project_id</code></pre>
             </article>
@@ -465,6 +465,7 @@ npm run deploy:arc</code></pre>
             <article><span>Main site</span><strong>aurapredict.xyz -> app project, repo root</strong></article>
             <article><span>App site</span><strong>app.aurapredict.xyz -> app project, repo root</strong></article>
             <article><span>Docs site</span><strong>docs.aurapredict.xyz -> docs project, root directory docs</strong></article>
+            <article><span>API site</span><strong>api.aurapredict.xyz -> self-hosted indexer behind HTTPS</strong></article>
           </div>
           <div class="two-column">
             <article>
