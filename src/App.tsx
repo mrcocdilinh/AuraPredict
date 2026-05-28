@@ -6256,7 +6256,12 @@ export default function App() {
     }
   };
 
-  const resolveMarket = async (marketId: number, outcome: Outcome, skipMismatchConfirm = false) => {
+  const resolveMarket = async (
+    marketId: number,
+    outcome: Outcome,
+    skipMismatchConfirm = false,
+    options?: { source?: "manual" | "ai" | "oracle" }
+  ) => {
     if (!account || !isAddress(account)) throw new Error("Connect wallet first.");
     if (isMarketActionPending("resolve", marketId)) return;
     const market = markets.find((item) => item.id === marketId);
@@ -6264,11 +6269,12 @@ export default function App() {
       setNotice("This market is cancel-only because both YES and NO were not funded. Use Cancel to refund positions.");
       return;
     }
+    const source = options?.source ?? "manual";
     const auraStatus = auraResolutionStatusByMarket[marketId] || "idle";
     const aiReceipt = aiResolutionReceipts[String(marketId)];
     const aiSuggestedOutcome = aiOutcomeFromReceipt(aiReceipt);
     const hasAiSuggestion = aiSuggestedOutcome === Outcome.Yes || aiSuggestedOutcome === Outcome.No;
-    if (auraStatus === "idle" && !hasAiSuggestion) {
+    if (source !== "oracle" && auraStatus === "idle" && !hasAiSuggestion) {
       throw new Error("Ask Aura Agent before proposing. If Aura is unavailable, manual propose will be unlocked.");
     }
     const mismatchWithAi = hasAiSuggestion && aiSuggestedOutcome !== outcome;
@@ -8037,7 +8043,9 @@ export default function App() {
                         {!cancelOnlyResolution && oracleCanPropose && (
                           <button
                             className="secondary action-use-oracle"
-                            onClick={() => resolveMarket(selectedMarket.id, oracleSuggestedOutcome as Outcome.Yes | Outcome.No)}
+                            onClick={() =>
+                              resolveMarket(selectedMarket.id, oracleSuggestedOutcome as Outcome.Yes | Outcome.No, false, { source: "oracle" })
+                            }
                             disabled={resolutionActionBusy || oracleSuggestionBlockedByPool}
                             type="button"
                           >
