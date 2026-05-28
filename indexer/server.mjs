@@ -1592,6 +1592,32 @@ async function buildUnsupportedOracleProposal(market, adapter, summary) {
   return finalizeOracleProposal(proposal);
 }
 
+function oracleEvidenceRowsForMarket(marketId) {
+  const proposal = oracleState()[String(marketId)];
+  if (!proposal || proposal.status !== "ready") return [];
+  const outcome = outcomeName(proposal.outcome || proposal.outcomeValue);
+  if (!["YES", "NO", "CANCEL"].includes(outcome)) return [];
+  const sourceUrls = Array.isArray(proposal.sourceUrls) ? proposal.sourceUrls.filter(Boolean) : [];
+  const notes = [
+    `Objective Oracle adapter ${proposal.adapter || "unknown"} returned ${outcome}.`,
+    proposal.summary,
+    proposal.observedValue ? `Observed value: ${proposal.observedValue}.` : "",
+    proposal.comparator && proposal.targetValue ? `Rule check: observed value ${proposal.comparator} ${proposal.targetValue}.` : "",
+    typeof proposal.confidence === "number" ? `Oracle confidence: ${proposal.confidence}%.` : "",
+    Array.isArray(proposal.checks) && proposal.checks.length > 0 ? `Checks: ${proposal.checks.join(" / ")}` : ""
+  ].filter(Boolean).join(" ");
+  return [
+    {
+      id: `oracle-${proposal.id || marketId}`,
+      marketId,
+      title: `Objective Oracle proposal: ${outcome}`,
+      url: sourceUrls[0] || "",
+      notes,
+      createdAt: proposal.generatedAt || nowIso()
+    }
+  ];
+}
+
 async function buildOracleProposal(marketId, options = {}) {
   const market = state.markets[String(marketId)];
   if (!market) throw new Error("Market not found.");
@@ -2059,9 +2085,10 @@ async function buildResolutionReceipt(marketId, options = {}) {
   if (market.proposedAt > 0 && !options.force) throw new Error("Market already has a proposed outcome.");
 
   const social = socialState();
-  const evidenceRows = Array.isArray(options.evidence) && options.evidence.length > 0
+  const suppliedEvidenceRows = Array.isArray(options.evidence) && options.evidence.length > 0
     ? options.evidence.slice(0, 10)
     : (social.evidence[String(marketId)] || []).slice(0, 10);
+  const evidenceRows = [...oracleEvidenceRowsForMarket(marketId), ...suppliedEvidenceRows].slice(0, 10);
   const roles = [
     "strict fact checker",
     "skeptical dispute reviewer",

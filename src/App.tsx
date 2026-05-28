@@ -1505,52 +1505,6 @@ function reputationBadgesFor(row: LeaderboardRow, decimals = ARC_NATIVE_USDC_DEC
   return badges.slice(0, 3);
 }
 
-function resolutionReportFor(
-  market: MarketView,
-  evidenceRows: MarketEvidence[],
-  yesPercent: number,
-  noPercent: number
-) {
-  const evidenceText = evidenceRows
-    .map((item) => `${item.title} ${item.url} ${item.notes}`)
-    .join(" ")
-    .toLowerCase();
-  const yesWords = ["yes", "approved", "confirmed", "passed", "true", "happened", "won", "listed"];
-  const noWords = ["no", "rejected", "failed", "false", "not happened", "canceled", "cancelled", "lost"];
-  const yesHits = yesWords.filter((word) => evidenceText.includes(word)).length;
-  const noHits = noWords.filter((word) => evidenceText.includes(word)).length;
-  const poolLean = yesPercent >= noPercent ? Outcome.Yes : Outcome.No;
-  const suggestedOutcome =
-    evidenceRows.length === 0
-      ? poolLean
-      : yesHits > noHits
-        ? Outcome.Yes
-        : noHits > yesHits
-          ? Outcome.No
-          : poolLean;
-  const evidenceStrength = Math.min(28, evidenceRows.length * 9);
-  const signalSpread = Math.min(24, Math.abs(yesHits - noHits) * 8);
-  const marketSpread = Math.min(18, Math.abs(yesPercent - noPercent) / 2);
-  const confidence = Math.min(96, Math.round(44 + evidenceStrength + signalSpread + marketSpread));
-  const suggestedLabel =
-    suggestedOutcome === Outcome.Yes ? "YES" : suggestedOutcome === Outcome.No ? "NO" : outcomeLabel(suggestedOutcome);
-
-  return {
-    confidence,
-    suggestedOutcome,
-    suggestedLabel,
-    summary:
-      evidenceRows.length > 0
-        ? `Aura Agent reviewed ${evidenceRows.length} evidence item${evidenceRows.length > 1 ? "s" : ""} and leans ${suggestedLabel}.`
-        : `Aura Agent has no evidence yet, so it only uses current pool consensus and leans ${suggestedLabel}.`,
-    checklist: [
-      "Attach official source links before proposing a result.",
-      "Use screenshots only as supporting context, not the only source.",
-      "Let users dispute if the evidence is incomplete or ambiguous."
-    ]
-  };
-}
-
 function marketStatus(market: MarketView) {
   if (market.outcome !== Outcome.Unresolved) return outcomeLabel(market.outcome);
   if (market.disputed) return "Disputed";
@@ -1592,6 +1546,16 @@ function aiOutcomeFromText(value?: string | null) {
   if (outcomeText === "NO") return Outcome.No;
   if (outcomeText === "CANCEL" || outcomeText === "CANCELED" || outcomeText === "CANCELLED") return Outcome.Canceled;
   return Outcome.Unresolved;
+}
+
+function aiDecisionText(value?: string | null) {
+  const outcomeText = String(value || "").trim().toUpperCase();
+  if (outcomeText === "YES") return "YES";
+  if (outcomeText === "NO") return "NO";
+  if (outcomeText === "CANCEL" || outcomeText === "CANCELED" || outcomeText === "CANCELLED") return "CANCEL / REFUND";
+  if (outcomeText.includes("INSUFFICIENT")) return "INSUFFICIENT EVIDENCE";
+  if (outcomeText === "NEEDS_REVIEW") return "NEEDS REVIEW";
+  return "";
 }
 
 function aiOutcomeFromReceipt(receipt?: AiResolutionReceipt | null) {
@@ -7443,14 +7407,9 @@ export default function App() {
     const isFollowingCreator = followedCreators.includes(creatorKey);
     const selectedEvidenceRows = marketEvidence[String(selectedMarket.id)] || [];
     const hasWalletAccess = Boolean(account);
-    const agentReport = resolutionReportFor(
-      selectedMarket,
-      selectedEvidenceRows,
-      selectedMarketYesPercent,
-      selectedMarketNoPercent
-    );
     const aiResolutionReport = aiResolutionReports[selectedMarket.id];
     const aiResolutionReceipt = aiResolutionReceipts[String(selectedMarket.id)];
+    const hasSavedAiReview = Boolean(aiResolutionReport || aiResolutionReceipt);
     const selectedMarketIsSettled = selectedMarket.outcome !== Outcome.Unresolved;
     const showResolutionAssistant = !selectedMarketIsSettled || Boolean(aiResolutionReport);
     const awaitingResolutionTime = !selectedMarketIsSettled && !selectedResolutionReady;
@@ -7473,11 +7432,27 @@ export default function App() {
       reportAiSuggestedOutcome === Outcome.Yes || reportAiSuggestedOutcome === Outcome.No
         ? reportAiSuggestedOutcome
         : receiptAiSuggestedOutcome;
+    const savedAiDecisionLabel =
+      aiDecisionText(aiResolutionReport?.suggestedOutcome) ||
+      aiDecisionText(aiResolutionReceipt?.consensus?.outcome) ||
+      aiDecisionText(aiResolutionReceipt?.proposedOutcome) ||
+      aiDecisionText(aiResolutionReceipt?.status);
     const selectedAiCanPropose = selectedAiSuggestedOutcome === Outcome.Yes || selectedAiSuggestedOutcome === Outcome.No;
     const selectedAiConfidence =
       typeof aiResolutionReport?.confidence === "number"
         ? aiResolutionReport.confidence
         : aiResolutionReceipt?.consensus?.confidence;
+    const savedAiRisks =
+      aiResolutionReport?.disputeRisks && aiResolutionReport.disputeRisks.length > 0
+        ? aiResolutionReport.disputeRisks
+        : (aiResolutionReceipt?.reviews || []).flatMap((review) => review.risks || []).slice(0, 4);
+    const savedAiSummary =
+      aiResolutionReport?.summary ||
+      aiResolutionReceipt?.error ||
+      aiResolutionReceipt?.reviews?.find((review) => review.reasoning)?.reasoning ||
+      (aiResolutionReceipt
+        ? `Aura saved a ${savedAiDecisionLabel || "review"} receipt, but it did not produce an approved YES/NO result.`
+        : "");
     const selectedAiSuggestionBlockedByPool =
       (selectedAiSuggestedOutcome === Outcome.Yes && !canProposeYes) ||
       (selectedAiSuggestedOutcome === Outcome.No && !canProposeNo);
@@ -7485,26 +7460,31 @@ export default function App() {
       ? "NOT READY"
       : cancelOnlyResolution
       ? "CANCEL / REFUND"
-      : aiResolutionReport?.suggestedOutcome || agentReport.suggestedLabel;
+      : savedAiDecisionLabel || "NO AI REVIEW YET";
     const displayedAgentConfidence =
       awaitingResolutionTime
         ? 0
         : cancelOnlyResolution
         ? 100
-        : typeof aiResolutionReport?.confidence === "number" ? aiResolutionReport.confidence : agentReport.confidence;
+        : typeof selectedAiConfidence === "number" ? selectedAiConfidence : 0;
     const displayedAgentSummary = awaitingResolutionTime
       ? "Aura resolution review becomes available only after the market resolution time has passed."
       : cancelOnlyResolution
       ? "Only one outcome received positions. This market cannot be resolved as YES or NO in the app; use Cancel / Refund."
-      : aiResolutionReport?.summary || agentReport.summary;
+      : savedAiSummary ||
+        (oracleProposal
+          ? "No saved Aura review yet. Oracle has objective source data; use Oracle for deterministic markets or ask Aura for a narrative evidence review."
+          : "No saved Aura review yet. Ask Aura to create an evidence-based review before using an AI suggestion.");
     const displayedAgentChecklist =
       awaitingResolutionTime
         ? ["Trading and the underlying event may still change before resolution time.", "Return after resolution time to request an Aura review."]
         : cancelOnlyResolution
         ? ["No Aura request is needed for this settlement rule.", "Cancellation returns the funded position through the market refund flow."]
-        : aiResolutionReport?.disputeRisks && aiResolutionReport.disputeRisks.length > 0
-          ? aiResolutionReport.disputeRisks
-          : agentReport.checklist;
+        : savedAiRisks.length > 0
+          ? savedAiRisks
+          : hasSavedAiReview
+            ? ["Aura did not produce an approved YES/NO result from the supplied evidence.", "Use Oracle when the market has objective price/status data.", "Add stronger evidence before asking Aura again."]
+            : ["Aura has not generated an AI review for this market yet.", "Run Oracle first for objective price, macro, or status markets.", "Ask Aura only when you need evidence interpretation."];
     const selectedDisputeWindowSeconds = selectedMarket.termsDisputeWindow ?? disputeWindow;
     const selectedGraceSeconds = selectedMarket.termsDisputeGracePeriod ?? disputeGracePeriod;
     const selectedProposalGraceSeconds = selectedMarket.termsProposalGracePeriod ?? 72 * 60 * 60;
@@ -7533,16 +7513,16 @@ export default function App() {
       ? "Cancel / Refund"
       : selectedAiSuggestedOutcome !== Outcome.Unresolved
       ? outcomeLabel(selectedAiSuggestedOutcome)
-      : displayedAgentLabel;
+      : savedAiDecisionLabel || "No saved AI result yet";
     const aiDecisionDetail = awaitingResolutionTime
       ? `Aura can review after ${closeDate(selectedResolutionReadyAt)}.`
       : cancelOnlyResolution
       ? "One side has no funded pool, so the app does not need another AI call."
       : selectedAiSuggestedOutcome !== Outcome.Unresolved
       ? `${typeof selectedAiConfidence === "number" ? `${selectedAiConfidence}% confidence. ` : ""}${displayedAgentSummary}`
-      : aiResolutionReport || aiResolutionReceipt
+      : hasSavedAiReview
       ? displayedAgentSummary
-      : "No saved AI result yet. Ask Aura before proposing a YES/NO result.";
+      : "No saved AI result yet. Ask Aura for narrative review, or use Oracle for objective markets.";
     const oracleDecisionLabel =
       oracleSuggestedOutcome !== Outcome.Unresolved
         ? outcomeLabel(oracleSuggestedOutcome)
