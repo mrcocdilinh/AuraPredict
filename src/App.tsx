@@ -2006,6 +2006,32 @@ function LandingPage() {
     "Aura analysis remains off-chain; the contract anchors source/rule terms, evidence hashes, and receipt hashes in wallet-signed proposal actions",
     "Wallet actions still sign directly against the Arc contract, with Arcscan as the verification layer"
   ];
+  const oracleAdapters = [
+    {
+      title: "Crypto price",
+      text: "BTC, ETH, SOL, BNB, XRP, ADA, DOGE, AVAX, and LINK markets can be checked against Binance 1-minute price data, with a near-time CoinGecko fallback when exact data is unavailable."
+    },
+    {
+      title: "Macro chart",
+      text: "Gold and US Dollar Index markets can be checked against Yahoo chart data near the market's onchain resolution timestamp."
+    },
+    {
+      title: "Health and status",
+      text: "API health checks, JSON ok:true endpoints, and supported public status pages can produce a source-based Oracle suggestion."
+    },
+    {
+      title: "Liquidity safety",
+      text: "If YES or NO has no funded positions, Oracle suggests Cancel/Refund instead of awarding a one-sided market."
+    },
+    {
+      title: "No AI quota",
+      text: "Oracle proposals use deterministic source checks from the indexer, so they do not consume Gemini/OpenAI quota like Aura Agent reviews."
+    },
+    {
+      title: "Wallet-signed settlement",
+      text: "Oracle output is only a proposal aid. Resolver, authority, dispute, and finalization actions still require wallet-signed contract transactions."
+    }
+  ];
   const roadmapItems = [
     "Add websocket or event streaming for absolute realtime odds and cross-user updates",
     "Harden AI receipt review with better evidence policy, audit logs, and operator dashboards",
@@ -2104,6 +2130,7 @@ function LandingPage() {
         </a>
         <div>
           <a href="#features">Features</a>
+          <a href="#oracle">Oracle</a>
           <a href="#how-it-works">How it works</a>
           <a href="#demo">Demo</a>
           <a href={DOCS_URL}>Docs</a>
@@ -2230,6 +2257,36 @@ function LandingPage() {
               <p>{feature.text}</p>
             </article>
           ))}
+        </div>
+      </section>
+
+      <section className="landing-section" id="oracle">
+        <div className="landing-section-head">
+          <p className="landing-kicker">Objective Oracle v1</p>
+          <h2>Source-based proposals for markets that can be checked without AI.</h2>
+          <p>
+            AuraPredict now separates two kinds of help during resolution. Aura Agent is used for reasoning-heavy
+            questions and evidence review. Oracle proposal v1 is used when the market can be checked directly against
+            objective data sources. It gives reviewers a YES, NO, Cancel, or manual-review signal before they sign a
+            contract action.
+          </p>
+        </div>
+        <div className="landing-feature-grid">
+          {oracleAdapters.map((adapter) => (
+            <article key={adapter.title}>
+              <span />
+              <h3>{adapter.title}</h3>
+              <p>{adapter.text}</p>
+            </article>
+          ))}
+        </div>
+        <div className="docs-note">
+          <strong>Settlement boundary</strong>
+          <p>
+            Oracle proposal v1 does not move funds by itself. The contract still enforces resolution time,
+            review/dispute windows, and finalization. The proposal simply gives the signer a clearer source-based
+            report before choosing YES, NO, or Cancel.
+          </p>
         </div>
       </section>
 

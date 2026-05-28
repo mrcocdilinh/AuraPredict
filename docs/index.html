@@ -28,6 +28,7 @@
         <a href="#users">Users</a>
         <a href="#creators">Creators</a>
         <a href="#contract">Contract</a>
+        <a href="#oracle">Oracle</a>
         <a href="#indexer">Indexer</a>
         <a href="#deploy">Deploy</a>
         <a href="#security">Security</a>
@@ -111,6 +112,11 @@
           <span>04</span>
           <strong>AI resolution</strong>
           <small>Visible suggestions, saved receipts, mismatch and dispute review.</small>
+        </a>
+        <a href="#oracle">
+          <span>05</span>
+          <strong>Oracle proposals</strong>
+          <small>Objective source checks without spending AI quota.</small>
         </a>
       </section>
 
@@ -388,6 +394,81 @@
           <div class="note">
             Aura Agent is decision support, not an autonomous oracle. It cannot settle a market
             by itself: the contract proposal, dispute window, and finalization remain authoritative.
+          </div>
+        </div>
+      </section>
+
+      <section id="oracle" class="docs-section">
+        <div class="section-label">Oracle proposals</div>
+        <div class="section-body">
+          <h2>Objective Oracle proposal v1</h2>
+          <p>
+            AuraPredict now has a source-based Oracle proposal layer in the indexer. It is separate from
+            Aura Agent: it is designed for objective markets that can be checked by fetching data from a
+            known source, not for open-ended news interpretation. The Oracle result appears in the market's
+            settlement report beside Aura's suggestion, the creator/resolver proposal, dispute state, pools,
+            volume, and timing windows.
+          </p>
+          <div class="note">
+            Oracle proposal v1 does not settle funds by itself. It produces a visible YES, NO, Cancel,
+            unsupported, or needs-review signal. A resolver, owner, authority, or approved adapter still
+            needs to sign the contract action that changes market state.
+          </div>
+          <div class="feature-grid">
+            <article>
+              <h3>Crypto price adapter</h3>
+              <p>Checks BTC, ETH, SOL, BNB, XRP, ADA, DOGE, AVAX, and LINK markets against Binance 1-minute klines, with a near-time CoinGecko fallback when exact-minute data is unavailable.</p>
+            </article>
+            <article>
+              <h3>Macro chart adapter</h3>
+              <p>Checks gold and US Dollar Index markets against Yahoo chart data near the market's onchain resolution timestamp.</p>
+            </article>
+            <article>
+              <h3>Health/status adapter</h3>
+              <p>Checks API health endpoints, JSON <code>ok: true</code> responses, HTTP 200 status, and supported public status pages.</p>
+            </article>
+            <article>
+              <h3>Liquidity rule</h3>
+              <p>If YES pool or NO pool is empty, Oracle suggests Cancel/Refund instead of allowing a one-sided YES/NO resolution.</p>
+            </article>
+            <article>
+              <h3>No AI quota</h3>
+              <p>Oracle proposals are deterministic source checks and do not consume Gemini/OpenAI requests. Aura Agent is still used for reasoning-heavy market review.</p>
+            </article>
+            <article>
+              <h3>Manual review boundary</h3>
+              <p>Listing, legal tender, complex sports, ambiguous news, or unsupported sources return needs-review/unsupported instead of a false automated answer.</p>
+            </article>
+          </div>
+          <div class="timeline">
+            <article>
+              <span>1</span>
+              <h3>Market reaches resolution time</h3>
+              <p>The contract and UI wait until the onchain resolution timestamp before result actions are available.</p>
+            </article>
+            <article>
+              <span>2</span>
+              <h3>Indexer checks adapter</h3>
+              <p>The Oracle route attempts a matching adapter based on the market question, source URL, and resolution rule.</p>
+            </article>
+            <article>
+              <span>3</span>
+              <h3>Settlement report updates</h3>
+              <p>The reviewer sees Oracle suggestion, confidence, observed value, source links, and checks alongside Aura and dispute context.</p>
+            </article>
+            <article>
+              <span>4</span>
+              <h3>Wallet signs action</h3>
+              <p>The signer can use Oracle guidance or choose manual review. Funds move only through contract proposal, dispute, finalize, cancel, or claim.</p>
+            </article>
+          </div>
+          <div class="reference-table">
+            <article><span>Read proposal</span><strong>GET /api/oracles/:marketId</strong></article>
+            <article><span>Run proposal</span><strong>POST /api/oracles/:marketId/run</strong></article>
+            <article><span>Auto sweep</span><strong>AURA_ORACLE_AUTO_RUN=1 checks closed unresolved markets.</strong></article>
+            <article><span>Timeout</span><strong>AURA_ORACLE_HTTP_TIMEOUT_MS controls external source fetch time.</strong></article>
+            <article><span>Cancel signal</span><strong>Empty or one-sided pools produce Cancel/Refund guidance.</strong></article>
+            <article><span>Final authority</span><strong>The contract proposal, review/dispute window, and finalization remain authoritative.</strong></article>
           </div>
         </div>
       </section>
