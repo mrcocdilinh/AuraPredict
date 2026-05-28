@@ -7021,7 +7021,6 @@ export default function App() {
           market.outcome === Outcome.Unresolved &&
           market.proposedAt > 0 &&
           !market.disputed &&
-          !market.authorityReviewRequired &&
           market.disputeDeadline > 0 &&
           Date.now() / 1000 < market.disputeDeadline &&
           hasUserPosition(market);
@@ -7331,7 +7330,6 @@ export default function App() {
       selectedMarket.outcome === Outcome.Unresolved &&
       selectedMarket.proposedAt > 0 &&
       !selectedMarket.disputed &&
-      !selectedMarket.authorityReviewRequired &&
       selectedMarket.disputeDeadline > 0 &&
       Date.now() / 1000 < selectedMarket.disputeDeadline &&
       hasUserPosition(selectedMarket);
@@ -7578,6 +7576,8 @@ export default function App() {
       : "Not available yet";
     const disputeDecisionDetail = selectedMarket.disputed
       ? `Disputer: ${displayNameForAddress(selectedMarket.disputer)}. The contract stores the disputing wallet and proposed result, not a separate YES/NO vote from the disputer.`
+      : selectedMarket.authorityReviewRequired && selectedMarket.proposedAt > 0 && selectedMarket.disputeDeadline > nowSeconds
+      ? `This result was flagged for owner/authority review. Users with funded positions can still open a formal dispute until ${closeDate(selectedMarket.disputeDeadline)}.`
       : selectedMarket.authorityReviewRequired
       ? "This result was flagged for owner/authority review, usually because the proposal needs extra verification."
       : selectedMarket.proposedAt > 0 && selectedMarket.disputeDeadline > 0
@@ -8026,7 +8026,7 @@ export default function App() {
                       </small>
                     )}
                     {finalizeHint && <small>{finalizeHint}</small>}
-                    {selectedMarket.authorityReviewRequired && <small>This proposal is held for authority review before final settlement.</small>}
+                    {selectedMarket.authorityReviewRequired && <small>This proposal is held for authority review before final settlement. Funded users can still dispute while the dispute window is open.</small>}
                   </div>
                 </div>
               )}
@@ -8826,7 +8826,7 @@ export default function App() {
                             {aiSuggestedOutcome !== Outcome.Unresolved ? `. AI suggested ${outcomeLabel(aiSuggestedOutcome)}.` : "."}
                           </small>
                           <div className="notification-actions">
-                            {!market.disputed && !market.authorityReviewRequired && market.disputeDeadline > nowSeconds && (
+                            {!market.disputed && market.disputeDeadline > nowSeconds && (
                               <button className="secondary" onClick={() => disputeMarket(market.id)}>
                                 Dispute {formatMarketAmount(market.termsDisputeBond ?? disputeBond, market)} {marketSymbol(market)}
                               </button>
@@ -9283,7 +9283,7 @@ export default function App() {
                       {aiSuggestedOutcome !== Outcome.Unresolved ? `. AI suggested ${outcomeLabel(aiSuggestedOutcome)}.` : "."}
                     </small>
                     <div className="notification-actions">
-                      {!market.disputed && !market.authorityReviewRequired && market.disputeDeadline > nowSeconds && (
+                      {!market.disputed && market.disputeDeadline > nowSeconds && (
                         <button className="secondary" onClick={() => disputeMarket(market.id)}>
                           Dispute {formatMarketAmount(market.termsDisputeBond ?? disputeBond, market)} {marketSymbol(market)}
                         </button>
