@@ -296,7 +296,7 @@
             Swap access: an active market or the user's Profile can offer a LI.FI quote for <code>USDC &lt;-&gt; EURC</code> on Arc Testnet. The UI shows estimated and minimum receive amounts, supports user-selected price tolerance, and expires old quotes to reduce failed swaps when testnet liquidity moves. The trader signs that swap in their wallet before staking; the market still settles, refunds, and pays winners only in its configured token.
           </div>
           <div class="note">
-            Settlement report: the final-action area now summarizes Aura's suggestion, the creator or resolver proposal, dispute or owner-review state, YES/NO pools, total volume, and the timing windows. It is designed so the next signer can understand what happened before selecting Final YES, Final NO, or Final Cancel.
+            Settlement report: the final-action area now summarizes Aura's suggestion, Oracle suggestion, the creator or resolver proposal, dispute or owner-review state, YES/NO pools, total volume, and the timing windows. It is designed so the next signer can understand what happened before selecting Final YES, Final NO, or Final Cancel.
           </div>
           <div class="reference-table">
             <article><span>Current state</span><strong>Live test markets are indexed at api.aurapredict.xyz.</strong></article>
@@ -304,7 +304,8 @@
             <article><span>Proposal timing</span><strong>Trading close time and result resolution time are separate; the contract rejects early proposals.</strong></article>
             <article><span>Token safety</span><strong>Frontend checks balance and allowance for the selected settlement token before create, stake, or dispute actions.</strong></article>
             <article><span>Optional swap</span><strong>LI.FI route quoting with visible minimum receive and adjustable tolerance helps a wallet obtain USDC or EURC without changing any market's payout denomination.</strong></article>
-            <article><span>Settlement report</span><strong>Resolution actions summarize AI choice, creator proposal, dispute state, pools, and deadlines before finalization.</strong></article>
+            <article><span>Settlement report</span><strong>Resolution actions summarize AI choice, Oracle choice, creator proposal, dispute state, pools, and deadlines before finalization.</strong></article>
+            <article><span>Oracle proposal</span><strong>The indexer can check objective crypto price, macro chart, and health/status API markets without spending AI quota.</strong></article>
             <article><span>No-liquidity markets</span><strong>If no one stakes, the resolver can cancel without spending an AI review.</strong></article>
             <article><span>No-proposal timeout</span><strong>If a market passes its proposal grace period without a result, it can be canceled/refunded instead of leaving funds stuck.</strong></article>
           </div>
@@ -319,7 +320,7 @@
             AuraPredict keeps Aura Agent's calculation off-chain. After the event timestamp
             in the rule, Resolution actions can show a suggested YES or NO outcome, confidence,
             supporting detail, a receipt, and a settlement report. The report compares Aura's suggestion,
-            the creator or resolver proposal, dispute/review status, pool balances, volume, and timing windows before final action.
+            an optional Oracle proposal, the creator or resolver proposal, dispute/review status, pool balances, volume, and timing windows before final action.
             The market's source and rule are already onchain,
             and the wallet-signed proposal can commit the evidence hash and AI receipt hash while the detailed report remains in the indexer.
           </p>
@@ -328,6 +329,9 @@
           </div>
           <div class="note">
             Current production mode: Aura signed attestations are supported by the active contract but disabled until a dedicated signer is configured. Until then, Aura is decision support and proposals that need extra trust move through owner or authority review. When Arc oracle tooling is ready, new markets can use an approved adapter without replacing the core market contract again.
+          </div>
+          <div class="note">
+            Oracle proposal v1: for objective markets, the indexer can separately check sources such as Binance 1-minute crypto price data, Yahoo chart data for macro assets, and health/status endpoints. The Oracle result is displayed for reviewers but still does not settle funds without a wallet-signed contract action.
           </div>
           <div class="timeline">
             <article>
@@ -374,7 +378,8 @@
           <div class="reference-table">
             <article><span>Timing</span><strong>Result actions wait for the rule's event timestamp, not an earlier trading cutoff.</strong></article>
             <article><span>Use AI</span><strong>The resolver may apply Aura's suggestion directly from Resolution actions.</strong></article>
-            <article><span>Settlement report</span><strong>Final reviewers see AI suggestion, proposed outcome, dispute/review status, pools, volume, and relevant deadlines in one panel.</strong></article>
+            <article><span>Use Oracle</span><strong>The resolver may apply an objective Oracle proposal when the adapter matches the market rule.</strong></article>
+            <article><span>Settlement report</span><strong>Final reviewers see AI suggestion, Oracle suggestion, proposed outcome, dispute/review status, pools, volume, and relevant deadlines in one panel.</strong></article>
             <article><span>Saved receipt</span><strong>Opening a market can show an existing AI receipt without rerunning Aura.</strong></article>
             <article><span>Mismatch</span><strong>A proposal against Aura's suggestion is highlighted, and authority review can stop ordinary finalization.</strong></article>
             <article><span>Dispute</span><strong>Participants keep the contract dispute window before finalization.</strong></article>
@@ -395,7 +400,7 @@
             The frontend can read directly from Arc RPC, but production UX is smoother with the
             AuraPredict indexer. The indexer reads contract events, stores JSON snapshots, and serves
             fast read endpoints for stats, market rows, activity, leaderboard views, social data,
-            and AI resolution receipts.
+            AI resolution receipts, and objective Oracle proposals.
           </p>
           <div class="note">Current production indexer endpoint: <code>https://api.aurapredict.xyz</code></div>
           <div class="flow-diagram" aria-label="AuraPredict data flow">
@@ -417,6 +422,7 @@ npm run dev</code></pre>
             <article><span>Markets</span><strong>/api/markets</strong></article>
             <article><span>Activity</span><strong>/api/activity</strong></article>
             <article><span>AI receipts</span><strong>/api/resolutions/:marketId</strong></article>
+            <article><span>Oracle proposal</span><strong>/api/oracles/:marketId and /api/oracles/:marketId/run</strong></article>
             <article><span>Market history</span><strong>/api/markets/:marketId returns trades for wallet search</strong></article>
           </div>
         </div>

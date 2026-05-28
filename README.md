@@ -17,6 +17,7 @@ Tinh nang hien tai:
 - Thanh activity ticker doc event `BetPlaced` de hien nguoi choi vua stake YES/NO.
 - Frontend uu tien doc market, stats, leaderboard va history tu AuraPredict Indexer neu `VITE_AURA_INDEXER_URL` kha dung; neu khong co thi fallback ve Arc RPC nhu cu.
 - Aura Agent giup draft market va goi y ket qua; thao tac de xuat/finalize van la giao dich onchain duoc ky boi vi co tham quyen.
+- Oracle proposal v1 chay trong indexer de tu kiem tra cac market khach quan nhu gia crypto, macro chart va health/status API ma khong ton quota AI; ket qua chi la goi y cho resolver/owner, khong tu chot tien.
 - Contract V4 tach `closeTime` cua giao dich voi `resolutionTime` cua su kien; contract khong cho cong bo ket qua truoc `resolutionTime`.
 - V4 luu primary source, fallback source va resolution rule onchain de dieu khoan market khong bi phu thuoc vao frontend/indexer.
 - V4 snapshot dieu khoan phi, creator bond, dispute bond, dispute window, min stake va proposal grace period theo tung market de thay doi cau hinh sau nay khong lam doi market cu.
@@ -31,6 +32,14 @@ Tinh nang hien tai:
 
 Production hien dung contract V4 tren Arc Testnet tai `0x3c853AE2eC705B453c9657569b6335e762631536`, bat dau tu block `44083985`. Frontend va indexer duoc pin vao deployment V4 nay.
 Market V3 cu va tien cua chung van ton tai tren contract cu tai `0x4399ea3f59AA14e4D19217f1af2aD0681f5FafFd`. Giao dien chinh tao market moi tren V4; neu can xem/settle/claim market V3 cu, mo app voi query `?deployment=v3`.
+
+Oracle proposal v1 ho tro:
+
+- Crypto price: BTC, ETH, SOL, BNB, XRP, ADA, DOGE, AVAX, LINK qua Binance 1-minute kline, fallback CoinGecko gan thoi diem khi can.
+- Macro chart: gold va US Dollar Index qua Yahoo chart data gan moc resolution.
+- Health/status API: endpoint co `ok: true`, HTTP 200, hoac status page public nhu GitHub/OpenAI.
+- Liquidity rule: neu YES pool hoac NO pool bang 0, Oracle goi y Cancel/Refund thay vi chon YES/NO.
+- Cac market ngoai adapter, vi du tin tuc phuc tap hoac sports, van di qua Aura Agent/evidence/authority review.
 
 ## Arc Testnet
 
@@ -130,6 +139,8 @@ Frontend production tren Vercel su dung:
 ```bash
 VITE_AURA_INDEXER_URL=https://api.aurapredict.xyz
 VITE_PREDICTION_MARKET_START_BLOCK=44083985
+AURA_ORACLE_AUTO_RUN=1
+AURA_ORACLE_HTTP_TIMEOUT_MS=8000
 ```
 
 Indexer chay bang `pm2` trong `/opt/aurapredict`, doc bien moi truong tu `/opt/aurapredict/.env`, va duoc Nginx proxy tu `api.aurapredict.xyz` ve `127.0.0.1:8787`. Sau khi sua `.env` hoac cap nhat code indexer tren VPS, restart:

@@ -46,6 +46,8 @@ const RESOLVER_PRIVATE_KEY = String(process.env.AURA_RESOLVER_PRIVATE_KEY || "")
 const AI_ATTESTATION_PRIVATE_KEY = String(process.env.AURA_ATTESTATION_PRIVATE_KEY || "").trim();
 const RESOLUTION_MIN_CONFIDENCE = Number(process.env.AURA_RESOLUTION_MIN_CONFIDENCE || 72);
 const RESOLUTION_CONSENSUS_COUNT = Number(process.env.AURA_RESOLUTION_CONSENSUS_COUNT || 2);
+const ORACLE_AUTO_RUN = String(process.env.AURA_ORACLE_AUTO_RUN || "1").trim() !== "0";
+const ORACLE_HTTP_TIMEOUT_MS = Number(process.env.AURA_ORACLE_HTTP_TIMEOUT_MS || 8_000);
 const USDC_DECIMALS = 18;
 const V3_SETTLEMENT_DECIMALS = 6;
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
@@ -219,6 +221,7 @@ function emptyState() {
       evidence: {}
     },
     resolutions: {},
+    oracleProposals: {},
     stats: {
       totalMarkets: 0,
       indexedMarkets: 0,
@@ -980,6 +983,11 @@ function resolutionState() {
   return state.resolutions;
 }
 
+function oracleState() {
+  state.oracleProposals ??= {};
+  return state.oracleProposals;
+}
+
 function adminAuthorized(req) {
   if (!RESOLUTION_ADMIN_TOKEN) return false;
   const header = String(req.headers.authorization || "");
@@ -1178,6 +1186,482 @@ function duplicateRiskFor(similarMarkets) {
   if (top >= 72) return "HIGH";
   if (top >= 48) return "MEDIUM";
   return "LOW";
+}
+
+function extractUrlsFromText(value) {
+  return (String(value || "").match(/https?:\/\/[^\s"'<>),]+/gi) || [])
+    .map((url) => cleanUrl(url))
+    .filter(Boolean);
+}
+
+function marketSourceUrls(market) {
+  return [
+    cleanUrl(market?.metadataURI),
+    cleanUrl(market?.fallbackSourceURI),
+    ...extractUrlsFromText(market?.question),
+    ...extractUrlsFromText(market?.resolutionRule)
+  ].filter((url, index, rows) => url && rows.indexOf(url) === index);
+}
+
+function oracleTextForMarket(market) {
+  return [
+    market?.question,
+    market?.category,
+    market?.metadataURI,
+    market?.fallbackSourceURI,
+    market?.resolutionRule
+  ]
+    .map((value) => String(value || ""))
+    .join(" ")
+    .toLowerCase();
+}
+
+function parseNumericValue(value) {
+  const parsed = Number(String(value || "").replace(/,/g, ""));
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function detectComparatorTarget(text) {
+  const value = String(text || "").toLowerCase().replace(/\s+/g, " ");
+  const patterns = [
+    { comparator: "gte", regex: /\$?\s*([0-9][0-9,]*(?:\.[0-9]+)?)\s*(?:usd|usdc|points?|index|per ounce)?\s*(?:or higher|or above|or more|or greater)/i },
+    { comparator: "lte", regex: /\$?\s*([0-9][0-9,]*(?:\.[0-9]+)?)\s*(?:usd|usdc|points?|index|per ounce)?\s*(?:or lower|or below|or less)/i },
+    { comparator: "gte", regex: /(?:at\s+or\s+above|at\s+least|above|higher than|greater than|>=)\s*\$?\s*([0-9][0-9,]*(?:\.[0-9]+)?)/i },
+    { comparator: "lte", regex: /(?:at\s+or\s+below|at\s+most|below|lower than|less than|<=)\s*\$?\s*([0-9][0-9,]*(?:\.[0-9]+)?)/i },
+    { comparator: "eq", regex: /(?:exactly|equal(?:s)?|=)\s*\$?\s*([0-9][0-9,]*(?:\.[0-9]+)?)/i }
+  ];
+
+  for (const pattern of patterns) {
+    const match = value.match(pattern.regex);
+    const target = parseNumericValue(match?.[1]);
+    if (target !== null) return { comparator: pattern.comparator, target };
+  }
+
+  return null;
+}
+
+function compareObservedValue(observed, comparator, target) {
+  if (comparator === "gte") return observed >= target;
+  if (comparator === "lte") return observed <= target;
+  if (comparator === "eq") return Math.abs(observed - target) < 0.000001;
+  return false;
+}
+
+function sourceHostLabel(url) {
+  try {
+    return new URL(url).host.replace(/^www\./, "");
+  } catch {
+    return "source";
+  }
+}
+
+function escapeRegExp(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function hasExactMarketTerm(text, term) {
+  const normalizedTerm = String(term || "").toLowerCase().trim();
+  if (!normalizedTerm) return false;
+  if (/^[a-z0-9]+$/.test(normalizedTerm)) {
+    return new RegExp(`(^|[^a-z0-9])${escapeRegExp(normalizedTerm)}([^a-z0-9]|$)`, "i").test(text);
+  }
+  return text.includes(normalizedTerm);
+}
+
+const CRYPTO_ORACLE_ASSETS = [
+  { symbol: "BTC", names: ["btc", "bitcoin"], binance: "BTCUSDT", coingecko: "bitcoin" },
+  { symbol: "ETH", names: ["eth", "ethereum"], binance: "ETHUSDT", coingecko: "ethereum" },
+  { symbol: "SOL", names: ["sol", "solana"], binance: "SOLUSDT", coingecko: "solana" },
+  { symbol: "BNB", names: ["bnb", "binance coin"], binance: "BNBUSDT", coingecko: "binancecoin" },
+  { symbol: "XRP", names: ["xrp", "ripple"], binance: "XRPUSDT", coingecko: "ripple" },
+  { symbol: "ADA", names: ["ada", "cardano"], binance: "ADAUSDT", coingecko: "cardano" },
+  { symbol: "DOGE", names: ["doge", "dogecoin"], binance: "DOGEUSDT", coingecko: "dogecoin" },
+  { symbol: "AVAX", names: ["avax", "avalanche"], binance: "AVAXUSDT", coingecko: "avalanche-2" },
+  { symbol: "LINK", names: ["link", "chainlink"], binance: "LINKUSDT", coingecko: "chainlink" }
+];
+
+function detectCryptoOracleMarket(market) {
+  const text = oracleTextForMarket(market);
+  const hasPriceContext =
+    /\b(price|spot|traded?|trade|close|closing|open|usd|usdt|btc\/usd|eth\/usd|btc\/usdt|eth\/usdt)\b/i.test(text) ||
+    /\/usd[t]?\b/i.test(text);
+  if (!hasPriceContext) return null;
+  const asset = CRYPTO_ORACLE_ASSETS.find((candidate) => candidate.names.some((name) => hasExactMarketTerm(text, name)));
+  const condition = detectComparatorTarget(text);
+  if (!asset || !condition) return null;
+  return { ...asset, ...condition };
+}
+
+const MACRO_ORACLE_ASSETS = [
+  { symbol: "GOLD", names: ["gold", "xau", "gc=f"], yahoo: "GC=F", label: "Gold futures", unit: "USD/oz" },
+  { symbol: "DXY", names: ["dxy", "dollar index", "us dollar index"], yahoo: "DX-Y.NYB", label: "US Dollar Index", unit: "index points" }
+];
+
+function detectMacroOracleMarket(market) {
+  const text = oracleTextForMarket(market);
+  const asset = MACRO_ORACLE_ASSETS.find((candidate) => candidate.names.some((name) => hasExactMarketTerm(text, name)));
+  const condition = detectComparatorTarget(text);
+  if (!asset || !condition) return null;
+  return { ...asset, ...condition };
+}
+
+function detectHealthOracleMarket(market) {
+  const text = oracleTextForMarket(market);
+  const urls = marketSourceUrls(market);
+  const explicitHealthUrl = urls.find((url) => /\/health(?:\?|$|\/)/i.test(url)) || urls.find((url) => /api\./i.test(url));
+  if (explicitHealthUrl) return { url: explicitHealthUrl };
+  if (text.includes("aurapredict") && text.includes("health")) return { url: "https://api.aurapredict.xyz/health" };
+  return null;
+}
+
+function detectStatusOracleMarket(market) {
+  const text = oracleTextForMarket(market);
+  if (text.includes("github") && text.includes("status")) {
+    return {
+      provider: "GitHub Status",
+      url: "https://www.githubstatus.com/api/v2/summary.json",
+      sourceUrl: "https://www.githubstatus.com/",
+      supportsHistorical: false
+    };
+  }
+  if (text.includes("openai") && text.includes("status")) {
+    return {
+      provider: "OpenAI Status",
+      url: "https://status.openai.com/api/v2/summary.json",
+      sourceUrl: "https://status.openai.com/",
+      supportsHistorical: false
+    };
+  }
+  return null;
+}
+
+function hasByDeadlineLanguage(text) {
+  return /\b(by|before|no later than|within)\b/i.test(String(text || ""));
+}
+
+async function fetchJsonWithTimeout(url, options = {}) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), ORACLE_HTTP_TIMEOUT_MS);
+  try {
+    const response = await fetch(url, {
+      ...options,
+      headers: {
+        accept: "application/json,text/plain,*/*",
+        "user-agent": "AuraPredictOracle/1.0",
+        ...(options.headers || {})
+      },
+      signal: controller.signal
+    });
+    const contentType = String(response.headers.get("content-type") || "");
+    const body = contentType.includes("application/json")
+      ? await response.json().catch(() => null)
+      : await response.text().catch(() => "");
+    return { response, body };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+function baseOracleProposal(market, adapter) {
+  return {
+    id: `${market.id}-${adapter}-${Date.now()}`,
+    version: 1,
+    marketId: market.id,
+    adapter,
+    status: "needs_review",
+    outcome: "NEEDS_REVIEW",
+    outcomeValue: Outcome.Unresolved,
+    confidence: 0,
+    observedValue: "",
+    comparator: "",
+    targetValue: "",
+    observedAt: nowIso(),
+    sourceUrls: marketSourceUrls(market),
+    summary: "",
+    checks: [],
+    generatedAt: nowIso(),
+    dataHash: ZERO_HASH
+  };
+}
+
+function finalizeOracleProposal(proposal) {
+  const outcome = outcomeName(proposal.outcome);
+  proposal.outcome = outcome === "INSUFFICIENT_EVIDENCE" ? "NEEDS_REVIEW" : outcome;
+  proposal.outcomeValue = outcomeValue(proposal.outcome);
+  proposal.status = proposal.outcomeValue === Outcome.Unresolved ? proposal.status || "needs_review" : "ready";
+  proposal.dataHash = receiptHashFor(proposal);
+  oracleState()[String(proposal.marketId)] = proposal;
+  return proposal;
+}
+
+async function buildCancelOracleProposal(market) {
+  const proposal = baseOracleProposal(market, "liquidity-rule");
+  const yesPool = toBigint(market.yesPool);
+  const noPool = toBigint(market.noPool);
+  proposal.outcome = "CANCEL";
+  proposal.confidence = 100;
+  proposal.observedValue = `YES pool ${formatUnits(yesPool, marketAssetDecimals(market))} / NO pool ${formatUnits(noPool, marketAssetDecimals(market))} ${market.settlementSymbol || "USDC"}`;
+  proposal.summary =
+    yesPool === 0n && noPool === 0n
+      ? "No positions were placed. The fair contract path is Cancel to release the creator bond."
+      : "Only one outcome has funded positions. YES/NO settlement is disabled; use Cancel to refund the funded side.";
+  proposal.checks = ["YES/NO resolution requires funded positions on both outcomes.", "Cancel/refund avoids awarding a side with no opposing pool."];
+  return finalizeOracleProposal(proposal);
+}
+
+async function buildCryptoOracleProposal(market, config) {
+  const proposal = baseOracleProposal(market, "crypto-price");
+  proposal.comparator = config.comparator;
+  proposal.targetValue = String(config.target);
+  proposal.sourceUrls = [
+    `https://www.binance.com/en/trade/${config.binance.replace("USDT", "_USDT")}`,
+    `https://api.binance.com/api/v3/klines?symbol=${config.binance}&interval=1m`,
+    `https://www.coingecko.com/en/coins/${config.coingecko}`
+  ];
+
+  const resolutionTime = marketResolutionTime(market);
+  const now = Math.floor(Date.now() / 1000);
+  if (now < resolutionTime) {
+    proposal.status = "not_ready";
+    proposal.summary = "Oracle cannot evaluate this market before the resolution timestamp.";
+    return finalizeOracleProposal(proposal);
+  }
+
+  const startMs = resolutionTime * 1000;
+  const binanceUrl = `https://api.binance.com/api/v3/klines?symbol=${encodeURIComponent(config.binance)}&interval=1m&startTime=${startMs}&endTime=${startMs + 60_000}&limit=1`;
+  try {
+    const { response, body } = await fetchJsonWithTimeout(binanceUrl);
+    if (response.ok && Array.isArray(body) && body[0]) {
+      const row = body[0];
+      const observed = Number(row[4]);
+      if (Number.isFinite(observed)) {
+        const matched = compareObservedValue(observed, config.comparator, config.target);
+        proposal.outcome = matched ? "YES" : "NO";
+        proposal.confidence = 92;
+        proposal.observedValue = `${config.symbol}/USDT close ${observed}`;
+        proposal.observedAt = new Date(Number(row[0])).toISOString();
+        proposal.summary = `${config.symbol}/USDT Binance 1-minute close was ${observed}. Rule target is ${config.comparator.toUpperCase()} ${config.target}.`;
+        proposal.checks = ["Binance 1-minute kline matched the requested resolution minute.", "If the market requires another source, review manually before final settlement."];
+        return finalizeOracleProposal(proposal);
+      }
+    }
+  } catch (error) {
+    proposal.checks.push(`Binance lookup failed: ${error instanceof Error ? error.message : String(error)}`);
+  }
+
+  if (Math.abs(now - resolutionTime) <= 10 * 60) {
+    try {
+      const coinGeckoUrl = `https://api.coingecko.com/api/v3/simple/price?ids=${encodeURIComponent(config.coingecko)}&vs_currencies=usd`;
+      const { response, body } = await fetchJsonWithTimeout(coinGeckoUrl);
+      const observed = Number(body?.[config.coingecko]?.usd);
+      if (response.ok && Number.isFinite(observed)) {
+        const matched = compareObservedValue(observed, config.comparator, config.target);
+        proposal.outcome = matched ? "YES" : "NO";
+        proposal.confidence = 65;
+        proposal.observedValue = `${config.symbol}/USD current ${observed}`;
+        proposal.observedAt = nowIso();
+        proposal.summary = `Binance minute data was unavailable, so the oracle used a near-time CoinGecko spot price of ${observed}.`;
+        proposal.checks.push("CoinGecko simple price is near-time, not exact-minute historical data.");
+        return finalizeOracleProposal(proposal);
+      }
+    } catch (error) {
+      proposal.checks.push(`CoinGecko fallback failed: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  proposal.status = "needs_review";
+  proposal.summary = "Oracle could not retrieve an exact price for the requested timestamp. Send this market to manual review.";
+  return finalizeOracleProposal(proposal);
+}
+
+async function buildMacroOracleProposal(market, config) {
+  const proposal = baseOracleProposal(market, "macro-yahoo-chart");
+  proposal.comparator = config.comparator;
+  proposal.targetValue = String(config.target);
+  proposal.sourceUrls = [`https://finance.yahoo.com/quote/${encodeURIComponent(config.yahoo)}`];
+
+  const resolutionTime = marketResolutionTime(market);
+  const now = Math.floor(Date.now() / 1000);
+  if (now < resolutionTime) {
+    proposal.status = "not_ready";
+    proposal.summary = "Oracle cannot evaluate this market before the resolution timestamp.";
+    return finalizeOracleProposal(proposal);
+  }
+
+  const yahooUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(config.yahoo)}?period1=${Math.max(0, resolutionTime - 600)}&period2=${resolutionTime + 900}&interval=1m`;
+  try {
+    const { response, body } = await fetchJsonWithTimeout(yahooUrl);
+    const result = body?.chart?.result?.[0];
+    const timestamps = result?.timestamp || [];
+    const closes = result?.indicators?.quote?.[0]?.close || [];
+    let bestIndex = -1;
+    let bestDistance = Number.POSITIVE_INFINITY;
+    timestamps.forEach((timestamp, index) => {
+      const price = Number(closes[index]);
+      const distance = Math.abs(Number(timestamp) - resolutionTime);
+      if (Number.isFinite(price) && distance < bestDistance) {
+        bestDistance = distance;
+        bestIndex = index;
+      }
+    });
+
+    if (response.ok && bestIndex >= 0 && bestDistance <= 15 * 60) {
+      const observed = Number(closes[bestIndex]);
+      const matched = compareObservedValue(observed, config.comparator, config.target);
+      proposal.outcome = matched ? "YES" : "NO";
+      proposal.confidence = bestDistance <= 90 ? 78 : 68;
+      proposal.observedValue = `${config.label} ${observed} ${config.unit}`;
+      proposal.observedAt = new Date(Number(timestamps[bestIndex]) * 1000).toISOString();
+      proposal.summary = `${config.label} was ${observed} ${config.unit} near the requested timestamp. Rule target is ${config.comparator.toUpperCase()} ${config.target}.`;
+      proposal.checks = ["Yahoo chart data is used as an offchain proposal source.", "Review manually if the market specified a different primary source."];
+      return finalizeOracleProposal(proposal);
+    }
+  } catch (error) {
+    proposal.checks.push(`Yahoo chart lookup failed: ${error instanceof Error ? error.message : String(error)}`);
+  }
+
+  proposal.status = "needs_review";
+  proposal.summary = `${config.label} data was not available with enough timestamp precision. Manual review is required.`;
+  return finalizeOracleProposal(proposal);
+}
+
+async function buildHealthOracleProposal(market, config) {
+  const proposal = baseOracleProposal(market, "status-health");
+  proposal.sourceUrls = [config.url];
+  const text = oracleTextForMarket(market);
+
+  try {
+    const { response, body } = await fetchJsonWithTimeout(config.url);
+    const wantsOkTrue = /ok["'\s:]*true|ok\s+true|return\s+ok/i.test(text);
+    const wantsHttpOk = /200|http\s+ok|status\s+ok/i.test(text);
+    const jsonOk = typeof body === "object" && body !== null && body.ok === true;
+    const matched = wantsOkTrue ? response.ok && jsonOk : wantsHttpOk ? response.ok : response.ok && (jsonOk || !wantsOkTrue);
+    proposal.outcome = matched ? "YES" : "NO";
+    proposal.confidence = wantsOkTrue || wantsHttpOk ? 96 : 88;
+    proposal.observedValue = `HTTP ${response.status}${typeof body === "object" && body !== null ? `, ok=${String(body.ok)}` : ""}`;
+    proposal.observedAt = nowIso();
+    proposal.summary = `${sourceHostLabel(config.url)} returned ${proposal.observedValue}.`;
+    proposal.checks = ["Health/API status can be checked automatically.", "If the rule requires a historical window, review the endpoint logs manually."];
+    return finalizeOracleProposal(proposal);
+  } catch (error) {
+    proposal.status = "needs_review";
+    proposal.summary = `Oracle could not reach ${config.url}: ${error instanceof Error ? error.message : String(error)}`;
+    return finalizeOracleProposal(proposal);
+  }
+}
+
+async function buildStatusPageOracleProposal(market, config) {
+  const proposal = baseOracleProposal(market, "status-page");
+  proposal.sourceUrls = [config.sourceUrl, config.url];
+  const text = oracleTextForMarket(market);
+
+  try {
+    const { response, body } = await fetchJsonWithTimeout(config.url);
+    const incidents = Array.isArray(body?.incidents) ? body.incidents : [];
+    const activeMajor = incidents.filter((incident) => String(incident.impact || "").toLowerCase() === "major" && String(incident.status || "").toLowerCase() !== "resolved");
+    if (hasByDeadlineLanguage(text) && !text.includes("currently")) {
+      proposal.status = "needs_review";
+      proposal.confidence = 40;
+      proposal.observedValue = `${incidents.length} current/recent incident rows`;
+      proposal.summary = `${config.provider} summary API does not provide a complete historical by-deadline record. Use this as a lead, not final proof.`;
+      proposal.checks = activeMajor.map((incident) => `${incident.name || "Incident"} (${incident.status || "unknown"})`).slice(0, 4);
+      return finalizeOracleProposal(proposal);
+    }
+
+    proposal.outcome = activeMajor.length > 0 ? "YES" : "NO";
+    proposal.confidence = response.ok ? 86 : 55;
+    proposal.observedValue = `${activeMajor.length} active major incident(s)`;
+    proposal.observedAt = nowIso();
+    proposal.summary = `${config.provider} currently reports ${proposal.observedValue}.`;
+    proposal.checks = activeMajor.map((incident) => `${incident.name || "Incident"} (${incident.status || "unknown"})`).slice(0, 4);
+    if (proposal.checks.length === 0) proposal.checks = ["No active major incident found in the public status summary."];
+    return finalizeOracleProposal(proposal);
+  } catch (error) {
+    proposal.status = "needs_review";
+    proposal.summary = `Oracle could not read ${config.provider}: ${error instanceof Error ? error.message : String(error)}`;
+    return finalizeOracleProposal(proposal);
+  }
+}
+
+async function buildUnsupportedOracleProposal(market, adapter, summary) {
+  const proposal = baseOracleProposal(market, adapter);
+  proposal.status = "unsupported";
+  proposal.confidence = 0;
+  proposal.summary = summary;
+  proposal.checks = ["Use Aura Agent and authority/committee review for this market type."];
+  return finalizeOracleProposal(proposal);
+}
+
+async function buildOracleProposal(marketId, options = {}) {
+  const market = state.markets[String(marketId)];
+  if (!market) throw new Error("Market not found.");
+  const now = Math.floor(Date.now() / 1000);
+  if (market.outcome !== Outcome.Unresolved && !options.force) {
+    return buildUnsupportedOracleProposal(market, "read-only", "Market is already finalized. Oracle proposal is read-only.");
+  }
+  if (marketResolutionTime(market) > now && !options.force) {
+    const proposal = baseOracleProposal(market, "not-ready");
+    proposal.status = "not_ready";
+    proposal.summary = "Oracle proposal is available after the market resolution time.";
+    return finalizeOracleProposal(proposal);
+  }
+  if (toBigint(market.yesPool) === 0n || toBigint(market.noPool) === 0n) {
+    return buildCancelOracleProposal(market);
+  }
+
+  const healthConfig = detectHealthOracleMarket(market);
+  if (healthConfig) return buildHealthOracleProposal(market, healthConfig);
+
+  const cryptoConfig = detectCryptoOracleMarket(market);
+  if (cryptoConfig) return buildCryptoOracleProposal(market, cryptoConfig);
+
+  const macroConfig = detectMacroOracleMarket(market);
+  if (macroConfig) return buildMacroOracleProposal(market, macroConfig);
+
+  const statusConfig = detectStatusOracleMarket(market);
+  if (statusConfig) return buildStatusPageOracleProposal(market, statusConfig);
+
+  if (String(market.category || "").toLowerCase() === "sports") {
+    return buildUnsupportedOracleProposal(
+      market,
+      "sports-manual",
+      "Sports adapter is not enabled yet. Use the official league/source link and authority review."
+    );
+  }
+
+  return buildUnsupportedOracleProposal(
+    market,
+    "manual-review",
+    "No deterministic oracle adapter matched this market. Use Aura Agent, evidence, and authority/committee review."
+  );
+}
+
+async function runAutoOracleSweep() {
+  const now = Math.floor(Date.now() / 1000);
+  const candidates = Object.values(state.markets)
+    .filter((market) => market.outcome === Outcome.Unresolved)
+    .filter((market) => marketResolutionTime(market) > 0 && marketResolutionTime(market) <= now)
+    .filter((market) => !oracleState()[String(market.id)])
+    .slice(0, 5);
+
+  for (const market of candidates) {
+    try {
+      await buildOracleProposal(market.id);
+    } catch (error) {
+      oracleState()[String(market.id)] = {
+        marketId: market.id,
+        adapter: "error",
+        status: "error",
+        outcome: "NEEDS_REVIEW",
+        outcomeValue: Outcome.Unresolved,
+        confidence: 0,
+        generatedAt: nowIso(),
+        summary: error instanceof Error ? error.message : String(error),
+        sourceUrls: marketSourceUrls(market),
+        checks: []
+      };
+    }
+  }
 }
 
 function extractJsonObject(text) {
@@ -1796,6 +2280,9 @@ async function syncOnce() {
 
     await refreshContractState();
     computeStats();
+    if (ORACLE_AUTO_RUN) {
+      await runAutoOracleSweep();
+    }
     if (RESOLUTION_AUTO_RUN) {
       await runAutoResolutionSweep();
     }
@@ -1978,6 +2465,29 @@ async function route(req, res) {
         });
         const proposal = body.propose === true ? await proposeResolutionOnchain(receipt) : { skipped: "Proposal not requested." };
         json(res, 200, { receipt, proposal, updatedAt: nowIso() });
+        return;
+      }
+
+      notFound(res);
+      return;
+    }
+
+    if (segments[0] === "api" && segments[1] === "oracles") {
+      const marketId = Number(segments[2]);
+      if (!Number.isInteger(marketId) || marketId < 0) return json(res, 400, { error: "Invalid market id." });
+
+      if (req.method === "GET" && segments.length === 3) {
+        const proposal = oracleState()[String(marketId)] ?? null;
+        json(res, 200, { proposal, updatedAt: state.updatedAt });
+        return;
+      }
+
+      if (req.method === "POST" && segments[3] === "run") {
+        const body = await readRequestBody(req);
+        const force = body.force === true && adminAuthorized(req);
+        const proposal = await buildOracleProposal(marketId, { force });
+        await saveState();
+        json(res, 200, { proposal, updatedAt: nowIso() });
         return;
       }
 

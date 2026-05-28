@@ -3183,7 +3183,7 @@ textarea {
 .resolution-report-grid {
   display: grid;
   gap: 10px;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
 }
 
 .resolution-report-grid article,
@@ -3244,6 +3244,7 @@ textarea {
 
 .resolution-button-grid .action-refresh-aura,
 .resolution-button-grid .action-use-ai,
+.resolution-button-grid .action-use-oracle,
 .resolution-button-grid .action-propose-cancel,
 .resolution-button-grid .action-dispute {
   grid-column: 1 / -1;
@@ -3269,6 +3270,12 @@ textarea {
   background: #e8f8ff;
   border-color: #bce8f8;
   color: #08768a;
+}
+
+.resolution-actions .action-use-oracle {
+  background: #f4efff;
+  border-color: #d8c9ff;
+  color: #5f3dc4;
 }
 
 .resolution-actions .action-propose-yes {
@@ -3305,6 +3312,12 @@ textarea {
   background: #d7f2fc;
   border-color: #8ed9f3;
   color: #065f73;
+}
+
+.resolution-actions .action-use-oracle:hover:not(:disabled) {
+  background: #eadfff;
+  border-color: #c5adff;
+  color: #4c2ba8;
 }
 
 .resolution-actions .action-propose-yes:hover:not(:disabled) {
@@ -6355,6 +6368,12 @@ label {
   color: #001325;
 }
 
+[data-theme="dark"] .resolution-actions .action-use-oracle {
+  background: linear-gradient(135deg, #b69cff, #7d5cff);
+  border-color: #b69cff;
+  color: #120a2a;
+}
+
 [data-theme="dark"] .resolution-actions .action-propose-yes {
   background: linear-gradient(135deg, #29d7a3, #2acb7f);
   border-color: #29d7a3;
@@ -6384,6 +6403,12 @@ label {
   background: linear-gradient(135deg, #71edff, #63c7ff);
   border-color: #71edff;
   color: #001325;
+}
+
+[data-theme="dark"] .resolution-actions .action-use-oracle:hover:not(:disabled) {
+  background: linear-gradient(135deg, #c8b5ff, #9678ff);
+  border-color: #c8b5ff;
+  color: #120a2a;
 }
 
 [data-theme="dark"] .resolution-actions .action-propose-yes:hover:not(:disabled) {

@@ -31,6 +31,8 @@ VITE_AURA_INDEXER_URL=http://127.0.0.1:8787
 AURA_INDEXER_PORT=8787
 AURA_INDEXER_HOST=127.0.0.1
 AURA_INDEXER_CHUNK_SIZE=9000
+AURA_ORACLE_AUTO_RUN=1
+AURA_ORACLE_HTTP_TIMEOUT_MS=8000
 ```
 
 The active production contract and its initial block are pinned in `indexer/server.mjs` for the V4 cutover. Arc RPC currently limits `eth_getLogs` ranges, so the default chunk size stays below that limit.
@@ -52,11 +54,33 @@ POST /api/social/markets/:id/evidence
 GET /api/social/profiles/:address
 POST /api/social/profiles/:address
 POST /api/social/profiles/:address/follows
+GET /api/oracles/:marketId
+POST /api/oracles/:marketId/run
 ```
 
 The frontend uses `VITE_AURA_INDEXER_URL` when available and falls back to direct Arc RPC reads if the indexer is offline.
 When `VITE_AURA_INDEXER_URL` points to a live web service, the frontend also persists comments, evidence, follows, and profile metadata through these social endpoints. Static GitHub Pages exports remain read-only, so the app falls back to browser-local storage for social actions on that setup.
 V4 settlement assets are restricted to 6-decimal stablecoins. If more than one asset such as USDC and EURC is used, `/api/stats` includes `assetBreakdown` so volume and live liquidity can be reported per token instead of merged into one generic total. The indexer does not perform FX conversion.
+
+## Objective Oracle Proposals
+
+Oracle proposal v1 is deterministic offchain assistance for markets with objective data sources. It does not spend AI quota and does not settle funds by itself. The resolver still signs the proposal/finalization transaction through the V4 contract.
+
+Supported adapters:
+
+- Liquidity rule: if YES pool or NO pool is empty, suggest `CANCEL` so the funded side can be refunded instead of awarding a one-sided market.
+- Crypto price: BTC, ETH, SOL, BNB, XRP, ADA, DOGE, AVAX, LINK through Binance 1-minute klines, with a near-time CoinGecko fallback only when exact minute data is unavailable.
+- Macro chart: gold and DXY through Yahoo chart data near the market's `resolutionTime`.
+- Health/status API: HTTP 200, JSON `ok: true`, and public status summary endpoints for supported services.
+
+The proposal is stored under `state.oracleProposals` and exposed at:
+
+```text
+GET /api/oracles/:marketId
+POST /api/oracles/:marketId/run
+```
+
+Set `AURA_ORACLE_AUTO_RUN=0` to disable the automatic sweep for closed unresolved markets. Keep this enabled for public UX, because it gives reviewers a source-based suggestion before they choose a contract action.
 
 ## AI Resolution And V4 Receipts
 

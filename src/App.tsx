@@ -300,8 +300,31 @@ type AiResolutionReceipt = {
   evidence?: MarketEvidence[];
 };
 
+type OracleProposal = {
+  id?: string;
+  marketId: number;
+  adapter?: string;
+  status?: string;
+  outcome?: string;
+  outcomeValue?: number;
+  confidence?: number;
+  observedValue?: string;
+  comparator?: string;
+  targetValue?: string;
+  observedAt?: string;
+  sourceUrls?: string[];
+  summary?: string;
+  checks?: string[];
+  generatedAt?: string;
+  dataHash?: string;
+};
+
 type ResolutionReceiptResponse = {
   receipt?: AiResolutionReceipt | null;
+};
+
+type OracleProposalResponse = {
+  proposal?: OracleProposal | null;
 };
 
 type AuraBreakdown = {
@@ -1581,6 +1604,24 @@ function aiOutcomeFromReceipt(receipt?: AiResolutionReceipt | null) {
   return aiOutcomeFromText(receipt.consensus?.outcome || receipt.proposedOutcome);
 }
 
+function oracleOutcomeFromProposal(proposal?: OracleProposal | null) {
+  if (!proposal) return Outcome.Unresolved;
+  if (typeof proposal.outcomeValue === "number") {
+    if (proposal.outcomeValue === Outcome.Yes) return Outcome.Yes;
+    if (proposal.outcomeValue === Outcome.No) return Outcome.No;
+    if (proposal.outcomeValue === Outcome.Canceled) return Outcome.Canceled;
+  }
+  return aiOutcomeFromText(proposal.outcome);
+}
+
+function urlHostLabel(url: string) {
+  try {
+    return new URL(url).host.replace(/^www\./, "");
+  } catch {
+    return "source";
+  }
+}
+
 function isUnknownChainError(error: unknown) {
   const code = (error as { code?: number }).code;
   const message = errorMessage(error).toLowerCase();
@@ -1896,6 +1937,10 @@ function LandingPage() {
       text: "The contract supports creator review, required authority review, authority-only resolution, and an adapter-only path for a future oracle or committee."
     },
     {
+      title: "Objective oracle proposals",
+      text: "The indexer can check objective markets such as crypto prices, macro prices, and health/status endpoints, then show a separate Oracle suggestion before settlement."
+    },
+    {
       title: "Policy controls",
       text: "Operational controls can pause new activity, allow approved creators, or block new positions without preventing existing markets from settling."
     },
@@ -1952,6 +1997,7 @@ function LandingPage() {
     "Wallet UI shows USDC and EURC balances with copy-address, faucet, and LI.FI swap access from markets or the user's profile",
     "The app checks selected-token balance and allowance before create, stake, or dispute transactions",
     "Aura Agent drafts clearer markets, checks similar questions, and prepares rules with source links",
+    "Oracle proposal checks objective data sources such as Binance, Yahoo chart data, and health/status endpoints without spending AI quota",
     "After the rule timestamp, Aura displays a suggested outcome and confidence in Resolution actions",
     "A saved AI receipt can be viewed without running a new AI request; Ask or Refresh requests a new review",
     "The settlement report explains what AI suggested, what the resolver proposed, whether a dispute exists, and what the final reviewer should do next",
@@ -2093,7 +2139,7 @@ function LandingPage() {
           </h1>
           <p>
             Trade YES/NO markets with Arc testnet stablecoins while the live AuraPredict indexer keeps market
-            history, volume, participants, leaderboards, comments, evidence, AI resolution receipts,
+            history, volume, participants, leaderboards, comments, evidence, AI resolution receipts, oracle proposals,
             and profile reputation fast enough for public forecasting.
           </p>
           <div className="landing-hero-ledger" aria-label="AuraPredict live indexer metrics">
@@ -2172,8 +2218,8 @@ function LandingPage() {
           <p>
             The app keeps the trading surface simple while making evidence, profiles, and leaderboard
             performance visible enough for social forecasting. AuraPredict combines onchain YES/NO
-            staking, an indexer-backed data layer, AI-assisted market quality checks, and AI resolution
-            receipts. The current contract is deployed on Arc Testnet with onchain source/rule terms, resolution timing, configurable settlement assets, signed-Aura hooks, and authority/oracle controls.
+            staking, an indexer-backed data layer, AI-assisted market quality checks, AI resolution
+            receipts, and objective oracle proposals. The current contract is deployed on Arc Testnet with onchain source/rule terms, resolution timing, configurable settlement assets, signed-Aura hooks, and authority/oracle controls.
           </p>
         </div>
         <div className="landing-feature-grid">
@@ -2368,7 +2414,11 @@ function LandingPage() {
           </article>
           <article>
             <span>Settlement report</span>
-            <strong>Resolution actions summarize AI suggestion, creator proposal, dispute/review state, YES/NO pools, volume, and timing so final reviewers know what they are signing.</strong>
+            <strong>Resolution actions summarize AI suggestion, Oracle suggestion, creator proposal, dispute/review state, YES/NO pools, volume, and timing so final reviewers know what they are signing.</strong>
+          </article>
+          <article>
+            <span>Oracle proposal</span>
+            <strong>Objective adapters can fetch crypto price, macro chart, and health/status API data, then display YES/NO/Cancel guidance without spending AI quota.</strong>
           </article>
           <article>
             <span>AI resolution</span>
@@ -2655,6 +2705,8 @@ export default function App() {
   const [duplicateAcknowledged, setDuplicateAcknowledged] = useState(false);
   const [aiResolutionReports, setAiResolutionReports] = useState<Record<number, AiResolutionReport>>({});
   const [aiResolutionReceipts, setAiResolutionReceipts] = useState<Record<string, AiResolutionReceipt | null>>({});
+  const [oracleProposals, setOracleProposals] = useState<Record<string, OracleProposal | null>>({});
+  const [oracleBusyByMarket, setOracleBusyByMarket] = useState<Record<number, boolean>>({});
   const [auraResolutionStatusByMarket, setAuraResolutionStatusByMarket] = useState<Record<number, "idle" | "ready" | "failed">>({});
   const [mismatchConfirm, setMismatchConfirm] = useState<MismatchConfirmState | null>(null);
   const [focusResolutionMarketId, setFocusResolutionMarketId] = useState<number | null>(null);
@@ -3625,6 +3677,10 @@ export default function App() {
     fetchIndexerJson<ResolutionReceiptResponse>(`/api/resolutions/${selectedMarketId}`).then((response) => {
       if (canceled || !response || !("receipt" in response)) return;
       setAiResolutionReceipts((current) => ({ ...current, [String(selectedMarketId)]: response.receipt ?? null }));
+    });
+    fetchIndexerJson<OracleProposalResponse>(`/api/oracles/${selectedMarketId}`).then((response) => {
+      if (canceled || !response || !("proposal" in response)) return;
+      setOracleProposals((current) => ({ ...current, [String(selectedMarketId)]: response.proposal ?? null }));
     });
     return () => {
       canceled = true;
@@ -4653,6 +4709,33 @@ export default function App() {
       }
     },
     [marketEvidence, resolutionUnlockTime, setNotice]
+  );
+
+  const requestOracleProposal = useCallback(
+    async (market: MarketView) => {
+      const effectiveCloseTime = resolutionUnlockTime(market);
+      if (Math.floor(Date.now() / 1000) < effectiveCloseTime) {
+        setNotice("Oracle proposal is available only after the market resolution time.");
+        return;
+      }
+      setOracleBusyByMarket((current) => ({ ...current, [market.id]: true }));
+      try {
+        const response = await postIndexerJson<OracleProposalResponse>(`/api/oracles/${market.id}/run`, {});
+        if (!response?.proposal) throw new Error("Oracle did not return a proposal.");
+        setOracleProposals((current) => ({ ...current, [String(market.id)]: response.proposal ?? null }));
+        const outcome = oracleOutcomeFromProposal(response.proposal);
+        setNotice(
+          outcome === Outcome.Unresolved
+            ? "Oracle could not make a deterministic proposal. Use Aura or authority review."
+            : `Oracle proposal ready: ${outcomeLabel(outcome)}.`
+        );
+      } catch (error) {
+        setNotice(`Oracle unavailable: ${compactErrorMessage(error)}.`);
+      } finally {
+        setOracleBusyByMarket((current) => ({ ...current, [market.id]: false }));
+      }
+    },
+    [resolutionUnlockTime, setNotice]
   );
 
   const setThemeMode = useCallback((nextTheme: ThemeMode) => {
@@ -7323,6 +7406,14 @@ export default function App() {
       isMarketActionPending("finalize-dispute", selectedMarket.id);
     const reportAiSuggestedOutcome = aiOutcomeFromText(aiResolutionReport?.suggestedOutcome);
     const receiptAiSuggestedOutcome = aiOutcomeFromReceipt(aiResolutionReceipt);
+    const oracleProposal = oracleProposals[String(selectedMarket.id)];
+    const oracleSuggestedOutcome = oracleOutcomeFromProposal(oracleProposal);
+    const oracleCanPropose = oracleSuggestedOutcome === Outcome.Yes || oracleSuggestedOutcome === Outcome.No;
+    const oracleCanCancel = oracleSuggestedOutcome === Outcome.Canceled;
+    const oracleBusy = Boolean(oracleBusyByMarket[selectedMarket.id]);
+    const oracleSuggestionBlockedByPool =
+      (oracleSuggestedOutcome === Outcome.Yes && !canProposeYes) ||
+      (oracleSuggestedOutcome === Outcome.No && !canProposeNo);
     const selectedAiSuggestedOutcome =
       reportAiSuggestedOutcome === Outcome.Yes || reportAiSuggestedOutcome === Outcome.No
         ? reportAiSuggestedOutcome
@@ -7397,6 +7488,22 @@ export default function App() {
       : aiResolutionReport || aiResolutionReceipt
       ? displayedAgentSummary
       : "No saved AI result yet. Ask Aura before proposing a YES/NO result.";
+    const oracleDecisionLabel =
+      oracleSuggestedOutcome !== Outcome.Unresolved
+        ? outcomeLabel(oracleSuggestedOutcome)
+        : oracleProposal?.status
+        ? String(oracleProposal.status).replace(/_/g, " ")
+        : "No oracle check yet";
+    const oracleDecisionDetail =
+      oracleProposal
+        ? [
+            oracleProposal.summary || "Oracle returned a saved proposal.",
+            oracleProposal.observedValue ? `Observed: ${oracleProposal.observedValue}.` : "",
+            typeof oracleProposal.confidence === "number" ? `${oracleProposal.confidence}% confidence.` : ""
+          ]
+            .filter(Boolean)
+            .join(" ")
+        : "Run Oracle for objective markets such as crypto price, macro price, or health/status endpoints.";
     const proposalDecisionLabel =
       selectedMarket.proposedAt > 0 ? outcomeLabel(selectedMarket.proposedOutcome) : "No proposal yet";
     const proposalDecisionDetail =
@@ -7642,6 +7749,16 @@ export default function App() {
                       View AI details
                     </button>
                   )}
+                  {!selectedMarketIsSettled && !awaitingResolutionTime && !cancelOnlyResolution && (
+                    <button
+                      className="secondary"
+                      disabled={oracleBusy}
+                      onClick={() => requestOracleProposal(selectedMarket)}
+                      type="button"
+                    >
+                      {oracleBusy ? "Checking Oracle..." : oracleProposal ? "Refresh Oracle" : "Check Oracle"}
+                    </button>
+                  )}
                 </div>
 
                 <div className="resolution-report-grid">
@@ -7649,6 +7766,11 @@ export default function App() {
                     <span>AI suggestion</span>
                     <strong>{aiDecisionLabel}</strong>
                     <small>{aiDecisionDetail}</small>
+                  </article>
+                  <article>
+                    <span>Oracle suggestion</span>
+                    <strong>{oracleDecisionLabel}</strong>
+                    <small>{oracleDecisionDetail}</small>
                   </article>
                   <article>
                     <span>Creator / resolver proposal</span>
@@ -7746,6 +7868,26 @@ export default function App() {
                             Use AI: {outcomeLabel(selectedAiSuggestedOutcome)}
                           </button>
                         )}
+                        {!cancelOnlyResolution && oracleCanPropose && (
+                          <button
+                            className="secondary action-use-oracle"
+                            onClick={() => resolveMarket(selectedMarket.id, oracleSuggestedOutcome as Outcome.Yes | Outcome.No)}
+                            disabled={resolutionActionBusy || oracleSuggestionBlockedByPool}
+                            type="button"
+                          >
+                            Use Oracle: {outcomeLabel(oracleSuggestedOutcome)}
+                          </button>
+                        )}
+                        {!cancelOnlyResolution && oracleCanCancel && (
+                          <button
+                            className="secondary action-use-oracle"
+                            disabled={resolutionActionBusy}
+                            onClick={() => cancelMarket(selectedMarket.id)}
+                            type="button"
+                          >
+                            Use Oracle: Cancel
+                          </button>
+                        )}
                         <button className="secondary action-propose-yes" onClick={() => resolveMarket(selectedMarket.id, Outcome.Yes)} disabled={resolutionActionBusy || !canProposeYes || !canResolveAfterAura(selectedMarket.id)}>
                           Propose YES
                         </button>
@@ -7819,6 +7961,11 @@ export default function App() {
                           : selectedAiCanPropose
                           ? `Aura suggests ${outcomeLabel(selectedAiSuggestedOutcome)}. Use the banner above to read the analysis.`
                           : resolveAuraStatusLabel(selectedMarket)}
+                      </small>
+                    )}
+                    {canPropose && oracleProposal && (
+                      <small>
+                        Oracle suggests {oracleDecisionLabel}. {oracleProposal.summary || "Use Oracle only when the adapter matches the market rule."}
                       </small>
                     )}
                     {finalizeHint && <small>{finalizeHint}</small>}
@@ -8132,6 +8279,44 @@ export default function App() {
                         </strong>
                         {review.reasoning && <p>{review.reasoning}</p>}
                         {review.risks && review.risks.length > 0 && <small>{review.risks.slice(0, 2).join(" / ")}</small>}
+                      </article>
+                    ))}
+                  </div>
+                )}
+              </section>
+            )}
+
+            {oracleProposal && (
+              <section className="agent-panel oracle-panel">
+                <div className="panel-heading">
+                  <div>
+                    <span className="section-label">Oracle proposal</span>
+                    <h3>{oracleProposal.adapter ? oracleProposal.adapter.replace(/-/g, " ") : "Objective data check"}</h3>
+                  </div>
+                  <span className="agent-confidence">{oracleProposal.confidence ?? 0}% confidence</span>
+                </div>
+                <div className="agent-result">
+                  <span>Status</span>
+                  <strong>{oracleDecisionLabel}</strong>
+                  {oracleProposal.summary && <p>{oracleProposal.summary}</p>}
+                  {oracleProposal.observedValue && <p>Observed: {oracleProposal.observedValue}</p>}
+                  {oracleProposal.dataHash && oracleProposal.dataHash !== ZERO_HASH && <p>Oracle hash {shortAddress(oracleProposal.dataHash)}</p>}
+                </div>
+                {oracleProposal.checks && oracleProposal.checks.length > 0 && (
+                  <div className="agent-checklist">
+                    {oracleProposal.checks.slice(0, 4).map((item) => (
+                      <span key={item}>{item}</span>
+                    ))}
+                  </div>
+                )}
+                {oracleProposal.sourceUrls && oracleProposal.sourceUrls.length > 0 && (
+                  <div className="agent-evidence-list">
+                    {oracleProposal.sourceUrls.slice(0, 4).map((url) => (
+                      <article key={url}>
+                        <strong>{urlHostLabel(url)}</strong>
+                        <a href={url} target="_blank" rel="noreferrer">
+                          Open source
+                        </a>
                       </article>
                     ))}
                   </div>
