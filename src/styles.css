@@ -3245,8 +3245,10 @@ textarea {
 .resolution-button-grid .action-refresh-aura,
 .resolution-button-grid .action-use-ai,
 .resolution-button-grid .action-use-oracle,
+.resolution-button-grid .action-withdraw-pending,
 .resolution-button-grid .action-propose-cancel,
-.resolution-button-grid .action-dispute {
+.resolution-button-grid .action-dispute,
+.resolution-button-grid .pending-withdraw-note {
   grid-column: 1 / -1;
 }
 
@@ -3261,86 +3263,110 @@ textarea {
 }
 
 .resolution-actions .action-refresh-aura {
-  background: #f5f8ff;
-  border-color: #cfe0ff;
-  color: #2f67d8;
+  background: #e6f0ff;
+  border-color: #8bb7ff;
+  color: #1549a8;
 }
 
 .resolution-actions .action-use-ai {
-  background: #e8f8ff;
-  border-color: #bce8f8;
-  color: #08768a;
+  background: linear-gradient(135deg, #20d9f8, #28b9f2);
+  border-color: #159fcf;
+  color: #041827;
 }
 
 .resolution-actions .action-use-oracle {
-  background: #f4efff;
-  border-color: #d8c9ff;
-  color: #5f3dc4;
+  background: linear-gradient(135deg, #9d7cff, #7655f6);
+  border-color: #6440d8;
+  color: #ffffff;
 }
 
 .resolution-actions .action-propose-yes {
-  background: #edfbf6;
-  border-color: #caeee1;
-  color: #087f5b;
+  background: linear-gradient(135deg, #25d69d, #20bd7f);
+  border-color: #10996a;
+  color: #031b14;
 }
 
 .resolution-actions .action-propose-no {
-  background: #fff2f4;
-  border-color: #ffd0d6;
-  color: #c92a3b;
+  background: linear-gradient(135deg, #ff6b8a, #ff4f68);
+  border-color: #d92d49;
+  color: #24060d;
 }
 
 .resolution-actions .action-propose-cancel {
-  background: #fffaf0;
-  border-color: #f0dca8;
-  color: #9a6200;
+  background: #fff2d6;
+  border-color: #e5a92f;
+  color: #754500;
 }
 
 .resolution-actions .action-dispute {
-  background: #fffaf0;
-  border-color: #f0dca8;
-  color: #9a6200;
+  background: #fff2d6;
+  border-color: #e5a92f;
+  color: #754500;
+}
+
+.resolution-actions .action-withdraw-pending {
+  background: linear-gradient(135deg, #12cbe8, #1597e8);
+  border-color: #0f85c9;
+  color: #021827;
 }
 
 .resolution-actions .action-refresh-aura:hover:not(:disabled) {
-  background: #eaf2ff;
-  border-color: #b8d1ff;
-  color: #2155bd;
+  background: #d6e7ff;
+  border-color: #6fa6ff;
+  color: #0e3b8c;
 }
 
 .resolution-actions .action-use-ai:hover:not(:disabled) {
-  background: #d7f2fc;
-  border-color: #8ed9f3;
-  color: #065f73;
+  background: linear-gradient(135deg, #5be8ff, #48c6fb);
+  border-color: #118ec0;
+  color: #041827;
 }
 
 .resolution-actions .action-use-oracle:hover:not(:disabled) {
-  background: #eadfff;
-  border-color: #c5adff;
-  color: #4c2ba8;
+  background: linear-gradient(135deg, #b49cff, #8d70ff);
+  border-color: #6b4ce2;
+  color: #ffffff;
 }
 
 .resolution-actions .action-propose-yes:hover:not(:disabled) {
-  background: #d8f5e9;
-  border-color: #9fdfc9;
-  color: #066748;
+  background: linear-gradient(135deg, #4ee3b5, #32cf8d);
+  border-color: #0f9d6b;
+  color: #031b14;
 }
 
 .resolution-actions .action-propose-no:hover:not(:disabled) {
-  background: #ffe0e5;
-  border-color: #ffb7c2;
-  color: #a82134;
+  background: linear-gradient(135deg, #ff8ca3, #ff6a80);
+  border-color: #de3652;
+  color: #24060d;
 }
 
 .resolution-actions .action-propose-cancel:hover:not(:disabled),
 .resolution-actions .action-dispute:hover:not(:disabled) {
-  background: #fff1cf;
-  border-color: #e9c66c;
+  background: #ffe8b6;
+  border-color: #d99416;
   color: #754a00;
+}
+
+.resolution-actions .action-withdraw-pending:hover:not(:disabled) {
+  background: linear-gradient(135deg, #42dff4, #2da9f2);
+  border-color: #0d7fbd;
+  color: #021827;
 }
 
 .resolution-actions .secondary:disabled {
   opacity: 0.5;
+}
+
+.pending-withdraw-note {
+  background: #eef8ff;
+  border: 1px solid #acd8f7;
+  border-radius: 8px;
+  color: #16456b;
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 700;
+  line-height: 1.4;
+  padding: 10px 12px;
 }
 
 .side-rail {
@@ -6374,6 +6400,12 @@ label {
   color: #120a2a;
 }
 
+[data-theme="dark"] .resolution-actions .action-withdraw-pending {
+  background: linear-gradient(135deg, #4be7ff, #3eb8ff);
+  border-color: #4be7ff;
+  color: #001325;
+}
+
 [data-theme="dark"] .resolution-actions .action-propose-yes {
   background: linear-gradient(135deg, #29d7a3, #2acb7f);
   border-color: #29d7a3;
@@ -6411,6 +6443,12 @@ label {
   color: #120a2a;
 }
 
+[data-theme="dark"] .resolution-actions .action-withdraw-pending:hover:not(:disabled) {
+  background: linear-gradient(135deg, #71edff, #63c7ff);
+  border-color: #71edff;
+  color: #001325;
+}
+
 [data-theme="dark"] .resolution-actions .action-propose-yes:hover:not(:disabled) {
   background: linear-gradient(135deg, #4de4b6, #42d992);
   border-color: #4de4b6;
@@ -6428,6 +6466,12 @@ label {
   background: rgba(255, 188, 102, 0.18);
   border-color: rgba(255, 198, 116, 0.95);
   color: #ffe2ba;
+}
+
+[data-theme="dark"] .pending-withdraw-note {
+  background: rgba(18, 64, 96, 0.52);
+  border-color: rgba(75, 231, 255, 0.28);
+  color: #cfeeff;
 }
 
 [data-theme="dark"] .profile-hero-card {

@@ -7358,6 +7358,12 @@ export default function App() {
     const canClaim = account && selectedMarket.potentialPayout > 0n && !selectedMarket.claimed;
     const pendingTokenWithdrawal =
       selectedMarket.settlementToken ? pendingWithdrawalsByToken[selectedMarket.settlementToken.toLowerCase()] || 0n : 0n;
+    const selectedMarketCreatorBond = selectedMarket.termsCreatorBond ?? creatorBond;
+    const showCreatorBondContext =
+      pendingTokenWithdrawal > 0n &&
+      account &&
+      sameAddress(account, selectedMarket.creator) &&
+      selectedMarketCreatorBond > 0n;
     const selectedMarketBalance =
       isStablecoinContractVersion(contractVersion) && selectedMarket.settlementToken && isAddress(selectedMarket.settlementToken)
         ? walletTokenBalances[selectedMarket.settlementToken.toLowerCase()] ??
@@ -7994,9 +8000,16 @@ export default function App() {
                       </button>
                     )}
                     {pendingTokenWithdrawal > 0n && (
-                      <button className="secondary action-use-ai" onClick={() => withdrawPendingBalance(selectedMarket)}>
-                        Withdraw {formatMarketAmount(pendingTokenWithdrawal, selectedMarket)} {marketSymbol(selectedMarket)}
-                      </button>
+                      <>
+                        <button className="secondary action-withdraw-pending" onClick={() => withdrawPendingBalance(selectedMarket)}>
+                          Withdraw total pending {marketSymbol(selectedMarket)}: {formatMarketAmount(pendingTokenWithdrawal, selectedMarket)} {marketSymbol(selectedMarket)}
+                        </button>
+                        <small className="pending-withdraw-note">
+                          {showCreatorBondContext
+                            ? `This market's creator bond is ${formatMarketAmount(selectedMarketCreatorBond, selectedMarket)} ${marketSymbol(selectedMarket)}. The withdraw button claims your total pending ${marketSymbol(selectedMarket)} balance across all finalized markets.`
+                            : `This withdraw button claims your total pending ${marketSymbol(selectedMarket)} balance across finalized markets, not only this market.`}
+                        </small>
+                      </>
                     )}
                   </div>
                   <div className="resolution-meta">
