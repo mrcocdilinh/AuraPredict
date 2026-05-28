@@ -48,6 +48,17 @@ const RESOLUTION_MIN_CONFIDENCE = Number(process.env.AURA_RESOLUTION_MIN_CONFIDE
 const RESOLUTION_CONSENSUS_COUNT = Number(process.env.AURA_RESOLUTION_CONSENSUS_COUNT || 2);
 const ORACLE_AUTO_RUN = String(process.env.AURA_ORACLE_AUTO_RUN || "1").trim() !== "0";
 const ORACLE_HTTP_TIMEOUT_MS = Number(process.env.AURA_ORACLE_HTTP_TIMEOUT_MS || 8_000);
+const ORACLE_AUTO_PROPOSE = String(process.env.AURA_ORACLE_AUTO_PROPOSE || "").trim() === "1";
+const ORACLE_AUTO_PROPOSE_MIN_CONFIDENCE = Number(process.env.AURA_ORACLE_AUTO_PROPOSE_MIN_CONFIDENCE || 78);
+const ORACLE_AUTO_PROPOSE_ADAPTERS = new Set(
+  String(
+    process.env.AURA_ORACLE_AUTO_PROPOSE_ADAPTERS ||
+      "crypto-price,macro-yahoo-chart,status-health,status-page,liquidity-rule"
+  )
+    .split(",")
+    .map((adapter) => adapter.trim())
+    .filter(Boolean)
+);
 const USDC_DECIMALS = 18;
 const V3_SETTLEMENT_DECIMALS = 6;
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
@@ -1010,6 +1021,14 @@ function outcomeValue(outcome) {
   return Outcome.Unresolved;
 }
 
+function isBytes32(value) {
+  return /^0x[a-fA-F0-9]{64}$/.test(String(value || ""));
+}
+
+function isSignature(value) {
+  return /^0x[a-fA-F0-9]{130}$/.test(String(value || ""));
+}
+
 function marketResolutionTime(market) {
   return Number(market?.resolutionTime || market?.closeTime || 0);
 }
@@ -1594,7 +1613,7 @@ async function buildUnsupportedOracleProposal(market, adapter, summary) {
 
 function oracleEvidenceRowsForMarket(marketId) {
   const proposal = oracleState()[String(marketId)];
-  if (!proposal || proposal.status !== "ready") return [];
+  if (!proposal || !["ready", "proposed"].includes(String(proposal.status || ""))) return [];
   const outcome = outcomeName(proposal.outcome || proposal.outcomeValue);
   if (!["YES", "NO", "CANCEL"].includes(outcome)) return [];
   const sourceUrls = Array.isArray(proposal.sourceUrls) ? proposal.sourceUrls.filter(Boolean) : [];
@@ -1662,19 +1681,158 @@ async function buildOracleProposal(marketId, options = {}) {
   );
 }
 
+function signerCanProposeMarket(market) {
+  if (!resolverAccount) return { ok: false, reason: "AURA_RESOLVER_PRIVATE_KEY is not configured." };
+  const signer = resolverAccount.address.toLowerCase();
+  const owner = String(state.owner || "").toLowerCase();
+  const marketAuthority = String(market.authority || "").toLowerCase();
+  const resolver = String(market.resolver || "").toLowerCase();
+  const adapter = String(market.resolutionAdapter || "").toLowerCase();
+  const isAuthority = signer === owner || (marketAuthority && marketAuthority !== ZERO_ADDRESS.toLowerCase() && signer === marketAuthority);
+  const mode = Number(market.resolutionMode || 0);
+
+  if (mode === 3) {
+    if (isAuthority || (adapter && adapter !== ZERO_ADDRESS.toLowerCase() && signer === adapter)) return { ok: true };
+    return { ok: false, reason: "Resolver key is not the market authority or configured adapter." };
+  }
+
+  if (mode === 2) {
+    if (isAuthority) return { ok: true };
+    return { ok: false, reason: "This market requires authority-only resolution." };
+  }
+
+  if (signer === resolver || isAuthority) return { ok: true };
+  return { ok: false, reason: "Resolver key is not the market resolver or authority." };
+}
+
+function oracleAutoProposeDecision(proposal, market) {
+  if (!ORACLE_AUTO_PROPOSE) return { ok: false, reason: "AURA_ORACLE_AUTO_PROPOSE is not enabled." };
+  if (!walletClient || !resolverAccount) return { ok: false, reason: "AURA_RESOLVER_PRIVATE_KEY is not configured." };
+  if (!proposal || proposal.status !== "ready") return { ok: false, reason: "Oracle proposal is not ready." };
+  if (!market) return { ok: false, reason: "Market not found." };
+  if (market.outcome !== Outcome.Unresolved) return { ok: false, reason: "Market is already finalized." };
+  if (Number(market.proposedAt || 0) > 0) return { ok: false, reason: "Market already has a proposal." };
+  if (marketResolutionTime(market) > Math.floor(Date.now() / 1000)) return { ok: false, reason: "Resolution time has not passed." };
+  if (!ORACLE_AUTO_PROPOSE_ADAPTERS.has(String(proposal.adapter || ""))) {
+    return { ok: false, reason: `Oracle adapter ${proposal.adapter || "unknown"} is not enabled for auto-propose.` };
+  }
+
+  const outcome = outcomeValue(proposal.outcome || proposal.outcomeValue);
+  if (outcome === Outcome.Unresolved) return { ok: false, reason: "Oracle outcome is unresolved." };
+  const confidence = Number(proposal.confidence || 0);
+  if (!Number.isFinite(confidence) || confidence < ORACLE_AUTO_PROPOSE_MIN_CONFIDENCE) {
+    return { ok: false, reason: `Oracle confidence ${confidence}% is below ${ORACLE_AUTO_PROPOSE_MIN_CONFIDENCE}%.` };
+  }
+
+  const yesPool = toBigint(market.yesPool);
+  const noPool = toBigint(market.noPool);
+  if ((outcome === Outcome.Yes || outcome === Outcome.No) && (yesPool === 0n || noPool === 0n)) {
+    return { ok: false, reason: "YES/NO auto-propose requires funded positions on both outcomes." };
+  }
+  if (outcome === Outcome.Canceled && proposal.adapter !== "liquidity-rule") {
+    return { ok: false, reason: "Only liquidity-rule can auto-propose Cancel." };
+  }
+
+  const signerCheck = signerCanProposeMarket(market);
+  if (!signerCheck.ok) return signerCheck;
+  return { ok: true };
+}
+
+async function proposeOracleOnchain(proposal) {
+  const market = state.markets[String(proposal?.marketId)];
+  const decision = oracleAutoProposeDecision(proposal, market);
+  if (!decision.ok) {
+    if (proposal) {
+      proposal.autoProposeSkipped = decision.reason;
+      oracleState()[String(proposal.marketId)] = proposal;
+      await saveState();
+    }
+    return { skipped: decision.reason };
+  }
+
+  const outcome = outcomeValue(proposal.outcome || proposal.outcomeValue);
+  const yesPool = toBigint(market.yesPool);
+  const noPool = toBigint(market.noPool);
+  const noLiquidity = yesPool === 0n && noPool === 0n;
+  const receiptHash = isBytes32(proposal.dataHash) ? proposal.dataHash : ZERO_HASH;
+  const evidenceRows = oracleEvidenceRowsForMarket(proposal.marketId);
+  const evidenceHash = keccak256(stringToHex(JSON.stringify(evidenceRows.length > 0 ? evidenceRows : [proposal])));
+  const functionName =
+    isStablecoinContract() && noLiquidity && outcome === Outcome.Canceled
+      ? "cancelEmptyMarket"
+      : outcome === Outcome.Canceled
+        ? "cancel"
+        : "resolve";
+  const args = isV4Contract() || isV3Contract()
+    ? functionName === "cancelEmptyMarket"
+      ? [BigInt(proposal.marketId)]
+      : functionName === "cancel"
+        ? [BigInt(proposal.marketId), evidenceHash, receiptHash]
+        : [BigInt(proposal.marketId), outcome, evidenceHash, receiptHash]
+    : functionName === "cancel"
+      ? [BigInt(proposal.marketId)]
+      : [BigInt(proposal.marketId), outcome];
+
+  try {
+    const txHash = await walletClient.writeContract({
+      address: CONTRACT_ADDRESS,
+      abi: currentContractAbi(),
+      functionName,
+      args
+    });
+    proposal.txHash = txHash;
+    proposal.status = "proposed";
+    proposal.autoProposed = true;
+    proposal.autoProposedAt = nowIso();
+    proposal.autoProposedBy = resolverAccount.address;
+    proposal.autoProposeSkipped = "";
+    proposal.onchainFunction = functionName;
+    const proposedAt = Math.floor(Date.now() / 1000);
+    market.proposedOutcome = outcome;
+    market.proposedAt = proposedAt;
+    market.proposedBy = resolverAccount.address;
+    market.proposalEvidenceHash = evidenceHash;
+    market.aiReceiptHash = receiptHash;
+    market.disputeDeadline = functionName === "cancelEmptyMarket" ? 0 : proposedAt + Number(market.termsDisputeWindow || state.disputeWindow || 0);
+    market.updatedTxHash = txHash;
+    oracleState()[String(proposal.marketId)] = proposal;
+    await saveState();
+    return { txHash, functionName };
+  } catch (error) {
+    proposal.autoProposeSkipped = "";
+    proposal.autoProposeError = error instanceof Error ? error.message : String(error);
+    proposal.autoProposeFailedAt = nowIso();
+    oracleState()[String(proposal.marketId)] = proposal;
+    await saveState();
+    return { error: proposal.autoProposeError };
+  }
+}
+
 async function runAutoOracleSweep() {
   const now = Math.floor(Date.now() / 1000);
   const candidates = Object.values(state.markets)
     .filter((market) => market.outcome === Outcome.Unresolved)
     .filter((market) => marketResolutionTime(market) > 0 && marketResolutionTime(market) <= now)
-    .filter((market) => !oracleState()[String(market.id)])
+    .filter((market) => Number(market.proposedAt || 0) === 0)
+    .filter((market) => {
+      const proposal = oracleState()[String(market.id)];
+      if (!proposal) return true;
+      if (proposal.autoProposeError) return false;
+      return ["not_ready", "ready", "error"].includes(String(proposal.status || ""));
+    })
     .slice(0, 5);
 
   for (const market of candidates) {
     try {
-      await buildOracleProposal(market.id);
+      const existing = oracleState()[String(market.id)];
+      const proposal =
+        existing && existing.status === "ready" && outcomeValue(existing.outcome || existing.outcomeValue) !== Outcome.Unresolved
+          ? existing
+          : await buildOracleProposal(market.id);
+      await proposeOracleOnchain(proposal);
     } catch (error) {
       oracleState()[String(market.id)] = {
+        ...(oracleState()[String(market.id)] || {}),
         marketId: market.id,
         adapter: "error",
         status: "error",
@@ -2151,21 +2309,16 @@ async function proposeResolutionOnchain(receipt) {
 
   const market = state.markets[String(receipt.marketId)];
   if (!market) throw new Error("Market not found.");
-  const resolver = String(market.resolver || "").toLowerCase();
-  const owner = String(state.owner || "").toLowerCase();
-  const authority = String(state.resolutionAuthority || "").toLowerCase();
-  const signer = resolverAccount.address.toLowerCase();
-  if (signer !== resolver && signer !== owner && signer !== authority) {
-    throw new Error("Resolver key is not the market resolver, contract owner, or resolution authority.");
-  }
+  const signerCheck = signerCanProposeMarket(market);
+  if (!signerCheck.ok) throw new Error(signerCheck.reason);
 
   const noLiquidity = toBigint(market.yesPool) === 0n && toBigint(market.noPool) === 0n;
-  const receiptHash = /^0x[a-fA-F0-9]{64}$/.test(String(receipt.receiptHash || "")) ? receipt.receiptHash : ZERO_HASH;
+  const receiptHash = isBytes32(receipt.receiptHash) ? receipt.receiptHash : ZERO_HASH;
   const evidenceHash = keccak256(stringToHex(JSON.stringify(receipt.evidence || [])));
   const functionName =
     isStablecoinContract() && noLiquidity
       ? "cancelEmptyMarket"
-      : isV4Contract() && /^0x[a-fA-F0-9]{130}$/.test(String(receipt.attestation || "")) && receipt.proposedOutcomeValue !== Outcome.Canceled
+      : isV4Contract() && isSignature(receipt.attestation) && receipt.proposedOutcomeValue !== Outcome.Canceled
         ? "resolveWithAiAttestation"
       : receipt.proposedOutcomeValue === Outcome.Canceled
         ? "cancel"
@@ -2337,7 +2490,7 @@ function json(res, status, payload) {
     "content-type": "application/json; charset=utf-8",
     "access-control-allow-origin": "*",
     "access-control-allow-methods": "GET, POST, OPTIONS",
-    "access-control-allow-headers": "content-type"
+    "access-control-allow-headers": "content-type, authorization, x-aura-admin-token"
   });
   res.end(body);
 }
@@ -2351,7 +2504,7 @@ async function route(req, res) {
     res.writeHead(204, {
       "access-control-allow-origin": "*",
       "access-control-allow-methods": "GET, POST, OPTIONS",
-      "access-control-allow-headers": "content-type"
+      "access-control-allow-headers": "content-type, authorization, x-aura-admin-token"
     });
     res.end();
     return;
@@ -2513,8 +2666,14 @@ async function route(req, res) {
         const body = await readRequestBody(req);
         const force = body.force === true && adminAuthorized(req);
         const proposal = await buildOracleProposal(marketId, { force });
+        const onchain =
+          body.propose === true
+            ? adminAuthorized(req)
+              ? await proposeOracleOnchain(proposal)
+              : { skipped: "Unauthorized." }
+            : { skipped: "Proposal not requested." };
         await saveState();
-        json(res, 200, { proposal, updatedAt: nowIso() });
+        json(res, body.propose === true && onchain.skipped === "Unauthorized." ? 401 : 200, { proposal, onchain, updatedAt: nowIso() });
         return;
       }
 

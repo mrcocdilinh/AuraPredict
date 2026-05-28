@@ -33,6 +33,9 @@ AURA_INDEXER_HOST=127.0.0.1
 AURA_INDEXER_CHUNK_SIZE=9000
 AURA_ORACLE_AUTO_RUN=1
 AURA_ORACLE_HTTP_TIMEOUT_MS=8000
+AURA_ORACLE_AUTO_PROPOSE=0
+AURA_ORACLE_AUTO_PROPOSE_MIN_CONFIDENCE=78
+AURA_ORACLE_AUTO_PROPOSE_ADAPTERS=crypto-price,macro-yahoo-chart,status-health,status-page,liquidity-rule
 ```
 
 The active production contract and its initial block are pinned in `indexer/server.mjs` for the V4 cutover. Arc RPC currently limits `eth_getLogs` ranges, so the default chunk size stays below that limit.
@@ -64,7 +67,7 @@ V4 settlement assets are restricted to 6-decimal stablecoins. If more than one a
 
 ## Objective Oracle Proposals
 
-Oracle proposal v1 is deterministic offchain assistance for markets with objective data sources. It does not spend AI quota and does not settle funds by itself. The resolver still signs the proposal/finalization transaction through the V4 contract.
+Oracle proposal v1 is deterministic offchain assistance for markets with objective data sources. It does not spend AI quota. By default it only writes a saved suggestion for the settlement report. In phase 2, the indexer can also auto-submit the first onchain proposal when explicitly enabled, but it still does not auto-finalize funded markets.
 
 Supported adapters:
 
@@ -81,6 +84,27 @@ POST /api/oracles/:marketId/run
 ```
 
 Set `AURA_ORACLE_AUTO_RUN=0` to disable the automatic sweep for closed unresolved markets. Keep this enabled for public UX, because it gives reviewers a source-based suggestion before they choose a contract action.
+
+Optional phase 2 auto-propose:
+
+```bash
+AURA_ORACLE_AUTO_PROPOSE=1
+AURA_ORACLE_AUTO_PROPOSE_MIN_CONFIDENCE=78
+AURA_ORACLE_AUTO_PROPOSE_ADAPTERS=crypto-price,macro-yahoo-chart,status-health,status-page,liquidity-rule
+AURA_RESOLVER_PRIVATE_KEY=0x...
+```
+
+Auto-propose only runs after `resolutionTime`, only when no result has already been proposed, and only when the resolver key is allowed by that market's resolution mode. YES/NO auto-propose requires both YES and NO pools to be funded. One-sided markets can only auto-propose Cancel through the liquidity rule. The normal dispute window, owner review, and finalization buttons remain the source of final settlement.
+
+Manual API proposal is also gated:
+
+```text
+POST /api/oracles/:marketId/run
+Authorization: Bearer your_admin_token
+{ "propose": true }
+```
+
+Without `propose: true`, the endpoint only refreshes the saved Oracle suggestion and does not spend the resolver wallet.
 
 ## AI Resolution And V4 Receipts
 
@@ -142,7 +166,7 @@ AURA_RESOLUTION_CONSENSUS_COUNT=2
 AURA_ATTESTATION_PRIVATE_KEY=0x_optional_dedicated_ai_signer_key
 ```
 
-Keep `AURA_RESOLUTION_AUTO_PROPOSE=0` until the resolver key and evidence policy are tested. If enabled, the private key must be the market resolver, contract owner, or configured `resolutionAuthority`.
+Keep `AURA_RESOLUTION_AUTO_PROPOSE=0` until the resolver key and evidence policy are tested. If enabled, the private key must be the market resolver, contract owner, or the authority captured on that market.
 When Gemini returns `429` (rate limit), the indexer puts that key on cooldown and rotates to the next key in `GEMINI_API_KEYS`. If all Gemini keys are cooling down or Gemini returns transient `5xx`, the indexer falls back to the configured provider if available.
 
 `POST /api/resolutions/:marketId/run` always requires `AURA_RESOLUTION_ADMIN_TOKEN`. If `AURA_RESOLUTION_AUTO_RUN=1`, the indexer only auto-generates the first receipt for each closed unresolved market; use the admin endpoint with `force: true` to rerun after adding better evidence.

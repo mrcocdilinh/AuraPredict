@@ -317,6 +317,12 @@ type OracleProposal = {
   checks?: string[];
   generatedAt?: string;
   dataHash?: string;
+  txHash?: string;
+  autoProposed?: boolean;
+  autoProposedAt?: string;
+  autoProposeSkipped?: string;
+  autoProposeError?: string;
+  onchainFunction?: string;
 };
 
 type ResolutionReceiptResponse = {
@@ -1902,7 +1908,7 @@ function LandingPage() {
     },
     {
       title: "Objective oracle proposals",
-      text: "The indexer can check objective markets such as crypto prices, macro prices, and health/status endpoints, then show a separate Oracle suggestion before settlement."
+      text: "The indexer can check objective markets such as crypto prices, macro prices, and health/status endpoints, then show or auto-submit a high-confidence Oracle proposal before final review."
     },
     {
       title: "Policy controls",
@@ -1962,6 +1968,7 @@ function LandingPage() {
     "The app checks selected-token balance and allowance before create, stake, or dispute transactions",
     "Aura Agent drafts clearer markets, checks similar questions, and prepares rules with source links",
     "Oracle proposal checks objective data sources such as Binance, Yahoo chart data, and health/status endpoints without spending AI quota",
+    "Objective oracle automation can auto-submit the first onchain proposal for high-confidence markets while keeping dispute and owner review open",
     "After the rule timestamp, Aura displays a suggested outcome and confidence in Resolution actions",
     "A saved AI receipt can be viewed without running a new AI request; Ask or Refresh requests a new review",
     "The settlement report explains what AI suggested, what the resolver proposed, whether a dispute exists, and what the final reviewer should do next",
@@ -1993,7 +2000,7 @@ function LandingPage() {
     },
     {
       title: "Wallet-signed settlement",
-      text: "Oracle output is only a proposal aid. Resolver, authority, dispute, and finalization actions still require wallet-signed contract transactions."
+      text: "Oracle output can become the first onchain proposal when enabled, but resolver, authority, dispute, and finalization actions still require contract transactions."
     }
   ];
   const roadmapItems = [
@@ -7534,7 +7541,10 @@ export default function App() {
         ? [
             oracleProposal.summary || "Oracle returned a saved proposal.",
             oracleProposal.observedValue ? `Observed: ${oracleProposal.observedValue}.` : "",
-            typeof oracleProposal.confidence === "number" ? `${oracleProposal.confidence}% confidence.` : ""
+            typeof oracleProposal.confidence === "number" ? `${oracleProposal.confidence}% confidence.` : "",
+            oracleProposal.txHash ? "Oracle auto-proposed this result onchain; dispute/review still stays open." : "",
+            oracleProposal.autoProposeError ? `Auto-propose failed: ${oracleProposal.autoProposeError}` : "",
+            oracleProposal.autoProposeSkipped ? `Auto-propose skipped: ${oracleProposal.autoProposeSkipped}` : ""
           ]
             .filter(Boolean)
             .join(" ")
@@ -8338,6 +8348,16 @@ export default function App() {
                   {oracleProposal.summary && <p>{oracleProposal.summary}</p>}
                   {oracleProposal.observedValue && <p>Observed: {oracleProposal.observedValue}</p>}
                   {oracleProposal.dataHash && oracleProposal.dataHash !== ZERO_HASH && <p>Oracle hash {shortAddress(oracleProposal.dataHash)}</p>}
+                  {oracleProposal.autoProposed && oracleProposal.txHash && (
+                    <p>Oracle submitted this proposal onchain. Dispute and owner review remain available.</p>
+                  )}
+                  {oracleProposal.txHash && (
+                    <a href={`${ARC_EXPLORER_URL}/tx/${oracleProposal.txHash}`} target="_blank" rel="noreferrer">
+                      View oracle proposal transaction
+                    </a>
+                  )}
+                  {oracleProposal.autoProposeSkipped && <p>{oracleProposal.autoProposeSkipped}</p>}
+                  {oracleProposal.autoProposeError && <p>{oracleProposal.autoProposeError}</p>}
                 </div>
                 {oracleProposal.checks && oracleProposal.checks.length > 0 && (
                   <div className="agent-checklist">

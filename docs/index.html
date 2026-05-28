@@ -458,17 +458,24 @@
             </article>
             <article>
               <span>4</span>
-              <h3>Wallet signs action</h3>
-              <p>The signer can use Oracle guidance or choose manual review. Funds move only through contract proposal, dispute, finalize, cancel, or claim.</p>
+              <h3>Proposal is submitted</h3>
+              <p>A permitted resolver can sign manually, or the indexer can auto-submit the first proposal when phase 2 is enabled and confidence is high enough.</p>
+            </article>
+            <article>
+              <span>5</span>
+              <h3>Review stays open</h3>
+              <p>Auto-propose does not auto-finalize funded markets. Dispute, owner review, finalization, cancel, and claim still run through the contract.</p>
             </article>
           </div>
           <div class="reference-table">
             <article><span>Read proposal</span><strong>GET /api/oracles/:marketId</strong></article>
             <article><span>Run proposal</span><strong>POST /api/oracles/:marketId/run</strong></article>
             <article><span>Auto sweep</span><strong>AURA_ORACLE_AUTO_RUN=1 checks closed unresolved markets.</strong></article>
+            <article><span>Auto propose</span><strong>AURA_ORACLE_AUTO_PROPOSE=1 submits high-confidence objective proposals.</strong></article>
+            <article><span>Confidence gate</span><strong>AURA_ORACLE_AUTO_PROPOSE_MIN_CONFIDENCE controls the minimum score.</strong></article>
             <article><span>Timeout</span><strong>AURA_ORACLE_HTTP_TIMEOUT_MS controls external source fetch time.</strong></article>
             <article><span>Cancel signal</span><strong>Empty or one-sided pools produce Cancel/Refund guidance.</strong></article>
-            <article><span>Final authority</span><strong>The contract proposal, review/dispute window, and finalization remain authoritative.</strong></article>
+            <article><span>Final authority</span><strong>The review/dispute window and finalization remain authoritative.</strong></article>
           </div>
         </div>
       </section>
