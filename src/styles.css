@@ -1396,12 +1396,24 @@ h3 {
   border: 1px solid #cfd9ff;
   box-shadow: none;
   color: #172033;
+  justify-content: center;
+  min-width: 156px;
+  width: 156px;
   gap: 8px;
 }
 
 .wallet-button:hover:not(:disabled) {
   background: linear-gradient(90deg, #e0e7ff, #dff8ff);
   color: #172033;
+}
+
+.wallet-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .wallet-dot {
@@ -3075,6 +3087,53 @@ textarea {
 
 .settlement-row {
   flex-wrap: wrap;
+}
+
+.profile-card-actions {
+  align-items: stretch;
+  display: grid;
+  gap: 8px;
+}
+
+.profile-resolution-callout,
+.profile-bond-return-card {
+  background: #f8fafc;
+  border: 1px solid #d6deeb;
+  border-radius: 8px;
+  display: grid;
+  gap: 6px;
+  padding: 10px;
+}
+
+.profile-resolution-callout span,
+.profile-bond-return-card span {
+  color: #667085;
+  font-size: 0.72rem;
+  font-weight: 880;
+  text-transform: uppercase;
+}
+
+.profile-resolution-callout strong,
+.profile-bond-return-card strong {
+  color: #101827;
+  font-size: 0.9rem;
+}
+
+.profile-resolution-callout small,
+.profile-bond-return-card small {
+  color: #475467;
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+.profile-needs-resolution {
+  border-color: #9ad8ff;
+  box-shadow: 0 0 0 1px rgba(70, 181, 235, 0.25);
+}
+
+.profile-pending-bond {
+  border-color: #95f0c7;
+  box-shadow: 0 0 0 1px rgba(18, 185, 129, 0.2);
 }
 
 .resolution-zone {
@@ -5936,6 +5995,37 @@ label {
 [data-theme="dark"] .wallet-dropdown-head,
 [data-theme="dark"] .wallet-list-panel {
   border-color: #202a3f;
+}
+
+[data-theme="dark"] .profile-resolution-callout,
+[data-theme="dark"] .profile-bond-return-card {
+  background: #0b1020;
+  border-color: #26334a;
+}
+
+[data-theme="dark"] .profile-resolution-callout span,
+[data-theme="dark"] .profile-bond-return-card span {
+  color: #9aa7bd;
+}
+
+[data-theme="dark"] .profile-resolution-callout strong,
+[data-theme="dark"] .profile-bond-return-card strong {
+  color: #f7f9ff;
+}
+
+[data-theme="dark"] .profile-resolution-callout small,
+[data-theme="dark"] .profile-bond-return-card small {
+  color: #9aa7bd;
+}
+
+[data-theme="dark"] .profile-needs-resolution {
+  border-color: #1f637a;
+  box-shadow: 0 0 0 1px rgba(24, 215, 255, 0.25);
+}
+
+[data-theme="dark"] .profile-pending-bond {
+  border-color: #1f6b55;
+  box-shadow: 0 0 0 1px rgba(18, 185, 129, 0.25);
 }
 
 [data-theme="dark"] .wallet-dropdown button,

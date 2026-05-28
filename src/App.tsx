@@ -862,6 +862,12 @@ function shortAddress(address: string) {
   return `${address.slice(0, 6)}...${address.slice(-4)}`;
 }
 
+function compactAccountLabel(label: string) {
+  const trimmed = label.trim();
+  if (trimmed.length <= 14) return trimmed;
+  return `${trimmed.slice(0, 6)}...${trimmed.slice(-4)}`;
+}
+
 function shortHash(hash: string) {
   return `${hash.slice(0, 10)}...${hash.slice(-6)}`;
 }
@@ -2624,6 +2630,9 @@ export default function App() {
 
   const transactionLockRef = useRef(false);
   const silentLoadRef = useRef(false);
+  const notificationMenuRef = useRef<HTMLDivElement | null>(null);
+  const walletMenuRef = useRef<HTMLDivElement | null>(null);
+  const themeMenuRef = useRef<HTMLDivElement | null>(null);
   const [account, setAccount] = useState("");
   const [owner, setOwner] = useState("");
   const [contractVersion, setContractVersion] = useState<MarketContractVersion>(VIEWING_V3_ARCHIVE ? "v3" : "unknown");
@@ -2941,6 +2950,7 @@ export default function App() {
   const profileDisplayName = viewedProfileAddress
     ? profileNames[viewedProfileKey] || shortAddress(viewedProfileAddress)
     : "Connect wallet";
+  const topbarProfileLabel = compactAccountLabel(profileDisplayName);
   const walletUsdcBalance = isAddress(defaultSettlementToken)
     ? walletTokenBalances[defaultSettlementToken.toLowerCase()] ?? walletBalance
     : walletBalance;
@@ -3429,6 +3439,28 @@ export default function App() {
   const showMobileWalletLinks = true;
   const recommendedWallets = ["Zerion", "MetaMask", "Rabby Wallet", "OKX Wallet", "Rainbow"];
   const walletConnectReady = Boolean(WALLETCONNECT_PROJECT_ID);
+  useEffect(() => {
+    const handleOutsidePointer = (event: PointerEvent) => {
+      const target = event.target as Node | null;
+      if (!target) return;
+      if (
+        notificationMenuOpen &&
+        notificationMenuRef.current &&
+        !notificationMenuRef.current.contains(target)
+      ) {
+        setNotificationMenuOpen(false);
+      }
+      if (walletMenuOpen && walletMenuRef.current && !walletMenuRef.current.contains(target)) {
+        setWalletMenuOpen(false);
+      }
+      if (themeMenuOpen && themeMenuRef.current && !themeMenuRef.current.contains(target)) {
+        setThemeMenuOpen(false);
+      }
+    };
+
+    document.addEventListener("pointerdown", handleOutsidePointer);
+    return () => document.removeEventListener("pointerdown", handleOutsidePointer);
+  }, [notificationMenuOpen, themeMenuOpen, walletMenuOpen]);
   const leaderboardTimestamp = lastDataRefresh ? Math.floor(lastDataRefresh.getTime() / 1000) : nowSeconds;
   const lastRefreshText = lastDataRefresh
     ? `${lastDataRefresh.toLocaleTimeString("en-US", { timeZone: "UTC", hour12: false })} UTC`
@@ -6939,7 +6971,13 @@ export default function App() {
     };
   }, [loadMarkets]);
 
-  const renderMarketCards = (items: MarketView[], emptyTitle: string, emptyText: string, resultSubject = "You") => (
+  const renderMarketCards = (
+    items: MarketView[],
+    emptyTitle: string,
+    emptyText: string,
+    resultSubject = "You",
+    cardContext: "market" | "profile" = "market"
+  ) => (
     <section className={marketViewMode === "list" ? "market-grid market-grid-list" : "market-grid"}>
       {items.length === 0 &&
         loading &&
@@ -7037,10 +7075,53 @@ export default function App() {
         const aiSuggestionBlockedByPool =
           (aiSuggestedOutcome === Outcome.Yes && !canProposeYes) ||
           (aiSuggestedOutcome === Outcome.No && !canProposeNo);
+        const isProfileCard = cardContext === "profile";
+        const profileResolutionAction =
+          isProfileCard &&
+          (Boolean(canPropose) ||
+            Boolean(canLegacyResolve) ||
+            Boolean(canDispute) ||
+            Boolean(canFinalize) ||
+            Boolean(canFinalizeDispute) ||
+            Boolean(canCancelStaleDispute));
+        const profileResolutionTitle = canPropose || canLegacyResolve
+          ? "Result needed"
+          : canDispute
+            ? "Dispute available"
+            : canFinalize || canFinalizeDispute || canCancelStaleDispute
+              ? "Final action needed"
+              : "Resolution action";
+        const profileResolutionText = canPropose || canLegacyResolve
+          ? "This market has reached resolution time. Open the market page to review Aura, Oracle, source evidence, and propose the result."
+          : canDispute
+            ? "A result has been proposed. Open the market page to review the report and dispute from the settlement panel if needed."
+            : canFinalize || canFinalizeDispute || canCancelStaleDispute
+              ? "This market needs a final settlement action. Open the market page to review the settlement report before acting."
+              : "Open the market page to continue settlement.";
+        const pendingTokenWithdrawal = market.settlementToken
+          ? pendingWithdrawalsByToken[market.settlementToken.toLowerCase()] || 0n
+          : 0n;
+        const cardCreatorBond = market.termsCreatorBond ?? creatorBond;
+        const showProfileBondReturn =
+          isProfileCard &&
+          Boolean(account) &&
+          sameAddress(account, market.creator) &&
+          market.outcome !== Outcome.Unresolved &&
+          cardCreatorBond > 0n &&
+          pendingTokenWithdrawal > 0n;
+        const marketCardClasses = [
+          "market-card",
+          "interactive-market-card",
+          isProfileCard ? "profile-market-card" : "",
+          profileResolutionAction ? "profile-needs-resolution" : "",
+          showProfileBondReturn ? "profile-pending-bond" : ""
+        ]
+          .filter(Boolean)
+          .join(" ");
 
         return (
           <article
-            className="market-card interactive-market-card"
+            className={marketCardClasses}
             key={market.id}
             onClick={() => openMarket(market.id)}
             onKeyDown={(event) => {
@@ -7162,7 +7243,39 @@ export default function App() {
               </button>
             </div>
 
-            {(canPropose || canLegacyResolve || canDispute || canFinalize || canFinalizeDispute || canCancelStaleDispute || canClaim) && (
+            {isProfileCard && (profileResolutionAction || showProfileBondReturn || canClaim) && (
+              <div className="settlement-row profile-card-actions" onClick={(event) => event.stopPropagation()}>
+                {profileResolutionAction && (
+                  <div className="profile-resolution-callout">
+                    <span>{profileResolutionTitle}</span>
+                    <strong>Open this market to handle settlement</strong>
+                    <small>{profileResolutionText}</small>
+                    <button className="secondary" onClick={() => openMarket(market.id, true)} type="button">
+                      Go to market
+                    </button>
+                  </div>
+                )}
+                {showProfileBondReturn && (
+                  <div className="profile-bond-return-card">
+                    <span>Creator bond pending</span>
+                    <strong>{formatMarketAmount(cardCreatorBond, market)} {marketSymbol(market)} bond for this market</strong>
+                    <small>
+                      Your wallet has {formatMarketAmount(pendingTokenWithdrawal, market)} {marketSymbol(market)} pending across finalized markets. The contract withdraws the total pending balance for this token.
+                    </small>
+                    <button disabled={transactionPending} onClick={() => withdrawPendingBalance(market)} type="button">
+                      Receive pending {marketSymbol(market)}
+                    </button>
+                  </div>
+                )}
+                {canClaim && (
+                  <button onClick={() => claim(market.id)} type="button">
+                    Claim {formatMarketAmount(market.potentialPayout, market)} {marketSymbol(market)}
+                  </button>
+                )}
+              </div>
+            )}
+
+            {!isProfileCard && (canPropose || canLegacyResolve || canDispute || canFinalize || canFinalizeDispute || canCancelStaleDispute || canClaim) && (
               <div className="settlement-row" onClick={(event) => event.stopPropagation()}>
                 {canLegacyResolve && (
                   <>
@@ -8662,7 +8775,7 @@ export default function App() {
           </div>
         </div>
         <div className="wallet-panel">
-          <div className="theme-menu">
+          <div className="theme-menu" ref={themeMenuRef}>
             <button
               className="theme-trigger"
               onClick={() => {
@@ -8703,7 +8816,7 @@ export default function App() {
           </a>
           {account ? (
             <>
-              <div className="notification-menu">
+              <div className="notification-menu" ref={notificationMenuRef}>
                 <button
                   className="notification-button"
                   onClick={() => {
@@ -8893,16 +9006,17 @@ export default function App() {
                   </div>
                 )}
               </div>
-              <div className="wallet-menu">
+              <div className="wallet-menu" ref={walletMenuRef}>
                 <button
                   className="wallet-button"
                   onClick={() => {
                     setWalletMenuOpen((current) => !current);
                     setNotificationMenuOpen(false);
                   }}
+                  title={profileDisplayName}
                 >
                   <span className="wallet-dot" />
-                  {profileDisplayName}
+                  <span className="wallet-label">{topbarProfileLabel}</span>
                   <span className="chevron">v</span>
                 </button>
                 {walletMenuOpen && (
@@ -9984,22 +10098,38 @@ export default function App() {
                     market.outcome === Outcome.Unresolved &&
                     isResolutionReady &&
                     [market.resolver.toLowerCase(), owner.toLowerCase()].includes(account.toLowerCase());
-                  const cancelOnlyResolution = isResolutionReady && requiresCancelForLiquidity(market);
-                  const canProposeYes = !cancelOnlyResolution && market.yesPool > 0n;
-                  const canProposeNo = !cancelOnlyResolution && market.noPool > 0n;
-                  const proposeHint = resolveActionHint(market);
-                  const finalizeHint = finalizeWaitingHint(market);
-                  const aiReceipt = aiResolutionReceipts[String(market.id)];
-                  const aiSuggestedOutcome = aiOutcomeFromReceipt(aiReceipt);
-                  const aiCanPropose = aiSuggestedOutcome === Outcome.Yes || aiSuggestedOutcome === Outcome.No;
-                  const aiSuggestionBlockedByPool =
-                    (aiSuggestedOutcome === Outcome.Yes && !canProposeYes) ||
-                    (aiSuggestedOutcome === Outcome.No && !canProposeNo);
                   const meta = categoryMeta(market.category || "Other");
                   const result = personalMarketResult(market, isOwnProfile ? "You" : "Profile");
                   const settlement = userSettlement(market, market.termsProtocolFeeBps ?? protocolFeeBps);
                   const claimStatus = claimStatusFor(market, settlement, isOwnProfile);
                   const claimableValue = isOwnProfile ? market.potentialPayout : settlement.payout;
+                  const profileResolutionAction =
+                    Boolean(canPropose) ||
+                    Boolean(canLegacyResolve) ||
+                    Boolean(canFinalize) ||
+                    Boolean(canFinalizeDispute) ||
+                    Boolean(canCancelStaleDispute);
+                  const profileResolutionTitle = canPropose || canLegacyResolve
+                    ? "Result needed"
+                    : canFinalize || canFinalizeDispute || canCancelStaleDispute
+                      ? "Final action needed"
+                      : "Resolution action";
+                  const profileResolutionText = canPropose || canLegacyResolve
+                    ? "This market has reached resolution time. Open the market page to review Aura, Oracle, source evidence, and propose the result."
+                    : canFinalize || canFinalizeDispute || canCancelStaleDispute
+                      ? "This market needs a final settlement action. Open the market page to review the settlement report before acting."
+                      : "Open the market page to continue settlement.";
+                  const pendingTokenWithdrawal = market.settlementToken
+                    ? pendingWithdrawalsByToken[market.settlementToken.toLowerCase()] || 0n
+                    : 0n;
+                  const profileMarketCreatorBond = market.termsCreatorBond ?? creatorBond;
+                  const showProfileBondReturn =
+                    isOwnProfile &&
+                    Boolean(account) &&
+                    sameAddress(account, market.creator) &&
+                    market.outcome !== Outcome.Unresolved &&
+                    profileMarketCreatorBond > 0n &&
+                    pendingTokenWithdrawal > 0n;
 
                   return (
                     <article className="history-card" key={market.id}>
@@ -10056,92 +10186,34 @@ export default function App() {
                           <span>No indexed tx yet</span>
                         )}
                       </div>
-                      {(canPropose ||
-                        canLegacyResolve ||
-                        canFinalize ||
-                        canFinalizeDispute ||
-                        canCancelStaleDispute ||
+                      {(profileResolutionAction ||
+                        showProfileBondReturn ||
                         (isOwnProfile && market.potentialPayout > 0n && !market.claimed)) && (
-                        <div className="settlement-row">
-                          {canLegacyResolve && (
-                            <>
-                              <button className="secondary" onClick={() => resolveMarket(market.id, Outcome.Yes)}>
-                                Resolve YES
+                        <div className="settlement-row profile-card-actions">
+                          {profileResolutionAction && (
+                            <div className="profile-resolution-callout">
+                              <span>{profileResolutionTitle}</span>
+                              <strong>Open this market to handle settlement</strong>
+                              <small>{profileResolutionText}</small>
+                              <button className="secondary" onClick={() => openMarket(market.id, true)} type="button">
+                                Go to market
                               </button>
-                              <button className="secondary" onClick={() => resolveMarket(market.id, Outcome.No)}>
-                                Resolve NO
-                              </button>
-                              <button className="secondary" onClick={() => cancelMarket(market.id)}>
-                                Cancel
-                              </button>
-                            </>
+                            </div>
                           )}
-                          {canPropose && (
-                            <>
-                              {!cancelOnlyResolution && (
-                                <button className="secondary" disabled={aiBusy || transactionPending} onClick={() => askAuraForResolution(market)} type="button">
-                                  {aiBusy ? "Aura thinking..." : transactionPending ? "Processing..." : aiCanPropose ? "Refresh Aura" : "Ask Aura"}
-                                </button>
-                              )}
-                              {!cancelOnlyResolution && aiCanPropose && (
-                                <button
-                                  className="secondary"
-                                  onClick={() => resolveMarket(market.id, aiSuggestedOutcome as Outcome.Yes | Outcome.No)}
-                                  disabled={transactionPending || !canResolveAfterAura(market.id) || aiSuggestionBlockedByPool}
-                                  type="button"
-                                >
-                                  Use AI
-                                </button>
-                              )}
-                              <button className="secondary" onClick={() => resolveMarket(market.id, Outcome.Yes)} disabled={transactionPending || !canProposeYes || !canResolveAfterAura(market.id)}>
-                                Propose YES
+                          {showProfileBondReturn && (
+                            <div className="profile-bond-return-card">
+                              <span>Creator bond pending</span>
+                              <strong>{formatMarketAmount(profileMarketCreatorBond, market)} {marketSymbol(market)} bond for this market</strong>
+                              <small>
+                                Your wallet has {formatMarketAmount(pendingTokenWithdrawal, market)} {marketSymbol(market)} pending across finalized markets. The contract withdraws the total pending balance for this token.
+                              </small>
+                              <button disabled={transactionPending} onClick={() => withdrawPendingBalance(market)} type="button">
+                                Receive pending {marketSymbol(market)}
                               </button>
-                              <button className="secondary" onClick={() => resolveMarket(market.id, Outcome.No)} disabled={transactionPending || !canProposeNo || !canResolveAfterAura(market.id)}>
-                                Propose NO
-                              </button>
-                              <button className="secondary" disabled={transactionPending || (!canResolveAfterAura(market.id) && !cancelOnlyResolution)} onClick={() => cancelMarket(market.id)}>
-                                {cancelOnlyResolution ? "Cancel / Refund" : "Propose Cancel"}
-                              </button>
-                            </>
-                          )}
-                          {canPropose && proposeHint && <small>{proposeHint}</small>}
-                          {canPropose && <small>{cancelOnlyResolution ? "Aura is not needed because this market must be canceled and refunded." : resolveAuraStatusLabel(market)}</small>}
-                          {canPropose && !cancelOnlyResolution && aiCanPropose && (
-                            <small>
-                              AI suggests {outcomeLabel(aiSuggestedOutcome)}
-                              {typeof aiReceipt?.consensus?.confidence === "number" ? ` (${aiReceipt.consensus.confidence}% confidence)` : ""}.
-                            </small>
-                          )}
-                          {finalizeHint && <small>{finalizeHint}</small>}
-                          {canFinalize && (
-                            <button className="secondary" disabled={transactionPending} onClick={() => finalizeMarket(market.id)}>
-                              Finalize
-                            </button>
-                          )}
-                          {canFinalizeDispute && (
-                            <>
-                              {!cancelOnlyResolution && (
-                                <>
-                                  <button className="secondary" disabled={transactionPending} onClick={() => finalizeDispute(market.id, Outcome.Yes)}>
-                                    Final YES
-                                  </button>
-                                  <button className="secondary" disabled={transactionPending} onClick={() => finalizeDispute(market.id, Outcome.No)}>
-                                    Final NO
-                                  </button>
-                                </>
-                              )}
-                              <button className="secondary" disabled={transactionPending} onClick={() => finalizeDispute(market.id, Outcome.Canceled)}>
-                                Final Cancel / Refund
-                              </button>
-                            </>
-                          )}
-                          {canCancelStaleDispute && (
-                            <button className="secondary" onClick={() => cancelStaleDispute(market.id)}>
-                              Cancel stale dispute
-                            </button>
+                            </div>
                           )}
                           {isOwnProfile && market.potentialPayout > 0n && !market.claimed && (
-                            <button onClick={() => claim(market.id)}>
+                            <button onClick={() => claim(market.id)} type="button">
                               Claim {formatMarketAmount(market.potentialPayout, market)} {marketSymbol(market)}
                             </button>
                           )}
@@ -10190,7 +10262,8 @@ export default function App() {
                       paginatedCreatedProfileMarkets,
                       "No created markets",
                       "Created markets from your wallet will appear here.",
-                      isOwnProfile ? "You" : "Profile"
+                      isOwnProfile ? "You" : "Profile",
+                      "profile"
                     )}
                     {createdProfileMarkets.length > PROFILE_PAGE_SIZE && (
                       <div className="pagination-row">
