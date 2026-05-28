@@ -1286,6 +1286,18 @@ function countdownText(closeTime: number, now: Date) {
   return `${minutes}M`;
 }
 
+function durationText(seconds: number) {
+  if (!Number.isFinite(seconds) || seconds <= 0) return "Not set";
+  const days = Math.floor(seconds / 86400);
+  const hours = Math.floor((seconds % 86400) / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const parts = [];
+  if (days > 0) parts.push(`${days}d`);
+  if (hours > 0) parts.push(`${hours}h`);
+  if (minutes > 0 && days === 0) parts.push(`${minutes}m`);
+  return parts.length > 0 ? parts.join(" ") : `${seconds}s`;
+}
+
 function timeAgo(timestamp: number, now: Date) {
   if (timestamp <= 0) return "";
   const elapsed = Math.max(0, Math.floor((now.getTime() - timestamp * 1000) / 1000));
@@ -7339,6 +7351,86 @@ export default function App() {
         : aiResolutionReport?.disputeRisks && aiResolutionReport.disputeRisks.length > 0
           ? aiResolutionReport.disputeRisks
           : agentReport.checklist;
+    const selectedDisputeWindowSeconds = selectedMarket.termsDisputeWindow ?? disputeWindow;
+    const selectedGraceSeconds = selectedMarket.termsDisputeGracePeriod ?? disputeGracePeriod;
+    const selectedProposalGraceSeconds = selectedMarket.termsProposalGracePeriod ?? 72 * 60 * 60;
+    const selectedProposalGraceDeadline = selectedResolutionReadyAt + selectedProposalGraceSeconds;
+    const selectedDisputeGraceDeadline =
+      selectedMarket.disputeDeadline > 0 && selectedGraceSeconds > 0
+        ? selectedMarket.disputeDeadline + selectedGraceSeconds
+        : 0;
+    const settlementStage =
+      selectedMarket.outcome !== Outcome.Unresolved
+        ? "Finalized"
+        : selectedMarket.disputed
+        ? "Dispute review"
+        : selectedMarket.authorityReviewRequired
+        ? "Owner review"
+        : selectedMarket.proposedAt > 0
+        ? canFinalize
+          ? "Ready to finalize"
+          : "Dispute window"
+        : awaitingResolutionTime
+        ? "Waiting for event time"
+        : cancelOnlyResolution
+        ? "Cancel / refund"
+        : "Awaiting proposal";
+    const aiDecisionLabel = cancelOnlyResolution
+      ? "Cancel / Refund"
+      : selectedAiSuggestedOutcome !== Outcome.Unresolved
+      ? outcomeLabel(selectedAiSuggestedOutcome)
+      : displayedAgentLabel;
+    const aiDecisionDetail = awaitingResolutionTime
+      ? `Aura can review after ${closeDate(selectedResolutionReadyAt)}.`
+      : cancelOnlyResolution
+      ? "One side has no funded pool, so the app does not need another AI call."
+      : selectedAiSuggestedOutcome !== Outcome.Unresolved
+      ? `${typeof selectedAiConfidence === "number" ? `${selectedAiConfidence}% confidence. ` : ""}${displayedAgentSummary}`
+      : aiResolutionReport || aiResolutionReceipt
+      ? displayedAgentSummary
+      : "No saved AI result yet. Ask Aura before proposing a YES/NO result.";
+    const proposalDecisionLabel =
+      selectedMarket.proposedAt > 0 ? outcomeLabel(selectedMarket.proposedOutcome) : "No proposal yet";
+    const proposalDecisionDetail =
+      selectedMarket.proposedAt > 0
+        ? `Proposed at ${closeDate(selectedMarket.proposedAt)} by the market resolver/creator path.`
+        : selectedResolutionReady
+        ? "The resolver can propose after reviewing Aura, source evidence, and pool rules."
+        : `Proposal opens after ${closeDate(selectedResolutionReadyAt)}.`;
+    const disputeDecisionLabel = selectedMarket.disputed
+      ? "Dispute opened"
+      : selectedMarket.authorityReviewRequired
+      ? "Owner review required"
+      : selectedMarket.proposedAt > 0
+      ? "No dispute opened"
+      : "Not available yet";
+    const disputeDecisionDetail = selectedMarket.disputed
+      ? `Disputer: ${displayNameForAddress(selectedMarket.disputer)}. The contract stores the disputing wallet and proposed result, not a separate YES/NO vote from the disputer.`
+      : selectedMarket.authorityReviewRequired
+      ? "This result was flagged for owner/authority review, usually because the proposal needs extra verification."
+      : selectedMarket.proposedAt > 0 && selectedMarket.disputeDeadline > 0
+      ? `Users with positions can dispute until ${closeDate(selectedMarket.disputeDeadline)}.`
+      : "Dispute opens only after a result has been proposed.";
+    const finalDecisionLabel =
+      selectedMarket.outcome !== Outcome.Unresolved
+        ? outcomeLabel(selectedMarket.outcome)
+        : requiresCancelForLiquidity(selectedMarket)
+        ? "Use Cancel / Refund"
+        : selectedMarket.disputed || selectedMarket.authorityReviewRequired
+        ? "Owner/authority final choice"
+        : selectedMarket.proposedAt > 0
+        ? outcomeLabel(selectedMarket.proposedOutcome)
+        : "No final action yet";
+    const finalDecisionDetail =
+      selectedMarket.outcome !== Outcome.Unresolved
+        ? "The market is settled and winners/refunds can be claimed from the contract."
+        : requiresCancelForLiquidity(selectedMarket)
+        ? "YES/NO finalization is blocked because one side has no funded position."
+        : selectedMarket.disputed || selectedMarket.authorityReviewRequired
+        ? "Final reviewer should compare Aura, the proposed result, source evidence, and any dispute context before choosing Final YES, Final NO, or Final Cancel."
+        : selectedMarket.proposedAt > 0 && selectedMarket.disputeDeadline > 0
+        ? `If no dispute is opened, finalize the proposed result after ${closeDate(selectedMarket.disputeDeadline)}.`
+        : "A final action appears after a result is proposed.";
     const scrollToAuraDetails = () => {
       document.getElementById("aura-resolution-details")?.scrollIntoView({ block: "start", behavior: "smooth" });
     };
@@ -7530,6 +7622,88 @@ export default function App() {
                     <small>View details</small>
                   </button>
                 )}
+              </div>
+              <div className="resolution-report">
+                <div className="resolution-report-head">
+                  <div>
+                    <span>Settlement report</span>
+                    <strong>{settlementStage}</strong>
+                  </div>
+                  {(aiResolutionReport || aiResolutionReceipt || selectedAiCanPropose) && (
+                    <button className="secondary" onClick={scrollToAuraDetails} type="button">
+                      View AI details
+                    </button>
+                  )}
+                </div>
+
+                <div className="resolution-report-grid">
+                  <article>
+                    <span>AI suggestion</span>
+                    <strong>{aiDecisionLabel}</strong>
+                    <small>{aiDecisionDetail}</small>
+                  </article>
+                  <article>
+                    <span>Creator / resolver proposal</span>
+                    <strong>{proposalDecisionLabel}</strong>
+                    <small>{proposalDecisionDetail}</small>
+                  </article>
+                  <article>
+                    <span>Dispute / review</span>
+                    <strong>{disputeDecisionLabel}</strong>
+                    <small>{disputeDecisionDetail}</small>
+                  </article>
+                  <article>
+                    <span>Final reviewer action</span>
+                    <strong>{finalDecisionLabel}</strong>
+                    <small>{finalDecisionDetail}</small>
+                  </article>
+                </div>
+
+                <div className="resolution-report-pools">
+                  <div>
+                    <span>YES pool</span>
+                    <strong>{selectedMarketYesPercent.toFixed(1)}% / {formatMarketAmount(selectedMarket.yesPool, selectedMarket)} {marketSymbol(selectedMarket)}</strong>
+                  </div>
+                  <div>
+                    <span>NO pool</span>
+                    <strong>{selectedMarketNoPercent.toFixed(1)}% / {formatMarketAmount(selectedMarket.noPool, selectedMarket)} {marketSymbol(selectedMarket)}</strong>
+                  </div>
+                  <div>
+                    <span>Total volume</span>
+                    <strong>{formatMarketAmount(totalPool, selectedMarket)} {marketSymbol(selectedMarket)}</strong>
+                  </div>
+                </div>
+
+                <div className="resolution-timeline">
+                  <div>
+                    <span>Trading close</span>
+                    <strong>{closeDate(selectedMarket.closeTime)}</strong>
+                  </div>
+                  <div>
+                    <span>Resolution/event time</span>
+                    <strong>{closeDate(selectedResolutionReadyAt)}</strong>
+                  </div>
+                  <div>
+                    <span>Proposal grace</span>
+                    <strong>{durationText(selectedProposalGraceSeconds)} · cancel after {closeDate(selectedProposalGraceDeadline)}</strong>
+                  </div>
+                  <div>
+                    <span>Dispute window</span>
+                    <strong>
+                      {selectedMarket.disputeDeadline > 0
+                        ? `until ${closeDate(selectedMarket.disputeDeadline)}`
+                        : durationText(selectedDisputeWindowSeconds)}
+                    </strong>
+                  </div>
+                  <div>
+                    <span>Owner review grace</span>
+                    <strong>
+                      {selectedDisputeGraceDeadline > 0
+                        ? `stale cancel after ${closeDate(selectedDisputeGraceDeadline)}`
+                        : durationText(selectedGraceSeconds)}
+                    </strong>
+                  </div>
+                </div>
               </div>
               {(canLegacyResolve || canPropose || canDispute || canFinalize || canFinalizeDispute || canCancelStaleDispute || canCancelUnproposed || canClaim) && (
                 <div className="settlement-row resolution-actions">
