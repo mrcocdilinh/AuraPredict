@@ -147,7 +147,7 @@
             </article>
             <article>
               <h3>AI receipts</h3>
-              <p>A visible suggested outcome, confidence, and receipt assist resolution. The contract can anchor evidence and receipt hashes in the signed proposal, and can later accept signed Aura attestations.</p>
+              <p>A visible suggested outcome, confidence, receipt, and settlement report assist resolution. The contract can anchor evidence and receipt hashes in the signed proposal, and can later accept signed Aura attestations.</p>
             </article>
             <article>
               <h3>Policy controls</h3>
@@ -222,6 +222,7 @@
               <ul>
                 <li>Wait until the event timestamp stated in the resolution rule has passed.</li>
                 <li>Open Resolution actions to view or request Aura's suggested result and confidence.</li>
+                <li>Review the settlement report: AI suggestion, creator proposal, dispute status, YES/NO pools, volume, and timing.</li>
                 <li>Attach supporting source links before proposing a result.</li>
                 <li>Apply Aura's suggestion or explicitly propose a different result for owner review.</li>
                 <li>Use Cancel only when the market cannot be fairly resolved.</li>
@@ -294,12 +295,16 @@
           <div class="note">
             Swap access: an active market or the user's Profile can offer a LI.FI quote for <code>USDC &lt;-&gt; EURC</code> on Arc Testnet. The UI shows estimated and minimum receive amounts, supports user-selected price tolerance, and expires old quotes to reduce failed swaps when testnet liquidity moves. The trader signs that swap in their wallet before staking; the market still settles, refunds, and pays winners only in its configured token.
           </div>
+          <div class="note">
+            Settlement report: the final-action area now summarizes Aura's suggestion, the creator or resolver proposal, dispute or owner-review state, YES/NO pools, total volume, and the timing windows. It is designed so the next signer can understand what happened before selecting Final YES, Final NO, or Final Cancel.
+          </div>
           <div class="reference-table">
             <article><span>Current state</span><strong>Live test markets are indexed at api.aurapredict.xyz.</strong></article>
             <article><span>Source/rule storage</span><strong>The contract stores the resolution source, fallback source, and rule for every new market.</strong></article>
             <article><span>Proposal timing</span><strong>Trading close time and result resolution time are separate; the contract rejects early proposals.</strong></article>
             <article><span>Token safety</span><strong>Frontend checks balance and allowance for the selected settlement token before create, stake, or dispute actions.</strong></article>
             <article><span>Optional swap</span><strong>LI.FI route quoting with visible minimum receive and adjustable tolerance helps a wallet obtain USDC or EURC without changing any market's payout denomination.</strong></article>
+            <article><span>Settlement report</span><strong>Resolution actions summarize AI choice, creator proposal, dispute state, pools, and deadlines before finalization.</strong></article>
             <article><span>No-liquidity markets</span><strong>If no one stakes, the resolver can cancel without spending an AI review.</strong></article>
             <article><span>No-proposal timeout</span><strong>If a market passes its proposal grace period without a result, it can be canceled/refunded instead of leaving funds stuck.</strong></article>
           </div>
@@ -313,7 +318,9 @@
           <p>
             AuraPredict keeps Aura Agent's calculation off-chain. After the event timestamp
             in the rule, Resolution actions can show a suggested YES or NO outcome, confidence,
-            supporting detail, and a receipt. The market's source and rule are already onchain,
+            supporting detail, a receipt, and a settlement report. The report compares Aura's suggestion,
+            the creator or resolver proposal, dispute/review status, pool balances, volume, and timing windows before final action.
+            The market's source and rule are already onchain,
             and the wallet-signed proposal can commit the evidence hash and AI receipt hash while the detailed report remains in the indexer.
           </p>
           <div class="note">
@@ -352,7 +359,7 @@
           <div class="two-column">
             <article>
               <h3>Visible in the market</h3>
-              <p>Resolution actions show Aura's suggested YES or NO outcome and confidence above the proposal buttons. Selecting the suggestion detail jumps to the full report.</p>
+              <p>Resolution actions show Aura's suggested YES or NO outcome and confidence above the proposal buttons. The settlement report stays in the same area so reviewers can see AI choice, creator proposal, dispute status, and deadline context before signing.</p>
             </article>
             <article>
               <h3>Saved receipt behavior</h3>
@@ -367,6 +374,7 @@
           <div class="reference-table">
             <article><span>Timing</span><strong>Result actions wait for the rule's event timestamp, not an earlier trading cutoff.</strong></article>
             <article><span>Use AI</span><strong>The resolver may apply Aura's suggestion directly from Resolution actions.</strong></article>
+            <article><span>Settlement report</span><strong>Final reviewers see AI suggestion, proposed outcome, dispute/review status, pools, volume, and relevant deadlines in one panel.</strong></article>
             <article><span>Saved receipt</span><strong>Opening a market can show an existing AI receipt without rerunning Aura.</strong></article>
             <article><span>Mismatch</span><strong>A proposal against Aura's suggestion is highlighted, and authority review can stop ordinary finalization.</strong></article>
             <article><span>Dispute</span><strong>Participants keep the contract dispute window before finalization.</strong></article>

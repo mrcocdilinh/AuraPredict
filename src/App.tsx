@@ -1925,7 +1925,7 @@ function LandingPage() {
     },
     {
       title: "AI resolution receipts",
-      text: "View a suggested YES or NO outcome with confidence and supporting detail. Saved receipts can be reopened without spending another AI request."
+      text: "View a suggested YES or NO outcome with confidence, supporting detail, and a settlement report that compares AI, creator proposal, dispute status, and final action."
     },
     {
       title: "Live indexer",
@@ -1938,6 +1938,7 @@ function LandingPage() {
     "Trading closes at the published UTC time",
     "Resolution opens only after the rule's event timestamp",
     "Resolver requests or views Aura's YES/NO suggestion and confidence",
+    "Resolution actions show a settlement report with AI choice, creator proposal, dispute/review state, pools, and timelines",
     "Resolver can apply the suggestion or propose a different result",
     "Owner receives an alert when resolver and AI disagree",
     "Dispute window stays open",
@@ -1953,6 +1954,7 @@ function LandingPage() {
     "Aura Agent drafts clearer markets, checks similar questions, and prepares rules with source links",
     "After the rule timestamp, Aura displays a suggested outcome and confidence in Resolution actions",
     "A saved AI receipt can be viewed without running a new AI request; Ask or Refresh requests a new review",
+    "The settlement report explains what AI suggested, what the resolver proposed, whether a dispute exists, and what the final reviewer should do next",
     "Resolver decisions that differ from Aura and user disputes are flagged for owner/authority review",
     "Owner wallets get a private dashboard for reporting, user activity, protocol fees, and fee withdrawal",
     "Aura analysis remains off-chain; the contract anchors source/rule terms, evidence hashes, and receipt hashes in wallet-signed proposal actions",
@@ -2217,7 +2219,8 @@ function LandingPage() {
             After the event timestamp in the resolution rule has passed, the resolver opens the
             market to request or view Aura's visible YES/NO suggestion and confidence. The creator
             or configured authority then proposes the result through a wallet-signed contract action,
-            users can dispute during the window, and winners claim directly after finalization.
+            Resolution actions summarize AI choice, creator proposal, dispute status, pools, and deadlines
+            before any final reviewer action. Users can dispute during the window, and winners claim directly after finalization.
           </p>
           <a className="landing-primary" href={APP_URL}>
             Launch the App
@@ -2275,7 +2278,8 @@ function LandingPage() {
             <h3>AI assisted, contract settled</h3>
             <p>
               Aura displays a suggested outcome with confidence after the rule timestamp, but the
-              resolver or configured authority still signs the contract proposal and users keep the dispute window.
+              resolver or configured authority still signs the contract proposal. The settlement report
+              shows AI choice, proposed result, dispute status, and final review guidance before users reach finalization.
             </p>
           </article>
           <article className="docs-card">
@@ -2361,6 +2365,10 @@ function LandingPage() {
           <article>
             <span>Settlement</span>
             <strong>AI receipts can support the result, but finalized outcomes still unlock payouts through the contract.</strong>
+          </article>
+          <article>
+            <span>Settlement report</span>
+            <strong>Resolution actions summarize AI suggestion, creator proposal, dispute/review state, YES/NO pools, volume, and timing so final reviewers know what they are signing.</strong>
           </article>
           <article>
             <span>AI resolution</span>
