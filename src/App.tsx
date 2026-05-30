@@ -1223,6 +1223,13 @@ function combineUtcDateTimeParts(datePart: string, timePart: string) {
 function parseAuraUtcCloseTimeFromText(value: string) {
   const text = value.trim();
   if (!text) return "";
+  const embeddedUtcMatch = text.match(
+    /(\d{4}-\d{2}-\d{2})[T\s]([01]\d|2[0-3]):([0-5]\d)(?::[0-5]\d)?\s*(UTC|Z)\b/i
+  );
+  if (embeddedUtcMatch) {
+    const [, datePart, hh, mm] = embeddedUtcMatch;
+    return combineUtcDateTimeParts(datePart, `${hh}:${mm}`);
+  }
   const isoMatch = text.match(/(\d{4}-\d{2}-\d{2})[T\s]([01]\d|2[0-3]):([0-5]\d)(?::[0-5]\d)?\s*Z/i);
   if (isoMatch) {
     const [, datePart, hh, mm] = isoMatch;
@@ -4687,9 +4694,9 @@ export default function App() {
       .filter((source) => !isValidHttpUrl(normalizeReferenceUrl(source)))
       .slice(0, 3);
     const inferredCloseTime =
-      parseAuraUtcCloseTimeFromText(aiMarketDraft.closeTime || "") ||
       parseAuraUtcCloseTimeFromText(aiMarketDraft.question || "") ||
-      parseAuraUtcCloseTimeFromText(aiMarketDraft.resolutionCriteria || "");
+      parseAuraUtcCloseTimeFromText(aiMarketDraft.resolutionCriteria || "") ||
+      parseAuraUtcCloseTimeFromText(aiMarketDraft.closeTime || "");
     const contextFallbackSource = defaultSourceByContext(
       aiMarketDraft.category,
       `${aiMarketDraft.question || ""} ${aiMarketDraft.resolutionCriteria || ""}`
@@ -4698,7 +4705,7 @@ export default function App() {
       ...current,
       question: aiMarketDraft.question || current.question,
       category: aiMarketDraft.category && CATEGORIES.includes(aiMarketDraft.category) ? aiMarketDraft.category : current.category,
-      closeTime: current.closeTime || inferredCloseTime,
+      closeTime: inferredCloseTime || current.closeTime,
       resolutionTime: inferredCloseTime || current.resolutionTime || current.closeTime,
       resolutionSource:
         firstSource ||
