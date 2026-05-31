@@ -164,6 +164,7 @@ type MarketSectionKey = "fresh" | "hot" | "closing";
 type ThemeMode = "dark" | "light";
 type MarketViewMode = "grid" | "list";
 type ChartWindowKey = "1h" | "6h" | "1d" | "1w" | "1m" | "all";
+type HeroActivityWindowKey = "1d" | "7d" | "30d" | "all";
 type MarketSortKey = "created" | "ending" | "volume" | "participants" | "yes" | "no";
 type SortDirection = "asc" | "desc";
 
@@ -577,6 +578,12 @@ const CHART_WINDOWS: Array<{ value: ChartWindowKey; label: string; seconds: numb
   { value: "1d", label: "1D", seconds: 24 * 60 * 60 },
   { value: "1w", label: "1W", seconds: 7 * 24 * 60 * 60 },
   { value: "1m", label: "1M", seconds: 30 * 24 * 60 * 60 },
+  { value: "all", label: "ALL", seconds: null }
+];
+const HERO_ACTIVITY_WINDOWS: Array<{ value: HeroActivityWindowKey; label: string; seconds: number | null }> = [
+  { value: "1d", label: "1D", seconds: 24 * 60 * 60 },
+  { value: "7d", label: "7D", seconds: 7 * 24 * 60 * 60 },
+  { value: "30d", label: "30D", seconds: 30 * 24 * 60 * 60 },
   { value: "all", label: "ALL", seconds: null }
 ];
 const MARKET_SORT_OPTIONS: Array<{ value: MarketSortKey; label: string }> = [
@@ -1488,6 +1495,39 @@ function chartTimeLabel(value: number, includeDate = false) {
     minute: "2-digit",
     hour12: false
   }).format(new Date(value * 1000));
+}
+
+function chartAxisLabel(value: number, rangeSeconds: number) {
+  if (rangeSeconds >= 2 * 24 * 60 * 60) {
+    return new Intl.DateTimeFormat("en-US", {
+      timeZone: "UTC",
+      month: "short",
+      day: "2-digit"
+    }).format(new Date(value * 1000));
+  }
+  return chartTimeLabel(value);
+}
+
+function smoothPathFromPoints(points: Array<{ x: number; y: number }>) {
+  if (points.length === 0) return "";
+  if (points.length === 1) return `M${points[0].x},${points[0].y}`;
+
+  const coord = (value: number) => Number(value.toFixed(3));
+  let path = `M${coord(points[0].x)},${coord(points[0].y)}`;
+
+  for (let index = 0; index < points.length - 1; index += 1) {
+    const p0 = points[Math.max(0, index - 1)];
+    const p1 = points[index];
+    const p2 = points[index + 1];
+    const p3 = points[Math.min(points.length - 1, index + 2)];
+    const cp1x = p1.x + (p2.x - p0.x) / 6;
+    const cp1y = p1.y + (p2.y - p0.y) / 6;
+    const cp2x = p2.x - (p3.x - p1.x) / 6;
+    const cp2y = p2.y - (p3.y - p1.y) / 6;
+    path += ` C${coord(cp1x)},${coord(cp1y)} ${coord(cp2x)},${coord(cp2y)} ${coord(p2.x)},${coord(p2.y)}`;
+  }
+
+  return path;
 }
 
 function parseUtcDateTime(value: string) {
@@ -3014,6 +3054,8 @@ export default function App() {
   const [collectionSettlementToken, setCollectionSettlementToken] = useState("All");
   const [collectionPage, setCollectionPage] = useState(1);
   const [selectedMarketId, setSelectedMarketId] = useState<number | null>(null);
+  const [heroActivityWindow, setHeroActivityWindow] = useState<HeroActivityWindowKey>("7d");
+  const [heroActivityHoverRatio, setHeroActivityHoverRatio] = useState<number | null>(null);
   const [selectedProfileAddress, setSelectedProfileAddress] = useState("");
   const [profileHistoryPage, setProfileHistoryPage] = useState(1);
   const [profileCreatedPage, setProfileCreatedPage] = useState(1);
@@ -3182,14 +3224,25 @@ export default function App() {
   const averageMarketByTokenText = formatAssetSummary(statsAssetBreakdown, "averageMarketVolume");
   const aggregateAssetLabel =
     statsAssetBreakdown.length > 1 ? "token units" : statsAssetBreakdown[0]?.symbol || defaultSettlementSymbol;
-  const heroActivityEnd = Math.max(
-    nowSeconds,
-    activities.reduce((max, activity) => Math.max(max, activity.timestamp || 0), 0)
+  const activeHeroActivityWindow =
+    HERO_ACTIVITY_WINDOWS.find((item) => item.value === heroActivityWindow) ?? HERO_ACTIVITY_WINDOWS[1];
+  const heroActivityTimestamps = activities
+    .map((activity) => activity.timestamp || 0)
+    .filter((timestamp) => timestamp > 0);
+  const heroActivityLatest = Math.max(nowSeconds, ...heroActivityTimestamps, 0);
+  const heroActivityOldest =
+    heroActivityTimestamps.length > 0 ? Math.min(...heroActivityTimestamps) : Math.max(0, heroActivityLatest - 7 * 24 * 60 * 60);
+  const heroActivityEnd = heroActivityLatest || nowSeconds;
+  const heroActivityRange = Math.max(
+    60 * 60,
+    activeHeroActivityWindow.seconds ?? Math.max(7 * 24 * 60 * 60, heroActivityEnd - heroActivityOldest)
   );
-  const heroActivityRange = 7 * 24 * 60 * 60;
-  const heroActivityStart = Math.max(0, heroActivityEnd - heroActivityRange);
-  const heroActivityBuckets = Array.from({ length: 8 }, (_, index) => ({
-    timestamp: Math.round(heroActivityStart + (heroActivityRange * index) / 7),
+  const heroActivityStart = Math.max(0, activeHeroActivityWindow.seconds ? heroActivityEnd - heroActivityRange : heroActivityOldest);
+  const heroActivityBucketCount = heroActivityWindow === "1d" ? 12 : heroActivityWindow === "7d" ? 14 : 18;
+  const heroActivityBuckets = Array.from({ length: heroActivityBucketCount }, (_, index) => ({
+    timestamp: Math.round(
+      heroActivityStart + (heroActivityRange * index) / Math.max(1, heroActivityBucketCount - 1)
+    ),
     volume: 0n
   }));
   for (const activity of activities) {
@@ -3214,24 +3267,44 @@ export default function App() {
       y: CHART_BOTTOM - ratio * CHART_HEIGHT
     };
   });
-  const heroActivityLinePoints = heroActivityPoints.map((point) => `${point.x},${point.y}`).join(" ");
+  const heroActivityLinePath = smoothPathFromPoints(heroActivityPoints.map((point) => ({ x: point.x, y: point.y })));
   const heroActivityAreaPath =
     heroActivityPoints.length > 0
-      ? `M${heroActivityPoints[0].x},${CHART_BOTTOM} L${heroActivityLinePoints} L${heroActivityPoints[heroActivityPoints.length - 1].x},${CHART_BOTTOM} Z`
+      ? `${heroActivityLinePath} L${heroActivityPoints[heroActivityPoints.length - 1].x},${CHART_BOTTOM} L${heroActivityPoints[0].x},${CHART_BOTTOM} Z`
       : "";
-  const heroActivityFocus =
-    heroActivityPoints.reduce(
-      (best, point) => (point.volume >= best.volume ? point : best),
-      heroActivityPoints[heroActivityPoints.length - 1] ?? {
+  const heroActivityFocus = (() => {
+    if (heroActivityPoints.length === 0) {
+      return {
         timestamp: heroActivityEnd,
         volume: 0n,
         x: CHART_RIGHT,
         y: CHART_BOTTOM - CHART_HEIGHT * 0.46
-      }
-    );
+      };
+    }
+    if (heroActivityHoverRatio === null) {
+      return heroActivityPoints[heroActivityPoints.length - 1];
+    }
+    const hoverX = CHART_LEFT + heroActivityHoverRatio * (CHART_RIGHT - CHART_LEFT);
+    const upperIndexRaw = heroActivityPoints.findIndex((point) => point.x >= hoverX);
+    if (upperIndexRaw <= 0) return { ...heroActivityPoints[0], x: hoverX };
+    if (upperIndexRaw === -1) return { ...heroActivityPoints[heroActivityPoints.length - 1], x: hoverX };
+    const previous = heroActivityPoints[upperIndexRaw - 1];
+    const next = heroActivityPoints[upperIndexRaw];
+    const segmentRatio = (hoverX - previous.x) / Math.max(0.0001, next.x - previous.x);
+    return {
+      ...next,
+      timestamp: Math.round(previous.timestamp + (next.timestamp - previous.timestamp) * segmentRatio),
+      x: hoverX,
+      y: previous.y + (next.y - previous.y) * segmentRatio,
+      volume: segmentRatio < 0.5 ? previous.volume : next.volume
+    };
+  })();
   const heroActivityVolumeText =
     heroActivityFocus.volume > 0n ? `${formatUsdc(heroActivityFocus.volume, defaultSettlementDecimals)} ${defaultSettlementSymbol}` : "No trades yet";
-  const heroActivityTicks = heroActivityPoints.filter((_, index) => index === 0 || index === 2 || index === 4 || index === 6 || index === heroActivityPoints.length - 1);
+  const heroActivityTicks =
+    heroActivityPoints.length <= 5
+      ? heroActivityPoints
+      : [0, 0.25, 0.5, 0.75, 1].map((ratio) => heroActivityPoints[Math.round(ratio * (heroActivityPoints.length - 1))]);
   const knownSettlementTokens = useMemo(() => {
     const byKey = new Map<string, { token: string; symbol: string; decimals: number }>();
     const addToken = (token: string | undefined, symbol: string, decimals: number) => {
@@ -7799,18 +7872,35 @@ export default function App() {
     const chartPrimaryPercent = selectedTradeSide === Outcome.No ? selectedMarketNoPercent : selectedMarketYesPercent;
     const chartPrimaryLabel = selectedTradeSide === Outcome.No ? "NO" : "YES";
     const chartLineY = (point: (typeof chartRows)[number]) => selectedTradeSide === Outcome.No ? point.noY : point.yesY;
-    const chartYesLinePoints = chartRows.map((point) => `${point.x},${point.yesY}`).join(" ");
-    const chartNoLinePoints = chartRows.map((point) => `${point.x},${point.noY}`).join(" ");
-    const chartLinePoints = selectedTradeSide === Outcome.No ? chartNoLinePoints : chartYesLinePoints;
+    const chartYesPath = smoothPathFromPoints(chartRows.map((point) => ({ x: point.x, y: point.yesY })));
+    const chartNoPath = smoothPathFromPoints(chartRows.map((point) => ({ x: point.x, y: point.noY })));
+    const chartLinePath = selectedTradeSide === Outcome.No ? chartNoPath : chartYesPath;
     const chartAreaPath =
-      chartRows.length > 0
-        ? `M${chartRows[0].x},${CHART_BOTTOM} L${chartLinePoints} L${chartRows[chartRows.length - 1].x},${CHART_BOTTOM} Z`
+      chartRows.length > 0 && chartLinePath
+        ? `${chartLinePath} L${chartRows[chartRows.length - 1].x},${CHART_BOTTOM} L${chartRows[0].x},${CHART_BOTTOM} Z`
         : "";
     const chartLastPoint = chartRows[chartRows.length - 1];
-    const chartHoverPoint =
-      chartRows.length > 0
-        ? chartRows[Math.min(chartRows.length - 1, Math.max(0, Math.round((chartHoverRatio ?? 1) * (chartRows.length - 1))))]
-        : undefined;
+    const chartHoverPoint = (() => {
+      if (chartHoverRatio === null || chartRows.length === 0) return undefined;
+      const hoverX = CHART_LEFT + chartHoverRatio * (CHART_RIGHT - CHART_LEFT);
+      const upperIndexRaw = chartRows.findIndex((point) => point.x >= hoverX);
+      if (upperIndexRaw <= 0) return { ...chartRows[0], x: hoverX };
+      if (upperIndexRaw === -1) return { ...chartRows[chartRows.length - 1], x: hoverX };
+      const previous = chartRows[upperIndexRaw - 1];
+      const next = chartRows[upperIndexRaw];
+      const segmentRatio = (hoverX - previous.x) / Math.max(0.0001, next.x - previous.x);
+      const yesPercent = previous.yesPercent + (next.yesPercent - previous.yesPercent) * segmentRatio;
+      const noPercent = 100 - yesPercent;
+      return {
+        ...next,
+        timestamp: Math.round(previous.timestamp + (next.timestamp - previous.timestamp) * segmentRatio),
+        x: hoverX,
+        yesPercent,
+        noPercent,
+        yesY: CHART_BOTTOM - (yesPercent / 100) * CHART_HEIGHT,
+        noY: CHART_BOTTOM - (noPercent / 100) * CHART_HEIGHT
+      };
+    })();
     const chartTooltipLeft = chartHoverPoint ? Math.min(86, Math.max(14, chartHoverPoint.x)) : 0;
     const chartTooltipTop = chartHoverPoint ? Math.min(76, Math.max(14, (chartLineY(chartHoverPoint) / 58) * 100)) : 0;
     const chartTradeCount = selectedMarketActivities.length;
@@ -8206,8 +8296,8 @@ export default function App() {
                     d={chartAreaPath}
                   />
                 )}
-                <polyline className={`detail-yes-line ${selectedTradeSide === Outcome.No ? "muted-line" : ""}`} points={chartYesLinePoints} />
-                <polyline className={`detail-no-line ${selectedTradeSide === Outcome.Yes ? "muted-line" : ""}`} points={chartNoLinePoints} />
+                <path className={`detail-yes-line ${selectedTradeSide === Outcome.No ? "muted-line" : ""}`} d={chartYesPath} />
+                <path className={`detail-no-line ${selectedTradeSide === Outcome.Yes ? "muted-line" : ""}`} d={chartNoPath} />
                 {chartLastPoint && (
                   <>
                     <circle className="chart-end-dot yes" cx={chartLastPoint.x} cy={chartLastPoint.yesY} r="1.35" />
@@ -8218,6 +8308,14 @@ export default function App() {
               {chartHoverPoint && (
                 <>
                   <span className="chart-crosshair" style={{ left: `${chartHoverPoint.x}%` }} />
+                  <span
+                    className="chart-hover-dot yes"
+                    style={{ left: `${chartHoverPoint.x}%`, top: `${(chartHoverPoint.yesY / 58) * 100}%` }}
+                  />
+                  <span
+                    className="chart-hover-dot no"
+                    style={{ left: `${chartHoverPoint.x}%`, top: `${(chartHoverPoint.noY / 58) * 100}%` }}
+                  />
                   <div className="chart-tooltip" style={{ left: `${chartTooltipLeft}%`, top: `${chartTooltipTop}%` }}>
                     <span>{chartTimeLabel(chartHoverPoint.timestamp, true)}</span>
                     <strong className="tooltip-yes">YES {chartHoverPoint.yesPercent.toFixed(1)}%</strong>
@@ -9526,24 +9624,6 @@ export default function App() {
               Transparent outcomes, verifiable data, smarter markets.
               Create YES/NO markets with Aura-assisted evidence review and objective oracle checks.
             </p>
-            <div className="hero-stat-strip">
-              <div>
-                <span>Total markets</span>
-                <strong>{statsSummary.totalMarkets}</strong>
-              </div>
-              <div>
-                <span>Live markets</span>
-                <strong>{statsSummary.liveMarkets}</strong>
-              </div>
-              <div>
-                <span>Total volume</span>
-                <strong>{totalVolumeByTokenText}</strong>
-              </div>
-              <div>
-                <span>Participants</span>
-                <strong>{statsSummary.knownPlayers}</strong>
-              </div>
-            </div>
             <div className="hero-actions">
               <button className="button-link hero-launch-button" onClick={account ? openCreateMarket : openWalletModal} disabled={connecting}>
                 {connecting ? "Connecting..." : "Launch Market"}
@@ -9559,16 +9639,23 @@ export default function App() {
           <aside className="hero-activity-panel">
             <div className="hero-activity-head">
               <div>
-                <span className="section-label">Market activity (7D)</span>
+                <span className="section-label">Market activity ({activeHeroActivityWindow.label})</span>
                 <strong>Volume {heroActivityVolumeText}</strong>
               </div>
               <span className="hero-live-pill">{liveMarkets} live</span>
             </div>
-            <div className="hero-activity-chart">
-              <svg viewBox="0 0 100 58" preserveAspectRatio="none" role="img" aria-label="Seven day market activity chart">
+            <div
+              className="hero-activity-chart"
+              onPointerLeave={() => setHeroActivityHoverRatio(null)}
+              onPointerMove={(event) => {
+                const rect = event.currentTarget.getBoundingClientRect();
+                setHeroActivityHoverRatio(Math.min(1, Math.max(0, (event.clientX - rect.left) / Math.max(1, rect.width))));
+              }}
+            >
+              <svg viewBox="0 0 100 58" preserveAspectRatio="none" role="img" aria-label={`${activeHeroActivityWindow.label} market activity chart`}>
                 <path className="hero-activity-grid" d="M8 10H92 M8 31H92 M8 52H92" />
                 {heroActivityAreaPath && <path className="hero-activity-area" d={heroActivityAreaPath} />}
-                <polyline className="hero-activity-line" points={heroActivityLinePoints} />
+                {heroActivityLinePath && <path className="hero-activity-line" d={heroActivityLinePath} />}
                 <line className="hero-activity-cursor" x1={heroActivityFocus.x} x2={heroActivityFocus.x} y1="8" y2="54" />
                 <circle className="hero-activity-dot" cx={heroActivityFocus.x} cy={heroActivityFocus.y} r="1.55" />
               </svg>
@@ -9578,15 +9665,24 @@ export default function App() {
               </div>
               <div className="hero-activity-axis">
                 {heroActivityTicks.map((tick) => (
-                  <span key={`hero-activity-${tick.timestamp}`}>{chartTimeLabel(tick.timestamp)}</span>
+                  <span key={`hero-activity-${tick.timestamp}`}>{chartAxisLabel(tick.timestamp, heroActivityRange)}</span>
                 ))}
               </div>
             </div>
             <div className="hero-activity-tabs" aria-label="Activity range preview">
-              <span>1D</span>
-              <span className="active">7D</span>
-              <span>30D</span>
-              <span>ALL</span>
+              {HERO_ACTIVITY_WINDOWS.map((windowOption) => (
+                <button
+                  className={heroActivityWindow === windowOption.value ? "active" : ""}
+                  key={windowOption.value}
+                  onClick={() => {
+                    setHeroActivityWindow(windowOption.value);
+                    setHeroActivityHoverRatio(null);
+                  }}
+                  type="button"
+                >
+                  {windowOption.label}
+                </button>
+              ))}
             </div>
           </aside>
         </section>

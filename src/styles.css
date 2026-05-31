@@ -1788,6 +1788,7 @@ h3 {
 
 .hero-actions {
   flex-wrap: wrap;
+  margin-top: 24px;
 }
 
 .hero-launch-button {
@@ -1959,40 +1960,6 @@ h3 {
   max-width: 600px;
 }
 
-.hero-stat-strip {
-  display: grid;
-  gap: 0;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  margin: 22px 0 24px;
-  max-width: 660px;
-}
-
-.hero-stat-strip div {
-  border-left: 1px solid rgba(154, 167, 189, 0.28);
-  display: grid;
-  gap: 6px;
-  min-width: 0;
-  padding: 2px 18px;
-}
-
-.hero-stat-strip div:first-child {
-  border-left: 0;
-  padding-left: 0;
-}
-
-.hero-stat-strip span {
-  color: #8190aa;
-  font-size: 0.68rem;
-  font-weight: 900;
-  text-transform: uppercase;
-}
-
-.hero-stat-strip strong {
-  color: #f7f9ff;
-  font-size: 1.04rem;
-  overflow-wrap: anywhere;
-}
-
 .hero-activity-panel {
   background: rgba(7, 12, 24, 0.66);
   border: 1px solid rgba(64, 89, 134, 0.7);
@@ -2037,6 +2004,7 @@ h3 {
   background-size: 64px 100%, 100% 48px, auto, auto;
   border: 1px solid rgba(64, 89, 134, 0.34);
   border-radius: 8px;
+  cursor: crosshair;
   min-height: 230px;
   overflow: hidden;
   padding: 14px 12px 32px;
@@ -2130,16 +2098,22 @@ h3 {
   gap: 8px;
 }
 
-.hero-activity-tabs span {
+.hero-activity-tabs button {
+  background: transparent;
   border: 1px solid transparent;
   border-radius: 999px;
   color: #7f8da5;
+  cursor: pointer;
   font-size: 0.72rem;
   font-weight: 900;
   padding: 7px 11px;
 }
 
-.hero-activity-tabs span.active {
+.hero-activity-tabs button:hover {
+  color: #b6c9e8;
+}
+
+.hero-activity-tabs button.active {
   background: rgba(24, 215, 255, 0.12);
   border-color: rgba(24, 215, 255, 0.28);
   color: #18d7ff;
@@ -4794,17 +4768,25 @@ label {
   width: 1px;
 }
 
-.chart-crosshair::after {
-  background: #18d7ff;
+.chart-hover-dot {
   border: 2px solid #ffffff;
   border-radius: 999px;
-  content: "";
   height: 8px;
-  left: 50%;
+  pointer-events: none;
   position: absolute;
-  top: 50%;
   transform: translate(-50%, -50%);
   width: 8px;
+  z-index: 2;
+}
+
+.chart-hover-dot.yes {
+  background: #12b981;
+  box-shadow: 0 0 0 4px rgba(18, 185, 129, 0.18);
+}
+
+.chart-hover-dot.no {
+  background: #ef4444;
+  box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.16);
 }
 
 .chart-tooltip {
@@ -8006,21 +7988,6 @@ label {
 
   .hero-band {
     gap: 22px;
-  }
-
-  .hero-stat-strip {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .hero-stat-strip div {
-    border-left: 0;
-    border-top: 1px solid rgba(154, 167, 189, 0.28);
-    padding: 10px 0 0;
-  }
-
-  .hero-stat-strip div:first-child,
-  .hero-stat-strip div:nth-child(2) {
-    border-top: 0;
   }
 
   .hero-activity-panel {
