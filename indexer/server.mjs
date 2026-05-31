@@ -63,6 +63,7 @@ const USDC_DECIMALS = 18;
 const V3_SETTLEMENT_DECIMALS = 6;
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 const ZERO_HASH = "0x0000000000000000000000000000000000000000000000000000000000000000";
+const AURA_RULE_JSON_PREFIX = "AURA_RULE_JSON:";
 const ARC_CHAIN = {
   id: 5042002,
   name: "Arc Testnet",
@@ -1214,21 +1215,47 @@ function extractUrlsFromText(value) {
 }
 
 function marketSourceUrls(market) {
+  const structuredRule = structuredRuleForMarket(market);
   return [
     cleanUrl(market?.metadataURI),
     cleanUrl(market?.fallbackSourceURI),
+    cleanUrl(structuredRule?.primarySource),
+    cleanUrl(structuredRule?.fallbackSource),
     ...extractUrlsFromText(market?.question),
     ...extractUrlsFromText(market?.resolutionRule)
   ].filter((url, index, rows) => url && rows.indexOf(url) === index);
 }
 
+function stripRuleMetadata(value) {
+  return String(value || "")
+    .replace(new RegExp(`\\n*${AURA_RULE_JSON_PREFIX}[\\s\\S]*$`), "")
+    .trim();
+}
+
+function structuredRuleForMarket(market) {
+  const rule = String(market?.resolutionRule || "");
+  const index = rule.indexOf(AURA_RULE_JSON_PREFIX);
+  if (index < 0) return null;
+  const raw = rule.slice(index + AURA_RULE_JSON_PREFIX.length).trim();
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    if (!parsed || Number(parsed.version || 0) !== 1) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
 function oracleTextForMarket(market) {
+  const structuredRule = structuredRuleForMarket(market);
   return [
     market?.question,
     market?.category,
     market?.metadataURI,
     market?.fallbackSourceURI,
-    market?.resolutionRule
+    stripRuleMetadata(market?.resolutionRule),
+    structuredRule ? JSON.stringify(structuredRule) : ""
   ]
     .map((value) => String(value || ""))
     .join(" ")
@@ -1300,6 +1327,15 @@ const CRYPTO_ORACLE_ASSETS = [
 ];
 
 function detectCryptoOracleMarket(market) {
+  const structuredRule = structuredRuleForMarket(market);
+  if (structuredRule?.kind === "crypto-price") {
+    const asset = CRYPTO_ORACLE_ASSETS.find((candidate) => candidate.symbol === String(structuredRule.asset || "").toUpperCase());
+    const target = parseNumericValue(structuredRule.target);
+    const comparator = String(structuredRule.comparator || "");
+    if (asset && target !== null && ["gte", "lte", "eq"].includes(comparator)) {
+      return { ...asset, comparator, target, structuredRule };
+    }
+  }
   const text = oracleTextForMarket(market);
   const hasPriceContext =
     /\b(price|spot|traded?|trade|close|closing|open|usd|usdt|btc\/usd|eth\/usd|btc\/usdt|eth\/usdt)\b/i.test(text) ||
@@ -1317,6 +1353,15 @@ const MACRO_ORACLE_ASSETS = [
 ];
 
 function detectMacroOracleMarket(market) {
+  const structuredRule = structuredRuleForMarket(market);
+  if (structuredRule?.kind === "macro-price") {
+    const asset = MACRO_ORACLE_ASSETS.find((candidate) => candidate.symbol === String(structuredRule.asset || "").toUpperCase());
+    const target = parseNumericValue(structuredRule.target);
+    const comparator = String(structuredRule.comparator || "");
+    if (asset && target !== null && ["gte", "lte", "eq"].includes(comparator)) {
+      return { ...asset, comparator, target, structuredRule };
+    }
+  }
   const text = oracleTextForMarket(market);
   const asset = MACRO_ORACLE_ASSETS.find((candidate) => candidate.names.some((name) => hasExactMarketTerm(text, name)));
   const condition = detectComparatorTarget(text);
@@ -1325,6 +1370,10 @@ function detectMacroOracleMarket(market) {
 }
 
 function detectHealthOracleMarket(market) {
+  const structuredRule = structuredRuleForMarket(market);
+  if (structuredRule?.kind === "status-health" && cleanUrl(structuredRule.primarySource)) {
+    return { url: cleanUrl(structuredRule.primarySource), structuredRule };
+  }
   const text = oracleTextForMarket(market);
   const urls = marketSourceUrls(market);
   const explicitHealthUrl = urls.find((url) => /\/health(?:\?|$|\/)/i.test(url)) || urls.find((url) => /api\./i.test(url));
@@ -1621,9 +1670,12 @@ function oracleEvidenceRowsForMarket(marketId) {
     `Objective Oracle adapter ${proposal.adapter || "unknown"} returned ${outcome}.`,
     proposal.summary,
     proposal.observedValue ? `Observed value: ${proposal.observedValue}.` : "",
-    proposal.comparator && proposal.targetValue ? `Rule check: observed value ${proposal.comparator} ${proposal.targetValue}.` : "",
+    proposal.comparator && proposal.targetValue
+      ? `Rule check: observed value must be ${String(proposal.comparator).toUpperCase()} ${proposal.targetValue}; oracle outcome is ${outcome}.`
+      : "",
     typeof proposal.confidence === "number" ? `Oracle confidence: ${proposal.confidence}%.` : "",
-    Array.isArray(proposal.checks) && proposal.checks.length > 0 ? `Checks: ${proposal.checks.join(" / ")}` : ""
+    Array.isArray(proposal.checks) && proposal.checks.length > 0 ? `Checks: ${proposal.checks.join(" / ")}` : "",
+    proposal.dataHash && proposal.dataHash !== ZERO_HASH ? `Data hash: ${proposal.dataHash}.` : ""
   ].filter(Boolean).join(" ");
   return [
     {
@@ -2101,13 +2153,14 @@ function resolutionPrompt(body) {
 }
 
 function resolutionReviewerPrompt(market, evidenceRows, role) {
+  const structuredRule = structuredRuleForMarket(market);
   const evidence = evidenceRows.map((item) => ({
     title: cleanText(item.title, 120),
     url: cleanUrl(item.url),
     notes: cleanText(item.notes || item.finding, 700),
     createdAt: item.createdAt
   }));
-  const criteria = cleanText(market.resolutionRule || market.resolutionCriteria || "", 1000);
+  const criteria = cleanText(stripRuleMetadata(market.resolutionRule || market.resolutionCriteria || ""), 1000);
   return [
     `Current UTC time: ${nowIso()}`,
     `Reviewer role: ${role}`,
@@ -2117,6 +2170,7 @@ function resolutionReviewerPrompt(market, evidenceRows, role) {
     `Trading close unix: ${market.closeTime}`,
     `Resolution time unix: ${marketResolutionTime(market)}`,
     `Resolution criteria: ${criteria || "not provided"}`,
+    `Structured resolution rule JSON: ${structuredRule ? JSON.stringify(structuredRule) : "not provided"}`,
     `Current pools: YES ${formatUnits(toBigint(market.yesPool), marketAssetDecimals(market))} ${market.settlementSymbol || "USDC"} / NO ${formatUnits(toBigint(market.noPool), marketAssetDecimals(market))} ${market.settlementSymbol || "USDC"}`,
     `Evidence JSON: ${JSON.stringify(evidence)}`,
     "Return JSON only with:",
@@ -2127,7 +2181,10 @@ function resolutionReviewerPrompt(market, evidenceRows, role) {
     '  "keyEvidence": [{"title":"...", "url":"...", "finding":"..."}],',
     '  "risks": ["specific dispute or ambiguity risk"]',
     "}",
-    "Use only the supplied evidence and public facts that can be verified from URLs in the evidence list.",
+    "Use only the supplied evidence, structured resolution rule, and public facts that can be verified from URLs in the evidence list.",
+    "If the evidence contains an Objective Oracle proposal with YES, NO, or CANCEL, treat it as a deterministic source check unless it conflicts with the market's primary source, timestamp, or rule.",
+    "For numeric threshold markets, compare the observed value against the structured comparator and target. If the observed value is clearly above or below the target, return YES or NO; do not return INSUFFICIENT_EVIDENCE just because the result is unfavorable to YES.",
+    "For health/status endpoint markets, an observed ok/major-incident value from the configured URL is enough to return YES or NO according to the rule.",
     "For deadline questions phrased like 'Will X ... by time T?', if T has passed and there is no credible evidence that X happened, prefer NO (with lower confidence) over INSUFFICIENT_EVIDENCE.",
     "If the evidence is not enough to decide confidently, return INSUFFICIENT_EVIDENCE.",
     "For price/date markets, require the source to match the metric and time window exactly."

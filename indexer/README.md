@@ -69,6 +69,8 @@ V4 settlement assets are restricted to 6-decimal stablecoins. If more than one a
 
 Oracle proposal v1 is deterministic offchain assistance for markets with objective data sources. It does not spend AI quota. By default it only writes a saved suggestion for the settlement report. In phase 2, the indexer can also auto-submit the first onchain proposal when explicitly enabled, but it still does not auto-finalize funded markets.
 
+New V4 markets can include an `AURA_RULE_JSON` metadata line inside the onchain resolution rule. The indexer strips that line for human display, but uses it for adapter matching: asset, comparator, target, primary source, fallback source, close time, and resolution time. This keeps Aura Agent, Oracle proposals, resolver actions, and final-review reporting aligned on the same source rule.
+
 Supported adapters:
 
 - Liquidity rule: if YES pool or NO pool is empty, suggest `CANCEL` so the funded side can be refunded instead of awarding a one-sided market.

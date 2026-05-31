@@ -19,7 +19,7 @@ Tinh nang hien tai:
 - Aura Agent giup draft market va goi y ket qua; thao tac de xuat/finalize van la giao dich onchain duoc ky boi vi co tham quyen.
 - Oracle proposal v1 chay trong indexer de tu kiem tra cac market khach quan nhu gia crypto, macro chart va health/status API ma khong ton quota AI; ket qua chi la goi y cho resolver/owner, khong tu chot tien.
 - Contract V4 tach `closeTime` cua giao dich voi `resolutionTime` cua su kien; contract khong cho cong bo ket qua truoc `resolutionTime`.
-- V4 luu primary source, fallback source va resolution rule onchain de dieu khoan market khong bi phu thuoc vao frontend/indexer.
+- V4 luu primary source, fallback source va resolution rule onchain de dieu khoan market khong bi phu thuoc vao frontend/indexer. Frontend moi con gan them mot dong metadata `AURA_RULE_JSON` vao rule de Aura Agent, Oracle, creator va final reviewer doc cung mot bo dieu kien co cau truc.
 - V4 snapshot dieu khoan phi, creator bond, dispute bond, dispute window, min stake va proposal grace period theo tung market de thay doi cau hinh sau nay khong lam doi market cu.
 - V4 cho phep settlement asset 6 decimals cau hinh theo market, vi du USDC hoac EURC, va quan ly phi theo tung token; khong quy doi FX giua cac token.
 - Trong trang market dang giao dich hoac trang Profile, nguoi dung co the lay quote LI.FI va tu ky swap `USDC <-> EURC` tren Arc Testnet neu can dung token settlement cua market truoc khi stake. UI hien so nhan toi thieu, cho chon price tolerance va yeu cau quote moi neu quote cu het han de giam swap revert tren thanh khoan testnet. Swap khong thay doi token tra thuong cua market.
@@ -40,6 +40,7 @@ Oracle proposal v1 ho tro:
 - Health/status API: endpoint co `ok: true`, HTTP 200, hoac status page public nhu GitHub/OpenAI.
 - Liquidity rule: neu YES pool hoac NO pool bang 0, Oracle goi y Cancel/Refund thay vi chon YES/NO.
 - Cac market ngoai adapter, vi du tin tuc phuc tap hoac sports, van di qua Aura Agent/evidence/authority review.
+- Khi market co metadata `AURA_RULE_JSON`, Oracle uu tien asset, comparator, target, source va resolution time trong metadata thay vi doan text tu do. Dieu nay giup giam tinh trang AI/Oracle/creator hieu khac nhau cung mot cau hoi.
 
 ## Arc Testnet
 

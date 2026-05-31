@@ -304,9 +304,12 @@
           <div class="note">
             Settlement report: the final-action area now summarizes Aura's suggestion, Oracle suggestion, the creator or resolver proposal, dispute or owner-review state, YES/NO pools, total volume, and the timing windows. It is designed so the next signer can understand what happened before selecting Final YES, Final NO, or Final Cancel.
           </div>
+          <div class="note">
+            Shared source rule: new markets keep a human-readable rule plus structured rule metadata onchain. Aura Agent, Oracle adapters, the resolver, and the final reviewer can all read the same source, fallback source, event time, comparator, target, and asset context.
+          </div>
           <div class="reference-table">
             <article><span>Current state</span><strong>Live test markets are indexed at api.aurapredict.xyz.</strong></article>
-            <article><span>Source/rule storage</span><strong>The contract stores the resolution source, fallback source, and rule for every new market.</strong></article>
+            <article><span>Source/rule storage</span><strong>The contract stores the resolution source, fallback source, human rule, and structured rule metadata for every new market.</strong></article>
             <article><span>Proposal timing</span><strong>Trading close time and result resolution time are separate; the contract rejects early proposals.</strong></article>
             <article><span>Token safety</span><strong>Frontend checks balance and allowance for the selected settlement token before create, stake, or dispute actions.</strong></article>
             <article><span>Optional swap</span><strong>LI.FI route quoting with visible minimum receive and adjustable tolerance helps a wallet obtain USDC or EURC without changing any market's payout denomination.</strong></article>
@@ -338,6 +341,9 @@
           </div>
           <div class="note">
             Oracle proposal v1: for objective markets, the indexer can separately check sources such as Binance 1-minute crypto price data, Yahoo chart data for macro assets, and health/status endpoints. The Oracle result is displayed for reviewers but still does not settle funds without a wallet-signed contract action.
+          </div>
+          <div class="note">
+            Rule alignment: when a market includes structured rule metadata, Aura and Oracle both receive the same comparator, target, source URL, asset, and timestamp. This reduces cases where the AI treats an objective price check as missing evidence while Oracle has already observed the value.
           </div>
           <div class="timeline">
             <article>
@@ -413,6 +419,9 @@
             Oracle proposal v1 does not settle funds by itself. It produces a visible YES, NO, Cancel,
             unsupported, or needs-review signal. A resolver, owner, authority, or approved adapter still
             needs to sign the contract action that changes market state.
+          </div>
+          <div class="note">
+            For markets with structured rule metadata, adapter detection no longer depends only on natural-language guessing. Crypto and macro adapters use the stored asset, comparator, target, source, and resolution timestamp when available.
           </div>
           <div class="feature-grid">
             <article>

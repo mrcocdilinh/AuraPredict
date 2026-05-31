@@ -58,6 +58,7 @@ type StablecoinSwapPair = {
 const SWAP_TOLERANCE_OPTIONS = [50, 100, 300, 500] as const;
 const DEFAULT_SWAP_TOLERANCE_BPS = 300;
 const SWAP_QUOTE_MAX_AGE_MS = 30_000;
+const AURA_RULE_JSON_PREFIX = "AURA_RULE_JSON:";
 
 function stablecoinSwapPairKey(pair: StablecoinSwapPair) {
   return `${pair.fromToken.toLowerCase()}:${pair.toToken.toLowerCase()}`;
@@ -216,6 +217,19 @@ type CreateFormState = {
   resolutionSource: string;
   resolutionRule: string;
   fallbackSource: string;
+};
+
+type StructuredResolutionRule = {
+  version: 1;
+  kind: "crypto-price" | "macro-price" | "status-health" | "status-page" | "sports-fixture" | "manual-review";
+  asset?: string;
+  metric?: string;
+  comparator?: "gte" | "lte" | "eq";
+  target?: string;
+  closeTimeUtc?: string;
+  resolutionTimeUtc?: string;
+  primarySource?: string;
+  fallbackSource?: string;
 };
 
 type MismatchConfirmState = {
@@ -1012,6 +1026,109 @@ function isValidHttpUrl(value: string) {
   } catch {
     return false;
   }
+}
+
+function stripRuleMetadata(value: string) {
+  return String(value || "")
+    .replace(new RegExp(`\\n*${AURA_RULE_JSON_PREFIX}[\\s\\S]*$`), "")
+    .trim();
+}
+
+function structuredRuleFromText(value?: string): StructuredResolutionRule | null {
+  const text = String(value || "");
+  const index = text.indexOf(AURA_RULE_JSON_PREFIX);
+  if (index < 0) return null;
+  const raw = text.slice(index + AURA_RULE_JSON_PREFIX.length).trim();
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as StructuredResolutionRule;
+    return parsed?.version === 1 ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function parseComparatorTarget(value: string): Pick<StructuredResolutionRule, "comparator" | "target"> {
+  const text = String(value || "").toLowerCase().replace(/\s+/g, " ");
+  const patterns: Array<{ comparator: "gte" | "lte" | "eq"; regex: RegExp }> = [
+    { comparator: "gte", regex: /\$?\s*([0-9][0-9,]*(?:\.[0-9]+)?)\s*(?:usd|usdc|points?|index|per ounce)?\s*(?:or higher|or above|or more|or greater)/i },
+    { comparator: "lte", regex: /\$?\s*([0-9][0-9,]*(?:\.[0-9]+)?)\s*(?:usd|usdc|points?|index|per ounce)?\s*(?:or lower|or below|or less)/i },
+    { comparator: "gte", regex: /(?:at\s+or\s+above|at\s+least|above|higher than|greater than|>=)\s*\$?\s*([0-9][0-9,]*(?:\.[0-9]+)?)/i },
+    { comparator: "lte", regex: /(?:at\s+or\s+below|at\s+most|below|lower than|less than|<=)\s*\$?\s*([0-9][0-9,]*(?:\.[0-9]+)?)/i },
+    { comparator: "eq", regex: /(?:exactly|equal(?:s)?|=)\s*\$?\s*([0-9][0-9,]*(?:\.[0-9]+)?)/i }
+  ];
+  for (const pattern of patterns) {
+    const match = text.match(pattern.regex);
+    const target = match?.[1]?.replace(/,/g, "");
+    if (target) return { comparator: pattern.comparator, target };
+  }
+  return {};
+}
+
+function inferRuleKindAndAsset(category: string, text: string): Pick<StructuredResolutionRule, "kind" | "asset" | "metric"> {
+  const value = `${category} ${text}`.toLowerCase();
+  if (/\/health(?:\?|$|\/)|\bhealth endpoint\b|\bok true\b|\bapi status\b/.test(value)) {
+    return { kind: "status-health", metric: "http_health" };
+  }
+  if (/\bgithub status\b|\bopenai status\b|\bstatus page\b/.test(value)) {
+    return { kind: "status-page", metric: "service_status" };
+  }
+  if (/\bfootball\b|\bsoccer\b|\bnba\b|\bnfl\b|\bmlb\b|\bespn\b|\bfixture\b|\bmatch\b/.test(value)) {
+    return { kind: "sports-fixture", metric: "fixture_presence" };
+  }
+  const cryptoAssets = [
+    ["BTC", /\bbtc\b|\bbitcoin\b/],
+    ["ETH", /\beth\b|\bethereum\b/],
+    ["SOL", /\bsol\b|\bsolana\b/],
+    ["BNB", /\bbnb\b/],
+    ["XRP", /\bxrp\b/],
+    ["ADA", /\bada\b|\bcardano\b/],
+    ["DOGE", /\bdoge\b|\bdogecoin\b/],
+    ["AVAX", /\bavax\b|\bavalanche\b/],
+    ["LINK", /\blink\b|\bchainlink\b/]
+  ] as const;
+  for (const [asset, regex] of cryptoAssets) {
+    if (regex.test(value)) return { kind: "crypto-price", asset, metric: `${asset}/USD spot` };
+  }
+  if (/\bxau\b|\bgold\b|\bgc=f\b/.test(value)) return { kind: "macro-price", asset: "GOLD", metric: "XAU/USD spot" };
+  if (/\bdxy\b|\bdollar index\b|\bus dollar index\b/.test(value)) return { kind: "macro-price", asset: "DXY", metric: "US Dollar Index" };
+  return { kind: "manual-review" };
+}
+
+function buildStructuredResolutionRule(input: {
+  question: string;
+  category: string;
+  closeTime: string;
+  resolutionTime: string;
+  resolutionSource: string;
+  resolutionRule: string;
+  fallbackSource: string;
+}): StructuredResolutionRule {
+  const ruleText = stripRuleMetadata(input.resolutionRule);
+  const kind = inferRuleKindAndAsset(input.category, `${input.question} ${ruleText} ${input.resolutionSource}`);
+  return {
+    version: 1,
+    ...kind,
+    ...parseComparatorTarget(`${input.question} ${ruleText}`),
+    closeTimeUtc: input.closeTime,
+    resolutionTimeUtc: input.resolutionTime || input.closeTime,
+    primarySource: input.resolutionSource,
+    fallbackSource: input.fallbackSource || undefined
+  };
+}
+
+function resolutionRuleForContract(input: {
+  question: string;
+  category: string;
+  closeTime: string;
+  resolutionTime: string;
+  resolutionSource: string;
+  resolutionRule: string;
+  fallbackSource: string;
+}) {
+  const humanRule = stripRuleMetadata(input.resolutionRule);
+  const metadata = buildStructuredResolutionRule({ ...input, resolutionRule: humanRule });
+  return `${humanRule}\n${AURA_RULE_JSON_PREFIX}${JSON.stringify(metadata)}`;
 }
 
 function marketVolume(market: MarketView) {
@@ -2230,7 +2347,7 @@ function LandingPage() {
             The app keeps the trading surface simple while making evidence, profiles, and leaderboard
             performance visible enough for social forecasting. AuraPredict combines onchain YES/NO
             staking, an indexer-backed data layer, AI-assisted market quality checks, AI resolution
-            receipts, and objective oracle proposals. The current contract is deployed on Arc Testnet with onchain source/rule terms, resolution timing, configurable settlement assets, signed-Aura hooks, and authority/oracle controls.
+            receipts, and objective oracle proposals. The current contract is deployed on Arc Testnet with onchain source/rule terms, structured rule metadata, resolution timing, configurable settlement assets, signed-Aura hooks, and authority/oracle controls.
           </p>
         </div>
         <div className="landing-feature-grid">
@@ -2252,7 +2369,8 @@ function LandingPage() {
             AuraPredict now separates two kinds of help during resolution. Aura Agent is used for reasoning-heavy
             questions and evidence review. Oracle proposal v1 is used when the market can be checked directly against
             objective data sources. It gives reviewers a YES, NO, Cancel, or manual-review signal before they sign a
-            contract action.
+            contract action. For new markets, the same structured source rule is shared by Aura, Oracle, the resolver,
+            and the final reviewer.
           </p>
         </div>
         <div className="landing-feature-grid">
@@ -5772,7 +5890,7 @@ export default function App() {
       const question = createForm.question.trim().replace(/\s+/g, " ");
       const category = createForm.category.trim() || "Other";
       const resolutionSource = normalizeReferenceUrl(createForm.resolutionSource);
-      const resolutionRule = createForm.resolutionRule.trim();
+      const resolutionRule = stripRuleMetadata(createForm.resolutionRule.trim());
       const fallbackSource = normalizeReferenceUrl(createForm.fallbackSource);
       if (!question) throw new Error("Market question is required.");
       if (question.length < 8) throw new Error("Market question must be at least 8 characters.");
@@ -5792,6 +5910,18 @@ export default function App() {
       }
       const closeTime = parseUtcDateTime(createForm.closeTime);
       const resolutionTime = isStablecoinContractVersion(contractVersion) ? parseUtcDateTime(createForm.resolutionTime) : closeTime;
+      const contractResolutionRule =
+        contractVersion === "v4"
+          ? resolutionRuleForContract({
+              question,
+              category,
+              closeTime: createForm.closeTime,
+              resolutionTime: createForm.resolutionTime || createForm.closeTime,
+              resolutionSource,
+              resolutionRule,
+              fallbackSource
+            })
+          : resolutionRule;
       const earliestCloseTime = BigInt(Math.floor(Date.now() / 1000) + 5 * 60);
       if (closeTime <= earliestCloseTime) {
         throw new Error("Close time must be at least 5 minutes after the current UTC time.");
@@ -5874,7 +6004,7 @@ export default function App() {
                     resolutionTime,
                     resolutionSource,
                     fallbackSource,
-                    resolutionRule,
+                    contractResolutionRule,
                     Number(createForm.resolutionMode),
                     ZERO_ADDRESS
                   ]
@@ -5895,7 +6025,7 @@ export default function App() {
                       question,
                       category,
                       resolutionSource,
-                      resolutionRule,
+                      resolutionRule: contractResolutionRule,
                       fallbackSource,
                       closeTime: closeTime.toString(),
                       resolutionTime: resolutionTime.toString()
@@ -6020,7 +6150,7 @@ export default function App() {
         resolutionMode: isStablecoinContractVersion(contractVersion) ? Number(createForm.resolutionMode) : undefined,
         metadataURI: isStablecoinContractVersion(contractVersion) ? resolutionSource : undefined,
         fallbackSourceURI: contractVersion === "v4" ? fallbackSource : undefined,
-        resolutionRule: contractVersion === "v4" ? resolutionRule : undefined,
+        resolutionRule: contractVersion === "v4" ? contractResolutionRule : undefined,
         termsDisputeGracePeriod: isStablecoinContractVersion(contractVersion) ? disputeGracePeriod : undefined,
         creator: account,
         resolver: account,
@@ -7725,6 +7855,22 @@ export default function App() {
         : selectedMarket.proposedAt > 0 && selectedMarket.disputeDeadline > 0
         ? `If no dispute is opened, finalize the proposed result after ${closeDate(selectedMarket.disputeDeadline)}.`
         : "A final action appears after a result is proposed.";
+    const selectedStructuredRule = structuredRuleFromText(selectedMarket.resolutionRule);
+    const selectedHumanRule = stripRuleMetadata(selectedMarket.resolutionRule || "");
+    const selectedRuleSource = selectedStructuredRule?.primarySource || selectedMarket.metadataURI || "";
+    const selectedRuleFallback = selectedStructuredRule?.fallbackSource || selectedMarket.fallbackSourceURI || "";
+    const selectedRuleComparator =
+      selectedStructuredRule?.comparator && selectedStructuredRule?.target
+        ? `${selectedStructuredRule.comparator.toUpperCase()} ${selectedStructuredRule.target}`
+        : "";
+    const selectedRuleContextRows = [
+      selectedStructuredRule?.kind ? `Mode: ${selectedStructuredRule.kind.replace(/-/g, " ")}` : "",
+      selectedStructuredRule?.asset ? `Asset: ${selectedStructuredRule.asset}` : "",
+      selectedRuleComparator ? `Condition: ${selectedRuleComparator}` : "",
+      selectedRuleSource ? `Primary source: ${selectedRuleSource}` : "",
+      selectedRuleFallback ? `Fallback source: ${selectedRuleFallback}` : "",
+      selectedHumanRule ? `Rule: ${selectedHumanRule}` : ""
+    ].filter(Boolean);
     const scrollToAuraDetails = () => {
       document.getElementById("aura-resolution-details")?.scrollIntoView({ block: "start", behavior: "smooth" });
     };
@@ -8013,6 +8159,17 @@ export default function App() {
                     </strong>
                   </div>
                 </div>
+                {selectedRuleContextRows.length > 0 && (
+                  <div className="resolution-rule-context">
+                    <span>Shared source rule</span>
+                    <strong>Aura, Oracle, resolver, and final reviewer use this same rule context.</strong>
+                    <ul>
+                      {selectedRuleContextRows.map((row) => (
+                        <li key={row}>{row}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
               </div>
               {(canLegacyResolve || canPropose || canDispute || canFinalize || canFinalizeDispute || canCancelStaleDispute || canCancelUnproposed || canClaim) && (
                 <div className="settlement-row resolution-actions">

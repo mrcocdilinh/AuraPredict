@@ -3284,6 +3284,43 @@ textarea {
   grid-template-columns: repeat(5, minmax(0, 1fr));
 }
 
+.resolution-rule-context {
+  background: #eef6ff;
+  border: 1px solid #c8dcf5;
+  border-radius: 8px;
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  padding: 10px;
+}
+
+.resolution-rule-context span {
+  color: #536178;
+  font-size: 0.72rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.resolution-rule-context strong {
+  color: #101827;
+  font-size: 0.9rem;
+}
+
+.resolution-rule-context ul {
+  color: #34435d;
+  display: grid;
+  font-size: 0.78rem;
+  font-weight: 700;
+  gap: 4px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.resolution-rule-context li {
+  overflow-wrap: anywhere;
+}
+
 .resolution-actions {
   display: grid;
   gap: 10px;
@@ -6457,18 +6494,26 @@ label {
   border-color: #26334a;
 }
 
+[data-theme="dark"] .resolution-rule-context {
+  background: rgba(9, 32, 52, 0.94);
+  border-color: rgba(47, 211, 255, 0.3);
+}
+
 [data-theme="dark"] .resolution-report-head span,
 [data-theme="dark"] .resolution-report-grid span,
 [data-theme="dark"] .resolution-report-pools span,
 [data-theme="dark"] .resolution-timeline span,
-[data-theme="dark"] .resolution-report-grid small {
+[data-theme="dark"] .resolution-report-grid small,
+[data-theme="dark"] .resolution-rule-context span,
+[data-theme="dark"] .resolution-rule-context ul {
   color: #9fb0ca;
 }
 
 [data-theme="dark"] .resolution-report-head strong,
 [data-theme="dark"] .resolution-report-grid strong,
 [data-theme="dark"] .resolution-report-pools strong,
-[data-theme="dark"] .resolution-timeline strong {
+[data-theme="dark"] .resolution-timeline strong,
+[data-theme="dark"] .resolution-rule-context strong {
   color: #f7f9ff;
 }
 
