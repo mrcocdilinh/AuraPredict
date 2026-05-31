@@ -15,6 +15,8 @@
     "seed:markets:dry": "set DRY_RUN=1&& hardhat run scripts/seed_markets.js --network arcTestnet"
   },
   "dependencies": {
+    "@circle-fin/adapter-viem-v2": "^1.11.2",
+    "@circle-fin/app-kit": "^1.7.0",
     "@lifi/sdk": "^3.16.3",
     "@walletconnect/ethereum-provider": "^2.23.9",
     "dotenv": "^16.4.7",

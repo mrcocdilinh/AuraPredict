@@ -22,7 +22,8 @@ Tinh nang hien tai:
 - V4 luu primary source, fallback source va resolution rule onchain de dieu khoan market khong bi phu thuoc vao frontend/indexer. Frontend moi con gan them mot dong metadata `AURA_RULE_JSON` vao rule de Aura Agent, Oracle, creator va final reviewer doc cung mot bo dieu kien co cau truc.
 - V4 snapshot dieu khoan phi, creator bond, dispute bond, dispute window, min stake va proposal grace period theo tung market de thay doi cau hinh sau nay khong lam doi market cu.
 - V4 cho phep settlement asset 6 decimals cau hinh theo market, vi du USDC hoac EURC, va quan ly phi theo tung token; khong quy doi FX giua cac token.
-- Trong trang market dang giao dich hoac trang Profile, nguoi dung co the lay quote LI.FI va tu ky swap `USDC <-> EURC` tren Arc Testnet neu can dung token settlement cua market truoc khi stake. UI hien so nhan toi thieu, cho chon price tolerance va yeu cau quote moi neu quote cu het han de giam swap revert tren thanh khoan testnet. Swap khong thay doi token tra thuong cua market.
+- Trong trang market dang giao dich hoac trang Profile, nguoi dung co the lay quote swap `USDC <-> EURC` tren Arc Testnet neu can dung token settlement cua market truoc khi stake. Frontend thu Circle App Kit truoc neu co `VITE_CIRCLE_APP_KIT_KEY`, sau do fallback sang LI.FI neu route native khong kha dung. UI hien so nhan toi thieu, cho chon price tolerance va yeu cau quote moi neu quote cu het han de giam swap revert tren thanh khoan testnet. Swap khong thay doi token tra thuong cua market.
+- Card market tren trang danh sach va Profile chi hien tom tat: category, trang thai, cau hoi, YES/NO %, pool amount, market id va volume. Nguoi dung click card de vao trang market moi stake, xem Aura/Oracle, dispute, finalize hoac claim.
 - V4 co bon huong resolution: creator + dispute review, creator + required authority review, authority/oracle only, va adapter-only cho oracle/committee sau nay.
 - Proposal V4 co the dung Aura signed attestation neu cau hinh signer. Neu chua bat signer hoac creator di nguoc Aura, contract day proposal vao authority review.
 - V4 co policy gate co ban: tam dung tao/cuoc moi, gioi han vi duoc tao market va chan account mo position moi; resolve, refund va claim cua market dang ton tai van hoat dong.
@@ -81,6 +82,7 @@ VITE_PREDICTION_MARKET_ADDRESS=0x3c853AE2eC705B453c9657569b6335e762631536
 VITE_ARC_EURC_TOKEN_ADDRESS=0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a
 VITE_AURA_INDEXER_URL=https://api.aurapredict.xyz
 VITE_WALLETCONNECT_PROJECT_ID=...
+VITE_CIRCLE_APP_KIT_KEY=... # optional, enables Circle App Kit swap before LI.FI fallback
 ```
 
 V3 archive reference:
@@ -162,5 +164,5 @@ curl https://api.aurapredict.xyz/health
 - V4 da mo duong cho authority/oracle/committee va adapter-only market sau nay, nhung chua thay the quy trinh compliance, audit, multisig va giam sat production.
 - Oracle phase 2 co the tu gui proposal onchain cho market khach quan nhu BTC/ETH price, gold/DXY, health/status API khi `AURA_ORACLE_AUTO_PROPOSE=1` va confidence du nguong. No khong tu finalize market co nguoi choi; dispute window va owner/authority review van giu nguyen.
 - Neu mo ca USDC va EURC, moi market chi settle trong token da chon; dashboard va `/api/stats` hien volume/liquidity rieng theo tung token, khong gop thanh mot tong FX.
-- Nut swap trong trading panel va Profile chi la tien ich cho vi nguoi dung doi USDC/EURC truoc giao dich; route, so nhan uoc tinh va muc nhan toi thieu den tu LI.FI, giao dich swap duoc ky trong vi. Quote cu het han sau thoi gian ngan va price tolerance do nguoi dung chon vi pool testnet co the bien dong nhanh.
+- Nut swap trong trading panel va Profile chi la tien ich cho vi nguoi dung doi USDC/EURC truoc giao dich; route, so nhan uoc tinh va muc nhan toi thieu uu tien Circle App Kit khi co cau hinh, roi fallback LI.FI. Giao dich swap duoc ky trong vi. Quote cu het han sau thoi gian ngan va price tolerance do nguoi dung chon vi pool testnet co the bien dong nhanh.
 - Production dang dung deployment V4 da pin trong source; market V3 cu khong tu di chuyen sang contract moi nhung co the truy cap qua `?deployment=v3` de settle/claim.

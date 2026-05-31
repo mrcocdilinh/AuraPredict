@@ -296,10 +296,11 @@
             Reporting update: the app and indexer expose token-specific volume and liquidity rows, so USDC and EURC activity is shown separately instead of being merged into one generic total.
           </div>
           <div class="note">
-            Wallet UX: the app shows USDC and EURC balances side by side, provides LI.FI swap access from the market panel and Profile, exposes a faucet shortcut, and blocks predictable create/stake/dispute failures when the selected token balance is too low.
+            Wallet UX: the app shows USDC and EURC balances side by side, provides swap access from the market panel and Profile, exposes a faucet shortcut, and blocks predictable create/stake/dispute failures when the selected token balance is too low.
           </div>
           <div class="note">
-            Swap access: an active market or the user's Profile can offer a LI.FI quote for <code>USDC &lt;-&gt; EURC</code> on Arc Testnet. The UI shows estimated and minimum receive amounts, supports user-selected price tolerance, and expires old quotes to reduce failed swaps when testnet liquidity moves. The trader signs that swap in their wallet before staking; the market still settles, refunds, and pays winners only in its configured token.
+            Swap access: an active market or the user's Profile can offer a <code>USDC &lt;-&gt; EURC</code> quote on Arc Testnet. Aura tries Circle App Kit first when <code>VITE_CIRCLE_APP_KIT_KEY</code> is configured, then falls back to LI.FI if no App Kit route is available. The UI shows estimated and minimum receive amounts, supports user-selected price tolerance, and expires old quotes to reduce failed swaps when testnet liquidity moves. The trader signs that swap in their wallet before staking; the market still settles, refunds, and pays winners only in its configured token.
+            Market browsing: market cards are compact click-through summaries with category, status, question, YES/NO percentages, pool sizes, market id, and volume. Betting and settlement actions live inside the market detail page.
           </div>
           <div class="note">
             Settlement report: the final-action area now summarizes Aura's suggestion, Oracle suggestion, the creator or resolver proposal, dispute or owner-review state, YES/NO pools, total volume, and the timing windows. It is designed so the next signer can understand what happened before selecting Final YES, Final NO, or Final Cancel.
@@ -312,7 +313,7 @@
             <article><span>Source/rule storage</span><strong>The contract stores the resolution source, fallback source, human rule, and structured rule metadata for every new market.</strong></article>
             <article><span>Proposal timing</span><strong>Trading close time and result resolution time are separate; the contract rejects early proposals.</strong></article>
             <article><span>Token safety</span><strong>Frontend checks balance and allowance for the selected settlement token before create, stake, or dispute actions.</strong></article>
-            <article><span>Optional swap</span><strong>LI.FI route quoting with visible minimum receive and adjustable tolerance helps a wallet obtain USDC or EURC without changing any market's payout denomination.</strong></article>
+            <article><span>Optional swap</span><strong>Circle App Kit-first quoting, with LI.FI fallback, visible minimum receive, and adjustable tolerance helps a wallet obtain USDC or EURC without changing any market's payout denomination.</strong></article>
             <article><span>Settlement report</span><strong>Resolution actions summarize AI choice, Oracle choice, creator proposal, dispute state, pools, and deadlines before finalization.</strong></article>
             <article><span>Oracle proposal</span><strong>The indexer can check objective crypto price, macro chart, and health/status API markets without spending AI quota.</strong></article>
             <article><span>No-liquidity markets</span><strong>If no one stakes, the resolver can cancel without spending an AI review.</strong></article>
@@ -548,7 +549,8 @@ npm run build</code></pre>
 VITE_ARC_EURC_TOKEN_ADDRESS=0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a
 VITE_AURA_INDEXER_URL=https://api.aurapredict.xyz
 VITE_PREDICTION_MARKET_START_BLOCK=44083985
-VITE_WALLETCONNECT_PROJECT_ID=your_project_id</code></pre>
+VITE_WALLETCONNECT_PROJECT_ID=your_project_id
+VITE_CIRCLE_APP_KIT_KEY=optional_app_kit_key</code></pre>
             </article>
             <article>
               <h3>Aura provider secrets</h3>

@@ -54,6 +54,19 @@ type StablecoinSwapPair = {
   toSymbol: string;
   decimals: number;
 };
+type AppKitSwapQuote = {
+  provider: "arc-app-kit";
+  amountIn: string;
+  estimatedAmountOut: string;
+  minimumAmountOut: string;
+  pairKey: string;
+  slippageBps: number;
+};
+type LifiStablecoinSwapQuote = {
+  provider: "lifi";
+  route: LifiSwapRoute;
+};
+type StablecoinSwapQuote = AppKitSwapQuote | LifiStablecoinSwapQuote;
 
 const SWAP_TOLERANCE_OPTIONS = [50, 100, 300, 500] as const;
 const DEFAULT_SWAP_TOLERANCE_BPS = 300;
@@ -455,6 +468,7 @@ const CHART_HEIGHT = CHART_BOTTOM - CHART_TOP;
 const WALLET_CONNECTED_KEY = "aurapredict.walletConnected";
 const WALLET_DISCONNECTED_KEY = "aurapredict.walletDisconnected";
 const WALLETCONNECT_PROJECT_ID = String(import.meta.env.VITE_WALLETCONNECT_PROJECT_ID || "").trim();
+const CIRCLE_APP_KIT_KEY = String(import.meta.env.VITE_CIRCLE_APP_KIT_KEY || "").trim();
 const DISMISSED_RESULT_KEY = "aurapredict.dismissedResultNotices";
 const THEME_KEY = "aurapredict.theme";
 const PROFILE_NAMES_KEY = "aurapredict.profileNames";
@@ -1024,6 +1038,81 @@ async function lifiRouteDiagnostic(pair: StablecoinSwapPair, requestedAmount: bi
   } catch {
     return `LI.FI quote diagnostics are unavailable, and no ${pair.fromSymbol} to ${pair.toSymbol} route was returned. Try again later.`;
   }
+}
+
+function swapAmountToDecimalString(amount: bigint, decimals: number) {
+  return formatUnits(amount, decimals);
+}
+
+function swapQuoteEstimatedAmount(quote: StablecoinSwapQuote, pair: StablecoinSwapPair) {
+  return quote.provider === "lifi" ? BigInt(quote.route.toAmount) : parseUsdcInput(quote.estimatedAmountOut, pair.decimals);
+}
+
+function swapQuoteMinimumAmount(quote: StablecoinSwapQuote, pair: StablecoinSwapPair) {
+  return quote.provider === "lifi" ? BigInt(quote.route.toAmountMin) : parseUsdcInput(quote.minimumAmountOut, pair.decimals);
+}
+
+function swapQuoteGasCost(quote: StablecoinSwapQuote) {
+  return quote.provider === "lifi" ? quote.route.gasCostUSD || "" : "";
+}
+
+function swapQuoteProviderLabel(quote?: StablecoinSwapQuote | null) {
+  if (!quote) return CIRCLE_APP_KIT_KEY ? "Circle App Kit, fallback LI.FI" : "LI.FI";
+  return quote.provider === "arc-app-kit" ? "Circle App Kit" : "LI.FI";
+}
+
+async function createArcAppKitSwapRuntime(provider: EthereumProvider) {
+  const [{ AppKit, Blockchain }, { createViemAdapterFromProvider }] = await Promise.all([
+    import("@circle-fin/app-kit"),
+    import("@circle-fin/adapter-viem-v2")
+  ]);
+  const adapter = await createViemAdapterFromProvider({ provider: provider as never });
+  return { kit: new AppKit(), Blockchain, adapter };
+}
+
+async function estimateArcAppKitSwap(
+  provider: EthereumProvider,
+  pair: StablecoinSwapPair,
+  requestedAmount: bigint,
+  toleranceBps: number
+): Promise<AppKitSwapQuote> {
+  if (!CIRCLE_APP_KIT_KEY) throw new Error("Circle App Kit key is not configured.");
+  const { kit, Blockchain, adapter } = await createArcAppKitSwapRuntime(provider);
+  const amountIn = swapAmountToDecimalString(requestedAmount, pair.decimals);
+  const estimate = await kit.estimateSwap({
+    from: { adapter, chain: Blockchain.Arc_Testnet },
+    tokenIn: pair.fromSymbol,
+    tokenOut: pair.toSymbol,
+    amountIn,
+    config: {
+      kitKey: CIRCLE_APP_KIT_KEY,
+      slippageBps: toleranceBps
+    }
+  } as never);
+  return {
+    provider: "arc-app-kit",
+    amountIn,
+    estimatedAmountOut: estimate.estimatedOutput.amount,
+    minimumAmountOut: estimate.stopLimit.amount,
+    pairKey: stablecoinSwapPairKey(pair),
+    slippageBps: toleranceBps
+  };
+}
+
+async function executeArcAppKitSwap(provider: EthereumProvider, pair: StablecoinSwapPair, quote: AppKitSwapQuote) {
+  if (!CIRCLE_APP_KIT_KEY) throw new Error("Circle App Kit key is not configured.");
+  const { kit, Blockchain, adapter } = await createArcAppKitSwapRuntime(provider);
+  return kit.swap({
+    from: { adapter, chain: Blockchain.Arc_Testnet },
+    tokenIn: pair.fromSymbol,
+    tokenOut: pair.toSymbol,
+    amountIn: quote.amountIn,
+    config: {
+      kitKey: CIRCLE_APP_KIT_KEY,
+      slippageBps: quote.slippageBps,
+      stopLimit: quote.minimumAmountOut
+    }
+  } as never);
 }
 
 function parseUsdcInput(value: string, decimals = ARC_NATIVE_USDC_DECIMALS) {
@@ -2109,7 +2198,7 @@ function LandingPage() {
     },
     {
       title: "Stablecoin swap access",
-      text: "Wallets can request a LI.FI USDC/EURC quote with visible minimum receive and adjustable price tolerance from a market or profile, then sign before staking."
+      text: "Wallets can request a USDC/EURC quote from a market or profile. Aura tries Circle App Kit first when configured, then falls back to LI.FI liquidity before the wallet signs."
     },
     {
       title: "Onchain market terms",
@@ -2177,7 +2266,8 @@ function LandingPage() {
   ];
   const dataFlow = [
     "The live AuraPredict indexer now powers market history, per-token volume, participants, activity, and leaderboards",
-    "Wallet UI shows USDC and EURC balances with copy-address, faucet, and LI.FI swap access from markets or the user's profile",
+    "Wallet UI shows USDC and EURC balances with copy-address, faucet, and swap access from markets or the user's profile",
+    "Market cards are now compact click-through summaries; staking, Aura review, Oracle checks, dispute, finalize, and claim actions happen inside the market page",
     "The app checks selected-token balance and allowance before create, stake, or dispute transactions",
     "Aura Agent drafts clearer markets, checks similar questions, and prepares rules with source links",
     "Oracle proposal checks objective data sources such as Binance, Yahoo chart data, and health/status endpoints without spending AI quota",
@@ -2648,7 +2738,7 @@ function LandingPage() {
           </article>
           <article>
             <span>Swap access</span>
-            <strong>A trader can obtain USDC or EURC through a LI.FI quote with visible minimum receive and adjustable tolerance in the market panel or profile, then sign on Arc Testnet before staking.</strong>
+            <strong>A trader can obtain USDC or EURC through Circle App Kit first when configured, with LI.FI fallback, visible minimum receive, and adjustable tolerance before staking.</strong>
           </article>
           <article>
             <span>Settlement</span>
@@ -2886,7 +2976,7 @@ export default function App() {
   const [selectedTradeSides, setSelectedTradeSides] = useState<Record<number, Outcome.Yes | Outcome.No>>({});
   const [swapMarketId, setSwapMarketId] = useState<number | null>(null);
   const [swapAmountInput, setSwapAmountInput] = useState("");
-  const [swapQuote, setSwapQuote] = useState<LifiSwapRoute | null>(null);
+  const [swapQuote, setSwapQuote] = useState<StablecoinSwapQuote | null>(null);
   const [swapQuotePairKey, setSwapQuotePairKey] = useState("");
   const [swapQuoteTime, setSwapQuoteTime] = useState(0);
   const [swapToleranceBps, setSwapToleranceBps] = useState(DEFAULT_SWAP_TOLERANCE_BPS);
@@ -4574,31 +4664,47 @@ export default function App() {
         setSwapQuotePairKey("");
         setSwapQuoteTime(0);
         setNotice(`Finding a ${pair.fromSymbol} to ${pair.toSymbol} swap route on Arc...`);
-        const { createConfig, getRoutes } = await import("@lifi/sdk");
-        createConfig({ integrator: "aurapredict", disableVersionCheck: true });
-        const result = await getRoutes({
-          fromChainId: ARC_CHAIN_ID_NUMBER,
-          toChainId: ARC_CHAIN_ID_NUMBER,
-          fromTokenAddress: pair.fromToken,
-          toTokenAddress: pair.toToken,
-          fromAmount: requestedAmount.toString(),
-          fromAddress: account,
-          toAddress: account,
-          options: { integrator: "aurapredict", order: "RECOMMENDED", slippage: swapToleranceBps / 10_000 }
-        });
-        const route = result.routes[0];
-        if (!route) {
-          const diagnostic = await lifiRouteDiagnostic(pair, requestedAmount, account, swapToleranceBps / 10_000);
-          throw new Error(diagnostic || `No LI.FI route is available for ${pair.fromSymbol} to ${pair.toSymbol} right now.`);
+        let quote: StablecoinSwapQuote | null = null;
+        let appKitFailure = "";
+        if (CIRCLE_APP_KIT_KEY) {
+          try {
+            await switchToArc();
+            quote = await estimateArcAppKitSwap(getInjectedProvider(selectedWalletProvider), pair, requestedAmount, swapToleranceBps);
+          } catch (error) {
+            appKitFailure = compactErrorMessage(error);
+          }
         }
-        setSwapQuote(route);
+        if (!quote) {
+          const { createConfig, getRoutes } = await import("@lifi/sdk");
+          createConfig({ integrator: "aurapredict", disableVersionCheck: true });
+          const result = await getRoutes({
+            fromChainId: ARC_CHAIN_ID_NUMBER,
+            toChainId: ARC_CHAIN_ID_NUMBER,
+            fromTokenAddress: pair.fromToken,
+            toTokenAddress: pair.toToken,
+            fromAmount: requestedAmount.toString(),
+            fromAddress: account,
+            toAddress: account,
+            options: { integrator: "aurapredict", order: "RECOMMENDED", slippage: swapToleranceBps / 10_000 }
+          });
+          const route = result.routes[0];
+          if (!route) {
+            const diagnostic = await lifiRouteDiagnostic(pair, requestedAmount, account, swapToleranceBps / 10_000);
+            const fallbackReason = diagnostic || `No LI.FI route is available for ${pair.fromSymbol} to ${pair.toSymbol} right now.`;
+            throw new Error(appKitFailure ? `Circle App Kit failed first (${appKitFailure}). ${fallbackReason}` : fallbackReason);
+          }
+          quote = { provider: "lifi", route };
+        }
+        setSwapQuote(quote);
         setSwapQuotePairKey(stablecoinSwapPairKey(pair));
         setSwapQuoteTime(Date.now());
+        const estimatedAmount = swapQuoteEstimatedAmount(quote, pair);
         setNotice(
-          `Swap quote ready: ${formatUsdcInput(requestedAmount, pair.decimals)} ${pair.fromSymbol} to approximately ${formatUsdcInput(
-            BigInt(route.toAmount),
-            pair.decimals
-          )} ${pair.toSymbol} with ${formatSwapTolerance(swapToleranceBps)} price tolerance.`
+          `${swapQuoteProviderLabel(quote)} quote ready: ${formatUsdcInput(requestedAmount, pair.decimals)} ${
+            pair.fromSymbol
+          } to approximately ${formatUsdcInput(estimatedAmount, pair.decimals)} ${pair.toSymbol} with ${formatSwapTolerance(
+            swapToleranceBps
+          )} price tolerance.`
         );
       } catch (error) {
         setSwapQuote(null);
@@ -4618,7 +4724,17 @@ export default function App() {
         setSwapBusy("idle");
       }
     },
-    [account, defaultSettlementToken, setNotice, swapAmountInput, swapToleranceBps, walletBalance, walletTokenBalances]
+    [
+      account,
+      defaultSettlementToken,
+      selectedWalletProvider,
+      setNotice,
+      swapAmountInput,
+      swapToleranceBps,
+      switchToArc,
+      walletBalance,
+      walletTokenBalances
+    ]
   );
 
   const executeStablecoinSwap = useCallback(
@@ -4644,35 +4760,42 @@ export default function App() {
       setSwapBusy("execute");
       try {
         await switchToArc();
-        const walletClient = createWalletClient({
-          account: account as Address,
-          chain: arcTestnet,
-          transport: custom(getInjectedProvider(selectedWalletProvider) as never)
-        });
-        const { createConfig, EVM, executeRoute } = await import("@lifi/sdk");
-        createConfig({
-          integrator: "aurapredict",
-          disableVersionCheck: true,
-          providers: [
-            EVM({
-              getWalletClient: async () => walletClient as never,
-              switchChain: async (chainId) => {
-                if (chainId !== ARC_CHAIN_ID_NUMBER) throw new Error("This swap must stay on Arc Testnet.");
-                await switchToArc();
-                return walletClient as never;
-              }
-            })
-          ]
-        });
         setNotice(`Confirm the ${pair.fromSymbol} to ${pair.toSymbol} swap in your wallet.`);
-        const executed = await executeRoute(swapQuote, {
-          updateRouteHook: (updatedRoute) => setSwapQuote(updatedRoute),
-          acceptExchangeRateUpdateHook: async () => false
-        });
-        const hashes = executed.steps.flatMap((step) => step.execution?.process || []).map((process) => process.txHash);
-        const swapHash = hashes.reverse().find((hash): hash is Hash => Boolean(hash && /^0x[a-fA-F0-9]{64}$/.test(hash)));
-        const received = formatUsdcInput(BigInt(executed.toAmount), pair.decimals);
-        setNotice(`Swap completed. Received approximately ${received} ${pair.toSymbol}.`, swapHash);
+        if (swapQuote.provider === "arc-app-kit") {
+          const executed = await executeArcAppKitSwap(getInjectedProvider(selectedWalletProvider), pair, swapQuote);
+          const received = executed.amountOut || swapQuote.estimatedAmountOut;
+          const swapHash = /^0x[a-fA-F0-9]{64}$/.test(executed.txHash) ? (executed.txHash as Hash) : undefined;
+          setNotice(`Swap completed through Circle App Kit. Received approximately ${received} ${pair.toSymbol}.`, swapHash);
+        } else {
+          const walletClient = createWalletClient({
+            account: account as Address,
+            chain: arcTestnet,
+            transport: custom(getInjectedProvider(selectedWalletProvider) as never)
+          });
+          const { createConfig, EVM, executeRoute } = await import("@lifi/sdk");
+          createConfig({
+            integrator: "aurapredict",
+            disableVersionCheck: true,
+            providers: [
+              EVM({
+                getWalletClient: async () => walletClient as never,
+                switchChain: async (chainId) => {
+                  if (chainId !== ARC_CHAIN_ID_NUMBER) throw new Error("This swap must stay on Arc Testnet.");
+                  await switchToArc();
+                  return walletClient as never;
+                }
+              })
+            ]
+          });
+          const executed = await executeRoute(swapQuote.route, {
+            updateRouteHook: (updatedRoute) => setSwapQuote({ provider: "lifi", route: updatedRoute }),
+            acceptExchangeRateUpdateHook: async () => false
+          });
+          const hashes = executed.steps.flatMap((step) => step.execution?.process || []).map((process) => process.txHash);
+          const swapHash = hashes.reverse().find((hash): hash is Hash => Boolean(hash && /^0x[a-fA-F0-9]{64}$/.test(hash)));
+          const received = formatUsdcInput(BigInt(executed.toAmount), pair.decimals);
+          setNotice(`Swap completed through LI.FI. Received approximately ${received} ${pair.toSymbol}.`, swapHash);
+        }
         setSwapAmountInput("");
         setSwapQuote(null);
         setSwapQuotePairKey("");
@@ -7357,250 +7480,88 @@ export default function App() {
         ]
           .filter(Boolean)
           .join(" ");
+        const marketSymbolLabel = marketSymbol(market);
+        const statusLabel = marketStatus(market);
+        const cardFocusResolution = Boolean(profileResolutionAction || showProfileBondReturn);
+        const actionHintTitle = profileResolutionAction
+          ? profileResolutionTitle
+          : showProfileBondReturn
+            ? "Creator bond pending"
+            : canClaim
+              ? "Payout available"
+              : "";
+        const actionHintText = profileResolutionAction
+          ? profileResolutionText
+          : showProfileBondReturn
+            ? `${formatMarketAmount(cardCreatorBond, market)} ${marketSymbolLabel} creator bond is ready for this market.`
+            : canClaim
+              ? `Open this market to claim ${formatMarketAmount(market.potentialPayout, market)} ${marketSymbolLabel}.`
+              : "";
 
         return (
           <article
             className={marketCardClasses}
             key={market.id}
-            onClick={() => openMarket(market.id)}
+            onClick={() => openMarket(market.id, cardFocusResolution)}
             onKeyDown={(event) => {
-              if (event.key === "Enter") openMarket(market.id);
+              if (event.key === "Enter") openMarket(market.id, cardFocusResolution);
             }}
             role="button"
             tabIndex={0}
           >
-            <div className={`market-card-image ${imageVariant}`}>
+            <div className={`market-card-image compact-market-visual ${imageVariant}`}>
               <img src={marketImage} alt="" loading="lazy" />
-              <span className={`category ${meta.className}`}>
-                <CategoryIcon category={market.category || "Other"} />
-                {market.category || "Other"}
-              </span>
-            </div>
-            <div className="market-topline">
-              <span>Market #{market.id}</span>
-              <div className="status-stack">
-                <span className={`status status-${market.outcome}`}>{marketStatus(market)}</span>
-                {market.outcome !== Outcome.Unresolved && (
-                  <span className={`personal-result ${walletResult.className}`}>{walletResult.label}</span>
-                )}
+              <div className="compact-card-header">
+                <span className={`category ${meta.className}`}>
+                  <CategoryIcon category={market.category || "Other"} />
+                  {market.category || "Other"}
+                </span>
+                <span className={`compact-live-badge ${statusLabel === "Live" ? "is-live" : "is-muted"}`}>
+                  {statusLabel}
+                </span>
               </div>
+              <h3>{market.question}</h3>
             </div>
-            <h3>{market.question}</h3>
-
-            <div className="odds-row">
-              <div>
+            <div className="compact-odds-grid" aria-label="YES and NO market odds">
+              <div className="compact-odds-tile compact-yes-tile">
                 <span>YES</span>
                 <strong>{yesPercent.toFixed(1)}%</strong>
+                <small>{formatMarketAmount(market.yesPool, market)} {marketSymbolLabel}</small>
               </div>
-              <div>
+              <div className="compact-odds-tile compact-no-tile">
                 <span>NO</span>
                 <strong>{noPercent.toFixed(1)}%</strong>
+                <small>{formatMarketAmount(market.noPool, market)} {marketSymbolLabel}</small>
               </div>
             </div>
-            <div className="pool-bar" aria-label="Pool split">
-              <span style={{ width: `${yesPercent}%` }} />
+            <div className="compact-card-footer">
+              <span>Market #{market.id}</span>
+              <strong>{formatMarketAmount(totalPool, market)} {marketSymbolLabel} VOL</strong>
             </div>
-
-            <div className="market-meta">
-              <div>
-                <span>Volume</span>
-                <strong>{formatMarketAmount(totalPool, market)} {marketSymbol(market)}</strong>
-              </div>
-              <div>
-                <span>Participants</span>
-                <strong>{market.traderCount}</strong>
-              </div>
-              <div>
-                <span>Countdown</span>
-                <strong>{countdownText(market.closeTime, currentTime)}</strong>
-              </div>
-              <div>
-                <span>Closes</span>
-                <strong>{closeDate(market.closeTime)}</strong>
-              </div>
-              {resolutionTimeFor(market) !== market.closeTime && (
-                <div>
-                  <span>Resolves after</span>
-                  <strong>{closeDate(resolutionTimeFor(market))}</strong>
-                </div>
-              )}
-              <div>
-                <span>Creator</span>
-                <strong>{displayNameForAddress(market.creator)}</strong>
-              </div>
-              {market.proposedAt > 0 && (
-                <div>
-                  <span>Proposed</span>
-                  <strong>{outcomeLabel(market.proposedOutcome)}</strong>
-                </div>
-              )}
-              {market.proposedAt > 0 && market.outcome === Outcome.Unresolved && (
-                <div>
-                  <span>Dispute until</span>
-                  <strong>{closeDate(market.disputeDeadline)}</strong>
-                </div>
-              )}
+            <div className="compact-market-meta">
+              <span>{countdownText(market.closeTime, currentTime)}</span>
+              <span>{market.traderCount} traders</span>
             </div>
-
             {account && (
-              <div className="position-chip">
-                YES {formatMarketAmount(market.yesPosition, market)} / NO {formatMarketAmount(market.noPosition, market)} {marketSymbol(market)}
+              <div className="compact-position-line">
+                Your position: YES {formatMarketAmount(market.yesPosition, market)} / NO {formatMarketAmount(market.noPosition, market)} {marketSymbolLabel}
               </div>
             )}
-
-            <div className="trade-row" onClick={(event) => event.stopPropagation()}>
-              <input
-                inputMode="decimal"
-                placeholder="Amount"
-                value={stakeInputs[market.id] || ""}
-                onChange={(event) =>
-                  setStakeInputs((current) => ({ ...current, [market.id]: event.target.value }))
-                }
-                disabled={!canBet}
-              />
-              <button
-                className="yes-button"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  placeBet(market.id, Outcome.Yes);
-                }}
-                disabled={!canBet}
-              >
-                <span>YES</span>
-                <small>{formatMarketAmount(market.yesPool, market)} {marketSymbol(market)}</small>
-              </button>
-              <button
-                className="no-button"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  placeBet(market.id, Outcome.No);
-                }}
-                disabled={!canBet}
-              >
-                <span>NO</span>
-                <small>{formatMarketAmount(market.noPool, market)} {marketSymbol(market)}</small>
-              </button>
-            </div>
-
+            {market.outcome !== Outcome.Unresolved && (
+              <span className={`compact-personal-result ${walletResult.className}`}>{walletResult.label}</span>
+            )}
             {isProfileCard && (profileResolutionAction || showProfileBondReturn || canClaim) && (
-              <div className="settlement-row profile-card-actions" onClick={(event) => event.stopPropagation()}>
+              <div className="compact-action-hint" onClick={(event) => event.stopPropagation()}>
+                <strong>{actionHintTitle}</strong>
+                <span>{actionHintText}</span>
                 {profileResolutionAction && (
-                  <div className="profile-resolution-callout">
-                    <span>{profileResolutionTitle}</span>
-                    <strong>Open this market to handle settlement</strong>
-                    <small>{profileResolutionText}</small>
-                    <button className="secondary" onClick={() => openMarket(market.id, true)} type="button">
-                      Go to market
-                    </button>
-                  </div>
+                  <button className="secondary" onClick={() => openMarket(market.id, true)} type="button">
+                    Go to market
+                  </button>
                 )}
                 {showProfileBondReturn && (
-                  <div className="profile-bond-return-card">
-                    <span>Creator bond pending</span>
-                    <strong>{formatMarketAmount(cardCreatorBond, market)} {marketSymbol(market)} bond for this market</strong>
-                    <small>
-                      Your wallet has {formatMarketAmount(pendingTokenWithdrawal, market)} {marketSymbol(market)} pending across finalized markets. The contract withdraws the total pending balance for this token.
-                    </small>
-                    <button disabled={transactionPending} onClick={() => withdrawPendingBalance(market)} type="button">
-                      Receive pending {marketSymbol(market)}
-                    </button>
-                  </div>
-                )}
-                {canClaim && (
-                  <button onClick={() => claim(market.id)} type="button">
-                    Claim {formatMarketAmount(market.potentialPayout, market)} {marketSymbol(market)}
-                  </button>
-                )}
-              </div>
-            )}
-
-            {!isProfileCard && (canPropose || canLegacyResolve || canDispute || canFinalize || canFinalizeDispute || canCancelStaleDispute || canClaim) && (
-              <div className="settlement-row" onClick={(event) => event.stopPropagation()}>
-                {canLegacyResolve && (
-                  <>
-                    <button className="secondary" onClick={() => resolveMarket(market.id, Outcome.Yes)}>
-                      Resolve YES
-                    </button>
-                    <button className="secondary" onClick={() => resolveMarket(market.id, Outcome.No)}>
-                      Resolve NO
-                    </button>
-                    <button className="secondary" onClick={() => cancelMarket(market.id)}>
-                      Cancel
-                    </button>
-                  </>
-                )}
-                {canPropose && (
-                  <>
-                    {!cancelOnlyResolution && (
-                      <button className="secondary" disabled={aiBusy || transactionPending} onClick={() => askAuraForResolution(market)} type="button">
-                        {aiBusy ? "Aura thinking..." : transactionPending ? "Processing..." : aiCanPropose ? "Refresh Aura" : "Ask Aura"}
-                      </button>
-                    )}
-                    {!cancelOnlyResolution && aiCanPropose && (
-                      <button
-                        className="secondary"
-                        onClick={() => resolveMarket(market.id, aiSuggestedOutcome as Outcome.Yes | Outcome.No)}
-                        disabled={transactionPending || !canResolveAfterAura(market.id) || aiSuggestionBlockedByPool}
-                        type="button"
-                      >
-                        Use AI
-                      </button>
-                    )}
-                    <button className="secondary" onClick={() => resolveMarket(market.id, Outcome.Yes)} disabled={transactionPending || !canProposeYes || !canResolveAfterAura(market.id)}>
-                      Propose YES
-                    </button>
-                    <button className="secondary" onClick={() => resolveMarket(market.id, Outcome.No)} disabled={transactionPending || !canProposeNo || !canResolveAfterAura(market.id)}>
-                      Propose NO
-                    </button>
-                    <button className="secondary" disabled={transactionPending || (!canResolveAfterAura(market.id) && !cancelOnlyResolution)} onClick={() => cancelMarket(market.id)}>
-                      {cancelOnlyResolution ? "Cancel / Refund" : "Propose Cancel"}
-                    </button>
-                  </>
-                )}
-                {canPropose && proposeHint && <small>{proposeHint}</small>}
-                {canPropose && <small>{cancelOnlyResolution ? "Aura is not needed because this market must be canceled and refunded." : resolveAuraStatusLabel(market)}</small>}
-                {canPropose && !cancelOnlyResolution && aiCanPropose && (
-                  <small>
-                    AI suggests {outcomeLabel(aiSuggestedOutcome)}
-                    {typeof aiReceipt?.consensus?.confidence === "number" ? ` (${aiReceipt.consensus.confidence}% confidence)` : ""}.
-                  </small>
-                )}
-                {finalizeHint && <small>{finalizeHint}</small>}
-                {canDispute && (
-                  <button className="secondary" onClick={() => disputeMarket(market.id)}>
-                    Dispute {formatMarketAmount(market.termsDisputeBond ?? disputeBond, market)} {marketSymbol(market)}
-                  </button>
-                )}
-                {canFinalize && (
-                  <button className="secondary" disabled={transactionPending} onClick={() => finalizeMarket(market.id)}>
-                    Finalize
-                  </button>
-                )}
-                {canFinalizeDispute && (
-                  <>
-                    {!cancelOnlyResolution && (
-                      <>
-                        <button className="secondary" disabled={transactionPending} onClick={() => finalizeDispute(market.id, Outcome.Yes)}>
-                          Final YES
-                        </button>
-                        <button className="secondary" disabled={transactionPending} onClick={() => finalizeDispute(market.id, Outcome.No)}>
-                          Final NO
-                        </button>
-                      </>
-                    )}
-                    <button className="secondary" disabled={transactionPending} onClick={() => finalizeDispute(market.id, Outcome.Canceled)}>
-                      Final Cancel / Refund
-                    </button>
-                  </>
-                )}
-                {canCancelStaleDispute && (
-                  <button className="secondary" onClick={() => cancelStaleDispute(market.id)}>
-                    Cancel stale dispute
-                  </button>
-                )}
-                {canClaim && (
-                  <button onClick={() => claim(market.id)}>
-                    Claim {formatMarketAmount(market.potentialPayout, market)} {marketSymbol(market)}
+                  <button disabled={transactionPending} onClick={() => withdrawPendingBalance(market)} type="button">
+                    Receive pending {marketSymbolLabel}
                   </button>
                 )}
               </div>
@@ -8502,10 +8463,10 @@ export default function App() {
                     {activeSwapQuote && (
                       <div className="market-swap-quote">
                         <span>Estimated receive</span>
-                        <strong>{formatUsdcInput(BigInt(activeSwapQuote.toAmount), selectedSwapPair.decimals)} {selectedSwapPair.toSymbol}</strong>
+                        <strong>{formatUsdcInput(swapQuoteEstimatedAmount(activeSwapQuote, selectedSwapPair), selectedSwapPair.decimals)} {selectedSwapPair.toSymbol}</strong>
                         <small>
-                          Minimum {formatUsdcInput(BigInt(activeSwapQuote.toAmountMin), selectedSwapPair.decimals)} {selectedSwapPair.toSymbol}
-                          {activeSwapQuote.gasCostUSD ? ` / network cost about $${activeSwapQuote.gasCostUSD}` : ""}
+                          Minimum {formatUsdcInput(swapQuoteMinimumAmount(activeSwapQuote, selectedSwapPair), selectedSwapPair.decimals)} {selectedSwapPair.toSymbol}
+                          {swapQuoteGasCost(activeSwapQuote) ? ` / network cost about $${swapQuoteGasCost(activeSwapQuote)}` : ""}
                         </small>
                         <button
                           className="market-swap-execute"
@@ -8518,10 +8479,10 @@ export default function App() {
                       </div>
                     )}
                     <small className="market-swap-note">
-                      Routed by LI.FI on Arc Testnet. This market still settles only in {selectedSwapPair.toSymbol}.
+                      Quote source: {swapQuoteProviderLabel(activeSwapQuote)} on Arc Testnet. This market still settles only in {selectedSwapPair.toSymbol}.
                     </small>
                     <small className="market-swap-note">
-                      Arc testnet swap liquidity is limited: EURC to USDC may have no route, and USDC to EURC may only quote for small amounts.
+                      Aura tries Circle App Kit first when configured, then LI.FI if the native route is unavailable. Testnet liquidity can still move quickly.
                     </small>
                   </div>
                 )}
@@ -10071,7 +10032,7 @@ export default function App() {
                       <div className="profile-swap-panel">
                         <div className="profile-swap-title">
                           <strong>Swap stablecoins</strong>
-                          <small>LI.FI route on Arc Testnet</small>
+                          <small>{CIRCLE_APP_KIT_KEY ? "Circle App Kit first, LI.FI fallback" : "LI.FI route on Arc Testnet"}</small>
                         </div>
                         <div className="profile-swap-direction" role="group" aria-label="Swap direction">
                           <button
@@ -10155,13 +10116,13 @@ export default function App() {
                         </div>
                         {activeProfileSwapQuote && (
                           <div className="market-swap-quote">
-                            <span>Estimated receive</span>
+                            <span>Estimated receive via {swapQuoteProviderLabel(activeProfileSwapQuote)}</span>
                             <strong>
-                              {formatUsdcInput(BigInt(activeProfileSwapQuote.toAmount), profileSwapPair.decimals)} {profileSwapPair.toSymbol}
+                              {formatUsdcInput(swapQuoteEstimatedAmount(activeProfileSwapQuote, profileSwapPair), profileSwapPair.decimals)} {profileSwapPair.toSymbol}
                             </strong>
                             <small>
-                              Minimum {formatUsdcInput(BigInt(activeProfileSwapQuote.toAmountMin), profileSwapPair.decimals)} {profileSwapPair.toSymbol}
-                              {activeProfileSwapQuote.gasCostUSD ? ` / network cost about $${activeProfileSwapQuote.gasCostUSD}` : ""}
+                              Minimum {formatUsdcInput(swapQuoteMinimumAmount(activeProfileSwapQuote, profileSwapPair), profileSwapPair.decimals)} {profileSwapPair.toSymbol}
+                              {swapQuoteGasCost(activeProfileSwapQuote) ? ` / network cost about $${swapQuoteGasCost(activeProfileSwapQuote)}` : ""}
                             </small>
                             <button
                               className="market-swap-execute"
@@ -10174,6 +10135,7 @@ export default function App() {
                           </div>
                         )}
                         <small className="market-swap-note">
+                          {CIRCLE_APP_KIT_KEY ? "Aura asks Circle App Kit first, then LI.FI if that route is unavailable. " : ""}
                           Arc testnet swap liquidity is limited: EURC to USDC may have no route, and USDC to EURC may only quote for small amounts.
                         </small>
                       </div>
