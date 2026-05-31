@@ -4566,6 +4566,38 @@ label {
   font-size: 0.9rem;
 }
 
+.swap-provider-health {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.provider-badge {
+  align-items: center;
+  background: #eef6ff;
+  border: 1px solid #d5e8ee;
+  border-radius: 999px;
+  color: #536178;
+  display: inline-flex;
+  font-size: 0.68rem;
+  font-weight: 850;
+  line-height: 1;
+  min-height: 24px;
+  padding: 0 9px;
+}
+
+.provider-badge.ok {
+  background: #e8fff5;
+  border-color: #8fe4bf;
+  color: #0b8e59;
+}
+
+.provider-badge.fail {
+  background: #ffeef2;
+  border-color: #ffadbe;
+  color: #c63458;
+}
+
 .market-swap-execute {
   margin-top: 4px;
   width: 100%;
@@ -6968,6 +7000,24 @@ label {
 
 [data-theme="dark"] .profile-swap-panel .market-swap-quote strong {
   color: #18d7ff;
+}
+
+[data-theme="dark"] .provider-badge {
+  background: #0b1020;
+  border-color: #26334a;
+  color: #9aa7bd;
+}
+
+[data-theme="dark"] .provider-badge.ok {
+  background: #113a2e;
+  border-color: #1f7d60;
+  color: #54d8a8;
+}
+
+[data-theme="dark"] .provider-badge.fail {
+  background: #3b1621;
+  border-color: #7c2f44;
+  color: #ff8aa3;
 }
 
 [data-theme="dark"] .chart-window-tabs {

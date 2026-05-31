@@ -67,6 +67,13 @@ type LifiStablecoinSwapQuote = {
   route: LifiSwapRoute;
 };
 type StablecoinSwapQuote = AppKitSwapQuote | LifiStablecoinSwapQuote;
+type SwapProviderState = "idle" | "ok" | "fail" | "skipped";
+type SwapProviderHealth = {
+  circle: SwapProviderState;
+  lifi: SwapProviderState;
+  circleMessage?: string;
+  lifiMessage?: string;
+};
 
 const SWAP_TOLERANCE_OPTIONS = [50, 100, 300, 500] as const;
 const DEFAULT_SWAP_TOLERANCE_BPS = 300;
@@ -81,6 +88,13 @@ function stablecoinSwapPairKey(pair: StablecoinSwapPair) {
 
 function formatSwapTolerance(bps: number) {
   return `${bps / 100}%`;
+}
+
+function providerHealthLabel(state: SwapProviderState) {
+  if (state === "ok") return "OK";
+  if (state === "fail") return "Failed";
+  if (state === "skipped") return "Skipped";
+  return "Idle";
 }
 
 declare global {
@@ -2981,6 +2995,7 @@ export default function App() {
   const [swapQuoteTime, setSwapQuoteTime] = useState(0);
   const [swapToleranceBps, setSwapToleranceBps] = useState(DEFAULT_SWAP_TOLERANCE_BPS);
   const [swapBusy, setSwapBusy] = useState<"idle" | "quote" | "execute">("idle");
+  const [swapProviderHealth, setSwapProviderHealth] = useState<SwapProviderHealth>({ circle: "idle", lifi: "idle" });
   const [profileSwapDirection, setProfileSwapDirection] = useState<StablecoinSwapDirection>("USDC_TO_EURC");
   const [activeCategory, setActiveCategory] = useState("All");
   const [marketViewMode, setMarketViewMode] = useState<MarketViewMode>("grid");
@@ -4646,6 +4661,7 @@ export default function App() {
     setSwapQuote(null);
     setSwapQuotePairKey("");
     setSwapQuoteTime(0);
+    setSwapProviderHealth({ circle: CIRCLE_APP_KIT_KEY ? "idle" : "skipped", lifi: "idle" });
   }, []);
 
   const requestSwapQuote = useCallback(
@@ -4663,6 +4679,10 @@ export default function App() {
         setSwapQuote(null);
         setSwapQuotePairKey("");
         setSwapQuoteTime(0);
+        setSwapProviderHealth({
+          circle: CIRCLE_APP_KIT_KEY ? "idle" : "skipped",
+          lifi: "idle"
+        });
         setNotice(`Finding a ${pair.fromSymbol} to ${pair.toSymbol} swap route on Arc...`);
         let quote: StablecoinSwapQuote | null = null;
         let appKitFailure = "";
@@ -4670,8 +4690,17 @@ export default function App() {
           try {
             await switchToArc();
             quote = await estimateArcAppKitSwap(getInjectedProvider(selectedWalletProvider), pair, requestedAmount, swapToleranceBps);
+            setSwapProviderHealth({
+              circle: "ok",
+              lifi: "skipped"
+            });
           } catch (error) {
             appKitFailure = compactErrorMessage(error);
+            setSwapProviderHealth({
+              circle: "fail",
+              lifi: "idle",
+              circleMessage: appKitFailure
+            });
           }
         }
         if (!quote) {
@@ -4691,9 +4720,18 @@ export default function App() {
           if (!route) {
             const diagnostic = await lifiRouteDiagnostic(pair, requestedAmount, account, swapToleranceBps / 10_000);
             const fallbackReason = diagnostic || `No LI.FI route is available for ${pair.fromSymbol} to ${pair.toSymbol} right now.`;
+            setSwapProviderHealth((current) => ({
+              ...current,
+              lifi: "fail",
+              lifiMessage: fallbackReason
+            }));
             throw new Error(appKitFailure ? `Circle App Kit failed first (${appKitFailure}). ${fallbackReason}` : fallbackReason);
           }
           quote = { provider: "lifi", route };
+          setSwapProviderHealth((current) => ({
+            ...current,
+            lifi: "ok"
+          }));
         }
         setSwapQuote(quote);
         setSwapQuotePairKey(stablecoinSwapPairKey(pair));
@@ -4718,6 +4756,11 @@ export default function App() {
           (message.toLowerCase().includes("no available quotes") || message.toLowerCase().includes("no li.fi route"))
         ) {
           message = await lifiRouteDiagnostic(pair, requestedAmount, account, swapToleranceBps / 10_000);
+          setSwapProviderHealth((current) => ({
+            ...current,
+            lifi: "fail",
+            lifiMessage: message
+          }));
         }
         setNotice(`Swap quote unavailable: ${message}`);
       } finally {
@@ -8429,6 +8472,7 @@ export default function App() {
                           setSwapQuote(null);
                           setSwapQuotePairKey("");
                           setSwapQuoteTime(0);
+                          setSwapProviderHealth({ circle: CIRCLE_APP_KIT_KEY ? "idle" : "skipped", lifi: "idle" });
                         }}
                       />
                       <button
@@ -8460,6 +8504,21 @@ export default function App() {
                         ))}
                       </div>
                     </div>
+                    <div className="swap-provider-health" aria-live="polite">
+                      <span className={`provider-badge ${swapProviderHealth.circle}`}>
+                        Circle App Kit: {providerHealthLabel(swapProviderHealth.circle)}
+                      </span>
+                      <span className={`provider-badge ${swapProviderHealth.lifi}`}>
+                        LI.FI: {providerHealthLabel(swapProviderHealth.lifi)}
+                      </span>
+                    </div>
+                    {(swapProviderHealth.circleMessage || swapProviderHealth.lifiMessage) && (
+                      <small className="market-swap-note">
+                        {swapProviderHealth.circleMessage ? `Circle: ${swapProviderHealth.circleMessage}` : ""}
+                        {swapProviderHealth.circleMessage && swapProviderHealth.lifiMessage ? " | " : ""}
+                        {swapProviderHealth.lifiMessage ? `LI.FI: ${swapProviderHealth.lifiMessage}` : ""}
+                      </small>
+                    )}
                     {activeSwapQuote && (
                       <div className="market-swap-quote">
                         <span>Estimated receive</span>
@@ -10044,6 +10103,7 @@ export default function App() {
                               setSwapQuote(null);
                               setSwapQuotePairKey("");
                               setSwapQuoteTime(0);
+                              setSwapProviderHealth({ circle: CIRCLE_APP_KIT_KEY ? "idle" : "skipped", lifi: "idle" });
                             }}
                             type="button"
                           >
@@ -10058,6 +10118,7 @@ export default function App() {
                               setSwapQuote(null);
                               setSwapQuotePairKey("");
                               setSwapQuoteTime(0);
+                              setSwapProviderHealth({ circle: CIRCLE_APP_KIT_KEY ? "idle" : "skipped", lifi: "idle" });
                             }}
                             type="button"
                           >
@@ -10079,6 +10140,7 @@ export default function App() {
                               setSwapQuote(null);
                               setSwapQuotePairKey("");
                               setSwapQuoteTime(0);
+                              setSwapProviderHealth({ circle: CIRCLE_APP_KIT_KEY ? "idle" : "skipped", lifi: "idle" });
                             }}
                           />
                           <button
@@ -10114,6 +10176,21 @@ export default function App() {
                             ))}
                           </div>
                         </div>
+                        <div className="swap-provider-health" aria-live="polite">
+                          <span className={`provider-badge ${swapProviderHealth.circle}`}>
+                            Circle App Kit: {providerHealthLabel(swapProviderHealth.circle)}
+                          </span>
+                          <span className={`provider-badge ${swapProviderHealth.lifi}`}>
+                            LI.FI: {providerHealthLabel(swapProviderHealth.lifi)}
+                          </span>
+                        </div>
+                        {(swapProviderHealth.circleMessage || swapProviderHealth.lifiMessage) && (
+                          <small className="market-swap-note">
+                            {swapProviderHealth.circleMessage ? `Circle: ${swapProviderHealth.circleMessage}` : ""}
+                            {swapProviderHealth.circleMessage && swapProviderHealth.lifiMessage ? " | " : ""}
+                            {swapProviderHealth.lifiMessage ? `LI.FI: ${swapProviderHealth.lifiMessage}` : ""}
+                          </small>
+                        )}
                         {activeProfileSwapQuote && (
                           <div className="market-swap-quote">
                             <span>Estimated receive via {swapQuoteProviderLabel(activeProfileSwapQuote)}</span>
