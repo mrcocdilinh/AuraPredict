@@ -163,7 +163,7 @@ type LeaderboardPeriod = "day" | "7d" | "30d" | "all";
 type MarketSectionKey = "fresh" | "hot" | "closing";
 type ThemeMode = "dark" | "light";
 type MarketViewMode = "grid" | "list";
-type ChartWindowKey = "1h" | "4h" | "8h" | "12h" | "1d" | "1w" | "1m" | "all";
+type ChartWindowKey = "1h" | "6h" | "1d" | "1w" | "1m" | "all";
 type MarketSortKey = "created" | "ending" | "volume" | "participants" | "yes" | "no";
 type SortDirection = "asc" | "desc";
 
@@ -573,9 +573,7 @@ const REPUTATION_TIERS = [
 ] as const;
 const CHART_WINDOWS: Array<{ value: ChartWindowKey; label: string; seconds: number | null }> = [
   { value: "1h", label: "1H", seconds: 60 * 60 },
-  { value: "4h", label: "4H", seconds: 4 * 60 * 60 },
-  { value: "8h", label: "8H", seconds: 8 * 60 * 60 },
-  { value: "12h", label: "12H", seconds: 12 * 60 * 60 },
+  { value: "6h", label: "6H", seconds: 6 * 60 * 60 },
   { value: "1d", label: "1D", seconds: 24 * 60 * 60 },
   { value: "1w", label: "1W", seconds: 7 * 24 * 60 * 60 },
   { value: "1m", label: "1M", seconds: 30 * 24 * 60 * 60 },
@@ -3000,6 +2998,7 @@ export default function App() {
   const [activeCategory, setActiveCategory] = useState("All");
   const [marketViewMode, setMarketViewMode] = useState<MarketViewMode>("grid");
   const [detailChartWindow, setDetailChartWindow] = useState<ChartWindowKey>("all");
+  const [chartHoverRatio, setChartHoverRatio] = useState<number | null>(null);
   const [projectStats, setProjectStats] = useState<ProjectStats | null>(null);
   const [view, setView] = useState<AppView>("markets");
   const [leaderboardMetric, setLeaderboardMetric] = useState<LeaderboardMetric>("volume");
@@ -3183,6 +3182,56 @@ export default function App() {
   const averageMarketByTokenText = formatAssetSummary(statsAssetBreakdown, "averageMarketVolume");
   const aggregateAssetLabel =
     statsAssetBreakdown.length > 1 ? "token units" : statsAssetBreakdown[0]?.symbol || defaultSettlementSymbol;
+  const heroActivityEnd = Math.max(
+    nowSeconds,
+    activities.reduce((max, activity) => Math.max(max, activity.timestamp || 0), 0)
+  );
+  const heroActivityRange = 7 * 24 * 60 * 60;
+  const heroActivityStart = Math.max(0, heroActivityEnd - heroActivityRange);
+  const heroActivityBuckets = Array.from({ length: 8 }, (_, index) => ({
+    timestamp: Math.round(heroActivityStart + (heroActivityRange * index) / 7),
+    volume: 0n
+  }));
+  for (const activity of activities) {
+    if (!activity.timestamp || activity.timestamp < heroActivityStart || activity.timestamp > heroActivityEnd) continue;
+    const bucketIndex = Math.min(
+      heroActivityBuckets.length - 1,
+      Math.max(0, Math.floor(((activity.timestamp - heroActivityStart) / heroActivityRange) * heroActivityBuckets.length))
+    );
+    heroActivityBuckets[bucketIndex].volume += activity.amount;
+  }
+  let heroActivityRunningVolume = 0n;
+  const heroActivityRows = heroActivityBuckets.map((bucket) => {
+    heroActivityRunningVolume += bucket.volume;
+    return { ...bucket, volume: heroActivityRunningVolume };
+  });
+  const heroActivityMaxVolume = heroActivityRows.reduce((max, row) => (row.volume > max ? row.volume : max), 0n);
+  const heroActivityPoints = heroActivityRows.map((row, index) => {
+    const ratio = heroActivityMaxVolume > 0n ? Number((row.volume * 10000n) / heroActivityMaxVolume) / 10000 : 0.46;
+    return {
+      ...row,
+      x: CHART_LEFT + (index / Math.max(1, heroActivityRows.length - 1)) * (CHART_RIGHT - CHART_LEFT),
+      y: CHART_BOTTOM - ratio * CHART_HEIGHT
+    };
+  });
+  const heroActivityLinePoints = heroActivityPoints.map((point) => `${point.x},${point.y}`).join(" ");
+  const heroActivityAreaPath =
+    heroActivityPoints.length > 0
+      ? `M${heroActivityPoints[0].x},${CHART_BOTTOM} L${heroActivityLinePoints} L${heroActivityPoints[heroActivityPoints.length - 1].x},${CHART_BOTTOM} Z`
+      : "";
+  const heroActivityFocus =
+    heroActivityPoints.reduce(
+      (best, point) => (point.volume >= best.volume ? point : best),
+      heroActivityPoints[heroActivityPoints.length - 1] ?? {
+        timestamp: heroActivityEnd,
+        volume: 0n,
+        x: CHART_RIGHT,
+        y: CHART_BOTTOM - CHART_HEIGHT * 0.46
+      }
+    );
+  const heroActivityVolumeText =
+    heroActivityFocus.volume > 0n ? `${formatUsdc(heroActivityFocus.volume, defaultSettlementDecimals)} ${defaultSettlementSymbol}` : "No trades yet";
+  const heroActivityTicks = heroActivityPoints.filter((_, index) => index === 0 || index === 2 || index === 4 || index === 6 || index === heroActivityPoints.length - 1);
   const knownSettlementTokens = useMemo(() => {
     const byKey = new Map<string, { token: string; symbol: string; decimals: number }>();
     const addToken = (token: string | undefined, symbol: string, decimals: number) => {
@@ -3778,6 +3827,7 @@ export default function App() {
   const lastRefreshText = lastDataRefresh
     ? `${lastDataRefresh.toLocaleTimeString("en-US", { timeZone: "UTC", hour12: false })} UTC`
     : "Not loaded";
+  const indexerSyncText = lastDataRefresh ? timeAgo(Math.floor(lastDataRefresh.getTime() / 1000), currentTime) : "Waiting";
   const boardTitle =
     view === "ended"
       ? "Ended markets"
@@ -7749,12 +7799,21 @@ export default function App() {
     const chartPrimaryPercent = selectedTradeSide === Outcome.No ? selectedMarketNoPercent : selectedMarketYesPercent;
     const chartPrimaryLabel = selectedTradeSide === Outcome.No ? "NO" : "YES";
     const chartLineY = (point: (typeof chartRows)[number]) => selectedTradeSide === Outcome.No ? point.noY : point.yesY;
-    const chartLinePoints = chartRows.map((point) => `${point.x},${chartLineY(point)}`).join(" ");
+    const chartYesLinePoints = chartRows.map((point) => `${point.x},${point.yesY}`).join(" ");
     const chartNoLinePoints = chartRows.map((point) => `${point.x},${point.noY}`).join(" ");
+    const chartLinePoints = selectedTradeSide === Outcome.No ? chartNoLinePoints : chartYesLinePoints;
     const chartAreaPath =
       chartRows.length > 0
         ? `M${chartRows[0].x},${CHART_BOTTOM} L${chartLinePoints} L${chartRows[chartRows.length - 1].x},${CHART_BOTTOM} Z`
         : "";
+    const chartLastPoint = chartRows[chartRows.length - 1];
+    const chartHoverPoint =
+      chartRows.length > 0
+        ? chartRows[Math.min(chartRows.length - 1, Math.max(0, Math.round((chartHoverRatio ?? 1) * (chartRows.length - 1))))]
+        : undefined;
+    const chartTooltipLeft = chartHoverPoint ? Math.min(86, Math.max(14, chartHoverPoint.x)) : 0;
+    const chartTooltipTop = chartHoverPoint ? Math.min(76, Math.max(14, (chartLineY(chartHoverPoint) / 58) * 100)) : 0;
+    const chartTradeCount = selectedMarketActivities.length;
     const submitLabel = !selectedTradeSide
       ? "Select YES or NO"
       : tradeAmount <= 0n
@@ -8096,8 +8155,8 @@ export default function App() {
               <div>
                 <span className="section-label">Odds movement</span>
                 <h2>
-                  <b>{chartPrimaryLabel} {chartPrimaryPercent.toFixed(0)}%</b>
-                  <span>Chance</span>
+                  <b>{chartPrimaryPercent.toFixed(0)}%</b>
+                  <span>{chartPrimaryLabel} chance</span>
                 </h2>
               </div>
               <div className="chart-window-tabs">
@@ -8113,21 +8172,64 @@ export default function App() {
                 ))}
               </div>
             </div>
-            <div className="chart-frame">
+            <div className="chart-stat-strip">
+              <span>
+                <b className="won">YES</b>
+                {selectedMarketYesPercent.toFixed(1)}%
+              </span>
+              <span>
+                <b className="lost">NO</b>
+                {selectedMarketNoPercent.toFixed(1)}%
+              </span>
+              <span>
+                <b>Volume</b>
+                {formatMarketAmount(totalPool, selectedMarket)} {marketSymbol(selectedMarket)}
+              </span>
+              <span>
+                <b>Trades</b>
+                {chartTradeCount}
+              </span>
+            </div>
+            <div
+              className="chart-frame"
+              onPointerLeave={() => setChartHoverRatio(null)}
+              onPointerMove={(event) => {
+                const rect = event.currentTarget.getBoundingClientRect();
+                setChartHoverRatio(Math.min(1, Math.max(0, (event.clientX - rect.left) / Math.max(1, rect.width))));
+              }}
+            >
               <svg className="detail-chart" viewBox="0 0 100 58" preserveAspectRatio="none" role="img" aria-label="Market odds chart">
-                <path className="edge-grid" d="M8 8H92 M8 31H92 M8 54H92" />
+                <path className="edge-grid" d="M8 8H92 M8 19.5H92 M8 31H92 M8 42.5H92 M8 54H92" />
                 {chartAreaPath && (
                   <path
                     className={selectedTradeSide === Outcome.No ? "detail-no-area" : "detail-yes-area"}
                     d={chartAreaPath}
                   />
                 )}
-                <polyline className={selectedTradeSide === Outcome.No ? "detail-no-line" : "detail-yes-line"} points={chartLinePoints} />
-                {!selectedTradeSide && <polyline className="detail-no-line secondary-line" points={chartNoLinePoints} />}
+                <polyline className={`detail-yes-line ${selectedTradeSide === Outcome.No ? "muted-line" : ""}`} points={chartYesLinePoints} />
+                <polyline className={`detail-no-line ${selectedTradeSide === Outcome.Yes ? "muted-line" : ""}`} points={chartNoLinePoints} />
+                {chartLastPoint && (
+                  <>
+                    <circle className="chart-end-dot yes" cx={chartLastPoint.x} cy={chartLastPoint.yesY} r="1.35" />
+                    <circle className="chart-end-dot no" cx={chartLastPoint.x} cy={chartLastPoint.noY} r="1.35" />
+                  </>
+                )}
               </svg>
+              {chartHoverPoint && (
+                <>
+                  <span className="chart-crosshair" style={{ left: `${chartHoverPoint.x}%` }} />
+                  <div className="chart-tooltip" style={{ left: `${chartTooltipLeft}%`, top: `${chartTooltipTop}%` }}>
+                    <span>{chartTimeLabel(chartHoverPoint.timestamp, true)}</span>
+                    <strong className="tooltip-yes">YES {chartHoverPoint.yesPercent.toFixed(1)}%</strong>
+                    <strong className="tooltip-no">NO {chartHoverPoint.noPercent.toFixed(1)}%</strong>
+                  </div>
+                </>
+              )}
               <div className="chart-y-labels" aria-hidden="true">
                 <span>100%</span>
+                <span>75%</span>
                 <span>50%</span>
+                <span>25%</span>
                 <span>0%</span>
               </div>
             </div>
@@ -9417,11 +9519,31 @@ export default function App() {
         <section className="hero-band">
           <div className="hero-copy">
             <p className="network-kicker">Arc Testnet prediction markets</p>
-            <h1>Trade outcomes on Arc.</h1>
+            <h1>
+              AI-powered prediction markets on <span>Arc.</span>
+            </h1>
             <p>
-              Create and trade YES/NO markets with transparent settlement, evidence review,
-              and Aura-assisted resolution on Arc Testnet.
+              Transparent outcomes, verifiable data, smarter markets.
+              Create YES/NO markets with Aura-assisted evidence review and objective oracle checks.
             </p>
+            <div className="hero-stat-strip">
+              <div>
+                <span>Total markets</span>
+                <strong>{statsSummary.totalMarkets}</strong>
+              </div>
+              <div>
+                <span>Live markets</span>
+                <strong>{statsSummary.liveMarkets}</strong>
+              </div>
+              <div>
+                <span>Total volume</span>
+                <strong>{totalVolumeByTokenText}</strong>
+              </div>
+              <div>
+                <span>Participants</span>
+                <strong>{statsSummary.knownPlayers}</strong>
+              </div>
+            </div>
             <div className="hero-actions">
               <button className="button-link hero-launch-button" onClick={account ? openCreateMarket : openWalletModal} disabled={connecting}>
                 {connecting ? "Connecting..." : "Launch Market"}
@@ -9434,48 +9556,37 @@ export default function App() {
               )}
             </div>
           </div>
-          <aside className="hero-hot-panel">
-            <div className="hero-hot-head">
+          <aside className="hero-activity-panel">
+            <div className="hero-activity-head">
               <div>
-                <span className="section-label">Hot markets</span>
-                <strong>{liveMarkets} live / {formatUsdc(totalLiquidity, defaultSettlementDecimals)} {aggregateAssetLabel}</strong>
+                <span className="section-label">Market activity (7D)</span>
+                <strong>Volume {heroActivityVolumeText}</strong>
               </div>
-              <button className="see-all-button" onClick={() => openCollection("hot")} type="button">
-                See all
-              </button>
+              <span className="hero-live-pill">{liveMarkets} live</span>
             </div>
-            <div className="hero-hot-window">
-              <div className="hero-hot-track">
-                {heroHotLoop.map((market, index) => {
-                  const totalPool = marketVolume(market);
-                  const yesPercent = percent(market.yesPool, totalPool);
-                  const meta = categoryMeta(market.category || "Other");
-
-                  return (
-                    <button
-                      className="hero-hot-card"
-                      key={`hero-hot-${market.id}-${index}`}
-                      onClick={() => openMarket(market.id)}
-                      type="button"
-                    >
-                      <span className={`category ${meta.className}`}>
-                        <CategoryIcon category={market.category || "Other"} />
-                        {market.category || "Other"}
-                      </span>
-                      <strong>{shortQuestion(market.question)}</strong>
-                      <div className="hero-hot-meter">
-                        <span style={{ width: `${yesPercent}%` }} />
-                      </div>
-                      <small>
-                        YES {yesPercent.toFixed(0)}% / {formatMarketAmount(totalPool, market)} {marketSymbol(market)} / {countdownText(market.closeTime, currentTime)}
-                      </small>
-                    </button>
-                  );
-                })}
-                {heroHotLoop.length === 0 && (
-                  <div className="hero-hot-empty">Hot markets will appear here after people create and stake.</div>
-                )}
+            <div className="hero-activity-chart">
+              <svg viewBox="0 0 100 58" preserveAspectRatio="none" role="img" aria-label="Seven day market activity chart">
+                <path className="hero-activity-grid" d="M8 10H92 M8 31H92 M8 52H92" />
+                {heroActivityAreaPath && <path className="hero-activity-area" d={heroActivityAreaPath} />}
+                <polyline className="hero-activity-line" points={heroActivityLinePoints} />
+                <line className="hero-activity-cursor" x1={heroActivityFocus.x} x2={heroActivityFocus.x} y1="8" y2="54" />
+                <circle className="hero-activity-dot" cx={heroActivityFocus.x} cy={heroActivityFocus.y} r="1.55" />
+              </svg>
+              <div className="hero-activity-tooltip" style={{ left: `${Math.min(82, Math.max(18, heroActivityFocus.x))}%` }}>
+                <span>{chartTimeLabel(heroActivityFocus.timestamp, true)}</span>
+                <strong>{heroActivityVolumeText}</strong>
               </div>
+              <div className="hero-activity-axis">
+                {heroActivityTicks.map((tick) => (
+                  <span key={`hero-activity-${tick.timestamp}`}>{chartTimeLabel(tick.timestamp)}</span>
+                ))}
+              </div>
+            </div>
+            <div className="hero-activity-tabs" aria-label="Activity range preview">
+              <span>1D</span>
+              <span className="active">7D</span>
+              <span>30D</span>
+              <span>ALL</span>
             </div>
           </aside>
         </section>
@@ -10869,61 +10980,57 @@ export default function App() {
         {view !== "collection" && view !== "market" && (
         <aside className="side-rail">
           <section className="protocol-card protocol-stats-card">
-            <span className="section-label">Project stats</span>
-            <div className="protocol-stat-feature">
-              <span>Total volume by token</span>
-              <ul className="asset-breakdown-list">
-                {statsAssetBreakdown.length > 0 ? (
-                  statsAssetBreakdown.map((asset) => (
-                    <li key={`${asset.token || asset.symbol}-total`}>
-                      <strong>{formatUsdc(asset.totalVolume, asset.decimals)}</strong>
-                      <span>{asset.symbol}</span>
-                    </li>
-                  ))
-                ) : (
-                  <li>
-                    <strong>--</strong>
-                    <span>Token</span>
-                  </li>
-                )}
-              </ul>
-            </div>
-            <div className="protocol-metric-grid">
-              <div>
-                <span>Total markets</span>
-                <strong>{statsSummary.totalMarkets}</strong>
+            <span className="section-label">Market stats</span>
+            <div className="market-stat-list">
+              <div className="market-stat-row highlight">
+                <span className="stat-glyph stat-volume" aria-hidden="true" />
+                <div>
+                  <span>Total volume</span>
+                  <strong>{totalVolumeByTokenText}</strong>
+                </div>
               </div>
-              <div>
-                <span>Indexed</span>
-                <strong>{statsSummary.indexedMarkets}</strong>
+              <div className="market-stat-row">
+                <span className="stat-glyph stat-liquidity" aria-hidden="true" />
+                <div>
+                  <span>Total liquidity</span>
+                  <strong>{liveLiquidityByTokenText}</strong>
+                </div>
               </div>
-              <div>
-                <span>Live</span>
-                <strong>{statsSummary.liveMarkets}</strong>
+              <div className="market-stat-row">
+                <span className="stat-glyph stat-live" aria-hidden="true" />
+                <div>
+                  <span>Live markets</span>
+                  <strong>{statsSummary.liveMarkets}</strong>
+                </div>
               </div>
-              <div>
-                <span>Ended</span>
-                <strong>{statsSummary.endedMarkets}</strong>
+              <div className="market-stat-row">
+                <span className="stat-glyph stat-indexed" aria-hidden="true" />
+                <div>
+                  <span>Indexed markets</span>
+                  <strong>{statsSummary.indexedMarkets}</strong>
+                </div>
               </div>
-              <div>
-                <span>Awaiting result</span>
-                <strong>{statsSummary.pendingMarkets}</strong>
+              <div className="market-stat-row">
+                <span className="stat-glyph stat-pending" aria-hidden="true" />
+                <div>
+                  <span>Awaiting result</span>
+                  <strong>{statsSummary.pendingMarkets}</strong>
+                </div>
               </div>
-              <div>
-                <span>Known players</span>
-                <strong>{statsSummary.knownPlayers}</strong>
+              <div className="market-stat-row">
+                <span className="stat-glyph stat-users" aria-hidden="true" />
+                <div>
+                  <span>Known players</span>
+                  <strong>{statsSummary.knownPlayers}</strong>
+                </div>
               </div>
-              <div>
-                <span>Entries</span>
-                <strong>{statsSummary.participantEntries}</strong>
-              </div>
-              <div>
-                <span>Live liquidity</span>
-                <strong>{liveLiquidityByTokenText}</strong>
-              </div>
-              <div>
-                <span>Avg market</span>
-                <strong>{averageMarketByTokenText}</strong>
+              <div className="market-stat-row status">
+                <span className="stat-glyph stat-sync" aria-hidden="true" />
+                <div>
+                  <span>Indexer status</span>
+                  <strong>Live & Syncing</strong>
+                </div>
+                <em>{indexerSyncText}</em>
               </div>
             </div>
           </section>
