@@ -58,6 +58,8 @@ type StablecoinSwapPair = {
 const SWAP_TOLERANCE_OPTIONS = [50, 100, 300, 500] as const;
 const DEFAULT_SWAP_TOLERANCE_BPS = 300;
 const SWAP_QUOTE_MAX_AGE_MS = 30_000;
+const LIFI_QUOTE_ENDPOINT = "https://li.quest/v1/quote";
+const LIFI_PROBE_AMOUNTS = [1_000n, 10_000n, 100_000n, 1_000_000n, 5_000_000n, 10_000_000n];
 const AURA_RULE_JSON_PREFIX = "AURA_RULE_JSON:";
 
 function stablecoinSwapPairKey(pair: StablecoinSwapPair) {
@@ -941,6 +943,87 @@ function compactErrorMessage(error: unknown) {
     return "Contract interaction failed. Check wallet balance, market status, contract address, or open the transaction details in your wallet.";
   }
   return firstLine.length > 220 ? `${firstLine.slice(0, 220)}...` : firstLine;
+}
+
+function lifiQuoteUrl(pair: StablecoinSwapPair, amount: bigint, account: string, slippage: number) {
+  const params = new URLSearchParams({
+    fromChain: String(ARC_CHAIN_ID_NUMBER),
+    toChain: String(ARC_CHAIN_ID_NUMBER),
+    fromToken: pair.fromToken,
+    toToken: pair.toToken,
+    fromAmount: amount.toString(),
+    fromAddress: account,
+    toAddress: account,
+    slippage: String(slippage)
+  });
+  return `${LIFI_QUOTE_ENDPOINT}?${params.toString()}`;
+}
+
+function hasLifiQuote(data: unknown) {
+  if (!data || typeof data !== "object") return false;
+  const record = data as Record<string, unknown>;
+  return Boolean(record.transactionRequest || record.estimate || record.toAmount);
+}
+
+function firstLifiFailureMessage(data: unknown) {
+  if (!data || typeof data !== "object") return "";
+  const record = data as Record<string, unknown>;
+  if (typeof record.message === "string" && record.message) return record.message;
+  const errors = record.errors;
+  if (!errors || typeof errors !== "object") return "";
+  const failed = (errors as Record<string, unknown>).failed;
+  if (!Array.isArray(failed)) return "";
+  for (const item of failed) {
+    if (!item || typeof item !== "object") continue;
+    const itemRecord = item as Record<string, unknown>;
+    const subpaths = itemRecord.subpaths;
+    if (!subpaths || typeof subpaths !== "object") continue;
+    for (const attempts of Object.values(subpaths as Record<string, unknown>)) {
+      if (!Array.isArray(attempts)) continue;
+      for (const attempt of attempts) {
+        if (!attempt || typeof attempt !== "object") continue;
+        const message = (attempt as Record<string, unknown>).message;
+        if (typeof message === "string" && message) return message;
+      }
+    }
+  }
+  return "";
+}
+
+async function fetchLifiQuoteJson(pair: StablecoinSwapPair, amount: bigint, account: string, slippage: number) {
+  const response = await fetch(lifiQuoteUrl(pair, amount, account, slippage));
+  return (await response.json()) as unknown;
+}
+
+async function lifiRouteDiagnostic(pair: StablecoinSwapPair, requestedAmount: bigint, account: string, slippage: number) {
+  try {
+    const requested = await fetchLifiQuoteJson(pair, requestedAmount, account, slippage);
+    if (hasLifiQuote(requested)) return "";
+    const directFailure = firstLifiFailureMessage(requested);
+    let largestWorkingProbe = 0n;
+    for (const probeAmount of LIFI_PROBE_AMOUNTS) {
+      if (probeAmount >= requestedAmount) continue;
+      const probe = await fetchLifiQuoteJson(pair, probeAmount, account, slippage);
+      if (hasLifiQuote(probe)) largestWorkingProbe = probeAmount;
+    }
+    if (largestWorkingProbe > 0n) {
+      return `LI.FI has only shallow ${pair.fromSymbol} to ${pair.toSymbol} liquidity on Arc Testnet right now. Try ${formatUsdcInput(
+        largestWorkingProbe,
+        pair.decimals
+      )} ${pair.fromSymbol} or less, or wait for LI.FI liquidity to recover.`;
+    }
+    if (pair.fromSymbol === "EURC" && pair.toSymbol === "USDC") {
+      return "LI.FI currently has no EURC to USDC route on Arc Testnet. This is a LI.FI/liquidity limitation, not an AuraPredict market issue. Use USDC directly or try again later.";
+    }
+    if (directFailure.toLowerCase().includes("liquidity")) {
+      return `LI.FI does not have enough ${pair.fromSymbol} to ${pair.toSymbol} liquidity on Arc Testnet for this amount. Try a much smaller amount or try again later.`;
+    }
+    return directFailure
+      ? `LI.FI could not quote this ${pair.fromSymbol} to ${pair.toSymbol} swap on Arc Testnet: ${directFailure}`
+      : `LI.FI could not quote ${pair.fromSymbol} to ${pair.toSymbol} on Arc Testnet right now. Try again later.`;
+  } catch {
+    return `LI.FI quote diagnostics are unavailable, and no ${pair.fromSymbol} to ${pair.toSymbol} route was returned. Try again later.`;
+  }
 }
 
 function parseUsdcInput(value: string, decimals = ARC_NATIVE_USDC_DECIMALS) {
@@ -4477,14 +4560,15 @@ export default function App() {
 
   const requestSwapQuote = useCallback(
     async (pair: StablecoinSwapPair) => {
+      let requestedAmount = 0n;
       try {
         if (!account || !isAddress(account)) throw new Error("Connect wallet before swapping.");
-        const amount = parseUsdcInput(swapAmountInput, pair.decimals);
-        if (amount <= 0n) throw new Error("Enter an amount to swap.");
+        requestedAmount = parseUsdcInput(swapAmountInput, pair.decimals);
+        if (requestedAmount <= 0n) throw new Error("Enter an amount to swap.");
         const fromBalance =
           walletTokenBalances[pair.fromToken.toLowerCase()] ??
           (sameAddress(pair.fromToken, defaultSettlementToken) ? walletBalance : 0n);
-        if (amount > fromBalance) throw new Error(`Not enough ${pair.fromSymbol} for this swap.`);
+        if (requestedAmount > fromBalance) throw new Error(`Not enough ${pair.fromSymbol} for this swap.`);
         setSwapBusy("quote");
         setSwapQuote(null);
         setSwapQuotePairKey("");
@@ -4497,18 +4581,21 @@ export default function App() {
           toChainId: ARC_CHAIN_ID_NUMBER,
           fromTokenAddress: pair.fromToken,
           toTokenAddress: pair.toToken,
-          fromAmount: amount.toString(),
+          fromAmount: requestedAmount.toString(),
           fromAddress: account,
           toAddress: account,
           options: { integrator: "aurapredict", order: "RECOMMENDED", slippage: swapToleranceBps / 10_000 }
         });
         const route = result.routes[0];
-        if (!route) throw new Error(`No LI.FI route is available for ${pair.fromSymbol} to ${pair.toSymbol} right now.`);
+        if (!route) {
+          const diagnostic = await lifiRouteDiagnostic(pair, requestedAmount, account, swapToleranceBps / 10_000);
+          throw new Error(diagnostic || `No LI.FI route is available for ${pair.fromSymbol} to ${pair.toSymbol} right now.`);
+        }
         setSwapQuote(route);
         setSwapQuotePairKey(stablecoinSwapPairKey(pair));
         setSwapQuoteTime(Date.now());
         setNotice(
-          `Swap quote ready: ${formatUsdcInput(amount, pair.decimals)} ${pair.fromSymbol} to approximately ${formatUsdcInput(
+          `Swap quote ready: ${formatUsdcInput(requestedAmount, pair.decimals)} ${pair.fromSymbol} to approximately ${formatUsdcInput(
             BigInt(route.toAmount),
             pair.decimals
           )} ${pair.toSymbol} with ${formatSwapTolerance(swapToleranceBps)} price tolerance.`
@@ -4517,7 +4604,16 @@ export default function App() {
         setSwapQuote(null);
         setSwapQuotePairKey("");
         setSwapQuoteTime(0);
-        setNotice(`Swap quote unavailable: ${compactErrorMessage(error)}`);
+        let message = compactErrorMessage(error);
+        if (
+          requestedAmount > 0n &&
+          account &&
+          isAddress(account) &&
+          (message.toLowerCase().includes("no available quotes") || message.toLowerCase().includes("no li.fi route"))
+        ) {
+          message = await lifiRouteDiagnostic(pair, requestedAmount, account, swapToleranceBps / 10_000);
+        }
+        setNotice(`Swap quote unavailable: ${message}`);
       } finally {
         setSwapBusy("idle");
       }
@@ -8425,7 +8521,7 @@ export default function App() {
                       Routed by LI.FI on Arc Testnet. This market still settles only in {selectedSwapPair.toSymbol}.
                     </small>
                     <small className="market-swap-note">
-                      Testnet liquidity can move quickly. Higher tolerance reduces failed swaps but can lower the amount received.
+                      Arc testnet swap liquidity is limited: EURC to USDC may have no route, and USDC to EURC may only quote for small amounts.
                     </small>
                   </div>
                 )}
@@ -10078,7 +10174,7 @@ export default function App() {
                           </div>
                         )}
                         <small className="market-swap-note">
-                          Testnet liquidity can move quickly. Higher tolerance reduces failed swaps but can lower the amount received.
+                          Arc testnet swap liquidity is limited: EURC to USDC may have no route, and USDC to EURC may only quote for small amounts.
                         </small>
                       </div>
                     )}
