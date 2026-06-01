@@ -7626,6 +7626,397 @@ label {
   color: #18d7ff;
 }
 
+.market-detail-view {
+  gap: 14px;
+}
+
+.detail-body-grid {
+  gap: 16px;
+  grid-template-columns: minmax(0, 1fr) minmax(306px, 340px);
+}
+
+.detail-primary-column {
+  gap: 16px;
+}
+
+.detail-question-panel,
+.detail-summary-card,
+.detail-chart-card,
+.detail-trade-card,
+.detail-public-card,
+.market-timeline,
+.resolution-zone {
+  border-radius: 12px;
+}
+
+.detail-chart-card {
+  background:
+    radial-gradient(circle at 18% 8%, rgba(24, 215, 255, 0.12), transparent 28%),
+    linear-gradient(135deg, rgba(20, 184, 166, 0.06), rgba(47, 128, 237, 0.04)),
+    #ffffff;
+  border-color: #cfdef0;
+  box-shadow: 0 18px 44px rgba(15, 23, 42, 0.08);
+  gap: 12px;
+  padding: 16px;
+}
+
+.detail-chart-header {
+  align-items: flex-start;
+}
+
+.detail-chart-header h2 b {
+  font-size: clamp(1.8rem, 3vw, 2.25rem);
+  letter-spacing: 0;
+}
+
+.chart-window-tabs {
+  border-radius: 12px;
+  gap: 4px;
+  padding: 4px;
+}
+
+.chart-window-tabs button {
+  min-height: 30px;
+  min-width: 42px;
+  padding: 5px 10px;
+}
+
+.chart-stat-strip {
+  gap: 10px;
+}
+
+.chart-stat-strip span {
+  border-color: #d7e3f2;
+  border-radius: 10px;
+  min-height: 56px;
+  padding: 10px 12px;
+}
+
+.chart-frame {
+  border-color: #d2e2f3;
+  border-radius: 12px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.85),
+    inset 0 -24px 60px rgba(24, 215, 255, 0.06);
+  height: clamp(260px, 32vw, 400px);
+}
+
+.detail-yes-line,
+.detail-no-line {
+  stroke-width: 1.85;
+}
+
+.detail-yes-area {
+  fill: rgba(18, 185, 129, 0.16);
+}
+
+.detail-no-area {
+  fill: rgba(239, 68, 68, 0.14);
+}
+
+.chart-crosshair {
+  box-shadow: 0 0 0 1px rgba(24, 215, 255, 0.12);
+}
+
+.chart-hover-dot {
+  height: 10px;
+  width: 10px;
+}
+
+.chart-tooltip {
+  border-radius: 10px;
+  min-width: 168px;
+}
+
+.resolution-zone {
+  border-color: #cfe0f2;
+  box-shadow: 0 18px 44px rgba(15, 23, 42, 0.07);
+  gap: 12px;
+  padding: 16px;
+}
+
+.resolution-zone-head {
+  align-items: flex-start;
+}
+
+.resolution-zone-head strong {
+  font-size: 1.08rem;
+}
+
+.resolution-ai-banner {
+  border-radius: 12px;
+  min-width: min(100%, 250px);
+  padding: 10px 12px;
+}
+
+.resolution-report {
+  background:
+    linear-gradient(135deg, rgba(24, 215, 255, 0.06), rgba(127, 92, 255, 0.04)),
+    #f8fbff;
+  border-color: #cfe0f2;
+  border-radius: 12px;
+  gap: 14px;
+  padding: 14px;
+}
+
+.resolution-report-head {
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.resolution-report-head button {
+  border-radius: 10px;
+  min-height: 42px;
+  padding-inline: 16px;
+}
+
+.resolution-report-grid {
+  align-items: stretch;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.resolution-report-grid article,
+.resolution-report-pools div,
+.resolution-timeline div {
+  border-color: #d9e5f4;
+  border-radius: 10px;
+  padding: 12px;
+}
+
+.resolution-report-grid article {
+  align-content: start;
+  min-height: 142px;
+}
+
+.resolution-report-grid article:nth-child(1) {
+  border-color: rgba(47, 128, 237, 0.22);
+}
+
+.resolution-report-grid article:nth-child(2) {
+  border-color: rgba(127, 92, 255, 0.24);
+}
+
+.resolution-report-grid article:nth-child(3) {
+  border-color: rgba(24, 215, 255, 0.26);
+}
+
+.resolution-report-grid article:nth-child(4),
+.resolution-report-grid article:nth-child(5) {
+  border-color: rgba(255, 188, 102, 0.38);
+}
+
+.resolution-report-grid small {
+  max-height: 112px;
+  overflow: auto;
+  padding-right: 2px;
+}
+
+.resolution-report-pools,
+.resolution-timeline {
+  gap: 10px;
+}
+
+.resolution-timeline {
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+}
+
+.resolution-button-grid {
+  gap: 10px;
+}
+
+.resolution-button-grid .secondary,
+.resolution-button-grid button {
+  border-radius: 10px;
+  font-weight: 900;
+  min-height: 50px;
+}
+
+.resolution-actions .action-refresh-aura,
+.resolution-actions .action-use-ai,
+.resolution-actions .action-use-oracle,
+.resolution-actions .action-withdraw-pending {
+  min-height: 52px;
+}
+
+.resolution-meta {
+  background: rgba(248, 250, 252, 0.86);
+  border: 1px solid #dde7f4;
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+
+.resolution-meta small {
+  color: #45546c;
+  font-weight: 760;
+  line-height: 1.38;
+}
+
+.resolver-note {
+  border-radius: 10px;
+  line-height: 1.45;
+  padding: 12px 14px;
+}
+
+.detail-trade-card {
+  border-color: #cfe0f2;
+  box-shadow: 0 18px 44px rgba(15, 23, 42, 0.08);
+  gap: 10px;
+  padding: 12px;
+  position: sticky;
+  top: 96px;
+}
+
+.detail-outcome-row {
+  border-radius: 10px;
+  min-height: 44px;
+  padding: 9px 10px;
+}
+
+.trade-balance-line {
+  border-radius: 10px;
+  padding: 8px 10px;
+}
+
+.trade-balance-line button {
+  border-radius: 999px;
+  min-height: 32px;
+  padding: 0 12px;
+}
+
+.trade-balance-line button:hover:not(:disabled) {
+  background: #ddf7ff;
+  border-color: #5fcfe8;
+  color: #083847;
+}
+
+.market-swap-panel,
+.market-swap-quote {
+  border-radius: 10px;
+}
+
+.market-swap-toggle {
+  min-height: 48px;
+  padding: 10px 12px;
+}
+
+.detail-trade-card input {
+  border-radius: 10px;
+  min-height: 44px;
+}
+
+.stake-shortcuts button {
+  border-radius: 10px;
+  min-height: 34px;
+}
+
+.trade-side-buttons {
+  gap: 8px;
+}
+
+.trade-side-buttons button {
+  border-width: 1px;
+  min-height: 50px;
+}
+
+.trade-side-buttons .yes-button.active {
+  background: linear-gradient(135deg, #17ce95, #12b981);
+  border-color: #5ff0c4;
+  box-shadow:
+    0 0 0 2px rgba(18, 185, 129, 0.22),
+    0 14px 28px rgba(18, 185, 129, 0.24);
+}
+
+.trade-side-buttons .no-button.active {
+  background: linear-gradient(135deg, #ff6685, #ef476f);
+  border-color: #ff9caf;
+  box-shadow:
+    0 0 0 2px rgba(239, 71, 111, 0.2),
+    0 14px 28px rgba(239, 71, 111, 0.24);
+}
+
+.trade-submit-button {
+  border-radius: 10px;
+  min-height: 44px;
+}
+
+[data-theme="dark"] .detail-chart-card {
+  background:
+    radial-gradient(circle at 18% 8%, rgba(24, 215, 255, 0.13), transparent 28%),
+    linear-gradient(135deg, rgba(20, 184, 166, 0.08), rgba(127, 92, 255, 0.08)),
+    rgba(12, 17, 31, 0.96);
+  border-color: rgba(38, 201, 255, 0.22);
+  box-shadow: 0 22px 54px rgba(0, 0, 0, 0.28);
+}
+
+[data-theme="dark"] .chart-frame {
+  background:
+    radial-gradient(circle at 18% 12%, rgba(24, 215, 255, 0.1), transparent 30%),
+    linear-gradient(180deg, rgba(24, 215, 255, 0.08), transparent),
+    #071827;
+  border-color: rgba(47, 211, 255, 0.2);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    inset 0 -30px 80px rgba(24, 215, 255, 0.06);
+}
+
+[data-theme="dark"] .resolution-zone {
+  background:
+    radial-gradient(circle at 10% 0%, rgba(24, 215, 255, 0.08), transparent 26%),
+    rgba(8, 13, 26, 0.56);
+  border-color: rgba(38, 201, 255, 0.26);
+  box-shadow: 0 22px 54px rgba(0, 0, 0, 0.24);
+}
+
+[data-theme="dark"] .resolution-report {
+  background:
+    linear-gradient(135deg, rgba(24, 215, 255, 0.08), rgba(127, 92, 255, 0.06)),
+    rgba(7, 12, 24, 0.82);
+  border-color: rgba(72, 95, 130, 0.92);
+}
+
+[data-theme="dark"] .resolution-report-grid article,
+[data-theme="dark"] .resolution-report-pools div,
+[data-theme="dark"] .resolution-timeline div {
+  background: rgba(8, 13, 26, 0.86);
+  border-color: rgba(53, 68, 100, 0.9);
+}
+
+[data-theme="dark"] .resolution-meta {
+  background: rgba(11, 16, 32, 0.82);
+  border-color: #26334a;
+}
+
+[data-theme="dark"] .resolution-meta small {
+  color: #b8c4d8;
+}
+
+[data-theme="dark"] .detail-trade-card {
+  border-color: rgba(38, 201, 255, 0.22);
+  box-shadow: 0 22px 54px rgba(0, 0, 0, 0.28);
+}
+
+[data-theme="dark"] .trade-balance-line button {
+  background: linear-gradient(135deg, rgba(24, 215, 255, 0.18), rgba(127, 92, 255, 0.14));
+  border-color: rgba(24, 215, 255, 0.28);
+  color: #dff8ff;
+}
+
+[data-theme="dark"] .trade-balance-line button:hover:not(:disabled) {
+  background: linear-gradient(135deg, rgba(24, 215, 255, 0.28), rgba(127, 92, 255, 0.22));
+  border-color: #18d7ff;
+  color: #ffffff;
+}
+
+[data-theme="dark"] .trade-side-buttons .yes-button.active {
+  background: linear-gradient(135deg, #29d7a3, #21bd82);
+  color: #031c15;
+}
+
+[data-theme="dark"] .trade-side-buttons .no-button.active {
+  background: linear-gradient(135deg, #ff6b8a, #ff4f68);
+  color: #2a0a12;
+}
+
 @media (max-width: 1180px) {
   .landing-hero,
   .landing-split {
