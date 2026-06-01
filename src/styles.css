@@ -8941,3 +8941,466 @@ label {
     line-height: 1.08;
   }
 }
+
+/* Mobile app usability layer */
+@media (max-width: 720px) {
+  html,
+  body,
+  #root {
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+
+  body {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  button,
+  a,
+  input,
+  select,
+  textarea {
+    touch-action: manipulation;
+  }
+
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+
+  .app-shell {
+    padding: 0 10px 28px;
+    overflow-x: clip;
+  }
+
+  .topbar {
+    position: sticky;
+    top: 0;
+    z-index: 80;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
+    margin: 0 -10px 10px;
+    padding: 10px;
+    border-radius: 0 0 16px 16px;
+    backdrop-filter: blur(18px);
+  }
+
+  .brand {
+    min-width: 0;
+  }
+
+  .brand span {
+    display: block;
+    max-width: 136px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .topbar-center {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    display: grid;
+    gap: 8px;
+    min-width: 0;
+    width: 100%;
+  }
+
+  .nav-tabs,
+  .category-row,
+  .chart-window-tabs,
+  .hero-window-tabs {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 6px;
+    overflow-x: auto;
+    padding-bottom: 4px;
+    scrollbar-width: none;
+  }
+
+  .nav-tabs::-webkit-scrollbar,
+  .category-row::-webkit-scrollbar,
+  .chart-window-tabs::-webkit-scrollbar,
+  .hero-window-tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .tab,
+  .category-pill,
+  .chart-window-tabs button,
+  .hero-window-tabs button {
+    min-height: 42px;
+    white-space: nowrap;
+  }
+
+  .market-search {
+    width: 100%;
+    max-width: none;
+    min-width: 0;
+  }
+
+  .market-search input {
+    min-height: 46px;
+  }
+
+  .wallet-panel {
+    grid-column: 2;
+    grid-row: 1;
+    justify-content: flex-end;
+    flex-wrap: nowrap;
+    gap: 6px;
+    min-width: 0;
+  }
+
+  .wallet-panel > a,
+  .clock-widget {
+    display: none;
+  }
+
+  .theme-trigger,
+  .notification-button,
+  .wallet-button,
+  .wallet-panel > button {
+    min-height: 42px;
+  }
+
+  .theme-trigger,
+  .notification-button {
+    width: 42px;
+    height: 42px;
+  }
+
+  .wallet-panel .wallet-menu {
+    min-width: 0;
+    max-width: 168px;
+  }
+
+  .wallet-button {
+    padding-inline: 10px;
+  }
+
+  .wallet-button span:not(.wallet-dot) {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .wallet-dropdown,
+  .notification-dropdown,
+  .theme-dropdown,
+  .search-dropdown {
+    position: fixed;
+    top: 72px;
+    right: 10px;
+    left: 10px;
+    z-index: 95;
+    width: auto;
+    min-width: 0;
+    max-height: calc(100dvh - 88px);
+    overflow: auto;
+  }
+
+  .hero-band {
+    grid-template-columns: 1fr;
+    gap: 18px;
+    padding: 24px 16px;
+    border-radius: 18px;
+  }
+
+  .hero-copy h1 {
+    max-width: 100%;
+    font-size: 3rem;
+    line-height: 1.02;
+  }
+
+  .hero-copy p {
+    max-width: 100%;
+  }
+
+  .hero-metric-row,
+  .hero-stats-grid,
+  .stats-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .hero-activity-panel,
+  .project-stats-card,
+  .stat-panel,
+  .side-rail {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .market-grid,
+  .market-grid.market-grid-list,
+  .related-market-grid,
+  .profile-market-grid,
+  .template-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .market-card,
+  .compact-market-card,
+  .interactive-market-card {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .compact-market-visual,
+  .market-card-image {
+    min-height: 132px;
+    aspect-ratio: 1.9 / 1;
+  }
+
+  .compact-odds-grid,
+  .compact-card-footer,
+  .market-card-stat-grid,
+  .profile-stat-grid,
+  .profile-rank-grid,
+  .profile-name-form {
+    grid-template-columns: 1fr;
+  }
+
+  .modal-backdrop {
+    align-items: flex-end;
+    padding: 0;
+  }
+
+  .modal-panel,
+  .create-market-modal,
+  .wallet-connect-modal {
+    width: 100%;
+    max-width: 100%;
+    max-height: 92dvh;
+    border-radius: 18px 18px 0 0;
+  }
+
+  .modal-panel {
+    padding: 18px;
+    overflow: auto;
+  }
+
+  .modal-form-grid,
+  .wallet-connect-modal {
+    grid-template-columns: 1fr;
+  }
+
+  .quick-time-grid,
+  .amount-quick-grid,
+  .resolution-mode-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .create-market-modal input,
+  .create-market-modal select,
+  .create-market-modal textarea,
+  .create-market-modal button,
+  .wallet-connect-modal button {
+    min-height: 46px;
+  }
+
+  .detail-body-grid,
+  .market-detail-hero,
+  .detail-summary-card,
+  .detail-header-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .market-detail-hero,
+  .detail-question-panel,
+  .detail-chart-card,
+  .resolution-zone,
+  .detail-trade-card {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .detail-question-panel {
+    min-height: 220px;
+    padding: 18px;
+  }
+
+  .detail-question-panel h1,
+  .market-detail-hero h1 {
+    font-size: 2rem;
+    line-height: 1.12;
+  }
+
+  .detail-trade-card {
+    position: static;
+    top: auto;
+    order: -1;
+  }
+
+  .chart-stat-strip,
+  .chart-summary-grid,
+  .resolution-report-pools,
+  .resolution-report-times,
+  .owner-metrics-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .chart-frame {
+    height: 260px;
+    min-height: 240px;
+  }
+
+  .chart-tooltip {
+    max-width: min(260px, calc(100vw - 48px));
+  }
+
+  .resolution-report {
+    padding: 14px;
+  }
+
+  .resolution-report-grid,
+  .resolution-report-grid.five-columns {
+    grid-template-columns: 1fr;
+  }
+
+  .resolution-report-card {
+    min-height: auto;
+  }
+
+  .resolution-report-card p {
+    max-height: none;
+    overflow: visible;
+  }
+
+  .resolution-button-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .resolution-actions button,
+  .resolution-button-grid button,
+  .trade-card button,
+  .detail-trade-card button,
+  .market-swap-panel button {
+    min-height: 48px;
+  }
+
+  .timeline-steps {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .timeline-step {
+    min-width: 0;
+    text-align: left;
+    align-items: flex-start;
+  }
+
+  .timeline-step::before,
+  .timeline-step::after {
+    display: none;
+  }
+
+  .profile-view,
+  .profile-hero-card,
+  .profile-section {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .profile-head {
+    grid-template-columns: 1fr;
+    text-align: left;
+  }
+
+  .profile-avatar {
+    width: 72px;
+    height: 72px;
+  }
+
+  .profile-actions,
+  .profile-filter-bar,
+  .history-toolbar,
+  .ended-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .profile-actions button,
+  .history-toolbar input,
+  .ended-toolbar input {
+    width: 100%;
+    min-height: 46px;
+  }
+
+  .trade-balance-line,
+  .balance-pill,
+  .asset-balance-pill {
+    color: var(--text-primary);
+  }
+
+  .trade-balance-line:hover,
+  .balance-pill:hover,
+  .asset-balance-pill:hover {
+    background: rgba(34, 211, 238, 0.14);
+    color: var(--text-primary);
+  }
+}
+
+@media (max-width: 420px) {
+  :root {
+    font-size: 11.5px;
+  }
+
+  .app-shell {
+    padding-inline: 8px;
+  }
+
+  .topbar {
+    margin-inline: -8px;
+    padding: 8px;
+  }
+
+  .brand span {
+    max-width: 102px;
+  }
+
+  .wallet-panel .wallet-menu {
+    max-width: 138px;
+  }
+
+  .hero-copy h1 {
+    font-size: 2.45rem;
+  }
+
+  .hero-metric-row,
+  .hero-stats-grid,
+  .stats-grid,
+  .chart-stat-strip,
+  .chart-summary-grid,
+  .resolution-report-pools,
+  .resolution-report-times,
+  .owner-metrics-grid,
+  .quick-time-grid,
+  .amount-quick-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .chart-frame {
+    height: 220px;
+    min-height: 210px;
+  }
+
+  .detail-question-panel h1,
+  .market-detail-hero h1 {
+    font-size: 1.75rem;
+  }
+
+  .modal-panel {
+    padding: 14px;
+  }
+}
+
+@media (hover: none) {
+  .interactive-market-card:hover,
+  .market-card:hover,
+  .compact-market-card:hover {
+    transform: none;
+  }
+}
