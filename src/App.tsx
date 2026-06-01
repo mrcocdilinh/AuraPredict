@@ -3345,7 +3345,7 @@ export default function App() {
     heroActivityFocus.volume > 0n ? `${formatUsdc(heroActivityFocus.volume, defaultSettlementDecimals)} ${defaultSettlementSymbol}` : "No trades yet";
   const heroActivityPointerActive = heroActivityHoverRatio !== null;
   const heroActivityTooltipLeft = Math.min(88, Math.max(12, heroActivityFocus.x));
-  const heroActivityTooltipTop = Math.min(64, Math.max(18, (heroActivityFocus.y / 58) * 100 + 10));
+  const heroActivityTooltipTop = Math.min(86, Math.max(14, (heroActivityFocus.y / 58) * 100));
   const heroActivityTooltipSide = heroActivityFocus.x > 68 ? "left" : "right";
   const heroActivityLatestPoint = heroActivityPoints[heroActivityPoints.length - 1] || heroActivityFocus;
   const heroActivityTicks =
@@ -9799,44 +9799,48 @@ export default function App() {
             </div>
             <div
               className="hero-activity-chart"
-              onPointerLeave={() => setHeroActivityHoverRatio(null)}
-              onPointerEnter={(event) => {
-                const rect = event.currentTarget.getBoundingClientRect();
-                setHeroActivityHoverRatio(Math.min(1, Math.max(0, (event.clientX - rect.left) / Math.max(1, rect.width))));
-              }}
-              onPointerMove={(event) => {
-                const rect = event.currentTarget.getBoundingClientRect();
-                setHeroActivityHoverRatio(Math.min(1, Math.max(0, (event.clientX - rect.left) / Math.max(1, rect.width))));
-              }}
-              onPointerDown={(event) => {
-                event.currentTarget.setPointerCapture(event.pointerId);
-                const rect = event.currentTarget.getBoundingClientRect();
-                setHeroActivityHoverRatio(Math.min(1, Math.max(0, (event.clientX - rect.left) / Math.max(1, rect.width))));
-              }}
             >
-              <svg viewBox="0 0 100 58" preserveAspectRatio="none" role="img" aria-label={`${activeHeroActivityWindow.label} market activity chart`}>
-                <path className="hero-activity-grid" d="M8 10H92 M8 31H92 M8 52H92" />
-                {heroActivityAreaPath && <path className="hero-activity-area" d={heroActivityAreaPath} />}
-                {heroActivityLinePath && <path className="hero-activity-line" d={heroActivityLinePath} />}
-                {!heroActivityPointerActive && (
-                  <circle className="hero-activity-dot is-latest" cx={heroActivityLatestPoint.x} cy={heroActivityLatestPoint.y} r="1.35" />
-                )}
+              <div
+                className="hero-activity-plot"
+                onPointerLeave={() => setHeroActivityHoverRatio(null)}
+                onPointerEnter={(event) => {
+                  const rect = event.currentTarget.getBoundingClientRect();
+                  setHeroActivityHoverRatio(Math.min(1, Math.max(0, (event.clientX - rect.left) / Math.max(1, rect.width))));
+                }}
+                onPointerMove={(event) => {
+                  const rect = event.currentTarget.getBoundingClientRect();
+                  setHeroActivityHoverRatio(Math.min(1, Math.max(0, (event.clientX - rect.left) / Math.max(1, rect.width))));
+                }}
+                onPointerDown={(event) => {
+                  event.currentTarget.setPointerCapture(event.pointerId);
+                  const rect = event.currentTarget.getBoundingClientRect();
+                  setHeroActivityHoverRatio(Math.min(1, Math.max(0, (event.clientX - rect.left) / Math.max(1, rect.width))));
+                }}
+              >
+                <svg viewBox="0 0 100 58" preserveAspectRatio="none" role="img" aria-label={`${activeHeroActivityWindow.label} market activity chart`}>
+                  <path className="hero-activity-grid" d="M8 10H92 M8 31H92 M8 52H92" />
+                  {heroActivityAreaPath && <path className="hero-activity-area" d={heroActivityAreaPath} />}
+                  {heroActivityLinePath && <path className="hero-activity-line" d={heroActivityLinePath} />}
+                  {!heroActivityPointerActive && (
+                    <circle className="hero-activity-dot is-latest" cx={heroActivityLatestPoint.x} cy={heroActivityLatestPoint.y} r="1.35" />
+                  )}
+                  {heroActivityPointerActive && (
+                    <>
+                      <line className="hero-activity-cursor" x1={heroActivityFocus.x} x2={heroActivityFocus.x} y1="8" y2="54" />
+                      <circle className="hero-activity-dot" cx={heroActivityFocus.x} cy={heroActivityFocus.y} r="1.55" />
+                    </>
+                  )}
+                </svg>
                 {heroActivityPointerActive && (
-                  <>
-                    <line className="hero-activity-cursor" x1={heroActivityFocus.x} x2={heroActivityFocus.x} y1="8" y2="54" />
-                    <circle className="hero-activity-dot" cx={heroActivityFocus.x} cy={heroActivityFocus.y} r="1.55" />
-                  </>
+                  <div
+                    className={`hero-activity-tooltip is-${heroActivityTooltipSide}`}
+                    style={{ left: `${heroActivityTooltipLeft}%`, top: `${heroActivityTooltipTop}%` }}
+                  >
+                    <span>{chartTimeLabel(heroActivityFocus.timestamp, true)}</span>
+                    <strong>{heroActivityVolumeText}</strong>
+                  </div>
                 )}
-              </svg>
-              {heroActivityPointerActive && (
-                <div
-                  className={`hero-activity-tooltip is-${heroActivityTooltipSide}`}
-                  style={{ left: `${heroActivityTooltipLeft}%`, top: `${heroActivityTooltipTop}%` }}
-                >
-                  <span>{chartTimeLabel(heroActivityFocus.timestamp, true)}</span>
-                  <strong>{heroActivityVolumeText}</strong>
-                </div>
-              )}
+              </div>
               <div className="hero-activity-axis">
                 {heroActivityTicks.map((tick) => (
                   <span key={`hero-activity-${tick.timestamp}`}>{chartAxisLabel(tick.timestamp, heroActivityRange)}</span>

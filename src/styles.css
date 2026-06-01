@@ -1982,6 +1982,10 @@ h3 {
   color: #f7f9ff;
   display: block;
   font-size: 0.95rem;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.15;
+  min-height: 1.1rem;
+  white-space: nowrap;
 }
 
 .hero-live-pill {
@@ -2005,16 +2009,25 @@ h3 {
   border: 1px solid rgba(64, 89, 134, 0.34);
   border-radius: 8px;
   cursor: crosshair;
-  min-height: 230px;
+  display: grid;
+  gap: 0;
+  grid-template-rows: minmax(0, 1fr) 28px;
+  height: 300px;
+  min-height: 0;
   overflow: hidden;
-  padding: 14px 12px 32px;
+  padding: 14px 12px 10px;
   position: relative;
   touch-action: none;
 }
 
-.hero-activity-chart svg {
+.hero-activity-plot {
+  min-height: 0;
+  position: relative;
+}
+
+.hero-activity-plot svg {
   display: block;
-  height: 190px;
+  height: 100%;
   width: 100%;
 }
 
@@ -2102,15 +2115,15 @@ h3 {
 }
 
 .hero-activity-axis {
-  bottom: 10px;
+  align-items: center;
   color: #7e8ca5;
   display: flex;
   font-size: 0.68rem;
   font-weight: 850;
   justify-content: space-between;
-  left: 18px;
-  position: absolute;
-  right: 18px;
+  min-height: 28px;
+  padding: 0 6px;
+  position: relative;
 }
 
 .hero-activity-tabs {
@@ -8497,11 +8510,11 @@ label {
   }
 
   .hero-activity-chart {
-    min-height: 190px;
+    height: 230px;
   }
 
-  .hero-activity-chart svg {
-    height: 150px;
+  .hero-activity-plot svg {
+    height: 100%;
   }
 
   .hero-activity-tooltip {
@@ -9730,7 +9743,7 @@ label {
   z-index: 0;
 }
 
-.hero-activity-chart > svg,
+.hero-activity-plot > svg,
 .chart-frame .detail-chart,
 .hero-activity-tooltip,
 .hero-activity-axis,
