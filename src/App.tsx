@@ -3342,6 +3342,10 @@ export default function App() {
   })();
   const heroActivityVolumeText =
     heroActivityFocus.volume > 0n ? `${formatUsdc(heroActivityFocus.volume, defaultSettlementDecimals)} ${defaultSettlementSymbol}` : "No trades yet";
+  const heroActivityPointerActive = heroActivityHoverRatio !== null;
+  const heroActivityTooltipLeft = Math.min(86, Math.max(14, heroActivityFocus.x));
+  const heroActivityTooltipTop = Math.min(78, Math.max(16, (heroActivityFocus.y / 58) * 100));
+  const heroActivityLatestPoint = heroActivityPoints[heroActivityPoints.length - 1] || heroActivityFocus;
   const heroActivityTicks =
     heroActivityPoints.length <= 5
       ? heroActivityPoints
@@ -7971,8 +7975,9 @@ export default function App() {
         ? `${chartLinePath} L${chartRows[chartRows.length - 1].x},${CHART_BOTTOM} L${chartRows[0].x},${CHART_BOTTOM} Z`
         : "";
     const chartLastPoint = chartRows[chartRows.length - 1];
+    const chartPointerActive = chartHoverRatio !== null;
     const chartHoverPoint = (() => {
-      if (chartHoverRatio === null || chartRows.length === 0) return undefined;
+      if (!chartPointerActive || chartRows.length === 0) return undefined;
       const hoverX = CHART_LEFT + chartHoverRatio * (CHART_RIGHT - CHART_LEFT);
       const upperIndexRaw = chartRows.findIndex((point) => point.x >= hoverX);
       if (upperIndexRaw <= 0) return { ...chartRows[0], x: hoverX };
@@ -7992,8 +7997,9 @@ export default function App() {
         noY: CHART_BOTTOM - (noPercent / 100) * CHART_HEIGHT
       };
     })();
-    const chartTooltipLeft = chartHoverPoint ? Math.min(86, Math.max(14, chartHoverPoint.x)) : 0;
-    const chartTooltipTop = chartHoverPoint ? Math.min(76, Math.max(14, (chartLineY(chartHoverPoint) / 58) * 100)) : 0;
+    const chartFocusPoint = chartHoverPoint || chartLastPoint;
+    const chartTooltipLeft = chartFocusPoint ? Math.min(86, Math.max(14, chartFocusPoint.x)) : 0;
+    const chartTooltipTop = chartFocusPoint ? Math.min(76, Math.max(14, (chartLineY(chartFocusPoint) / 58) * 100)) : 0;
     const chartTradeCount = selectedMarketActivities.length;
     const submitLabel = !selectedTradeSide
       ? "Select YES or NO"
@@ -8374,7 +8380,15 @@ export default function App() {
             <div
               className="chart-frame"
               onPointerLeave={() => setChartHoverRatio(null)}
+              onPointerEnter={(event) => {
+                const rect = event.currentTarget.getBoundingClientRect();
+                setChartHoverRatio(Math.min(1, Math.max(0, (event.clientX - rect.left) / Math.max(1, rect.width))));
+              }}
               onPointerMove={(event) => {
+                const rect = event.currentTarget.getBoundingClientRect();
+                setChartHoverRatio(Math.min(1, Math.max(0, (event.clientX - rect.left) / Math.max(1, rect.width))));
+              }}
+              onPointerDown={(event) => {
                 const rect = event.currentTarget.getBoundingClientRect();
                 setChartHoverRatio(Math.min(1, Math.max(0, (event.clientX - rect.left) / Math.max(1, rect.width))));
               }}
@@ -8396,22 +8410,24 @@ export default function App() {
                   </>
                 )}
               </svg>
-              {chartHoverPoint && (
+              {chartFocusPoint && (
                 <>
-                  <span className="chart-crosshair" style={{ left: `${chartHoverPoint.x}%` }} />
+                  <span className={`chart-crosshair ${chartPointerActive ? "is-active" : "is-idle"}`} style={{ left: `${chartFocusPoint.x}%` }} />
                   <span
-                    className="chart-hover-dot yes"
-                    style={{ left: `${chartHoverPoint.x}%`, top: `${(chartHoverPoint.yesY / 58) * 100}%` }}
+                    className={`chart-hover-dot yes ${chartPointerActive ? "is-active" : "is-idle"}`}
+                    style={{ left: `${chartFocusPoint.x}%`, top: `${(chartFocusPoint.yesY / 58) * 100}%` }}
                   />
                   <span
-                    className="chart-hover-dot no"
-                    style={{ left: `${chartHoverPoint.x}%`, top: `${(chartHoverPoint.noY / 58) * 100}%` }}
+                    className={`chart-hover-dot no ${chartPointerActive ? "is-active" : "is-idle"}`}
+                    style={{ left: `${chartFocusPoint.x}%`, top: `${(chartFocusPoint.noY / 58) * 100}%` }}
                   />
-                  <div className="chart-tooltip" style={{ left: `${chartTooltipLeft}%`, top: `${chartTooltipTop}%` }}>
-                    <span>{chartTimeLabel(chartHoverPoint.timestamp, true)}</span>
-                    <strong className="tooltip-yes">YES {chartHoverPoint.yesPercent.toFixed(1)}%</strong>
-                    <strong className="tooltip-no">NO {chartHoverPoint.noPercent.toFixed(1)}%</strong>
-                  </div>
+                  {chartPointerActive && (
+                    <div className="chart-tooltip" style={{ left: `${chartTooltipLeft}%`, top: `${chartTooltipTop}%` }}>
+                      <span>{chartTimeLabel(chartFocusPoint.timestamp, true)}</span>
+                      <strong className="tooltip-yes">YES {chartFocusPoint.yesPercent.toFixed(1)}%</strong>
+                      <strong className="tooltip-no">NO {chartFocusPoint.noPercent.toFixed(1)}%</strong>
+                    </div>
+                  )}
                 </>
               )}
               <div className="chart-y-labels" aria-hidden="true">
@@ -9753,7 +9769,15 @@ export default function App() {
             <div
               className="hero-activity-chart"
               onPointerLeave={() => setHeroActivityHoverRatio(null)}
+              onPointerEnter={(event) => {
+                const rect = event.currentTarget.getBoundingClientRect();
+                setHeroActivityHoverRatio(Math.min(1, Math.max(0, (event.clientX - rect.left) / Math.max(1, rect.width))));
+              }}
               onPointerMove={(event) => {
+                const rect = event.currentTarget.getBoundingClientRect();
+                setHeroActivityHoverRatio(Math.min(1, Math.max(0, (event.clientX - rect.left) / Math.max(1, rect.width))));
+              }}
+              onPointerDown={(event) => {
                 const rect = event.currentTarget.getBoundingClientRect();
                 setHeroActivityHoverRatio(Math.min(1, Math.max(0, (event.clientX - rect.left) / Math.max(1, rect.width))));
               }}
@@ -9762,13 +9786,25 @@ export default function App() {
                 <path className="hero-activity-grid" d="M8 10H92 M8 31H92 M8 52H92" />
                 {heroActivityAreaPath && <path className="hero-activity-area" d={heroActivityAreaPath} />}
                 {heroActivityLinePath && <path className="hero-activity-line" d={heroActivityLinePath} />}
-                <line className="hero-activity-cursor" x1={heroActivityFocus.x} x2={heroActivityFocus.x} y1="8" y2="54" />
-                <circle className="hero-activity-dot" cx={heroActivityFocus.x} cy={heroActivityFocus.y} r="1.55" />
+                {!heroActivityPointerActive && (
+                  <circle className="hero-activity-dot is-latest" cx={heroActivityLatestPoint.x} cy={heroActivityLatestPoint.y} r="1.35" />
+                )}
+                {heroActivityPointerActive && (
+                  <>
+                    <line className="hero-activity-cursor" x1={heroActivityFocus.x} x2={heroActivityFocus.x} y1="8" y2="54" />
+                    <circle className="hero-activity-dot" cx={heroActivityFocus.x} cy={heroActivityFocus.y} r="1.55" />
+                  </>
+                )}
               </svg>
-              <div className="hero-activity-tooltip" style={{ left: `${Math.min(82, Math.max(18, heroActivityFocus.x))}%` }}>
-                <span>{chartTimeLabel(heroActivityFocus.timestamp, true)}</span>
-                <strong>{heroActivityVolumeText}</strong>
-              </div>
+              {heroActivityPointerActive && (
+                <div
+                  className="hero-activity-tooltip"
+                  style={{ left: `${heroActivityTooltipLeft}%`, top: `${heroActivityTooltipTop}%` }}
+                >
+                  <span>{chartTimeLabel(heroActivityFocus.timestamp, true)}</span>
+                  <strong>{heroActivityVolumeText}</strong>
+                </div>
+              )}
               <div className="hero-activity-axis">
                 {heroActivityTicks.map((tick) => (
                   <span key={`hero-activity-${tick.timestamp}`}>{chartAxisLabel(tick.timestamp, heroActivityRange)}</span>

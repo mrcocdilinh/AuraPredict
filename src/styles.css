@@ -2040,7 +2040,7 @@ h3 {
 }
 
 .hero-activity-cursor {
-  opacity: 0.72;
+  opacity: 0.86;
   stroke: #18d7ff;
   stroke-dasharray: 3 4;
   stroke-width: 0.55;
@@ -2049,24 +2049,34 @@ h3 {
 
 .hero-activity-dot {
   fill: #18d7ff;
+  filter: drop-shadow(0 0 7px rgba(24, 215, 255, 0.46));
   stroke: #d8f8ff;
   stroke-width: 0.6;
   vector-effect: non-scaling-stroke;
+}
+
+.hero-activity-dot.is-latest {
+  opacity: 0.78;
 }
 
 .hero-activity-tooltip {
   background: rgba(16, 28, 49, 0.96);
   border: 1px solid rgba(94, 137, 197, 0.64);
   border-radius: 8px;
+  backdrop-filter: blur(16px);
   box-shadow: 0 18px 36px rgba(0, 0, 0, 0.28);
   color: #d8e6ff;
   display: grid;
   gap: 4px;
   min-width: 150px;
   padding: 10px 12px;
+  pointer-events: none;
   position: absolute;
-  top: 28px;
-  transform: translateX(-50%);
+  transform: translate(-50%, -50%);
+  transition:
+    left 90ms ease,
+    top 90ms ease;
+  will-change: left, top;
 }
 
 .hero-activity-tooltip span {
@@ -4759,13 +4769,25 @@ label {
 }
 
 .chart-crosshair {
-  background: rgba(24, 215, 255, 0.72);
+  background: linear-gradient(180deg, transparent, rgba(24, 215, 255, 0.82), transparent);
   bottom: 18px;
+  box-shadow: 0 0 18px rgba(24, 215, 255, 0.18);
   pointer-events: none;
   position: absolute;
   top: 12px;
   transform: translateX(-50%);
+  transition:
+    left 90ms ease,
+    opacity 120ms ease;
   width: 1px;
+}
+
+.chart-crosshair.is-idle {
+  opacity: 0.36;
+}
+
+.chart-crosshair.is-active {
+  opacity: 0.95;
 }
 
 .chart-hover-dot {
@@ -4775,8 +4797,22 @@ label {
   pointer-events: none;
   position: absolute;
   transform: translate(-50%, -50%);
+  transition:
+    left 90ms ease,
+    top 90ms ease,
+    opacity 120ms ease,
+    transform 120ms ease;
   width: 8px;
   z-index: 2;
+}
+
+.chart-hover-dot.is-idle {
+  opacity: 0.72;
+  transform: translate(-50%, -50%) scale(0.78);
+}
+
+.chart-hover-dot.is-active {
+  opacity: 1;
 }
 
 .chart-hover-dot.yes {
@@ -4793,6 +4829,7 @@ label {
   background: rgba(255, 255, 255, 0.96);
   border: 1px solid #dfe6f1;
   border-radius: 8px;
+  backdrop-filter: blur(18px);
   box-shadow: 0 18px 38px rgba(15, 23, 42, 0.18);
   display: grid;
   gap: 5px;
@@ -4801,6 +4838,10 @@ label {
   pointer-events: none;
   position: absolute;
   transform: translate(-50%, -50%);
+  transition:
+    left 90ms ease,
+    top 90ms ease;
+  will-change: left, top;
   z-index: 3;
 }
 
@@ -9658,6 +9699,31 @@ label {
   border-color: #18d7ff;
   color: #06111e;
   box-shadow: 0 10px 24px rgba(24, 215, 255, 0.2);
+}
+
+[data-theme="dark"] .hero-activity-tabs button,
+[data-theme="dark"] .chart-window-tabs button {
+  background: rgba(11, 25, 44, 0.86);
+  border-color: rgba(78, 178, 219, 0.34);
+  color: #e3f7ff;
+  text-shadow: none;
+}
+
+[data-theme="dark"] .hero-activity-tabs button:hover,
+[data-theme="dark"] .chart-window-tabs button:hover:not(:disabled) {
+  background: rgba(24, 215, 255, 0.18);
+  border-color: rgba(24, 215, 255, 0.62);
+  color: #ffffff;
+}
+
+[data-theme="dark"] .hero-activity-tabs button.active,
+[data-theme="dark"] .chart-window-tabs button.active {
+  background: #23dcff;
+  border-color: #23dcff;
+  color: #03101c;
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.14) inset,
+    0 12px 26px rgba(24, 215, 255, 0.28);
 }
 
 .protocol-card.protocol-stats-card .market-stat-row {
