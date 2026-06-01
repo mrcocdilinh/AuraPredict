@@ -346,6 +346,9 @@
           <div class="note">
             Rule alignment: when a market includes structured rule metadata, Aura and Oracle both receive the same comparator, target, source URL, asset, and timestamp. This reduces cases where the AI treats an objective price check as missing evidence while Oracle has already observed the value.
           </div>
+          <div class="note">
+            Source router: before Aura reviews deadline-style publish, announce, blog, news, fixture, or schedule markets, the indexer scans the market's primary source, fallback source, embedded URLs, and a small official-source registry for sources such as Circle, Arc, OpenAI, status pages, sports schedules, and selected government pages. It records qualifying items, missing items, or timestamp gaps as evidence rows so the AI receives source facts instead of relying on memory.
+          </div>
           <div class="timeline">
             <article>
               <span>1</span>
@@ -392,6 +395,7 @@
             <article><span>Timing</span><strong>Result actions wait for the rule's event timestamp, not an earlier trading cutoff.</strong></article>
             <article><span>Use AI</span><strong>The resolver may apply Aura's suggestion directly from Resolution actions.</strong></article>
             <article><span>Use Oracle</span><strong>The resolver may apply an objective Oracle proposal when the adapter matches the market rule.</strong></article>
+            <article><span>Source router</span><strong>Configured sources are scanned into evidence rows before Aura reviews deadline-style content and schedule markets.</strong></article>
             <article><span>Settlement report</span><strong>Final reviewers see AI suggestion, Oracle suggestion, proposed outcome, dispute/review status, pools, volume, and relevant deadlines in one panel.</strong></article>
             <article><span>Saved receipt</span><strong>Opening a market can show an existing AI receipt without rerunning Aura.</strong></article>
             <article><span>Mismatch</span><strong>A proposal against Aura's suggestion is highlighted, and authority review can stop ordinary finalization.</strong></article>

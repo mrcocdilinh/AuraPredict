@@ -149,6 +149,17 @@ GEMINI_RATE_LIMIT_COOLDOWN_MS=120000
 AURA_RESOLUTION_ADMIN_TOKEN=long_random_admin_token
 ```
 
+Automatic evidence collection is enabled by default. Before Aura asks its reviewer models, the indexer scans the market's primary source, fallback source, URLs embedded in the question/rule, and a small registry of common official sources. This turns source checks into explicit evidence rows instead of asking the model to guess from memory.
+
+```bash
+AURA_AUTO_EVIDENCE_ENABLED=1
+AURA_AUTO_EVIDENCE_TIMEOUT_MS=6000
+AURA_AUTO_EVIDENCE_MAX_SOURCES=3
+AURA_AUTO_EVIDENCE_MAX_ITEMS=80
+```
+
+The source router reads RSS/Atom feeds, sitemaps, JSON-LD, and visible page links. It currently helps by-deadline publish/announce/news/blog/schedule markets such as Circle/Arc/OpenAI blog checks, public status pages, ESPN/NBA/NFL/MLB/NHL schedule checks, and selected official government sources. If it finds a qualifying item before the resolution timestamp, Aura receives evidence that supports YES. If the configured source is reachable but no matching item is found by the deadline, Aura receives evidence that supports NO. If matching items exist but no timestamp can be parsed, Aura is instructed to ask for manual review instead of inventing a result.
+
 Optional provider fallback:
 
 ```bash

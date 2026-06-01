@@ -48,6 +48,10 @@ const RESOLUTION_MIN_CONFIDENCE = Number(process.env.AURA_RESOLUTION_MIN_CONFIDE
 const RESOLUTION_CONSENSUS_COUNT = Number(process.env.AURA_RESOLUTION_CONSENSUS_COUNT || 2);
 const ORACLE_AUTO_RUN = String(process.env.AURA_ORACLE_AUTO_RUN || "1").trim() !== "0";
 const ORACLE_HTTP_TIMEOUT_MS = Number(process.env.AURA_ORACLE_HTTP_TIMEOUT_MS || 8_000);
+const AUTO_EVIDENCE_ENABLED = String(process.env.AURA_AUTO_EVIDENCE_ENABLED || "1").trim() !== "0";
+const AUTO_EVIDENCE_TIMEOUT_MS = Number(process.env.AURA_AUTO_EVIDENCE_TIMEOUT_MS || 6_000);
+const AUTO_EVIDENCE_MAX_SOURCES = Number(process.env.AURA_AUTO_EVIDENCE_MAX_SOURCES || 3);
+const AUTO_EVIDENCE_MAX_ITEMS = Number(process.env.AURA_AUTO_EVIDENCE_MAX_ITEMS || 80);
 const ORACLE_AUTO_PROPOSE = String(process.env.AURA_ORACLE_AUTO_PROPOSE || "").trim() === "1";
 const ORACLE_AUTO_PROPOSE_MIN_CONFIDENCE = Number(process.env.AURA_ORACLE_AUTO_PROPOSE_MIN_CONFIDENCE || 78);
 const ORACLE_AUTO_PROPOSE_ADAPTERS = new Set(
@@ -1226,6 +1230,435 @@ function marketSourceUrls(market) {
   ].filter((url, index, rows) => url && rows.indexOf(url) === index);
 }
 
+function hostnameFor(url) {
+  try {
+    return new URL(url).hostname.replace(/^www\./i, "").toLowerCase();
+  } catch {
+    return "";
+  }
+}
+
+function inferSourceUrlsForMarket(market) {
+  const text = oracleTextForMarket(market);
+  const rows = [];
+  const add = (url) => {
+    const cleaned = cleanUrl(url);
+    if (cleaned && !rows.includes(cleaned)) rows.push(cleaned);
+  };
+
+  if (text.includes("circle") && /\b(blog|post|publish|news|article)\b/.test(text)) {
+    add("https://www.circle.com/blog");
+    add("https://www.circle.com/newsroom");
+  }
+  if (text.includes("arc") && /\b(blog|post|publish|news|article|blueprint)\b/.test(text)) {
+    add("https://www.arc.io/blog");
+  }
+  if (text.includes("openai") && /\b(blog|post|publish|news|release|announce)\b/.test(text)) {
+    add("https://openai.com/news/");
+  }
+  if (text.includes("github") && text.includes("status")) {
+    add("https://www.githubstatus.com/");
+  }
+  if (text.includes("openai") && text.includes("status")) {
+    add("https://status.openai.com/");
+  }
+  if (text.includes("circle") && text.includes("status")) {
+    add("https://status.circle.com/");
+  }
+  if (text.includes("coinbase") && text.includes("status")) {
+    add("https://status.coinbase.com/");
+  }
+  if (text.includes("cloudflare") && text.includes("status")) {
+    add("https://www.cloudflarestatus.com/");
+  }
+  if (text.includes("espn") && /\b(soccer|football|fixture|fixtures|schedule|match)\b/.test(text)) {
+    add("https://www.espn.com/soccer/fixtures");
+  }
+  if (/\bnba\b/.test(text) && /\b(score|scores|game|games|schedule|fixture|final)\b/.test(text)) {
+    add("https://www.nba.com/games");
+    add("https://www.espn.com/nba/schedule");
+  }
+  if (/\bnfl\b|\bsuper bowl\b/.test(text) && /\b(score|scores|game|games|schedule|fixture|final)\b/.test(text)) {
+    add("https://www.espn.com/nfl/schedule");
+  }
+  if (/\bmlb\b/.test(text) && /\b(score|scores|game|games|schedule|fixture|final)\b/.test(text)) {
+    add("https://www.mlb.com/schedule");
+  }
+  if (/\bnhl\b/.test(text) && /\b(score|scores|game|games|schedule|fixture|final)\b/.test(text)) {
+    add("https://www.nhl.com/schedule");
+  }
+  if (/\bwhite house\b|\bdonald trump\b|\bpresident\b/.test(text) && /\bannounce|statement|declare|press|ceasefire|executive\b/.test(text)) {
+    add("https://www.whitehouse.gov/briefing-room/");
+  }
+  if (/\bcongress\b|\bsenate\b|\bhouse of representatives\b/.test(text) && /\bvote|bill|pass|approve|hearing\b/.test(text)) {
+    add("https://www.congress.gov/");
+  }
+
+  return rows;
+}
+
+function evidenceSourceUrlsForMarket(market) {
+  const explicit = marketSourceUrls(market);
+  const inferred = inferSourceUrlsForMarket(market);
+  return [...explicit, ...inferred]
+    .map((url) => cleanUrl(url))
+    .filter((url, index, rows) => url && rows.indexOf(url) === index)
+    .slice(0, AUTO_EVIDENCE_MAX_SOURCES);
+}
+
+function decodeHtmlEntities(value) {
+  return String(value || "")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/&#x([0-9a-f]+);/gi, (_, hex) => String.fromCharCode(Number.parseInt(hex, 16)))
+    .replace(/&#(\d+);/g, (_, number) => String.fromCharCode(Number.parseInt(number, 10)));
+}
+
+function stripHtml(value) {
+  return decodeHtmlEntities(String(value || "").replace(/<[^>]+>/g, " ")).replace(/\s+/g, " ").trim();
+}
+
+function absoluteUrl(value, baseUrl) {
+  const raw = decodeHtmlEntities(String(value || "").trim());
+  if (!raw || raw.startsWith("#") || raw.startsWith("mailto:") || raw.startsWith("javascript:")) return "";
+  try {
+    return new URL(raw, baseUrl).toString();
+  } catch {
+    return "";
+  }
+}
+
+function extractTag(block, tag) {
+  const match = new RegExp(`<${tag}\\b[^>]*>([\\s\\S]*?)<\\/${tag}>`, "i").exec(String(block || ""));
+  return match ? stripHtml(match[1]) : "";
+}
+
+function extractTagRaw(block, tag) {
+  const match = new RegExp(`<${tag}\\b[^>]*>([\\s\\S]*?)<\\/${tag}>`, "i").exec(String(block || ""));
+  return match ? String(match[0]) : "";
+}
+
+function parseDateMs(value) {
+  const raw = stripHtml(value);
+  if (!raw) return null;
+  const parsed = Date.parse(raw);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function sourceFeedCandidates(sourceUrl) {
+  const candidates = [sourceUrl];
+  try {
+    const parsed = new URL(sourceUrl);
+    const origin = parsed.origin;
+    const path = parsed.pathname.replace(/\/$/, "");
+    if (!/\b(feed|rss|atom|sitemap)\b|\.xml$/i.test(path)) {
+      if (path && path !== "/") candidates.push(`${origin}${path}/feed`);
+      candidates.push(`${origin}/feed`, `${origin}/rss`, `${origin}/rss.xml`, `${origin}/atom.xml`, `${origin}/sitemap.xml`);
+    }
+  } catch {
+    // Ignore malformed URLs after cleanUrl already filtered them.
+  }
+  return candidates.filter((url, index, rows) => rows.indexOf(url) === index).slice(0, 5);
+}
+
+async function fetchTextWithTimeout(url) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), AUTO_EVIDENCE_TIMEOUT_MS);
+  try {
+    const response = await fetch(url, {
+      headers: {
+        accept: "text/html,application/rss+xml,application/atom+xml,application/xml,text/xml,*/*",
+        "user-agent": "AuraPredictEvidenceBot/1.0"
+      },
+      redirect: "follow",
+      signal: controller.signal
+    });
+    const text = await response.text().catch(() => "");
+    return {
+      ok: response.ok,
+      status: response.status,
+      url: response.url || url,
+      contentType: String(response.headers.get("content-type") || ""),
+      text: text.slice(0, 900_000)
+    };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+function parseFeedItems(text, baseUrl) {
+  const rows = [];
+  const blocks = [
+    ...String(text || "").matchAll(/<item\b[\s\S]*?<\/item>/gi),
+    ...String(text || "").matchAll(/<entry\b[\s\S]*?<\/entry>/gi)
+  ].map((match) => match[0]);
+  for (const block of blocks) {
+    const rawLink = extractTagRaw(block, "link");
+    const hrefMatch = /href=["']([^"']+)["']/i.exec(rawLink);
+    const link = absoluteUrl(hrefMatch?.[1] || extractTag(block, "link") || extractTag(block, "id"), baseUrl);
+    const title = cleanText(extractTag(block, "title") || extractTag(block, "name") || link, 180);
+    const dateMs =
+      parseDateMs(extractTag(block, "pubDate")) ||
+      parseDateMs(extractTag(block, "published")) ||
+      parseDateMs(extractTag(block, "updated")) ||
+      parseDateMs(extractTag(block, "lastBuildDate"));
+    if (title || link) rows.push({ title, url: link, publishedAt: dateMs, source: "feed" });
+  }
+  return rows;
+}
+
+function parseSitemapItems(text, baseUrl) {
+  const rows = [];
+  const blocks = [...String(text || "").matchAll(/<url\b[\s\S]*?<\/url>/gi)].map((match) => match[0]);
+  for (const block of blocks) {
+    const link = absoluteUrl(extractTag(block, "loc"), baseUrl);
+    if (!link) continue;
+    const pathTitle = link
+      .replace(/^https?:\/\/[^/]+\//i, "")
+      .replace(/[?#].*$/, "")
+      .split("/")
+      .filter(Boolean)
+      .pop() || link;
+    rows.push({
+      title: cleanText(pathTitle.replace(/[-_]+/g, " "), 180),
+      url: link,
+      publishedAt: parseDateMs(extractTag(block, "lastmod")),
+      source: "sitemap"
+    });
+  }
+  return rows;
+}
+
+function collectJsonLdItems(value, rows = []) {
+  if (!value || rows.length >= AUTO_EVIDENCE_MAX_ITEMS) return rows;
+  if (Array.isArray(value)) {
+    for (const item of value) collectJsonLdItems(item, rows);
+    return rows;
+  }
+  if (typeof value !== "object") return rows;
+  const type = Array.isArray(value["@type"]) ? value["@type"].join(" ") : String(value["@type"] || "");
+  const title = cleanText(value.headline || value.name || value.title, 180);
+  const url = cleanUrl(value.url || value.mainEntityOfPage?.["@id"] || value.mainEntityOfPage?.url || "");
+  const publishedAt = parseDateMs(value.datePublished || value.dateModified || value.uploadDate || value.dateCreated);
+  if ((title || url) && /\b(article|blogposting|newsarticle|creativework|webpage)\b/i.test(type || title)) {
+    rows.push({ title: title || url, url, publishedAt, source: "json-ld" });
+  }
+  if (value["@graph"]) collectJsonLdItems(value["@graph"], rows);
+  if (value.itemListElement) collectJsonLdItems(value.itemListElement, rows);
+  return rows;
+}
+
+function parseHtmlItems(text, baseUrl) {
+  const rows = [];
+  const html = String(text || "");
+  const scripts = [...html.matchAll(/<script\b[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)];
+  for (const script of scripts.slice(0, 20)) {
+    try {
+      collectJsonLdItems(JSON.parse(decodeHtmlEntities(script[1])), rows);
+    } catch {
+      // Ignore invalid JSON-LD fragments.
+    }
+  }
+
+  const anchors = [...html.matchAll(/<a\b[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi)];
+  for (const anchor of anchors.slice(0, 1200)) {
+    const url = absoluteUrl(anchor[1], baseUrl);
+    const title = cleanText(stripHtml(anchor[2]), 180);
+    if (!url || !title || title.length < 4) continue;
+    rows.push({ title, url, publishedAt: null, source: "html" });
+    if (rows.length >= AUTO_EVIDENCE_MAX_ITEMS) break;
+  }
+  return rows;
+}
+
+function marketEvidenceKeywords(market) {
+  const text = `${market?.question || ""} ${stripRuleMetadata(market?.resolutionRule || "")}`;
+  const generic = new Set([
+    "will",
+    "this",
+    "that",
+    "test",
+    "market",
+    "resolution",
+    "time",
+    "before",
+    "after",
+    "publish",
+    "published",
+    "post",
+    "blog",
+    "article",
+    "news",
+    "announce",
+    "announcement",
+    "scheduled",
+    "show",
+    "least",
+    "higher",
+    "lower",
+    "price",
+    "spot",
+    "utc",
+    "yes",
+    "won"
+  ]);
+  return tokenizeMarketText(text).filter((token, index, rows) => !generic.has(token) && rows.indexOf(token) === index).slice(0, 12);
+}
+
+function isContentDeadlineMarket(market) {
+  const text = oracleTextForMarket(market);
+  if (looksLikeDeadlineEventQuestion(text)) return true;
+  return /\b(blog|post|article|news|publish|announcement|announce|fixtures?|schedule|match)\b/.test(text);
+}
+
+function itemMatchesMarketEvidence(item, market, sourceUrl) {
+  const marketText = oracleTextForMarket(market);
+  const host = hostnameFor(sourceUrl);
+  const itemText = normalizeMarketText(`${item.title || ""} ${item.url || ""}`);
+  const keywords = marketEvidenceKeywords(market);
+
+  if (/\b(blog|post|article|news|publish)\b/.test(marketText) && /\b(blog|news)\b|\/blog|\/news/.test(`${sourceUrl} ${item.url || ""}`.toLowerCase())) {
+    const entityKeywords = keywords.filter((token) => host.includes(token) || ["circle", "arc", "openai", "aurapredict"].includes(token));
+    return entityKeywords.length === 0 || entityKeywords.some((token) => itemText.includes(token) || host.includes(token));
+  }
+
+  if (/\b(fixtures?|schedule|match)\b/.test(marketText) && /\b(fixture|schedule|match|soccer|football|espn)\b/.test(itemText)) {
+    return true;
+  }
+
+  if (keywords.length === 0) return false;
+  const matched = keywords.filter((token) => itemText.includes(token));
+  return matched.length >= Math.min(2, keywords.length);
+}
+
+function itemWithinMarketWindow(item, market) {
+  const deadlineMs = marketResolutionTime(market) * 1000;
+  if (!Number.isFinite(deadlineMs) || deadlineMs <= 0) return false;
+  const startMs = Math.max(0, Number(market?.createdAt || 0) * 1000 || deadlineMs - 7 * 24 * 60 * 60 * 1000);
+  if (!Number.isFinite(item.publishedAt) || !item.publishedAt) {
+    return false;
+  }
+  return item.publishedAt >= startMs - 60_000 && item.publishedAt <= deadlineMs + 60_000;
+}
+
+function dedupeEvidenceItems(rows) {
+  const seen = new Set();
+  return rows.filter((item) => {
+    const key = `${item.url || ""}|${normalizeMarketText(item.title || "")}`;
+    if (!key.trim() || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function autoEvidenceRow(market, sourceUrl, title, notes, finding) {
+  return {
+    id: `auto-source-${market.id}-${hostnameFor(sourceUrl) || "source"}-${Date.now()}`,
+    marketId: market.id,
+    title,
+    url: sourceUrl,
+    notes,
+    finding,
+    createdAt: nowIso()
+  };
+}
+
+async function scanSourceForEvidence(market, sourceUrl) {
+  const deadline = marketResolutionTime(market);
+  const deadlineIso = deadline > 0 ? new Date(deadline * 1000).toISOString() : "unknown";
+  const candidates = sourceFeedCandidates(sourceUrl);
+  const fetched = [];
+  const parsedItems = [];
+
+  for (const candidate of candidates) {
+    try {
+      const result = await fetchTextWithTimeout(candidate);
+      fetched.push(`${hostnameFor(result.url) || hostnameFor(candidate)}:${result.status}`);
+      if (!result.ok && result.status !== 404) continue;
+      const content = result.text || "";
+      const items = [
+        ...parseFeedItems(content, result.url),
+        ...parseSitemapItems(content, result.url),
+        ...parseHtmlItems(content, result.url)
+      ];
+      parsedItems.push(...items);
+      if (parsedItems.length >= AUTO_EVIDENCE_MAX_ITEMS) break;
+    } catch (error) {
+      fetched.push(`${hostnameFor(candidate) || "source"}:${error instanceof Error ? error.message : "fetch failed"}`);
+    }
+  }
+
+  const items = dedupeEvidenceItems(parsedItems).slice(0, AUTO_EVIDENCE_MAX_ITEMS);
+  const matching = items.filter((item) => itemMatchesMarketEvidence(item, market, sourceUrl));
+  const timedMatch = matching.find((item) => itemWithinMarketWindow(item, market));
+  if (timedMatch) {
+    const itemDate = timedMatch.publishedAt ? new Date(timedMatch.publishedAt).toISOString() : "unknown time";
+    return autoEvidenceRow(
+      market,
+      timedMatch.url || sourceUrl,
+      "Objective source scan: qualifying item found",
+      `Aura Source Router scanned ${sourceUrl} and found a matching item before the resolution deadline ${deadlineIso}: "${timedMatch.title}" at ${itemDate}. This supports YES unless the market rule excludes this source or item.`,
+      `Matched ${timedMatch.title} at ${itemDate}.`
+    );
+  }
+
+  if (matching.length > 0) {
+    const sample = matching
+      .slice(0, 3)
+      .map((item) => `${item.title}${item.publishedAt ? ` (${new Date(item.publishedAt).toISOString()})` : ""}`)
+      .join(" / ");
+    return autoEvidenceRow(
+      market,
+      matching[0].url || sourceUrl,
+      "Objective source scan: matching items need timestamp review",
+      `Aura Source Router scanned ${sourceUrl}. Matching items were found, but no parsed timestamp was inside the required window ending ${deadlineIso}. Review manually before a final YES/NO: ${sample}.`,
+      `Found ${matching.length} possible matching item(s), but timestamp proof is incomplete.`
+    );
+  }
+
+  const noMatchFinding = items.length > 0
+    ? `No matching item was parsed among ${items.length} source item(s).`
+    : "The source was reachable but did not expose parseable feed, sitemap, JSON-LD, or link items.";
+  return autoEvidenceRow(
+    market,
+    sourceUrl,
+    "Objective source scan: no matching item found",
+    `Aura Source Router scanned ${sourceUrl} before AI review. ${noMatchFinding} The resolution deadline is ${deadlineIso}. For by-deadline publish/announce/schedule markets, this supports NO unless a user provides a qualifying source item.`,
+    noMatchFinding
+  );
+}
+
+async function gatherAutomaticEvidenceRows(market) {
+  if (!AUTO_EVIDENCE_ENABLED || !market || !isContentDeadlineMarket(market)) return [];
+  const now = Math.floor(Date.now() / 1000);
+  const resolutionTime = marketResolutionTime(market);
+  if (!resolutionTime || now < resolutionTime) return [];
+
+  const urls = evidenceSourceUrlsForMarket(market);
+  if (urls.length === 0) {
+    return [
+      autoEvidenceRow(
+        market,
+        "",
+        "Objective source scan: no source URL configured",
+        "Aura Source Router could not find a primary, fallback, or inferred source URL. Add an official source link before relying on Aura for this market.",
+        "No source URL was available for automatic evidence collection."
+      )
+    ];
+  }
+
+  const rows = [];
+  for (const sourceUrl of urls) {
+    const row = await scanSourceForEvidence(market, sourceUrl);
+    rows.push(row);
+    if (/qualifying item found/i.test(row.title || "")) break;
+  }
+  return rows.slice(0, AUTO_EVIDENCE_MAX_SOURCES);
+}
+
 function stripRuleMetadata(value) {
   return String(value || "")
     .replace(new RegExp(`\\n*${AURA_RULE_JSON_PREFIX}[\\s\\S]*$`), "")
@@ -2183,6 +2616,9 @@ function resolutionReviewerPrompt(market, evidenceRows, role) {
     "}",
     "Use only the supplied evidence, structured resolution rule, and public facts that can be verified from URLs in the evidence list.",
     "If the evidence contains an Objective Oracle proposal with YES, NO, or CANCEL, treat it as a deterministic source check unless it conflicts with the market's primary source, timestamp, or rule.",
+    "If the evidence contains an Objective source scan row, treat it as Aura's source router result. A qualifying item found supports YES; a no matching item found row supports NO for by-deadline publish, announce, blog, news, fixture, or schedule markets unless stronger contrary evidence is supplied.",
+    "If an Objective source scan says matching items need timestamp review, do not invent a timestamp. Prefer INSUFFICIENT_EVIDENCE unless another evidence row proves the required time window.",
+    "If an Objective source scan says no source URL is configured, return INSUFFICIENT_EVIDENCE and ask for an official source link.",
     "For numeric threshold markets, compare the observed value against the structured comparator and target. If the observed value is clearly above or below the target, return YES or NO; do not return INSUFFICIENT_EVIDENCE just because the result is unfavorable to YES.",
     "For health/status endpoint markets, an observed ok/major-incident value from the configured URL is enough to return YES or NO according to the rule.",
     "For deadline questions phrased like 'Will X ... by time T?', if T has passed and there is no credible evidence that X happened, prefer NO (with lower confidence) over INSUFFICIENT_EVIDENCE.",
@@ -2303,7 +2739,8 @@ async function buildResolutionReceipt(marketId, options = {}) {
   const suppliedEvidenceRows = Array.isArray(options.evidence) && options.evidence.length > 0
     ? options.evidence.slice(0, 10)
     : (social.evidence[String(marketId)] || []).slice(0, 10);
-  const evidenceRows = [...oracleEvidenceRowsForMarket(marketId), ...suppliedEvidenceRows].slice(0, 10);
+  const automaticEvidenceRows = await gatherAutomaticEvidenceRows(market);
+  const evidenceRows = [...oracleEvidenceRowsForMarket(marketId), ...automaticEvidenceRows, ...suppliedEvidenceRows].slice(0, 10);
   const roles = [
     "strict fact checker",
     "skeptical dispute reviewer",

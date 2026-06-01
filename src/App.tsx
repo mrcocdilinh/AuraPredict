@@ -2753,6 +2753,7 @@ function LandingPage() {
             <p>
               Aura Agent helps draft questions, score clarity, surface similar markets, summarize
               evidence, and expose resolution receipts that users can inspect without rerunning AI.
+              A source router now scans configured links before Aura reviews deadline-style markets.
             </p>
           </article>
         </div>
@@ -2842,6 +2843,10 @@ function LandingPage() {
           <article>
             <span>AI resolution</span>
             <strong>Aura-first flow: the suggested result is visible before proposal, with mismatch alerts and dispute review when needed.</strong>
+          </article>
+          <article>
+            <span>Source router</span>
+            <strong>Before Aura reviews publish, announce, blog, news, fixture, and schedule markets, the indexer scans primary/fallback/inferred sources such as official blogs, status pages, sports schedules, and selected government pages, then turns findings into explicit evidence rows.</strong>
           </article>
           <article>
             <span>AI efficiency</span>
