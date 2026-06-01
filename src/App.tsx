@@ -160,7 +160,7 @@ type ActivityItem = {
 type AppView = "markets" | "ended" | "leaderboard" | "profile" | "collection" | "market" | "security" | "notifications" | "owner";
 type LeaderboardMetric = "volume" | "winRate" | "pnl" | "auraPoints";
 type LeaderboardPeriod = "day" | "7d" | "30d" | "all";
-type MarketSectionKey = "fresh" | "hot" | "closing";
+type MarketSectionKey = "fresh" | "hot" | "closing" | "live";
 type ThemeMode = "dark" | "light";
 type MarketViewMode = "grid" | "list";
 type ChartWindowKey = "1h" | "6h" | "1d" | "1w" | "1m" | "all";
@@ -3543,6 +3543,12 @@ export default function App() {
       if (a.closeTime !== b.closeTime) return a.closeTime - b.closeTime;
       return b.id - a.id;
     });
+  const allLiveMarkets = [...filteredMarkets]
+    .filter((market) => market.outcome === Outcome.Unresolved && market.closeTime > nowSeconds)
+    .sort((a, b) => {
+      if (a.closeTime !== b.closeTime) return a.closeTime - b.closeTime;
+      return b.id - a.id;
+    });
   const heroHotMarkets = [...activeMarkets]
     .sort((a, b) => {
       if (b.traderCount !== a.traderCount) return b.traderCount - a.traderCount;
@@ -3558,6 +3564,8 @@ export default function App() {
       ? allHottestMarkets
       : collectionView === "closing"
         ? allClosingSoonMarkets
+        : collectionView === "live"
+          ? allLiveMarkets
         : allFreshMarkets;
   const baseCollectionMarkets = unfilteredCollectionMarkets.filter((market) => {
     if (collectionSettlementToken === "All") return true;
@@ -3593,12 +3601,20 @@ export default function App() {
   const collectionVisibleStart = collectionMarkets.length === 0 ? 0 : collectionStartIndex + 1;
   const collectionVisibleEnd = Math.min(collectionStartIndex + paginatedCollectionMarkets.length, collectionMarkets.length);
   const collectionTitle =
-    collectionView === "hot" ? "Hottest markets" : collectionView === "closing" ? "Closing soon" : "Fresh markets";
+    collectionView === "hot"
+      ? "Hottest markets"
+      : collectionView === "closing"
+        ? "Closing soon"
+        : collectionView === "live"
+          ? "Live markets"
+          : "Fresh markets";
   const collectionDescription =
     collectionView === "hot"
       ? "All live markets sorted by participants, then volume."
       : collectionView === "closing"
         ? "All live markets sorted by nearest UTC close time."
+        : collectionView === "live"
+          ? "All currently open markets sorted by nearest UTC close time."
         : "All live markets sorted by newest market first.";
   const homeSectionLimit = marketViewMode === "list" ? 3 : SECTION_LIMIT;
   const freshMarkets = allFreshMarkets.slice(0, homeSectionLimit);
@@ -5446,8 +5462,8 @@ export default function App() {
 
   const openCollection = useCallback((section: MarketSectionKey) => {
     setCollectionView(section);
-    setCollectionSortKey(section === "hot" ? "participants" : section === "closing" ? "ending" : "created");
-    setCollectionSortDirection(section === "closing" ? "asc" : "desc");
+    setCollectionSortKey(section === "hot" ? "participants" : section === "closing" || section === "live" ? "ending" : "created");
+    setCollectionSortDirection(section === "closing" || section === "live" ? "asc" : "desc");
     setCollectionPage(1);
     setSelectedMarketId(null);
     setSelectedProfileAddress("");
@@ -9727,7 +9743,12 @@ export default function App() {
                 <span className="section-label">Market activity ({activeHeroActivityWindow.label})</span>
                 <strong>Volume {heroActivityVolumeText}</strong>
               </div>
-              <span className="hero-live-pill">{liveMarkets} live</span>
+              <div className="hero-activity-actions">
+                <span className="hero-live-pill">{liveMarkets} live</span>
+                <button className="hero-see-all-button" onClick={() => openCollection("live")} type="button">
+                  See all
+                </button>
+              </div>
             </div>
             <div
               className="hero-activity-chart"
@@ -10203,7 +10224,9 @@ export default function App() {
                         ? "section-dot hot"
                         : collectionView === "closing"
                           ? "section-dot closing"
-                          : "section-dot"
+                          : collectionView === "live"
+                            ? "section-dot live"
+                            : "section-dot"
                     }
                   />
                   <h3>{collectionTitle}</h3>

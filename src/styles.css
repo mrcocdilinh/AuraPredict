@@ -9572,3 +9572,214 @@ label {
     padding: 5px;
   }
 }
+
+/* Arc dashboard polish */
+.hero-activity-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.hero-see-all-button {
+  background: rgba(24, 215, 255, 0.1);
+  border: 1px solid rgba(24, 215, 255, 0.26);
+  border-radius: 999px;
+  color: #d9f8ff;
+  cursor: pointer;
+  font-size: 0.72rem;
+  font-weight: 950;
+  min-height: 31px;
+  padding: 6px 12px;
+}
+
+.hero-see-all-button:hover {
+  background: #18d7ff;
+  color: #06111e;
+}
+
+.section-dot.live {
+  background: #30e1b0;
+  box-shadow: 0 0 0 5px rgba(48, 225, 176, 0.14);
+}
+
+.hero-activity-chart::before,
+.chart-frame::before {
+  background: url("/arc-logo-white.svg") center / min(40%, 280px) no-repeat;
+  content: "";
+  inset: 12px;
+  opacity: 0.055;
+  pointer-events: none;
+  position: absolute;
+  z-index: 0;
+}
+
+.hero-activity-chart > svg,
+.chart-frame .detail-chart,
+.hero-activity-tooltip,
+.hero-activity-axis,
+.chart-y-labels,
+.chart-crosshair,
+.chart-hover-dot,
+.chart-tooltip {
+  position: relative;
+  z-index: 1;
+}
+
+.hero-activity-tooltip,
+.chart-tooltip {
+  z-index: 3;
+}
+
+.hero-activity-axis,
+.chart-time-row,
+.chart-y-labels {
+  color: #b9c9e7;
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.38);
+}
+
+.hero-activity-tabs button,
+.chart-window-tabs button {
+  border-color: rgba(24, 215, 255, 0.14);
+  color: #aac1df;
+}
+
+.hero-activity-tabs button:hover,
+.chart-window-tabs button:hover {
+  background: rgba(24, 215, 255, 0.1);
+  border-color: rgba(24, 215, 255, 0.28);
+  color: #d6f6ff;
+}
+
+.hero-activity-tabs button.active,
+.chart-window-tabs button.active {
+  background: #18d7ff;
+  border-color: #18d7ff;
+  color: #06111e;
+  box-shadow: 0 10px 24px rgba(24, 215, 255, 0.2);
+}
+
+.protocol-card.protocol-stats-card .market-stat-row {
+  grid-template-columns: 36px minmax(0, 1fr) auto;
+}
+
+.stat-glyph {
+  background:
+    radial-gradient(circle at 28% 24%, rgba(255, 255, 255, 0.2), transparent 28%),
+    linear-gradient(135deg, rgba(24, 215, 255, 0.18), rgba(47, 128, 237, 0.1));
+  border-color: rgba(24, 215, 255, 0.42);
+  border-radius: 10px;
+  color: #5be8ff;
+  height: 34px;
+  overflow: hidden;
+  width: 34px;
+}
+
+.stat-glyph::before {
+  background: currentColor;
+  border: 0;
+  border-radius: 0;
+  content: "";
+  height: 18px;
+  -webkit-mask: var(--stat-icon) center / contain no-repeat;
+  mask: var(--stat-icon) center / contain no-repeat;
+  transform: none;
+  width: 18px;
+}
+
+.stat-glyph::after {
+  background: rgba(24, 215, 255, 0.42);
+  border-radius: 999px;
+  content: "";
+  height: 22px;
+  position: absolute;
+  right: -12px;
+  top: -10px;
+  width: 22px;
+}
+
+.stat-volume {
+  --stat-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M5 19V9M12 19V5M19 19v-7' stroke='black' stroke-width='2.4' stroke-linecap='round'/%3E%3C/svg%3E");
+}
+
+.stat-liquidity {
+  --stat-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M4 14c2-6 4 6 6 0s4-6 6 0 4-1 4-1' fill='none' stroke='black' stroke-width='2.3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+
+.stat-live {
+  --stat-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M8 6v12l10-6z' fill='black'/%3E%3C/svg%3E");
+}
+
+.stat-indexed {
+  --stat-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M5 7c0-2 14-2 14 0s-14 2-14 0Zm0 0v5c0 2 14 2 14 0V7M5 12v5c0 2 14 2 14 0v-5' fill='none' stroke='black' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E");
+}
+
+.stat-pending {
+  --stat-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M7 4h10M7 20h10M8 4c0 5 8 5 8 8s-8 3-8 8M16 4c0 5-8 5-8 8s8 3 8 8' fill='none' stroke='black' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E");
+}
+
+.stat-users {
+  --stat-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M9 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6Zm6 1a3 3 0 1 0 0-6M4 20c0-4 10-4 10 0M14 20c.3-2 2-3 6-3' fill='none' stroke='black' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E");
+}
+
+.stat-sync {
+  --stat-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M17 4v5h-5M7 20v-5h5M17 9a6 6 0 0 0-10-2M7 15a6 6 0 0 0 10 2' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+
+[data-theme="light"] .hero-activity-chart::before,
+[data-theme="light"] .chart-frame::before {
+  background-image: url("/arc-logo-navy.svg");
+  opacity: 0.07;
+}
+
+[data-theme="light"] .hero-activity-axis,
+[data-theme="light"] .chart-time-row,
+[data-theme="light"] .chart-y-labels {
+  color: #425a7a;
+  text-shadow: none;
+}
+
+[data-theme="light"] .hero-activity-tabs button,
+[data-theme="light"] .chart-window-tabs button {
+  background: #eef8ff;
+  border-color: #b8e9f5;
+  color: #25657b;
+}
+
+[data-theme="light"] .hero-activity-tabs button:hover,
+[data-theme="light"] .chart-window-tabs button:hover {
+  background: #dff6ff;
+  border-color: #6dddf2;
+  color: #073a4c;
+}
+
+[data-theme="light"] .hero-activity-tabs button.active,
+[data-theme="light"] .chart-window-tabs button.active {
+  background: #18d7ff;
+  border-color: #18d7ff;
+  color: #06111e;
+}
+
+[data-theme="light"] .hero-see-all-button {
+  background: #e9f8ff;
+  border-color: #aee9f5;
+  color: #075f76;
+}
+
+[data-theme="light"] .hero-see-all-button:hover {
+  background: #18d7ff;
+  border-color: #18d7ff;
+  color: #06111e;
+}
+
+@media (max-width: 760px) {
+  .hero-activity-actions {
+    justify-content: flex-start;
+  }
+
+  .hero-activity-head {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
