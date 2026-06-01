@@ -2009,6 +2009,7 @@ h3 {
   overflow: hidden;
   padding: 14px 12px 32px;
   position: relative;
+  touch-action: none;
 }
 
 .hero-activity-chart svg {
@@ -2068,15 +2069,25 @@ h3 {
   color: #d8e6ff;
   display: grid;
   gap: 4px;
-  min-width: 150px;
+  min-width: 0;
   padding: 10px 12px;
   pointer-events: none;
   position: absolute;
-  transform: translate(-50%, -50%);
+  transform: translate(12px, -50%);
   transition:
     left 90ms ease,
     top 90ms ease;
+  white-space: nowrap;
+  width: max-content;
   will-change: left, top;
+}
+
+.hero-activity-tooltip.is-left {
+  transform: translate(calc(-100% - 12px), -50%);
+}
+
+.hero-activity-tooltip.is-right {
+  transform: translate(12px, -50%);
 }
 
 .hero-activity-tooltip span {
@@ -4620,6 +4631,15 @@ label {
   justify-content: space-between;
 }
 
+.chart-header-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
+  min-width: 0;
+}
+
 .detail-chart-header h2 {
   align-items: baseline;
   display: flex;
@@ -4667,6 +4687,45 @@ label {
   color: #06111e;
 }
 
+.chart-side-toggle {
+  align-items: center;
+  background: rgba(248, 250, 252, 0.92);
+  border: 1px solid #d9e5f2;
+  border-radius: 999px;
+  box-shadow: none;
+  color: #334155;
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 0.72rem;
+  font-weight: 900;
+  gap: 6px;
+  min-height: 30px;
+  padding: 6px 10px;
+  white-space: nowrap;
+}
+
+.chart-side-toggle::before {
+  background: currentColor;
+  border-radius: 999px;
+  content: "";
+  height: 8px;
+  width: 8px;
+}
+
+.chart-side-toggle.yes {
+  color: #0f9f78;
+}
+
+.chart-side-toggle.no {
+  color: #e65337;
+}
+
+.chart-side-toggle:hover:not(:disabled) {
+  background: #eef8ff;
+  border-color: #8ee9f8;
+  color: #075f76;
+}
+
 .chart-stat-strip {
   display: grid;
   gap: 8px;
@@ -4712,6 +4771,7 @@ label {
   height: clamp(210px, 25vw, 320px);
   overflow: hidden;
   position: relative;
+  touch-action: none;
   width: 100%;
 }
 
@@ -4735,15 +4795,15 @@ label {
 }
 
 .detail-yes-area {
-  fill: rgba(18, 185, 129, 0.12);
+  fill: rgba(18, 185, 129, 0.08);
 }
 
 .detail-no-area {
-  fill: rgba(239, 68, 68, 0.12);
+  fill: rgba(255, 107, 53, 0.08);
 }
 
 .detail-no-line {
-  stroke: #ef4444;
+  stroke: #ff6b35;
 }
 
 .secondary-line {
@@ -4765,7 +4825,7 @@ label {
 }
 
 .chart-end-dot.no {
-  fill: #ef4444;
+  fill: #ff6b35;
 }
 
 .chart-crosshair {
@@ -4821,8 +4881,8 @@ label {
 }
 
 .chart-hover-dot.no {
-  background: #ef4444;
-  box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.16);
+  background: #ff6b35;
+  box-shadow: 0 0 0 4px rgba(255, 107, 53, 0.16);
 }
 
 .chart-tooltip {
@@ -4833,16 +4893,26 @@ label {
   box-shadow: 0 18px 38px rgba(15, 23, 42, 0.18);
   display: grid;
   gap: 5px;
-  min-width: 150px;
+  min-width: 0;
   padding: 10px 12px;
   pointer-events: none;
   position: absolute;
-  transform: translate(-50%, -50%);
+  transform: translate(12px, -50%);
   transition:
     left 90ms ease,
     top 90ms ease;
+  white-space: nowrap;
+  width: max-content;
   will-change: left, top;
   z-index: 3;
+}
+
+.chart-tooltip.is-left {
+  transform: translate(calc(-100% - 12px), -50%);
+}
+
+.chart-tooltip.is-right {
+  transform: translate(12px, -50%);
 }
 
 .chart-tooltip span {
@@ -4861,7 +4931,7 @@ label {
 }
 
 .tooltip-no {
-  color: #e11d48;
+  color: #e65337;
 }
 
 .chart-y-labels {
@@ -7748,11 +7818,11 @@ label {
 }
 
 .detail-yes-area {
-  fill: rgba(18, 185, 129, 0.16);
+  fill: rgba(18, 185, 129, 0.08);
 }
 
 .detail-no-area {
-  fill: rgba(239, 68, 68, 0.14);
+  fill: rgba(255, 107, 53, 0.08);
 }
 
 .chart-crosshair {
@@ -7766,7 +7836,7 @@ label {
 
 .chart-tooltip {
   border-radius: 10px;
-  min-width: 168px;
+  min-width: 0;
 }
 
 .resolution-zone {
@@ -8435,7 +8505,7 @@ label {
   }
 
   .hero-activity-tooltip {
-    display: none;
+    max-width: calc(100% - 24px);
   }
 
   .chart-stat-strip {
@@ -8445,6 +8515,10 @@ label {
   .detail-chart-header {
     align-items: stretch;
     display: grid;
+  }
+
+  .chart-header-actions {
+    justify-content: flex-start;
   }
 }
 
@@ -9724,6 +9798,26 @@ label {
   box-shadow:
     0 0 0 1px rgba(255, 255, 255, 0.14) inset,
     0 12px 26px rgba(24, 215, 255, 0.28);
+}
+
+[data-theme="dark"] .chart-side-toggle {
+  background: rgba(14, 27, 47, 0.92);
+  border-color: rgba(99, 176, 218, 0.36);
+  color: #d8e7ff;
+}
+
+[data-theme="dark"] .chart-side-toggle.yes {
+  color: #31e3b2;
+}
+
+[data-theme="dark"] .chart-side-toggle.no {
+  color: #ff8a5c;
+}
+
+[data-theme="dark"] .chart-side-toggle:hover:not(:disabled) {
+  background: rgba(24, 215, 255, 0.16);
+  border-color: rgba(24, 215, 255, 0.58);
+  color: #ffffff;
 }
 
 .protocol-card.protocol-stats-card .market-stat-row {

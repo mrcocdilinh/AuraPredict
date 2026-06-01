@@ -3067,6 +3067,7 @@ export default function App() {
   const [pendingMarketActions, setPendingMarketActions] = useState<Record<string, boolean>>({});
   const [stakeInputs, setStakeInputs] = useState<Record<number, string>>({});
   const [selectedTradeSides, setSelectedTradeSides] = useState<Record<number, Outcome.Yes | Outcome.No>>({});
+  const [chartViewSides, setChartViewSides] = useState<Record<number, Outcome.Yes | Outcome.No>>({});
   const [swapMarketId, setSwapMarketId] = useState<number | null>(null);
   const [swapAmountInput, setSwapAmountInput] = useState("");
   const [swapQuote, setSwapQuote] = useState<StablecoinSwapQuote | null>(null);
@@ -3343,8 +3344,9 @@ export default function App() {
   const heroActivityVolumeText =
     heroActivityFocus.volume > 0n ? `${formatUsdc(heroActivityFocus.volume, defaultSettlementDecimals)} ${defaultSettlementSymbol}` : "No trades yet";
   const heroActivityPointerActive = heroActivityHoverRatio !== null;
-  const heroActivityTooltipLeft = Math.min(86, Math.max(14, heroActivityFocus.x));
-  const heroActivityTooltipTop = Math.min(78, Math.max(16, (heroActivityFocus.y / 58) * 100));
+  const heroActivityTooltipLeft = Math.min(88, Math.max(12, heroActivityFocus.x));
+  const heroActivityTooltipTop = Math.min(64, Math.max(18, (heroActivityFocus.y / 58) * 100 + 10));
+  const heroActivityTooltipSide = heroActivityFocus.x > 68 ? "left" : "right";
   const heroActivityLatestPoint = heroActivityPoints[heroActivityPoints.length - 1] || heroActivityFocus;
   const heroActivityTicks =
     heroActivityPoints.length <= 5
@@ -7964,12 +7966,20 @@ export default function App() {
     const selectedMarketImage = marketImageFor(selectedMarket);
     const selectedMarketImageVariant = marketImageVariant(selectedMarket);
     const chartRows = detailChartRows;
-    const chartPrimaryPercent = selectedTradeSide === Outcome.No ? selectedMarketNoPercent : selectedMarketYesPercent;
-    const chartPrimaryLabel = selectedTradeSide === Outcome.No ? "NO" : "YES";
-    const chartLineY = (point: (typeof chartRows)[number]) => selectedTradeSide === Outcome.No ? point.noY : point.yesY;
+    const selectedChartSide =
+      chartViewSides[selectedMarket.id] ??
+      selectedTradeSide ??
+      (selectedMarketNoPercent > selectedMarketYesPercent ? Outcome.No : Outcome.Yes);
+    const oppositeChartSide = selectedChartSide === Outcome.No ? Outcome.Yes : Outcome.No;
+    const chartPrimaryPercent = selectedChartSide === Outcome.No ? selectedMarketNoPercent : selectedMarketYesPercent;
+    const chartPrimaryLabel = selectedChartSide === Outcome.No ? "NO" : "YES";
+    const chartOppositeLabel = oppositeChartSide === Outcome.No ? "NO" : "YES";
+    const chartLineY = (point: (typeof chartRows)[number]) => selectedChartSide === Outcome.No ? point.noY : point.yesY;
+    const chartLinePercent = (point: (typeof chartRows)[number]) =>
+      selectedChartSide === Outcome.No ? point.noPercent : point.yesPercent;
     const chartYesPath = smoothPathFromPoints(chartRows.map((point) => ({ x: point.x, y: point.yesY })));
     const chartNoPath = smoothPathFromPoints(chartRows.map((point) => ({ x: point.x, y: point.noY })));
-    const chartLinePath = selectedTradeSide === Outcome.No ? chartNoPath : chartYesPath;
+    const chartLinePath = selectedChartSide === Outcome.No ? chartNoPath : chartYesPath;
     const chartAreaPath =
       chartRows.length > 0 && chartLinePath
         ? `${chartLinePath} L${chartRows[chartRows.length - 1].x},${CHART_BOTTOM} L${chartRows[0].x},${CHART_BOTTOM} Z`
@@ -7998,8 +8008,10 @@ export default function App() {
       };
     })();
     const chartFocusPoint = chartHoverPoint || chartLastPoint;
-    const chartTooltipLeft = chartFocusPoint ? Math.min(86, Math.max(14, chartFocusPoint.x)) : 0;
-    const chartTooltipTop = chartFocusPoint ? Math.min(76, Math.max(14, (chartLineY(chartFocusPoint) / 58) * 100)) : 0;
+    const chartTooltipLeft = chartFocusPoint ? Math.min(88, Math.max(12, chartFocusPoint.x)) : 0;
+    const chartTooltipTop = chartFocusPoint ? Math.min(68, Math.max(16, (chartLineY(chartFocusPoint) / 58) * 100 + 8)) : 0;
+    const chartTooltipSide = chartFocusPoint && chartFocusPoint.x > 68 ? "left" : "right";
+    const chartFocusPercent = chartFocusPoint ? chartLinePercent(chartFocusPoint) : chartPrimaryPercent;
     const chartTradeCount = selectedMarketActivities.length;
     const submitLabel = !selectedTradeSide
       ? "Select YES or NO"
@@ -8346,17 +8358,31 @@ export default function App() {
                   <span>{chartPrimaryLabel} chance</span>
                 </h2>
               </div>
-              <div className="chart-window-tabs">
-                {CHART_WINDOWS.map((windowOption) => (
-                  <button
-                    className={detailChartWindow === windowOption.value ? "active" : ""}
-                    key={windowOption.value}
-                    onClick={() => setDetailChartWindow(windowOption.value)}
-                    type="button"
-                  >
-                    {windowOption.label}
-                  </button>
-                ))}
+              <div className="chart-header-actions">
+                <div className="chart-window-tabs">
+                  {CHART_WINDOWS.map((windowOption) => (
+                    <button
+                      className={detailChartWindow === windowOption.value ? "active" : ""}
+                      key={windowOption.value}
+                      onClick={() => setDetailChartWindow(windowOption.value)}
+                      type="button"
+                    >
+                      {windowOption.label}
+                    </button>
+                  ))}
+                </div>
+                <button
+                  className={`chart-side-toggle ${chartOppositeLabel.toLowerCase()}`}
+                  onClick={() =>
+                    setChartViewSides((current) => ({
+                      ...current,
+                      [selectedMarket.id]: oppositeChartSide
+                    }))
+                  }
+                  type="button"
+                >
+                  View {chartOppositeLabel}
+                </button>
               </div>
             </div>
             <div className="chart-stat-strip">
@@ -8389,6 +8415,7 @@ export default function App() {
                 setChartHoverRatio(Math.min(1, Math.max(0, (event.clientX - rect.left) / Math.max(1, rect.width))));
               }}
               onPointerDown={(event) => {
+                event.currentTarget.setPointerCapture(event.pointerId);
                 const rect = event.currentTarget.getBoundingClientRect();
                 setChartHoverRatio(Math.min(1, Math.max(0, (event.clientX - rect.left) / Math.max(1, rect.width))));
               }}
@@ -8397,35 +8424,39 @@ export default function App() {
                 <path className="edge-grid" d="M8 8H92 M8 19.5H92 M8 31H92 M8 42.5H92 M8 54H92" />
                 {chartAreaPath && (
                   <path
-                    className={selectedTradeSide === Outcome.No ? "detail-no-area" : "detail-yes-area"}
+                    className={selectedChartSide === Outcome.No ? "detail-no-area" : "detail-yes-area"}
                     d={chartAreaPath}
                   />
                 )}
-                <path className={`detail-yes-line ${selectedTradeSide === Outcome.No ? "muted-line" : ""}`} d={chartYesPath} />
-                <path className={`detail-no-line ${selectedTradeSide === Outcome.Yes ? "muted-line" : ""}`} d={chartNoPath} />
+                <path
+                  className={selectedChartSide === Outcome.No ? "detail-no-line" : "detail-yes-line"}
+                  d={chartLinePath}
+                />
                 {chartLastPoint && (
-                  <>
-                    <circle className="chart-end-dot yes" cx={chartLastPoint.x} cy={chartLastPoint.yesY} r="1.35" />
-                    <circle className="chart-end-dot no" cx={chartLastPoint.x} cy={chartLastPoint.noY} r="1.35" />
-                  </>
+                  <circle
+                    className={`chart-end-dot ${selectedChartSide === Outcome.No ? "no" : "yes"}`}
+                    cx={chartLastPoint.x}
+                    cy={chartLineY(chartLastPoint)}
+                    r="1.35"
+                  />
                 )}
               </svg>
               {chartFocusPoint && (
                 <>
                   <span className={`chart-crosshair ${chartPointerActive ? "is-active" : "is-idle"}`} style={{ left: `${chartFocusPoint.x}%` }} />
                   <span
-                    className={`chart-hover-dot yes ${chartPointerActive ? "is-active" : "is-idle"}`}
-                    style={{ left: `${chartFocusPoint.x}%`, top: `${(chartFocusPoint.yesY / 58) * 100}%` }}
-                  />
-                  <span
-                    className={`chart-hover-dot no ${chartPointerActive ? "is-active" : "is-idle"}`}
-                    style={{ left: `${chartFocusPoint.x}%`, top: `${(chartFocusPoint.noY / 58) * 100}%` }}
+                    className={`chart-hover-dot ${selectedChartSide === Outcome.No ? "no" : "yes"} ${chartPointerActive ? "is-active" : "is-idle"}`}
+                    style={{ left: `${chartFocusPoint.x}%`, top: `${(chartLineY(chartFocusPoint) / 58) * 100}%` }}
                   />
                   {chartPointerActive && (
-                    <div className="chart-tooltip" style={{ left: `${chartTooltipLeft}%`, top: `${chartTooltipTop}%` }}>
+                    <div
+                      className={`chart-tooltip is-${chartTooltipSide}`}
+                      style={{ left: `${chartTooltipLeft}%`, top: `${chartTooltipTop}%` }}
+                    >
                       <span>{chartTimeLabel(chartFocusPoint.timestamp, true)}</span>
-                      <strong className="tooltip-yes">YES {chartFocusPoint.yesPercent.toFixed(1)}%</strong>
-                      <strong className="tooltip-no">NO {chartFocusPoint.noPercent.toFixed(1)}%</strong>
+                      <strong className={selectedChartSide === Outcome.No ? "tooltip-no" : "tooltip-yes"}>
+                        {chartPrimaryLabel} {chartFocusPercent.toFixed(1)}%
+                      </strong>
                     </div>
                   )}
                 </>
@@ -9778,6 +9809,7 @@ export default function App() {
                 setHeroActivityHoverRatio(Math.min(1, Math.max(0, (event.clientX - rect.left) / Math.max(1, rect.width))));
               }}
               onPointerDown={(event) => {
+                event.currentTarget.setPointerCapture(event.pointerId);
                 const rect = event.currentTarget.getBoundingClientRect();
                 setHeroActivityHoverRatio(Math.min(1, Math.max(0, (event.clientX - rect.left) / Math.max(1, rect.width))));
               }}
@@ -9798,7 +9830,7 @@ export default function App() {
               </svg>
               {heroActivityPointerActive && (
                 <div
-                  className="hero-activity-tooltip"
+                  className={`hero-activity-tooltip is-${heroActivityTooltipSide}`}
                   style={{ left: `${heroActivityTooltipLeft}%`, top: `${heroActivityTooltipTop}%` }}
                 >
                   <span>{chartTimeLabel(heroActivityFocus.timestamp, true)}</span>
