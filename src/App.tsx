@@ -2477,6 +2477,10 @@ function LandingPage() {
         <a className="landing-brand" href="#top" aria-label="AuraPredict home">
           <img src="/aurapredict-logo.png" alt="AuraPredict" />
           <span>AuraPredict</span>
+          <span className="arc-brand-chip">
+            <img src="/arc-icon-navy-gradient.svg" alt="" />
+            Built on Arc
+          </span>
         </a>
         <div>
           <a href="#features">Features</a>
@@ -2508,6 +2512,10 @@ function LandingPage() {
         <div className="landing-hero-copy">
           <div className="landing-network-row">
             <span>AuraPredict</span>
+            <span className="landing-arc-powered">
+              <img src="/arc-logo-white.svg" alt="Arc" />
+              Testnet
+            </span>
             <strong>{indexerIsRealtime ? "Network :: Live" : "Network :: Indexed"}</strong>
           </div>
           <p className="landing-kicker">Arc Testnet prediction markets</p>
@@ -2550,7 +2558,10 @@ function LandingPage() {
           </div>
           <div className="landing-proof">
             <span>{indexerIsRealtime ? "AuraPredict indexer live" : "Indexer fallback active"}</span>
-            <span>Deployed on Arc Testnet</span>
+            <span className="landing-proof-arc">
+              <img src="/arc-icon-white.svg" alt="" />
+              Deployed on Arc Testnet
+            </span>
             <span>{updatedText}</span>
             <span>{pendingMarketsText} pending resolution</span>
           </div>
@@ -9211,7 +9222,11 @@ export default function App() {
           }}
         >
           <img src="/aurapredict-logo.png" alt="AuraPredict" />
-          <span>AuraPredict</span>
+          <span className="brand-name">AuraPredict</span>
+          <span className="arc-topbar-chip">
+            <img src="/arc-icon-navy-gradient.svg" alt="" />
+            Arc
+          </span>
         </a>
         <div className="topbar-center">
           <div className="nav-tabs">
@@ -9675,7 +9690,13 @@ export default function App() {
       {view === "markets" && (
         <section className="hero-band">
           <div className="hero-copy">
-            <p className="network-kicker">Arc Testnet prediction markets</p>
+            <p className="network-kicker">
+              <span className="hero-arc-mark">
+                <img src="/arc-icon-white.svg" alt="" />
+                Arc Testnet
+              </span>
+              prediction markets
+            </p>
             <h1>
               AI-powered prediction markets on <span>Arc.</span>
             </h1>
@@ -11747,7 +11768,13 @@ export default function App() {
         <section className="footer-brand">
           <img src="/aurapredict-logo.png" alt="AuraPredict" />
           <div>
-            <strong>AuraPredict</strong>
+            <div className="footer-brand-row">
+              <strong>AuraPredict</strong>
+              <span className="arc-brand-chip footer-arc-chip">
+                <img src="/arc-icon-navy-gradient.svg" alt="" />
+                Built on Arc
+              </span>
+            </div>
             <p>Prediction markets built for Arc Testnet with transparent stablecoin settlement.</p>
           </div>
         </section>

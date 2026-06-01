@@ -9404,3 +9404,171 @@ label {
     transform: none;
   }
 }
+
+/* Arc identity layer */
+.arc-brand-chip,
+.arc-topbar-chip,
+.landing-arc-powered,
+.hero-arc-mark,
+.landing-proof-arc {
+  align-items: center;
+  display: inline-flex;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.arc-brand-chip {
+  background: rgba(12, 22, 42, 0.72);
+  border: 1px solid rgba(28, 211, 255, 0.28);
+  border-radius: 999px;
+  color: #d7f5ff;
+  font-size: 0.68rem;
+  font-weight: 950;
+  letter-spacing: 0;
+  padding: 5px 8px;
+}
+
+.landing-brand .arc-brand-chip img,
+.brand .arc-topbar-chip img,
+.footer-brand .arc-brand-chip img {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  height: 14px;
+  object-fit: contain;
+  width: 14px;
+}
+
+.landing-arc-powered {
+  background: linear-gradient(135deg, rgba(9, 19, 41, 0.92), rgba(19, 44, 74, 0.88));
+  border: 1px solid rgba(28, 211, 255, 0.28);
+  border-radius: 999px;
+  color: #e8f7ff;
+  font-size: 0.74rem;
+  padding: 6px 10px;
+}
+
+.landing-network-row .landing-arc-powered::before {
+  content: none;
+}
+
+.landing-arc-powered img {
+  height: 15px;
+  max-width: 44px;
+  object-fit: contain;
+}
+
+.landing-proof-arc img {
+  height: 14px;
+  width: 14px;
+}
+
+.landing-light .arc-brand-chip,
+.landing-light .landing-arc-powered {
+  background: #07162e;
+  border-color: rgba(28, 148, 255, 0.22);
+  color: #eaf7ff;
+}
+
+.brand {
+  gap: 8px;
+}
+
+.brand-name {
+  min-width: 0;
+}
+
+.arc-topbar-chip {
+  background: rgba(24, 215, 255, 0.1);
+  border: 1px solid rgba(24, 215, 255, 0.28);
+  border-radius: 999px;
+  color: #08768a;
+  font-size: 0.68rem;
+  font-weight: 950;
+  padding: 4px 7px;
+}
+
+[data-theme="dark"] .arc-topbar-chip {
+  background: rgba(24, 215, 255, 0.12);
+  color: #9ceeff;
+}
+
+.hero-band {
+  background:
+    radial-gradient(circle at 82% 18%, rgba(28, 211, 255, 0.2), transparent 32%),
+    radial-gradient(circle at 16% 12%, rgba(81, 116, 255, 0.22), transparent 34%),
+    linear-gradient(135deg, #07162e 0%, #111a3e 48%, #063446 100%);
+  border-color: rgba(74, 122, 184, 0.72);
+}
+
+.hero-band::after {
+  background: url("/arc-logo-white.svg") center / contain no-repeat;
+  content: "";
+  height: 34px;
+  opacity: 0.16;
+  pointer-events: none;
+  position: absolute;
+  right: 24px;
+  top: 22px;
+  width: 96px;
+  z-index: 0;
+}
+
+.hero-arc-mark {
+  background: rgba(24, 215, 255, 0.1);
+  border: 1px solid rgba(24, 215, 255, 0.26);
+  border-radius: 999px;
+  color: #b9f5ff;
+  margin-right: 9px;
+  padding: 5px 8px;
+}
+
+.hero-arc-mark img {
+  height: 13px;
+  width: 13px;
+}
+
+.footer-brand-row {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+@media (max-width: 760px) {
+  .arc-brand-chip {
+    font-size: 0.64rem;
+    padding: 4px 7px;
+  }
+
+  .landing-network-row {
+    align-items: flex-start;
+  }
+
+  .hero-band::after {
+    height: 26px;
+    right: 16px;
+    top: 16px;
+    width: 74px;
+  }
+
+  .hero-arc-mark {
+    margin-bottom: 7px;
+  }
+}
+
+@media (max-width: 420px) {
+  .brand .arc-topbar-chip {
+    max-width: none;
+  }
+
+  .brand .arc-topbar-chip img {
+    height: 12px;
+    width: 12px;
+  }
+
+  .arc-topbar-chip {
+    font-size: 0;
+    padding: 5px;
+  }
+}
