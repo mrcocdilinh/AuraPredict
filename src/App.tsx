@@ -3345,7 +3345,7 @@ export default function App() {
     heroActivityFocus.volume > 0n ? `${formatUsdc(heroActivityFocus.volume, defaultSettlementDecimals)} ${defaultSettlementSymbol}` : "No trades yet";
   const heroActivityPointerActive = heroActivityHoverRatio !== null;
   const heroActivityTooltipLeft = Math.min(88, Math.max(12, heroActivityFocus.x));
-  const heroActivityTooltipTop = Math.min(86, Math.max(14, (heroActivityFocus.y / 58) * 100));
+  const heroActivityTooltipTop = Math.min(42, Math.max(18, (heroActivityFocus.y / 58) * 100 - 4));
   const heroActivityTooltipSide = heroActivityFocus.x > 68 ? "left" : "right";
   const heroActivityLatestPoint = heroActivityPoints[heroActivityPoints.length - 1] || heroActivityFocus;
   const heroActivityTicks =

@@ -2074,12 +2074,12 @@ h3 {
 }
 
 .hero-activity-tooltip {
-  background: rgba(16, 28, 49, 0.96);
-  border: 1px solid rgba(94, 137, 197, 0.64);
+  background: rgba(255, 255, 255, 0.97);
+  border: 1px solid rgba(202, 213, 228, 0.92);
   border-radius: 8px;
   backdrop-filter: blur(16px);
-  box-shadow: 0 18px 36px rgba(0, 0, 0, 0.28);
-  color: #d8e6ff;
+  box-shadow: 0 18px 36px rgba(0, 0, 0, 0.34);
+  color: #152033;
   display: grid;
   gap: 4px;
   min-width: 0;
@@ -2104,14 +2104,15 @@ h3 {
 }
 
 .hero-activity-tooltip span {
-  color: #9aa7bd;
+  color: #64748b;
   font-size: 0.72rem;
-  font-weight: 850;
+  font-weight: 900;
 }
 
 .hero-activity-tooltip strong {
-  color: #18d7ff;
+  color: #063f56;
   font-size: 0.86rem;
+  font-weight: 950;
 }
 
 .hero-activity-axis {
