@@ -9631,7 +9631,13 @@ export default function App() {
             tickerActivities.map((activity, index) => {
               const activityMarket = markets.find((market) => market.id === activity.marketId);
               return (
-                <span className="ticker-item" key={`${activity.id}-${index}`}>
+                <button
+                  className="ticker-item"
+                  disabled={!activityMarket}
+                  key={`${activity.id}-${index}`}
+                  onClick={() => activityMarket && openMarket(activityMarket.id)}
+                  type="button"
+                >
                   <strong>{displayNameForAddress(activity.user)}</strong> bought{" "}
                   <b className={activity.side === Outcome.Yes ? "ticker-yes" : "ticker-no"}>
                     {activity.side === Outcome.Yes ? "YES" : "NO"}
@@ -9639,17 +9645,17 @@ export default function App() {
                   {activityMarket ? formatMarketAmount(activity.amount, activityMarket) : formatUsdc(activity.amount)}{" "}
                   {activityMarket ? marketSymbol(activityMarket) : defaultSettlementSymbol} on {shortQuestion(activity.question)}
                   {activity.timestamp > 0 ? ` - ${timeAgo(activity.timestamp, currentTime)}` : ""}
-                </span>
+                </button>
               );
             })}
           {tickerActivities.length === 0 &&
             tickerFallbackLoop.map((market, index) => {
               const yesPercent = percent(market.yesPool, marketVolume(market));
               return (
-                <span className="ticker-item" key={`fallback-${market.id}-${index}`}>
+                <button className="ticker-item" key={`fallback-${market.id}-${index}`} onClick={() => openMarket(market.id)} type="button">
                   <strong>Market #{market.id}</strong> has {formatMarketAmount(marketVolume(market), market)} {marketSymbol(market)} live liquidity on{" "}
                   {shortQuestion(market.question)} - YES {yesPercent.toFixed(0)}%
-                </span>
+                </button>
               );
             })}
           {tickerActivities.length === 0 && tickerFallbackLoop.length === 0 && (
