@@ -3004,6 +3004,7 @@ export default function App() {
 
   const transactionLockRef = useRef(false);
   const silentLoadRef = useRef(false);
+  const loadMarketsInFlightRef = useRef(false);
   const notificationMenuRef = useRef<HTMLDivElement | null>(null);
   const walletMenuRef = useRef<HTMLDivElement | null>(null);
   const themeMenuRef = useRef<HTMLDivElement | null>(null);
@@ -4532,6 +4533,9 @@ export default function App() {
         if (isAddress(EURC_TOKEN_ADDRESS)) tokenSet.add(EURC_TOKEN_ADDRESS.toLowerCase());
         const balances = await Promise.all(
           Array.from(tokenSet).map(async (token) => {
+            if (isAddress(defaultSettlementToken) && sameAddress(token, defaultSettlementToken)) {
+              return [token, balance] as const;
+            }
             const value = await withRpcRetry(() => getPublicClient().readContract({
               address: token as Address,
               abi: settlementTokenAbi,
@@ -5504,6 +5508,8 @@ export default function App() {
 
     const isSilentLoad = silentLoadRef.current;
     silentLoadRef.current = false;
+    if (loadMarketsInFlightRef.current) return;
+    loadMarketsInFlightRef.current = true;
     if (!isSilentLoad) setLoading(true);
     try {
       const publicClient = getPublicClient();
@@ -5529,7 +5535,7 @@ export default function App() {
       ]);
 
       const totalMarketCount = Number(count);
-      const requestedMarketCount = totalMarketCount;
+      const requestedMarketCount = Math.min(totalMarketCount, Math.max(1, marketLoadLimit));
       const latestMarketStart = Math.max(0, totalMarketCount - requestedMarketCount);
       const marketIdSet = new Set<number>();
 
@@ -5685,46 +5691,53 @@ export default function App() {
         setDataSource("indexer");
 
         if (!isSilentLoad && account && isAddress(account) && indexedRows.length > 0) {
-          const positionRows = await mapWithConcurrency(
-            indexedRows,
-            MARKET_LOAD_CONCURRENCY,
-            async (market) => {
-              const position = await withRpcRetry(() => publicClient.readContract({
-                address: contractAddress,
-                abi: arcPredictionMarketAbi,
-                functionName: "positionOf",
-                args: [BigInt(market.id), account as Address]
-              }));
-              const yesPosition = position[0];
-              const noPosition = position[1];
-              const claimed = position[2];
-              let potentialPayout = 0n;
+          const accountForPositions = account as Address;
+          void (async () => {
+            try {
+              const positionRows = await mapWithConcurrency(
+                indexedRows,
+                MARKET_LOAD_CONCURRENCY,
+                async (market) => {
+                  const position = await withRpcRetry(() => publicClient.readContract({
+                    address: contractAddress,
+                    abi: arcPredictionMarketAbi,
+                    functionName: "positionOf",
+                    args: [BigInt(market.id), accountForPositions]
+                  }));
+                  const yesPosition = position[0];
+                  const noPosition = position[1];
+                  const claimed = position[2];
+                  let potentialPayout = 0n;
 
-              if (market.outcome !== Outcome.Unresolved && !claimed && (yesPosition > 0n || noPosition > 0n)) {
-                potentialPayout = await withRpcRetry(() => publicClient.readContract({
-                  address: contractAddress,
-                  abi: arcPredictionMarketAbi,
-                  functionName: "potentialPayout",
-                  args: [BigInt(market.id), account as Address]
-                }));
-              }
+                  if (market.outcome !== Outcome.Unresolved && !claimed && (yesPosition > 0n || noPosition > 0n)) {
+                    potentialPayout = await withRpcRetry(() => publicClient.readContract({
+                      address: contractAddress,
+                      abi: arcPredictionMarketAbi,
+                      functionName: "potentialPayout",
+                      args: [BigInt(market.id), accountForPositions]
+                    }));
+                  }
 
-              return {
-                id: market.id,
-                yesPosition,
-                noPosition,
-                claimed,
-                potentialPayout
-              };
+                  return {
+                    id: market.id,
+                    yesPosition,
+                    noPosition,
+                    claimed,
+                    potentialPayout
+                  };
+                }
+              );
+              const positionsByMarket = new Map(positionRows.map((position) => [position.id, position]));
+              setMarkets((current) =>
+                current.map((market) => {
+                  const position = positionsByMarket.get(market.id);
+                  return position ? { ...market, ...position } : market;
+                })
+              );
+            } catch {
+              // Position hydration is intentionally non-blocking.
             }
-          );
-          const positionsByMarket = new Map(positionRows.map((position) => [position.id, position]));
-          setMarkets((current) =>
-            current.map((market) => {
-              const position = positionsByMarket.get(market.id);
-              return position ? { ...market, ...position } : market;
-            })
-          );
+          })();
         }
 
         setLastDataRefresh(new Date());
@@ -6037,46 +6050,53 @@ export default function App() {
       }
 
       if (!isSilentLoad && account && isAddress(account) && sortedRows.length > 0) {
-        const positionRows = await mapWithConcurrency(
-          sortedRows,
-          MARKET_LOAD_CONCURRENCY,
-          async (market) => {
-            const position = await withRpcRetry(() => publicClient.readContract({
-              address: contractAddress,
-              abi: arcPredictionMarketAbi,
-              functionName: "positionOf",
-              args: [BigInt(market.id), account as Address]
-            }));
-            const yesPosition = position[0];
-            const noPosition = position[1];
-            const claimed = position[2];
-            let potentialPayout = 0n;
+        const accountForPositions = account as Address;
+        void (async () => {
+          try {
+            const positionRows = await mapWithConcurrency(
+              sortedRows,
+              MARKET_LOAD_CONCURRENCY,
+              async (market) => {
+                const position = await withRpcRetry(() => publicClient.readContract({
+                  address: contractAddress,
+                  abi: arcPredictionMarketAbi,
+                  functionName: "positionOf",
+                  args: [BigInt(market.id), accountForPositions]
+                }));
+                const yesPosition = position[0];
+                const noPosition = position[1];
+                const claimed = position[2];
+                let potentialPayout = 0n;
 
-            if (market.outcome !== Outcome.Unresolved && !claimed && (yesPosition > 0n || noPosition > 0n)) {
-              potentialPayout = await withRpcRetry(() => publicClient.readContract({
-                address: contractAddress,
-                abi: arcPredictionMarketAbi,
-                functionName: "potentialPayout",
-                args: [BigInt(market.id), account as Address]
-              }));
-            }
+                if (market.outcome !== Outcome.Unresolved && !claimed && (yesPosition > 0n || noPosition > 0n)) {
+                  potentialPayout = await withRpcRetry(() => publicClient.readContract({
+                    address: contractAddress,
+                    abi: arcPredictionMarketAbi,
+                    functionName: "potentialPayout",
+                    args: [BigInt(market.id), accountForPositions]
+                  }));
+                }
 
-            return {
-              id: market.id,
-              yesPosition,
-              noPosition,
-              claimed,
-              potentialPayout
-            };
+                return {
+                  id: market.id,
+                  yesPosition,
+                  noPosition,
+                  claimed,
+                  potentialPayout
+                };
+              }
+            );
+            const positionsByMarket = new Map(positionRows.map((position) => [position.id, position]));
+            setMarkets((current) =>
+              current.map((market) => {
+                const position = positionsByMarket.get(market.id);
+                return position ? { ...market, ...position } : market;
+              })
+            );
+          } catch {
+            // Position hydration is intentionally non-blocking.
           }
-        );
-        const positionsByMarket = new Map(positionRows.map((position) => [position.id, position]));
-        setMarkets((current) =>
-          current.map((market) => {
-            const position = positionsByMarket.get(market.id);
-            return position ? { ...market, ...position } : market;
-          })
-        );
+        })();
       }
 
       if (!isSilentLoad) try {
@@ -6221,9 +6241,10 @@ export default function App() {
           : errorMessage(error)
       );
     } finally {
+      loadMarketsInFlightRef.current = false;
       if (!isSilentLoad) setLoading(false);
     }
-  }, [account, contractAddress, hasContract, selectedMarketId]);
+  }, [account, contractAddress, hasContract, marketLoadLimit, selectedMarketId]);
 
   const isMarketActionPending = (action: string, marketId: number) => Boolean(pendingMarketActions[`${action}:${marketId}`]);
   const setMarketActionPending = (action: string, marketId: number, pending: boolean) => {
@@ -6404,7 +6425,8 @@ export default function App() {
                 functionName: "approve",
                 args: [contractAddress, createCost]
               }),
-            `Approving ${formatUsdc(createCost, createdSettlementDecimals)} ${createdSettlementSymbol} for market creation...`
+            `Approving ${formatUsdc(createCost, createdSettlementDecimals)} ${createdSettlementSymbol} for market creation...`,
+            false
           );
           if (!approved) return;
         }
@@ -6456,7 +6478,7 @@ export default function App() {
                   ]
                 }),
           `Creating market with ${formatUsdc(createCost, createdSettlementDecimals)} ${createdSettlementSymbol} locked/charged...`,
-          true,
+          false,
           (receipt) => {
             const createdEvent = receipt.logs
               .map((log) => {
@@ -6500,7 +6522,7 @@ export default function App() {
               args: [question, category, closeTime]
             }),
           "Creating legacy market...",
-          true,
+          false,
           (receipt) => {
             const createdEvent = receipt.logs
               .map((log) => {
@@ -6535,7 +6557,7 @@ export default function App() {
           marketCreationFee > 0n
             ? `Creating market with ${formatUsdc(creatorBond, createdSettlementDecimals)} ${createdSettlementSymbol} bond and ${formatUsdc(marketCreationFee, createdSettlementDecimals)} ${createdSettlementSymbol} creation fee...`
             : `Creating market with ${formatUsdc(creatorBond, createdSettlementDecimals)} ${createdSettlementSymbol} creator bond...`,
-          true,
+          false,
           (receipt) => {
             const createdEvent = receipt.logs
               .map((log) => {
@@ -6725,7 +6747,8 @@ export default function App() {
               functionName: "approve",
               args: [contractAddress, value]
             }),
-            `Approving ${formatMarketAmount(value, market)} ${marketSymbol(market)} stake...`
+            `Approving ${formatMarketAmount(value, market)} ${marketSymbol(market)} stake...`,
+            false
           );
           if (!approved) return;
         }
