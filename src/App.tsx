@@ -1617,6 +1617,17 @@ function parseAuraUtcCloseTimeFromText(value: string) {
 }
 
 function parseResolutionReferenceTime(value: string) {
+  const text = value.trim();
+  if (!text) return "";
+  const candidates = [
+    ...text.matchAll(/(\d{4}-\d{2}-\d{2})[T\s]([01]\d|2[0-3]):([0-5]\d)(?::[0-5]\d)?\s*(UTC|Z)\b/gi),
+    ...text.matchAll(/(\d{4}-\d{2}-\d{2})[T\s]([01]\d|2[0-3]):([0-5]\d)(?::[0-5]\d)?\s*Z/gi)
+  ]
+    .map((match) => combineUtcDateTimeParts(match[1], `${match[2]}:${match[3]}`))
+    .filter(Boolean);
+  if (candidates.length > 0) {
+    return candidates.sort((a, b) => Number(parseUtcDateTime(a) - parseUtcDateTime(b))).at(-1) || "";
+  }
   return parseAuraUtcCloseTimeFromText(value);
 }
 
