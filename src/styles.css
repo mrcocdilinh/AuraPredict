@@ -4438,6 +4438,31 @@ textarea {
   grid-column: 1 / -1;
 }
 
+.unified-balance-advanced-actions {
+  border-top: 1px solid #e5ebf4;
+  padding-top: 8px;
+}
+
+.unified-balance-advanced-actions summary {
+  color: #667085;
+  cursor: pointer;
+  font-size: 0.76rem;
+  font-weight: 900;
+  list-style-position: inside;
+  text-transform: uppercase;
+}
+
+.unified-balance-advanced-actions div {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 1fr 1fr;
+  margin-top: 8px;
+}
+
+.unified-balance-advanced-actions button {
+  min-height: 38px;
+}
+
 .unified-balance-controls small,
 .unified-balance-note {
   color: #667085;
@@ -4502,6 +4527,52 @@ textarea {
 .unified-balance-breakdown {
   display: grid;
   gap: 8px;
+}
+
+.unified-balance-wallet-grid {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.unified-balance-wallet-grid div {
+  background: #f8fafc;
+  border: 1px solid #e5ebf4;
+  border-radius: 8px;
+  display: grid;
+  gap: 4px;
+  min-height: 78px;
+  padding: 10px;
+}
+
+.unified-balance-wallet-grid div.active {
+  background: #eafaff;
+  border-color: #18d7ff;
+  box-shadow: 0 12px 26px rgba(24, 215, 255, 0.14);
+}
+
+.unified-balance-wallet-grid div.arc-wallet-balance {
+  background: #f2fbff;
+  border-color: #bfeaf3;
+}
+
+.unified-balance-wallet-grid span {
+  color: #667085;
+  font-size: 0.72rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.unified-balance-wallet-grid strong {
+  color: #172033;
+  font-size: 0.95rem;
+}
+
+.unified-balance-wallet-grid small {
+  color: #ff4d6d;
+  font-size: 0.72rem;
+  font-weight: 760;
+  line-height: 1.35;
 }
 
 .unified-balance-fees,
@@ -6968,15 +7039,23 @@ label {
 
 [data-theme="dark"] .unified-balance-mini-grid div,
 [data-theme="dark"] .unified-balance-breakdown div,
+[data-theme="dark"] .unified-balance-wallet-grid div,
 [data-theme="dark"] .unified-balance-fees div,
 [data-theme="dark"] .unified-balance-lasttx {
   background: #090d18;
   border-color: #26334a;
 }
 
+[data-theme="dark"] .unified-balance-wallet-grid div.active,
+[data-theme="dark"] .unified-balance-wallet-grid div.arc-wallet-balance {
+  background: rgba(24, 215, 255, 0.08);
+  border-color: rgba(24, 215, 255, 0.32);
+}
+
 [data-theme="dark"] .unified-balance-summary > strong,
 [data-theme="dark"] .unified-balance-mini-grid strong,
 [data-theme="dark"] .unified-balance-breakdown strong,
+[data-theme="dark"] .unified-balance-wallet-grid strong,
 [data-theme="dark"] .unified-balance-fees strong,
 [data-theme="dark"] .unified-balance-lasttx strong {
   color: #f7f9ff;
@@ -6986,8 +7065,17 @@ label {
 [data-theme="dark"] .unified-balance-card label,
 [data-theme="dark"] .unified-balance-mini-grid span,
 [data-theme="dark"] .unified-balance-breakdown span,
+[data-theme="dark"] .unified-balance-wallet-grid span,
 [data-theme="dark"] .unified-balance-fees span,
 [data-theme="dark"] .unified-balance-lasttx span {
+  color: #71809b;
+}
+
+[data-theme="dark"] .unified-balance-advanced-actions {
+  border-top-color: #26334a;
+}
+
+[data-theme="dark"] .unified-balance-advanced-actions summary {
   color: #71809b;
 }
 
@@ -9374,12 +9462,20 @@ label {
     grid-template-columns: 1fr;
   }
 
+  .unified-balance-wallet-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
   .unified-balance-action-grid {
     grid-template-columns: 1fr;
   }
 
   .unified-balance-action-grid .unified-balance-primary {
     grid-column: auto;
+  }
+
+  .unified-balance-advanced-actions div {
+    grid-template-columns: 1fr;
   }
 
   .modal-backdrop {

@@ -14,6 +14,7 @@ import {
   type Hash,
   type TransactionReceipt
 } from "viem";
+import { Buffer } from "buffer";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ARC_CHAIN_ID_NUMBER,
@@ -27,6 +28,11 @@ import {
 } from "./arc";
 import { arcPredictionMarketV3Abi, arcPredictionMarketV4Abi, settlementTokenAbi } from "./contracts/arcPredictionMarketAbi";
 import { arcPredictionMarketV2Abi as arcPredictionMarketAbi } from "./contracts/arcPredictionMarketV2Abi";
+
+const browserGlobal = globalThis as typeof globalThis & { Buffer?: typeof Buffer };
+if (!browserGlobal.Buffer) {
+  browserGlobal.Buffer = Buffer;
+}
 
 type EthereumProvider = {
   request: (args: { method: string; params?: unknown[] }) => Promise<unknown>;
@@ -98,6 +104,14 @@ type UnifiedBalanceTx = {
   txHash?: string;
   explorerUrl?: string;
 };
+type UnifiedBalanceWalletBalance = {
+  chain: string;
+  label: string;
+  balance: bigint;
+  decimals: number;
+  tokenAddress: Address;
+  error?: string;
+};
 
 const SWAP_TOLERANCE_OPTIONS = [50, 100, 300, 500] as const;
 const DEFAULT_SWAP_TOLERANCE_BPS = 300;
@@ -110,6 +124,8 @@ const UNIFIED_BALANCE_SOURCE_CHAINS: Array<{
   nativeCurrency: { name: string; symbol: string; decimals: number };
   rpcUrls: string[];
   blockExplorerUrls: string[];
+  usdcAddress: Address;
+  decimals: number;
 }> = [
   {
     value: "Base_Sepolia",
@@ -118,7 +134,9 @@ const UNIFIED_BALANCE_SOURCE_CHAINS: Array<{
     chainName: "Base Sepolia",
     nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
     rpcUrls: ["https://sepolia.base.org"],
-    blockExplorerUrls: ["https://sepolia.basescan.org"]
+    blockExplorerUrls: ["https://sepolia.basescan.org"],
+    usdcAddress: "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
+    decimals: 6
   },
   {
     value: "Arbitrum_Sepolia",
@@ -127,7 +145,9 @@ const UNIFIED_BALANCE_SOURCE_CHAINS: Array<{
     chainName: "Arbitrum Sepolia",
     nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
     rpcUrls: ["https://sepolia-rollup.arbitrum.io/rpc"],
-    blockExplorerUrls: ["https://sepolia.arbiscan.io"]
+    blockExplorerUrls: ["https://sepolia.arbiscan.io"],
+    usdcAddress: "0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d",
+    decimals: 6
   },
   {
     value: "Ethereum_Sepolia",
@@ -136,7 +156,19 @@ const UNIFIED_BALANCE_SOURCE_CHAINS: Array<{
     chainName: "Ethereum Sepolia",
     nativeCurrency: { name: "Sepolia Ether", symbol: "ETH", decimals: 18 },
     rpcUrls: ["https://ethereum-sepolia-rpc.publicnode.com"],
-    blockExplorerUrls: ["https://sepolia.etherscan.io"]
+    blockExplorerUrls: ["https://sepolia.etherscan.io"],
+    usdcAddress: "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238",
+    decimals: 6
+  }
+];
+const UNIFIED_BALANCE_WALLET_CHAINS = [
+  ...UNIFIED_BALANCE_SOURCE_CHAINS,
+  {
+    value: "Arc_Testnet",
+    label: "Arc Testnet",
+    rpcUrls: ARC_RPC_URLS,
+    usdcAddress: "0x3600000000000000000000000000000000000000" as Address,
+    decimals: 6
   }
 ];
 const LIFI_QUOTE_ENDPOINT = "https://li.quest/v1/quote";
@@ -1256,9 +1288,23 @@ function hasUnifiedBalanceValue(value?: string) {
 }
 
 function normalizeUnifiedBalanceAmount(value: string) {
-  const amount = parseUsdcInput(value, ARC_NATIVE_USDC_DECIMALS);
+  const amount = parseUsdcInput(value, 6);
   if (amount <= 0n) throw new Error("Enter a USDC amount greater than 0.");
-  return formatUsdcInput(amount, ARC_NATIVE_USDC_DECIMALS);
+  return formatUsdcInput(amount, 6);
+}
+
+function unifiedBalanceGatewayAmount(
+  summary: UnifiedBalanceSummary | null | undefined,
+  chain: UnifiedBalanceSourceChainKey,
+  field: "confirmedBalance" | "pendingBalance"
+) {
+  const row = summary?.breakdown.find((entry) => entry.chain === chain);
+  return parseUsdcInput(row?.[field] || "0", 6);
+}
+
+function addUnifiedBalanceDecimals(left?: string, right?: string) {
+  const total = parseUsdcInput(left || "0", 6) + parseUsdcInput(right || "0", 6);
+  return formatUsdcInput(total, 6);
 }
 
 function flattenUnifiedBalanceSummary(data: unknown): UnifiedBalanceSummary {
@@ -1276,11 +1322,25 @@ function flattenUnifiedBalanceSummary(data: unknown): UnifiedBalanceSummary {
       };
     });
   });
+  const byChain = new Map<string, UnifiedBalanceChainBalance>();
+  for (const row of rows) {
+    const current = byChain.get(row.chain);
+    byChain.set(row.chain, {
+      chain: row.chain,
+      confirmedBalance: addUnifiedBalanceDecimals(current?.confirmedBalance, row.confirmedBalance),
+      pendingBalance:
+        current?.pendingBalance || row.pendingBalance
+          ? addUnifiedBalanceDecimals(current?.pendingBalance, row.pendingBalance)
+          : undefined
+    });
+  }
 
   return {
     totalConfirmedBalance: unifiedBalanceString(record.totalConfirmedBalance),
     totalPendingBalance: record.totalPendingBalance === undefined ? undefined : unifiedBalanceString(record.totalPendingBalance),
-    breakdown: rows.sort((left, right) => unifiedBalanceChainLabel(left.chain).localeCompare(unifiedBalanceChainLabel(right.chain)))
+    breakdown: [...byChain.values()].sort((left, right) =>
+      unifiedBalanceChainLabel(left.chain).localeCompare(unifiedBalanceChainLabel(right.chain))
+    )
   };
 }
 
@@ -1338,6 +1398,44 @@ function createUnifiedBalanceSpendParams(
     token: "USDC",
     amount
   };
+}
+
+async function readUnifiedBalanceWalletBalances(account: string): Promise<UnifiedBalanceWalletBalance[]> {
+  if (!account || !isAddress(account)) return [];
+  return Promise.all(
+    UNIFIED_BALANCE_WALLET_CHAINS.map(async (chain) => {
+      try {
+        const client = createPublicClient({
+          transport: fallback(
+            chain.rpcUrls.map((url) => http(url, { retryCount: 1, retryDelay: 250, timeout: 10_000 })),
+            { rank: false, retryCount: 1, retryDelay: 400 }
+          )
+        });
+        const balance = (await client.readContract({
+          address: chain.usdcAddress,
+          abi: settlementTokenAbi,
+          functionName: "balanceOf",
+          args: [account as Address]
+        })) as bigint;
+        return {
+          chain: chain.value,
+          label: chain.label,
+          balance,
+          decimals: chain.decimals,
+          tokenAddress: chain.usdcAddress
+        };
+      } catch (error) {
+        return {
+          chain: chain.value,
+          label: chain.label,
+          balance: 0n,
+          decimals: chain.decimals,
+          tokenAddress: chain.usdcAddress,
+          error: compactErrorMessage(error)
+        };
+      }
+    })
+  );
 }
 
 function parseUsdcInput(value: string, decimals = ARC_NATIVE_USDC_DECIMALS) {
@@ -3300,6 +3398,7 @@ export default function App() {
   const [unifiedBalanceAmount, setUnifiedBalanceAmount] = useState("");
   const [unifiedBalanceBusy, setUnifiedBalanceBusy] = useState<UnifiedBalanceBusy>("idle");
   const [unifiedBalanceSummary, setUnifiedBalanceSummary] = useState<UnifiedBalanceSummary | null>(null);
+  const [unifiedBalanceWalletBalances, setUnifiedBalanceWalletBalances] = useState<UnifiedBalanceWalletBalance[]>([]);
   const [unifiedBalanceFees, setUnifiedBalanceFees] = useState<UnifiedBalanceFeeLine[]>([]);
   const [unifiedBalanceLastTx, setUnifiedBalanceLastTx] = useState<UnifiedBalanceTx | null>(null);
   const [unifiedBalanceLog, setUnifiedBalanceLog] = useState<string[]>([]);
@@ -5249,17 +5348,21 @@ export default function App() {
   const refreshUnifiedBalance = useCallback(async () => {
     if (!account || !isAddress(account)) throw new Error("Connect wallet before using Unified Balance.");
     const { kit, Blockchain, adapter } = await createUnifiedBalanceRuntime(getInjectedProvider(selectedWalletProvider));
-    const result = await kit.unifiedBalance.getBalances({
-      token: "USDC",
-      sources: {
-        adapter,
-        chains: [unifiedBalanceSourceChain, Blockchain.Arc_Testnet]
-      },
-      includePending: true,
-      networkType: "testnet"
-    } as never);
+    const [result, walletBalances] = await Promise.all([
+      kit.unifiedBalance.getBalances({
+        token: "USDC",
+        sources: {
+          adapter,
+          chains: [unifiedBalanceSourceChain, Blockchain.Arc_Testnet]
+        },
+        includePending: true,
+        networkType: "testnet"
+      } as never),
+      readUnifiedBalanceWalletBalances(account)
+    ]);
     const summary = flattenUnifiedBalanceSummary(result);
     setUnifiedBalanceSummary(summary);
+    setUnifiedBalanceWalletBalances(walletBalances);
     return summary;
   }, [account, selectedWalletProvider, unifiedBalanceSourceChain]);
 
@@ -5289,6 +5392,19 @@ export default function App() {
     if (!unifiedBalanceModalOpen || !account || !isAddress(account)) return;
     void loadUnifiedBalance();
   }, [account, loadUnifiedBalance, unifiedBalanceModalOpen, unifiedBalanceSourceChain]);
+
+  const waitForUnifiedBalanceConfirmed = useCallback(
+    async (sourceChain: UnifiedBalanceSourceChainKey, amount: string) => {
+      const required = parseUsdcInput(amount, 6);
+      for (let attempt = 0; attempt < 20; attempt += 1) {
+        const summary = await refreshUnifiedBalance();
+        if (unifiedBalanceGatewayAmount(summary, sourceChain, "confirmedBalance") >= required) return summary;
+        await sleep(6000);
+      }
+      return null;
+    },
+    [refreshUnifiedBalance]
+  );
 
   const estimateUnifiedBalanceSpend = useCallback(async () => {
     try {
@@ -5366,6 +5482,17 @@ export default function App() {
     try {
       if (!account || !isAddress(account)) throw new Error("Connect wallet before using Unified Balance.");
       const amount = normalizeUnifiedBalanceAmount(unifiedBalanceAmount);
+      const required = parseUsdcInput(amount, 6);
+      const summary = await refreshUnifiedBalance();
+      const confirmed = unifiedBalanceGatewayAmount(summary, unifiedBalanceSourceChain, "confirmedBalance");
+      const pending = unifiedBalanceGatewayAmount(summary, unifiedBalanceSourceChain, "pendingBalance");
+      if (confirmed < required) {
+        throw new Error(
+          pending > 0n
+            ? `Gateway deposit is still pending on ${unifiedBalanceChainLabel(unifiedBalanceSourceChain)}. Wait for confirmations, refresh, then retry spend.`
+            : `No confirmed Gateway balance on ${unifiedBalanceChainLabel(unifiedBalanceSourceChain)}. Deposit first or choose a chain with Gateway balance.`
+        );
+      }
       await switchToUnifiedBalanceSourceChain(unifiedBalanceSourceChain);
       const { kit, Blockchain, adapter } = await createUnifiedBalanceRuntime(getInjectedProvider(selectedWalletProvider));
       const params = createUnifiedBalanceSpendParams(
@@ -5418,19 +5545,49 @@ export default function App() {
     try {
       if (!account || !isAddress(account)) throw new Error("Connect wallet before using Unified Balance.");
       const amount = normalizeUnifiedBalanceAmount(unifiedBalanceAmount);
-      await switchToUnifiedBalanceSourceChain(unifiedBalanceSourceChain);
+      const required = parseUsdcInput(amount, 6);
+      let summary = await refreshUnifiedBalance();
+      let confirmed = unifiedBalanceGatewayAmount(summary, unifiedBalanceSourceChain, "confirmedBalance");
+      let pending = unifiedBalanceGatewayAmount(summary, unifiedBalanceSourceChain, "pendingBalance");
       const { kit, Blockchain, adapter } = await createUnifiedBalanceRuntime(getInjectedProvider(selectedWalletProvider));
-      addUnifiedBalanceLog(`Depositing ${amount} USDC before Arc spend.`);
-      setNotice(`Step 1/2: confirm Gateway deposit of ${amount} USDC from ${unifiedBalanceChainLabel(unifiedBalanceSourceChain)}.`);
-      const deposit = await kit.unifiedBalance.deposit({
-        from: { adapter, chain: unifiedBalanceSourceChain },
-        amount,
-        token: "USDC",
-        allowanceStrategy: "authorize"
-      } as never);
-      const depositTx = unifiedBalanceTxFromResult("Deposit to Gateway", deposit);
-      setUnifiedBalanceLastTx(depositTx);
-      addUnifiedBalanceLog(`Deposit confirmed${depositTx.txHash ? `: ${shortHash(depositTx.txHash)}` : "."}`);
+
+      if (confirmed < required && confirmed + pending < required) {
+        await switchToUnifiedBalanceSourceChain(unifiedBalanceSourceChain);
+        addUnifiedBalanceLog(`Depositing ${amount} USDC before Arc spend.`);
+        setNotice(`Step 1/2: confirm Gateway deposit of ${amount} USDC from ${unifiedBalanceChainLabel(unifiedBalanceSourceChain)}.`);
+        const deposit = await kit.unifiedBalance.deposit({
+          from: { adapter, chain: unifiedBalanceSourceChain },
+          amount,
+          token: "USDC",
+          allowanceStrategy: "authorize"
+        } as never);
+        const depositTx = unifiedBalanceTxFromResult("Deposit to Gateway", deposit);
+        setUnifiedBalanceLastTx(depositTx);
+        addUnifiedBalanceLog(`Deposit confirmed${depositTx.txHash ? `: ${shortHash(depositTx.txHash)}` : "."}`);
+        summary = await refreshUnifiedBalance();
+        confirmed = unifiedBalanceGatewayAmount(summary, unifiedBalanceSourceChain, "confirmedBalance");
+        pending = unifiedBalanceGatewayAmount(summary, unifiedBalanceSourceChain, "pendingBalance");
+      } else if (confirmed >= required) {
+        addUnifiedBalanceLog(`Using existing confirmed Gateway balance on ${unifiedBalanceChainLabel(unifiedBalanceSourceChain)}.`);
+      } else {
+        addUnifiedBalanceLog(`Waiting for pending Gateway deposit on ${unifiedBalanceChainLabel(unifiedBalanceSourceChain)}.`);
+      }
+
+      if (confirmed < required) {
+        setNotice(`Gateway deposit is pending ${formatUsdcInput(pending, 6)} USDC. Waiting for confirmations before minting to Arc...`);
+        const readySummary = await waitForUnifiedBalanceConfirmed(unifiedBalanceSourceChain, amount);
+        if (!readySummary) {
+          setNotice(`Gateway deposit is still pending. Refresh later, then use Retry spend to Arc without depositing again.`);
+          return;
+        }
+        confirmed = unifiedBalanceGatewayAmount(readySummary, unifiedBalanceSourceChain, "confirmedBalance");
+        if (confirmed < required) {
+          setNotice(`Gateway balance is not confirmed yet. Refresh later, then use Retry spend to Arc.`);
+          return;
+        }
+      }
+
+      await switchToUnifiedBalanceSourceChain(unifiedBalanceSourceChain);
       setNotice(`Step 2/2: confirm Unified Balance spend of ${amount} USDC to Arc Testnet.`);
       const spend = await kit.unifiedBalance.spend(
         createUnifiedBalanceSpendParams(adapter, Blockchain as Record<string, unknown>, unifiedBalanceSourceChain, amount, account) as never
@@ -5461,7 +5618,8 @@ export default function App() {
     switchToArc,
     switchToUnifiedBalanceSourceChain,
     unifiedBalanceAmount,
-    unifiedBalanceSourceChain
+    unifiedBalanceSourceChain,
+    waitForUnifiedBalanceConfirmed
   ]);
 
   const profileSwapPair = swapPairForDirection(profileSwapDirection);
@@ -9686,9 +9844,12 @@ export default function App() {
 
   const unifiedBalanceSelectedSource =
     UNIFIED_BALANCE_SOURCE_CHAINS.find((item) => item.value === unifiedBalanceSourceChain) || UNIFIED_BALANCE_SOURCE_CHAINS[0];
-  const unifiedBalanceAmountReady = parseUsdcInput(unifiedBalanceAmount, ARC_NATIVE_USDC_DECIMALS) > 0n;
+  const unifiedBalanceAmountReady = parseUsdcInput(unifiedBalanceAmount, 6) > 0n;
   const unifiedBalanceSourceBalance = unifiedBalanceSummary?.breakdown.find((entry) => entry.chain === unifiedBalanceSourceChain);
   const unifiedBalanceArcBalance = unifiedBalanceSummary?.breakdown.find((entry) => entry.chain === "Arc_Testnet");
+  const unifiedBalanceSourceWalletBalance = unifiedBalanceWalletBalances.find((entry) => entry.chain === unifiedBalanceSourceChain);
+  const unifiedBalanceArcWalletBalance = unifiedBalanceWalletBalances.find((entry) => entry.chain === "Arc_Testnet");
+  const unifiedBalanceOtherWalletBalances = unifiedBalanceWalletBalances.filter((entry) => entry.chain !== "Arc_Testnet");
   const unifiedBalanceBusyText =
     unifiedBalanceBusy === "balances"
       ? "Refreshing..."
@@ -12141,6 +12302,10 @@ export default function App() {
             <div className="unified-balance-status-row">
               <span>Wallet {account ? shortAddress(account) : "not connected"}</span>
               <span>Destination Arc Testnet</span>
+              <span>
+                Source wallet{" "}
+                {formatUsdcInput(unifiedBalanceSourceWalletBalance?.balance || 0n, unifiedBalanceSourceWalletBalance?.decimals || 6)} USDC
+              </span>
               {unifiedBalanceBusyText && <strong>{unifiedBalanceBusyText}</strong>}
             </div>
             <div className="unified-balance-grid">
@@ -12178,6 +12343,14 @@ export default function App() {
                 </label>
                 <div className="unified-balance-action-grid">
                   <button
+                    className="unified-balance-primary"
+                    disabled={unifiedBalanceBusy !== "idle" || transactionPending || !unifiedBalanceAmountReady}
+                    onClick={depositAndSpendUnifiedBalance}
+                    type="button"
+                  >
+                    {unifiedBalanceBusy === "deposit-spend" ? "Moving..." : "Move USDC to Arc"}
+                  </button>
+                  <button
                     className="secondary"
                     disabled={unifiedBalanceBusy !== "idle"}
                     onClick={loadUnifiedBalance}
@@ -12193,50 +12366,49 @@ export default function App() {
                   >
                     {unifiedBalanceBusy === "estimate" ? "Estimating..." : "Estimate fees"}
                   </button>
-                  <button
-                    disabled={unifiedBalanceBusy !== "idle" || transactionPending || !unifiedBalanceAmountReady}
-                    onClick={depositUnifiedBalance}
-                    type="button"
-                  >
-                    {unifiedBalanceBusy === "deposit" ? "Depositing..." : "Deposit to Gateway"}
-                  </button>
-                  <button
-                    disabled={unifiedBalanceBusy !== "idle" || transactionPending || !unifiedBalanceAmountReady}
-                    onClick={spendUnifiedBalanceToArc}
-                    type="button"
-                  >
-                    {unifiedBalanceBusy === "spend" ? "Spending..." : "Spend to Arc"}
-                  </button>
-                  <button
-                    className="unified-balance-primary"
-                    disabled={unifiedBalanceBusy !== "idle" || transactionPending || !unifiedBalanceAmountReady}
-                    onClick={depositAndSpendUnifiedBalance}
-                    type="button"
-                  >
-                    {unifiedBalanceBusy === "deposit-spend" ? "Funding..." : "Deposit + spend"}
-                  </button>
                 </div>
+                <details className="unified-balance-advanced-actions">
+                  <summary>Advanced recovery</summary>
+                  <div>
+                    <button
+                      className="secondary"
+                      disabled={unifiedBalanceBusy !== "idle" || transactionPending || !unifiedBalanceAmountReady}
+                      onClick={depositUnifiedBalance}
+                      type="button"
+                    >
+                      {unifiedBalanceBusy === "deposit" ? "Depositing..." : "Deposit only"}
+                    </button>
+                    <button
+                      className="secondary"
+                      disabled={unifiedBalanceBusy !== "idle" || transactionPending || !unifiedBalanceAmountReady}
+                      onClick={spendUnifiedBalanceToArc}
+                      type="button"
+                    >
+                      {unifiedBalanceBusy === "spend" ? "Spending..." : "Retry spend to Arc"}
+                    </button>
+                  </div>
+                </details>
                 <small>
-                  Deposit uses {unifiedBalanceSelectedSource.label}. Spend uses Circle Gateway and forwards the Arc mint to your connected wallet.
+                  Main flow deposits from {unifiedBalanceSelectedSource.label}, then spends the confirmed Gateway balance to Arc. Use retry spend if a previous deposit succeeded but minting failed.
                 </small>
               </article>
 
               <article className="unified-balance-card unified-balance-summary">
-                <span>Total confirmed Gateway balance</span>
+                <span>Gateway balance available to spend</span>
                 <strong>{formatUnifiedBalanceDecimal(unifiedBalanceSummary?.totalConfirmedBalance)} USDC</strong>
                 {hasUnifiedBalanceValue(unifiedBalanceSummary?.totalPendingBalance) && (
-                  <small>Pending {formatUnifiedBalanceDecimal(unifiedBalanceSummary?.totalPendingBalance)} USDC</small>
+                  <small>Pending {formatUnifiedBalanceDecimal(unifiedBalanceSummary?.totalPendingBalance)} USDC. Pending deposits need confirmations before spend.</small>
                 )}
                 <div className="unified-balance-mini-grid">
                   <div>
-                    <span>{unifiedBalanceSelectedSource.label}</span>
+                    <span>{unifiedBalanceSelectedSource.label} Gateway</span>
                     <strong>{formatUnifiedBalanceDecimal(unifiedBalanceSourceBalance?.confirmedBalance)} USDC</strong>
                     {hasUnifiedBalanceValue(unifiedBalanceSourceBalance?.pendingBalance) && (
                       <small>Pending {formatUnifiedBalanceDecimal(unifiedBalanceSourceBalance?.pendingBalance)}</small>
                     )}
                   </div>
                   <div>
-                    <span>Arc Testnet</span>
+                    <span>Arc Testnet Gateway</span>
                     <strong>{formatUnifiedBalanceDecimal(unifiedBalanceArcBalance?.confirmedBalance)} USDC</strong>
                     {hasUnifiedBalanceValue(unifiedBalanceArcBalance?.pendingBalance) && (
                       <small>Pending {formatUnifiedBalanceDecimal(unifiedBalanceArcBalance?.pendingBalance)}</small>
@@ -12255,6 +12427,26 @@ export default function App() {
                   )}
                 </div>
               </article>
+            </div>
+
+            <div className="unified-balance-card unified-balance-wallets">
+              <span>Wallet USDC by chain</span>
+              <div className="unified-balance-wallet-grid">
+                {unifiedBalanceOtherWalletBalances.map((entry) => (
+                  <div className={entry.chain === unifiedBalanceSourceChain ? "active" : ""} key={entry.chain}>
+                    <span>{entry.label}</span>
+                    <strong>{formatUsdcInput(entry.balance, entry.decimals)} USDC</strong>
+                    {entry.error && <small>{entry.error}</small>}
+                  </div>
+                ))}
+                {unifiedBalanceArcWalletBalance && (
+                  <div className="arc-wallet-balance">
+                    <span>Arc Testnet</span>
+                    <strong>{formatUsdcInput(unifiedBalanceArcWalletBalance.balance, unifiedBalanceArcWalletBalance.decimals)} USDC</strong>
+                    {unifiedBalanceArcWalletBalance.error && <small>{unifiedBalanceArcWalletBalance.error}</small>}
+                  </div>
+                )}
+              </div>
             </div>
 
             {unifiedBalanceFees.length > 0 && (
