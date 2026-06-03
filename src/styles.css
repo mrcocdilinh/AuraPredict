@@ -1572,6 +1572,66 @@ h3 {
   color: #172033;
 }
 
+.fund-on-arc-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+
+.fund-on-arc-actions a {
+  align-items: center;
+  border-radius: 8px;
+  display: inline-flex;
+  font-size: 0.72rem;
+  font-weight: 920;
+  justify-content: center;
+  min-height: 34px;
+  padding: 0 10px;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.fund-on-arc-primary {
+  background: #18d7ff;
+  border: 1px solid #18d7ff;
+  color: #06111e;
+  box-shadow: 0 10px 24px rgba(24, 215, 255, 0.2);
+}
+
+.fund-on-arc-secondary {
+  background: #eef8ff;
+  border: 1px solid #b8e7ef;
+  color: #08768a;
+}
+
+.fund-on-arc-actions a:hover {
+  transform: translateY(-1px);
+}
+
+.fund-on-arc-actions small {
+  color: #667085;
+  flex: 1 0 100%;
+  font-size: 0.76rem;
+  font-weight: 760;
+  line-height: 1.4;
+}
+
+.fund-on-arc-actions.compact {
+  gap: 6px;
+}
+
+.fund-on-arc-actions.compact a {
+  flex: 1 1 120px;
+  min-height: 36px;
+}
+
+.wallet-dropdown .fund-on-arc-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+
 .wallet-dropdown button:hover:not(:disabled) {
   background: #eef2ff;
   color: #172033;
@@ -4523,6 +4583,36 @@ label {
   padding: 11px;
 }
 
+.create-fund-panel {
+  align-items: center;
+  background: #f3fbfd;
+  border: 1px solid #b8e7ef;
+  border-radius: 8px;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) minmax(240px, auto);
+  padding: 11px;
+}
+
+.create-fund-panel > div:first-child {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.create-fund-panel strong {
+  color: #08768a;
+  font-size: 0.88rem;
+  line-height: 1.15;
+}
+
+.create-fund-panel small {
+  color: #536178;
+  font-size: 0.76rem;
+  font-weight: 760;
+  line-height: 1.35;
+}
+
 .protocol-card div {
   background: #f8fafc;
   border-color: #e5ebf4;
@@ -5047,6 +5137,11 @@ label {
   background: #eef8ff;
   border-color: #9edff0;
   color: #075f70;
+}
+
+.trade-fund-row .fund-on-arc-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
 }
 
 .market-swap-panel {
@@ -6660,6 +6755,22 @@ label {
   color: #d8e1f0;
 }
 
+[data-theme="dark"] .fund-on-arc-actions .fund-on-arc-primary {
+  background: #18d7ff;
+  border-color: #18d7ff;
+  color: #06111e;
+}
+
+[data-theme="dark"] .fund-on-arc-actions .fund-on-arc-secondary {
+  background: #0b1020;
+  border-color: #26334a;
+  color: #d8e1f0;
+}
+
+[data-theme="dark"] .fund-on-arc-actions small {
+  color: #9aa7bd;
+}
+
 [data-theme="dark"] .secondary:hover:not(:disabled),
 [data-theme="dark"] .wallet-panel a:hover,
 [data-theme="dark"] .button-link:hover {
@@ -7319,6 +7430,19 @@ label {
   background: linear-gradient(135deg, rgba(127, 92, 255, 0.14), rgba(24, 215, 255, 0.12));
   border-color: #26334a;
   color: #b8c4d8;
+}
+
+[data-theme="dark"] .create-fund-panel {
+  background: #081d28;
+  border-color: #17445a;
+}
+
+[data-theme="dark"] .create-fund-panel strong {
+  color: #18d7ff;
+}
+
+[data-theme="dark"] .create-fund-panel small {
+  color: #9aa7bd;
 }
 
 [data-theme="dark"] .profile-hero-card,
@@ -8935,6 +9059,15 @@ label {
   }
 
   .profile-swap-direction {
+    grid-template-columns: 1fr;
+  }
+
+  .create-fund-panel {
+    grid-template-columns: 1fr;
+  }
+
+  .trade-fund-row .fund-on-arc-actions,
+  .wallet-dropdown .fund-on-arc-actions {
     grid-template-columns: 1fr;
   }
 

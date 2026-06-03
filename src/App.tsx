@@ -97,6 +97,26 @@ function providerHealthLabel(state: SwapProviderState) {
   return "Idle";
 }
 
+function FundOnArcActions({ compact = false, targetSymbol = "USDC" }: { compact?: boolean; targetSymbol?: string }) {
+  const symbol = targetSymbol || "USDC";
+
+  return (
+    <div className={`fund-on-arc-actions${compact ? " compact" : ""}`}>
+      <a className="fund-on-arc-primary" href={ARC_FAUCET_URL} target="_blank" rel="noreferrer">
+        Fund on Arc
+      </a>
+      <a className="fund-on-arc-secondary" href={ARC_UNIFIED_BALANCE_URL} target="_blank" rel="noreferrer">
+        Unified Balance
+      </a>
+      {!compact && (
+        <small>
+          Need {symbol}? Claim testnet funds from Circle Faucet now, or review Arc Unified Balance for cross-app funding.
+        </small>
+      )}
+    </div>
+  );
+}
+
 declare global {
   interface Window {
     ethereum?: EthereumProvider;
@@ -501,6 +521,7 @@ const LANDING_HOSTS = new Set(["aurapredict.xyz", "www.aurapredict.xyz"]);
 const APP_URL = "https://app.aurapredict.xyz";
 const DOCS_URL = "https://docs.aurapredict.xyz";
 const ARC_FAUCET_URL = "https://faucet.circle.com";
+const ARC_UNIFIED_BALANCE_URL = "https://docs.arc.io/app-kit/unified-balance";
 const X_URL = "https://x.com/AuraPredict";
 const DISCORD_URL = "https://discord.gg/3wTYhdsr";
 const DEMO_VIDEO_URL = "https://www.youtube.com/watch?v=tdYqpAIG82s";
@@ -2285,12 +2306,12 @@ function LandingPage() {
       text: "Each market's primary source, fallback source, and resolution rule are stored onchain so settlement criteria stay tied to the market."
     },
     {
-      title: "Oracle-ready authority",
-      text: "The contract supports creator review, required authority review, authority-only resolution, and an adapter-only path for a future oracle or committee."
+      title: "Circle Agent Wallet signer",
+      text: "Resolution authority can be operated by a Circle Agent Wallet on Arc Testnet, giving authority/oracle-only markets a server-side signer for source-backed proposals."
     },
     {
       title: "Objective oracle proposals",
-      text: "The indexer can check objective markets such as crypto prices, macro prices, and health/status endpoints, then show or auto-submit a high-confidence Oracle proposal before final review."
+      text: "The indexer can check objective markets such as crypto prices, macro prices, and health/status endpoints, then show or auto-submit a high-confidence Oracle proposal before dispute/final review."
     },
     {
       title: "Policy controls",
@@ -2334,10 +2355,10 @@ function LandingPage() {
   const settlementSteps = [
     "Trading closes at the published UTC time",
     "Resolution opens only after the rule's event timestamp",
-    "Resolver requests or views Aura's YES/NO suggestion and confidence",
+    "Resolver or authority reviews Aura and Oracle suggestions with confidence",
     "Resolution actions show a settlement report with AI choice, creator proposal, dispute/review state, pools, and timelines",
-    "Resolver can apply the suggestion or propose a different result",
-    "Owner receives an alert when resolver and AI disagree",
+    "Creator, authority, or Circle Agent Wallet signer can submit the first onchain proposal when permitted",
+    "Owner receives an alert when the proposed result needs extra review",
     "Dispute window stays open",
     "Disputes are routed to owner/resolution authority review",
     "Stale disputes can be canceled to refund users",
@@ -2351,11 +2372,11 @@ function LandingPage() {
     "The app checks selected-token balance and allowance before create, stake, or dispute transactions",
     "Aura Agent drafts clearer markets, checks similar questions, and prepares rules with source links",
     "Oracle proposal checks objective data sources such as Binance, Yahoo chart data, and health/status endpoints without spending AI quota",
-    "Objective oracle automation can auto-submit the first onchain proposal for high-confidence markets while keeping dispute and owner review open",
+    "Objective oracle automation can auto-submit the first onchain proposal through the configured Circle Agent Wallet while keeping dispute and owner review open",
     "After the rule timestamp, Aura displays a suggested outcome and confidence in Resolution actions",
     "A saved AI receipt can be viewed without running a new AI request; Ask or Refresh requests a new review",
     "The settlement report explains what AI suggested, what the resolver proposed, whether a dispute exists, and what the final reviewer should do next",
-    "Resolver decisions that differ from Aura and user disputes are flagged for owner/authority review",
+    "Resolver, authority, or agent-signed decisions that differ from Aura and user disputes are flagged for owner/authority review",
     "Owner wallets get a private dashboard for reporting, user activity, protocol fees, and fee withdrawal",
     "Aura analysis remains off-chain; the contract anchors source/rule terms, evidence hashes, and receipt hashes in wallet-signed proposal actions",
     "Wallet actions still sign directly against the Arc contract, with Arcscan as the verification layer"
@@ -2382,15 +2403,15 @@ function LandingPage() {
       text: "Oracle proposals use deterministic source checks from the indexer, so they do not consume Gemini/OpenAI quota like Aura Agent reviews."
     },
     {
-      title: "Wallet-signed settlement",
-      text: "Oracle output can become the first onchain proposal when enabled, but resolver, authority, dispute, and finalization actions still require contract transactions."
+      title: "Circle Agent proposal signer",
+      text: "When automation is enabled, a configured Circle Agent Wallet can submit high-confidence Oracle proposals on Arc while finalization still follows the contract's review windows."
     }
   ];
   const roadmapItems = [
     "Add websocket or event streaming for absolute realtime odds and cross-user updates",
     "Harden AI receipt review with better evidence policy, audit logs, and operator dashboards",
     "Persist social identity, comments, follows, evidence, and notifications beyond local browser storage",
-    "Configure an oracle or committee authority after its evidence and operating policy are ready"
+    "Expand oracle adapters, committee policies, and Circle Agent Wallet operations after evidence policy is hardened"
   ];
   const nextTheme = landingTheme === "dark" ? "light" : "dark";
   const heroMarketCount = landingHealth?.marketCount ?? landingStats?.totalMarkets ?? 0;
@@ -2529,7 +2550,7 @@ function LandingPage() {
           <p>
             Trade YES/NO markets with Arc testnet stablecoins while the live AuraPredict indexer keeps market
             history, volume, participants, leaderboards, comments, evidence, AI resolution receipts, oracle proposals,
-            and profile reputation fast enough for public forecasting.
+            Circle Agent Wallet proposal status, and profile reputation fast enough for public forecasting.
           </p>
           <div className="landing-hero-ledger" aria-label="AuraPredict live indexer metrics">
             <div>
@@ -2568,6 +2589,7 @@ function LandingPage() {
             </span>
             <span>{updatedText}</span>
             <span>{pendingMarketsText} pending resolution</span>
+            <span>Circle Agent Wallet authority ready</span>
           </div>
         </div>
         <aside className="landing-network-panel" aria-label="Live AuraPredict network metrics">
@@ -2611,7 +2633,7 @@ function LandingPage() {
             The app keeps the trading surface simple while making evidence, profiles, and leaderboard
             performance visible enough for social forecasting. AuraPredict combines onchain YES/NO
             staking, an indexer-backed data layer, AI-assisted market quality checks, AI resolution
-            receipts, and objective oracle proposals. The current contract is deployed on Arc Testnet with onchain source/rule terms, structured rule metadata, resolution timing, configurable settlement assets, signed-Aura hooks, and authority/oracle controls.
+            receipts, objective oracle proposals, and Circle Agent Wallet signing for eligible authority/oracle markets. The current contract is deployed on Arc Testnet with onchain source/rule terms, structured rule metadata, resolution timing, configurable settlement assets, signed-Aura hooks, and authority/oracle controls.
           </p>
         </div>
         <div className="landing-feature-grid">
@@ -2633,8 +2655,9 @@ function LandingPage() {
             AuraPredict now separates two kinds of help during resolution. Aura Agent is used for reasoning-heavy
             questions and evidence review. Oracle proposal v1 is used when the market can be checked directly against
             objective data sources. It gives reviewers a YES, NO, Cancel, or manual-review signal before they sign a
-            contract action. For new markets, the same structured source rule is shared by Aura, Oracle, the resolver,
-            and the final reviewer.
+            contract action. When auto-propose is enabled and confidence passes the policy threshold, the configured
+            Circle Agent Wallet can submit that first proposal onchain. For new markets, the same structured source rule
+            is shared by Aura, Oracle, the resolver, and the final reviewer.
           </p>
         </div>
         <div className="landing-feature-grid">
@@ -2650,8 +2673,8 @@ function LandingPage() {
           <strong>Settlement boundary</strong>
           <p>
             Oracle proposal v1 does not move funds by itself. The contract still enforces resolution time,
-            review/dispute windows, and finalization. The proposal simply gives the signer a clearer source-based
-            report before choosing YES, NO, or Cancel.
+            review/dispute windows, and finalization. The proposal simply gives the signer, including the Circle Agent
+            Wallet signer when configured, a clearer source-based report before choosing YES, NO, or Cancel.
           </p>
         </div>
       </section>
@@ -2686,8 +2709,8 @@ function LandingPage() {
             A market starts as a clear YES/NO question. Users stake based on their conviction.
             Creation now requires a primary resolution source and an explicit resolution rule.
             After the event timestamp in the resolution rule has passed, the resolver opens the
-            market to request or view Aura's visible YES/NO suggestion and confidence. The creator
-            or configured authority then proposes the result through a wallet-signed contract action,
+            market to request or view Aura and Oracle suggestions with confidence. The creator,
+            configured authority, or Circle Agent Wallet signer then proposes the result through a contract action.
             Resolution actions summarize AI choice, creator proposal, dispute status, pools, and deadlines
             before any final reviewer action. Users can dispute during the window, and winners claim directly after finalization.
           </p>
@@ -2712,7 +2735,7 @@ function LandingPage() {
           <p>
             AuraPredict is live as an Arc Testnet MVP with its public indexer hosted at api.aurapredict.xyz. The current product
             proves market creation, staking, dispute-aware settlement, profiles, comments, evidence,
-            AI resolution receipts, live stats, notifications, and public reputation while wallet
+            AI resolution receipts, objective Oracle automation, Circle Agent Wallet proposal signing, live stats, notifications, and public reputation while wallet
             actions remain fully onchain. Production reads the active Arc Testnet contract through the AuraPredict indexer and wallet transactions remain verifiable on Arcscan.
           </p>
           <div className="landing-docs-actions">
@@ -2744,10 +2767,10 @@ function LandingPage() {
           </article>
           <article className="docs-card">
             <span className="docs-label">Resolution model</span>
-            <h3>AI assisted, contract settled</h3>
+            <h3>AI and Oracle assisted, contract settled</h3>
             <p>
-              Aura displays a suggested outcome with confidence after the rule timestamp, but the
-              resolver or configured authority still signs the contract proposal. The settlement report
+              Aura displays a suggested outcome with confidence after the rule timestamp, Oracle checks objective sources,
+              and a configured Circle Agent Wallet can submit eligible high-confidence proposals. The settlement report
               shows AI choice, proposed result, dispute status, and final review guidance before users reach finalization.
             </p>
           </article>
@@ -2834,7 +2857,7 @@ function LandingPage() {
           </article>
           <article>
             <span>Settlement</span>
-            <strong>AI receipts can support the result, but finalized outcomes still unlock payouts through the contract.</strong>
+            <strong>AI receipts and Oracle proposals can support the result, but finalized outcomes still unlock payouts through the contract.</strong>
           </article>
           <article>
             <span>Settlement report</span>
@@ -2842,7 +2865,7 @@ function LandingPage() {
           </article>
           <article>
             <span>Oracle proposal</span>
-            <strong>Objective adapters can fetch crypto price, macro chart, and health/status API data, then display YES/NO/Cancel guidance without spending AI quota.</strong>
+            <strong>Objective adapters can fetch crypto price, macro chart, and health/status API data, then display or auto-submit YES/NO/Cancel guidance without spending AI quota.</strong>
           </article>
           <article>
             <span>AI resolution</span>
@@ -2858,7 +2881,7 @@ function LandingPage() {
           </article>
           <article>
             <span>Oracle path</span>
-            <strong>The contract includes approved adapter and signed-Aura hooks so future oracle or committee markets do not require another core migration.</strong>
+            <strong>Circle Agent Wallet signing is now supported by the indexer; the contract also includes approved adapter and signed-Aura hooks for future oracle or committee markets.</strong>
           </article>
           <article>
             <span>Deadline outcomes</span>
@@ -2891,9 +2914,9 @@ function LandingPage() {
             <span className="docs-label">Roadmap</span>
             <h3>Path toward a production-grade prediction market</h3>
             <p>
-              AuraPredict now has a live public indexer, AI market drafting, duplicate-risk checks, comments,
+            AuraPredict now has a live public indexer, AI market drafting, duplicate-risk checks, comments,
               evidence fields, AI resolution receipts, profile reputation, and leaderboard metrics. The remaining
-              gap is production-grade realtime streaming, durable social data, and stronger oracle-backed settlement.
+              gap is production-grade realtime streaming, durable social data, and broader oracle-backed settlement coverage.
             </p>
           </div>
           <div className="docs-roadmap">
@@ -2910,8 +2933,8 @@ function LandingPage() {
           <strong>Important note</strong>
           <p>
             AuraPredict is currently a testnet dapp. It is not financial advice and the current market
-            resolution flow uses AI as an off-chain decision aid, not a trustless oracle. The safest
-            near-term design is AI receipt generation plus human proposal, evidence, and user dispute.
+            resolution flow uses AI and source-based Oracle checks as decision aids, not as a trustless oracle.
+            Circle Agent Wallet proposals still follow contract timing, dispute, review, and finalization rules.
           </p>
         </div>
       </section>
@@ -8494,7 +8517,7 @@ export default function App() {
                   </div>
                   <div>
                     <span>Proposal grace</span>
-                    <strong>{durationText(selectedProposalGraceSeconds)} · cancel after {closeDate(selectedProposalGraceDeadline)}</strong>
+                    <strong>{durationText(selectedProposalGraceSeconds)} - cancel after {closeDate(selectedProposalGraceDeadline)}</strong>
                   </div>
                   <div>
                     <span>Dispute window</span>
@@ -8697,6 +8720,9 @@ export default function App() {
               <button onClick={() => refreshWalletBalance()} type="button">
                 {formatMarketAmount(selectedMarketBalance, selectedMarket)} {marketSymbol(selectedMarket)}
               </button>
+            </div>
+            <div className="trade-fund-row">
+              <FundOnArcActions compact targetSymbol={marketSymbol(selectedMarket)} />
             </div>
             {selectedSwapPair && (
               <section className="market-swap-panel">
@@ -9608,9 +9634,7 @@ export default function App() {
                         Refresh
                       </button>
                     </div>
-                    <a className="wallet-faucet-link" href={ARC_FAUCET_URL} target="_blank" rel="noreferrer">
-                      Faucet
-                    </a>
+                    <FundOnArcActions compact targetSymbol={defaultSettlementSymbol} />
                     <button onClick={openProfile}>View Profile</button>
                     <button onClick={disconnectWallet}>Disconnect</button>
                   </div>
@@ -9692,7 +9716,7 @@ export default function App() {
             </h1>
             <p>
               Transparent outcomes, verifiable data, smarter markets.
-              Create YES/NO markets with Aura-assisted evidence review and objective oracle checks.
+              Create YES/NO markets with Aura-assisted evidence review, objective oracle checks, and Circle Agent Wallet proposal support.
             </p>
             <div className="hero-actions">
               <button className="button-link hero-launch-button" onClick={account ? openCreateMarket : openWalletModal} disabled={connecting}>
@@ -9733,14 +9757,14 @@ export default function App() {
                         type="button"
                       >
                         <small>
-                          #{market.id} · {market.category || "Other"} · {market.traderCount} traders
+                          #{market.id} - {market.category || "Other"} - {market.traderCount} traders
                         </small>
                         <strong>{market.question}</strong>
                         <div className="hero-hot-meter" aria-hidden="true">
                           <span style={{ width: `${Math.max(2, Math.min(98, hotYesPercent))}%` }} />
                         </div>
                         <small>
-                          YES {hotYesPercent.toFixed(0)}% · {formatMarketAmount(hotVolume, market)} {marketSymbol(market)}
+                          YES {hotYesPercent.toFixed(0)}% - {formatMarketAmount(hotVolume, market)} {marketSymbol(market)}
                         </small>
                       </button>
                     );
@@ -10362,6 +10386,7 @@ export default function App() {
                     <strong>USDC {formatUsdc(walletUsdcBalance, defaultSettlementDecimals)}</strong>
                     <strong>EURC {formatUsdc(walletEurcBalance, defaultSettlementDecimals)}</strong>
                     <small>Arc Testnet wallet balance</small>
+                    <FundOnArcActions compact targetSymbol={defaultSettlementSymbol} />
                     {profileSwapPair && (
                       <div className="profile-swap-panel">
                         <div className="profile-swap-title">
@@ -11565,6 +11590,13 @@ export default function App() {
                   ? ` Creating a market costs ${formatUsdc(creatorBond + marketCreationFee, defaultSettlementDecimals)} ${defaultSettlementSymbol} total: ${formatUsdc(creatorBond, defaultSettlementDecimals)} bond plus ${formatUsdc(marketCreationFee, defaultSettlementDecimals)} creation fee.`
                   : ` Creating a market locks a ${formatUsdc(creatorBond, defaultSettlementDecimals)} ${defaultSettlementSymbol} creator bond until the result is finalized.`}
             </div>
+            <div className="create-fund-panel">
+              <div>
+                <strong>Need creator bond or fees?</strong>
+                <small>Fund your Arc wallet before launching, then refresh your balance.</small>
+              </div>
+              <FundOnArcActions compact targetSymbol={defaultSettlementSymbol} />
+            </div>
             {aiMarketDraft?.duplicateRisk && aiMarketDraft.duplicateRisk !== "LOW" && (
               <label className="duplicate-acknowledge">
                 <input
@@ -11742,6 +11774,14 @@ export default function App() {
                 <div>
                   <strong>No password for this dapp</strong>
                   <p>AuraPredict never receives your private key. Your wallet asks before every transaction.</p>
+                </div>
+              </div>
+              <div className="wallet-info-item">
+                <span className="wallet-info-icon">3</span>
+                <div>
+                  <strong>Fund on Arc</strong>
+                  <p>Use Circle Faucet for testnet funds, then swap stablecoins inside AuraPredict when a route is available.</p>
+                  <FundOnArcActions compact targetSymbol={defaultSettlementSymbol} />
                 </div>
               </div>
               <button className="secondary" type="button" onClick={() => window.open("https://metamask.io", "_blank")}>

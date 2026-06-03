@@ -17,7 +17,7 @@ Tinh nang hien tai:
 - Thanh activity ticker doc event `BetPlaced` de hien nguoi choi vua stake YES/NO.
 - Frontend uu tien doc market, stats, leaderboard va history tu AuraPredict Indexer neu `VITE_AURA_INDEXER_URL` kha dung; neu khong co thi fallback ve Arc RPC nhu cu.
 - Aura Agent giup draft market va goi y ket qua; thao tac de xuat/finalize van la giao dich onchain duoc ky boi vi co tham quyen.
-- Oracle proposal v1 chay trong indexer de tu kiem tra cac market khach quan nhu gia crypto, macro chart va health/status API ma khong ton quota AI; ket qua chi la goi y cho resolver/owner, khong tu chot tien.
+- Oracle proposal v1 chay trong indexer de tu kiem tra cac market khach quan nhu gia crypto, macro chart va health/status API ma khong ton quota AI; khi confidence du nguong va signer duoc cau hinh, indexer co the gui proposal onchain qua Circle Agent Wallet nhung khong tu finalize tien.
 - Contract V4 tach `closeTime` cua giao dich voi `resolutionTime` cua su kien; contract khong cho cong bo ket qua truoc `resolutionTime`.
 - V4 luu primary source, fallback source va resolution rule onchain de dieu khoan market khong bi phu thuoc vao frontend/indexer. Frontend moi con gan them mot dong metadata `AURA_RULE_JSON` vao rule de Aura Agent, Oracle, creator va final reviewer doc cung mot bo dieu kien co cau truc.
 - Source router trong indexer quet primary/fallback/inferred sources truoc khi Aura Agent review cac market dang deadline nhu blog, news, announce, fixtures hoac schedule. Ket qua quet nguon duoc dua vao AI nhu evidence ro rang thay vi de model tu doan theo tri nho.
@@ -25,7 +25,7 @@ Tinh nang hien tai:
 - V4 cho phep settlement asset 6 decimals cau hinh theo market, vi du USDC hoac EURC, va quan ly phi theo tung token; khong quy doi FX giua cac token.
 - Trong trang market dang giao dich hoac trang Profile, nguoi dung co the lay quote swap `USDC <-> EURC` tren Arc Testnet neu can dung token settlement cua market truoc khi stake. Frontend thu Circle App Kit truoc neu co `VITE_CIRCLE_APP_KIT_KEY`, sau do fallback sang LI.FI neu route native khong kha dung. UI hien so nhan toi thieu, cho chon price tolerance va yeu cau quote moi neu quote cu het han de giam swap revert tren thanh khoan testnet. Swap khong thay doi token tra thuong cua market.
 - Card market tren trang danh sach va Profile chi hien tom tat: category, trang thai, cau hoi, YES/NO %, pool amount, market id va volume. Nguoi dung click card de vao trang market moi stake, xem Aura/Oracle, dispute, finalize hoac claim.
-- V4 co bon huong resolution: creator + dispute review, creator + required authority review, authority/oracle only, va adapter-only cho oracle/committee sau nay.
+- V4 co bon huong resolution: creator + dispute review, creator + required authority review, authority/oracle only, va adapter-only cho oracle/committee sau nay. Production authority hien co the van hanh bang Circle Agent Wallet cho cac market moi.
 - Proposal V4 co the dung Aura signed attestation neu cau hinh signer. Neu chua bat signer hoac creator di nguoc Aura, contract day proposal vao authority review.
 - V4 co policy gate co ban: tam dung tao/cuoc moi, gioi han vi duoc tao market va chan account mo position moi; resolve, refund va claim cua market dang ton tai van hoat dong.
 - Market da qua resolution time nhung khong ai propose co the cancel sau grace period de tra bond/refund, tranh ket tien vo han.
@@ -43,6 +43,7 @@ Oracle proposal v1 ho tro:
 - Liquidity rule: neu YES pool hoac NO pool bang 0, Oracle goi y Cancel/Refund thay vi chon YES/NO.
 - Cac market ngoai adapter, vi du tin tuc phuc tap hoac sports, van di qua Aura Agent/evidence/authority review.
 - Khi market co metadata `AURA_RULE_JSON`, Oracle uu tien asset, comparator, target, source va resolution time trong metadata thay vi doan text tu do. Dieu nay giup giam tinh trang AI/Oracle/creator hieu khac nhau cung mot cau hoi.
+- Khi `AURA_ORACLE_AUTO_PROPOSE=1`, confidence dat nguong va vi signer duoc phep theo resolution mode, Oracle co the submit proposal dau tien onchain. Dispute window, authority review va finalization van do contract xu ly.
 
 ## Arc Testnet
 
@@ -145,9 +146,11 @@ VITE_AURA_INDEXER_URL=https://api.aurapredict.xyz
 VITE_PREDICTION_MARKET_START_BLOCK=44083985
 AURA_ORACLE_AUTO_RUN=1
 AURA_ORACLE_HTTP_TIMEOUT_MS=8000
-AURA_ORACLE_AUTO_PROPOSE=0
+AURA_ORACLE_AUTO_PROPOSE=1
 AURA_ORACLE_AUTO_PROPOSE_MIN_CONFIDENCE=78
-AURA_RESOLVER_SIGNER_MODE=private-key
+AURA_RESOLVER_SIGNER_MODE=circle-cli
+AURA_CIRCLE_AGENT_WALLET_ADDRESS=0x035e03f8c0a9d22a24b8212c466895a210645dc6
+AURA_CIRCLE_AGENT_CHAIN=ARC-TESTNET
 ```
 
 Indexer chay bang `pm2` trong `/opt/aurapredict`, doc bien moi truong tu `/opt/aurapredict/.env`, va duoc Nginx proxy tu `api.aurapredict.xyz` ve `127.0.0.1:8787`. Sau khi sua `.env` hoac cap nhat code indexer tren VPS, restart:
@@ -165,7 +168,7 @@ curl https://api.aurapredict.xyz/health
 - Contract hien la ban MVP testnet, chua audit.
 - V4 da mo duong cho authority/oracle/committee va adapter-only market sau nay, nhung chua thay the quy trinh compliance, audit, multisig va giam sat production.
 - Oracle phase 2 co the tu gui proposal onchain cho market khach quan nhu BTC/ETH price, gold/DXY, health/status API khi `AURA_ORACLE_AUTO_PROPOSE=1` va confidence du nguong. No khong tu finalize market co nguoi choi; dispute window va owner/authority review van giu nguyen.
-- De van hanh theo Circle Agent Wallet, set `AURA_RESOLVER_SIGNER_MODE=circle-cli`, `AURA_CIRCLE_AGENT_WALLET_ADDRESS=0x...`, dang nhap Circle CLI tren VPS, va dam bao agent wallet la resolver/authority/adapter cua market.
+- De van hanh theo Circle Agent Wallet, set `AURA_RESOLVER_SIGNER_MODE=circle-cli`, `AURA_CIRCLE_AGENT_WALLET_ADDRESS=0x...`, dang nhap Circle CLI tren VPS, va dam bao agent wallet la resolver/authority/adapter cua market. Flow khuyen nghi cho market Oracle la `Authority / oracle only`, nhung authority cung co the propose trong cac mode creator-led neu chua co proposal.
 - Neu mo ca USDC va EURC, moi market chi settle trong token da chon; dashboard va `/api/stats` hien volume/liquidity rieng theo tung token, khong gop thanh mot tong FX.
 - Nut swap trong trading panel va Profile chi la tien ich cho vi nguoi dung doi USDC/EURC truoc giao dich; route, so nhan uoc tinh va muc nhan toi thieu uu tien Circle App Kit khi co cau hinh, roi fallback LI.FI. Giao dich swap duoc ky trong vi. Quote cu het han sau thoi gian ngan va price tolerance do nguoi dung chon vi pool testnet co the bien dong nhanh.
 - Production dang dung deployment V4 da pin trong source; market V3 cu khong tu di chuyen sang contract moi nhung co the truy cap qua `?deployment=v3` de settle/claim.

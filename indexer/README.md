@@ -67,7 +67,7 @@ V4 settlement assets are restricted to 6-decimal stablecoins. If more than one a
 
 ## Objective Oracle Proposals
 
-Oracle proposal v1 is deterministic offchain assistance for markets with objective data sources. It does not spend AI quota. By default it only writes a saved suggestion for the settlement report. In phase 2, the indexer can also auto-submit the first onchain proposal when explicitly enabled, but it still does not auto-finalize funded markets.
+Oracle proposal v1 is deterministic offchain assistance for markets with objective data sources. It does not spend AI quota. By default it only writes a saved suggestion for the settlement report. When explicitly enabled, the indexer can also auto-submit the first onchain proposal through either a private-key resolver or a Circle Agent Wallet signer, but it still does not auto-finalize funded markets.
 
 New V4 markets can include an `AURA_RULE_JSON` metadata line inside the onchain resolution rule. The indexer strips that line for human display, but uses it for adapter matching: asset, comparator, target, primary source, fallback source, close time, and resolution time. This keeps Aura Agent, Oracle proposals, resolver actions, and final-review reporting aligned on the same source rule.
 
@@ -97,7 +97,7 @@ AURA_RESOLVER_SIGNER_MODE=private-key
 AURA_RESOLVER_PRIVATE_KEY=0x...
 ```
 
-Auto-propose only runs after `resolutionTime`, only when no result has already been proposed, and only when the resolver key is allowed by that market's resolution mode. YES/NO auto-propose requires both YES and NO pools to be funded. One-sided markets can only auto-propose Cancel through the liquidity rule. The normal dispute window, owner review, and finalization buttons remain the source of final settlement.
+Auto-propose only runs after `resolutionTime`, only when no result has already been proposed, and only when the configured signer is allowed by that market's resolution mode. YES/NO auto-propose requires both YES and NO pools to be funded. One-sided markets can only auto-propose Cancel through the liquidity rule. The normal dispute window, owner review, and finalization buttons remain the source of final settlement.
 
 Circle Agent Wallet signer mode:
 
@@ -110,7 +110,7 @@ AURA_CIRCLE_EXECUTE_TIMEOUT_MS=60000
 AURA_CIRCLE_WALLET_ADDRESS_FLAG=--address
 ```
 
-In this mode the indexer sends proposal transactions through `circle wallet execute` instead of loading `AURA_RESOLVER_PRIVATE_KEY`. The Circle wallet still must be the market resolver, market authority, contract owner, or configured adapter for the market's resolution mode. The VPS session must already be authenticated with Circle CLI, usually with `circle wallet login your@email --testnet`, and production shells should set `CIRCLE_ACCEPT_TERMS=1` so the CLI does not pause on first use.
+In this mode the indexer sends proposal transactions through `circle wallet execute` instead of loading `AURA_RESOLVER_PRIVATE_KEY`. The Circle wallet still must be the market resolver, market authority, contract owner, or configured adapter for the market's resolution mode. For new Oracle-led markets, `Authority / oracle only` is the cleanest flow because the creator cannot front-run the authority path. Creator-led modes can still allow the authority signer to propose when no result has been proposed yet. The VPS session must already be authenticated with Circle CLI, usually with `circle wallet login your@email --testnet`, and production shells should set `CIRCLE_ACCEPT_TERMS=1` so the CLI does not pause on first use.
 
 Manual API proposal is also gated:
 
