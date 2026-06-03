@@ -1580,7 +1580,8 @@ h3 {
   min-width: 0;
 }
 
-.fund-on-arc-actions a {
+.fund-on-arc-actions a,
+.fund-on-arc-actions button {
   align-items: center;
   border-radius: 8px;
   display: inline-flex;
@@ -1591,6 +1592,11 @@ h3 {
   padding: 0 10px;
   text-decoration: none;
   white-space: nowrap;
+}
+
+.fund-on-arc-actions button {
+  box-shadow: none;
+  cursor: pointer;
 }
 
 .fund-on-arc-primary {
@@ -1606,7 +1612,8 @@ h3 {
   color: #08768a;
 }
 
-.fund-on-arc-actions a:hover {
+.fund-on-arc-actions a:hover,
+.fund-on-arc-actions button:hover:not(:disabled) {
   transform: translateY(-1px);
 }
 
@@ -1622,7 +1629,8 @@ h3 {
   gap: 6px;
 }
 
-.fund-on-arc-actions.compact a {
+.fund-on-arc-actions.compact a,
+.fund-on-arc-actions.compact button {
   flex: 1 1 120px;
   min-height: 36px;
 }
@@ -4347,6 +4355,171 @@ textarea {
   justify-content: flex-end;
 }
 
+.unified-balance-modal {
+  display: grid;
+  gap: 14px;
+  padding: 20px;
+  width: min(920px, 100%);
+}
+
+.unified-balance-modal .modal-header p {
+  color: #667085;
+  font-size: 0.9rem;
+  line-height: 1.45;
+  margin: 6px 0 0;
+  max-width: 640px;
+}
+
+.unified-balance-status-row {
+  align-items: center;
+  background: #f2fbff;
+  border: 1px solid #c8edf6;
+  border-radius: 8px;
+  color: #344054;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  justify-content: space-between;
+  min-height: 42px;
+  padding: 10px 12px;
+}
+
+.unified-balance-status-row span,
+.unified-balance-status-row strong {
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.unified-balance-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(280px, 0.9fr) minmax(300px, 1.1fr);
+}
+
+.unified-balance-card {
+  background: #ffffff;
+  border: 1px solid #dfe6f1;
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+}
+
+.unified-balance-card > span,
+.unified-balance-card label {
+  color: #667085;
+  font-size: 0.75rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.unified-balance-card label {
+  display: grid;
+  gap: 6px;
+}
+
+.unified-balance-card input,
+.unified-balance-card select {
+  min-height: 42px;
+}
+
+.unified-balance-action-grid {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 1fr 1fr;
+}
+
+.unified-balance-action-grid button {
+  min-height: 40px;
+  padding: 0 10px;
+}
+
+.unified-balance-action-grid .unified-balance-primary {
+  grid-column: 1 / -1;
+}
+
+.unified-balance-controls small,
+.unified-balance-note {
+  color: #667085;
+  font-size: 0.78rem;
+  font-weight: 740;
+  line-height: 1.45;
+}
+
+.unified-balance-summary > strong {
+  color: #0f172a;
+  font-size: 1.55rem;
+  line-height: 1.1;
+}
+
+.unified-balance-mini-grid {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 1fr 1fr;
+}
+
+.unified-balance-mini-grid div,
+.unified-balance-breakdown div,
+.unified-balance-fees div,
+.unified-balance-lasttx {
+  background: #f8fafc;
+  border: 1px solid #e5ebf4;
+  border-radius: 8px;
+  display: grid;
+  gap: 4px;
+  padding: 10px;
+}
+
+.unified-balance-mini-grid span,
+.unified-balance-breakdown span,
+.unified-balance-fees span,
+.unified-balance-lasttx span {
+  color: #667085;
+  font-size: 0.72rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.unified-balance-mini-grid strong,
+.unified-balance-breakdown strong,
+.unified-balance-fees strong,
+.unified-balance-lasttx strong {
+  color: #172033;
+  font-size: 0.9rem;
+}
+
+.unified-balance-mini-grid small,
+.unified-balance-breakdown small,
+.unified-balance-fees small,
+.unified-balance-lasttx small,
+.unified-balance-events small {
+  color: #667085;
+  font-size: 0.76rem;
+  font-weight: 760;
+  line-height: 1.4;
+}
+
+.unified-balance-breakdown {
+  display: grid;
+  gap: 8px;
+}
+
+.unified-balance-fees,
+.unified-balance-events {
+  background: #f8fbff;
+}
+
+.unified-balance-lasttx a {
+  color: #08768a;
+  font-size: 0.78rem;
+  font-weight: 900;
+  text-decoration: none;
+}
+
+.unified-balance-note {
+  display: block;
+}
+
 .wallet-connect-modal {
   display: grid;
   grid-template-columns: minmax(280px, 360px) minmax(280px, 1fr);
@@ -6771,6 +6944,57 @@ label {
   color: #9aa7bd;
 }
 
+[data-theme="dark"] .unified-balance-modal .modal-header p,
+[data-theme="dark"] .unified-balance-controls small,
+[data-theme="dark"] .unified-balance-note,
+[data-theme="dark"] .unified-balance-mini-grid small,
+[data-theme="dark"] .unified-balance-breakdown small,
+[data-theme="dark"] .unified-balance-fees small,
+[data-theme="dark"] .unified-balance-lasttx small,
+[data-theme="dark"] .unified-balance-events small {
+  color: #9aa7bd;
+}
+
+[data-theme="dark"] .unified-balance-status-row {
+  background: rgba(24, 215, 255, 0.08);
+  border-color: rgba(24, 215, 255, 0.22);
+  color: #d8e1f0;
+}
+
+[data-theme="dark"] .unified-balance-card {
+  background: #0b1020;
+  border-color: #26334a;
+}
+
+[data-theme="dark"] .unified-balance-mini-grid div,
+[data-theme="dark"] .unified-balance-breakdown div,
+[data-theme="dark"] .unified-balance-fees div,
+[data-theme="dark"] .unified-balance-lasttx {
+  background: #090d18;
+  border-color: #26334a;
+}
+
+[data-theme="dark"] .unified-balance-summary > strong,
+[data-theme="dark"] .unified-balance-mini-grid strong,
+[data-theme="dark"] .unified-balance-breakdown strong,
+[data-theme="dark"] .unified-balance-fees strong,
+[data-theme="dark"] .unified-balance-lasttx strong {
+  color: #f7f9ff;
+}
+
+[data-theme="dark"] .unified-balance-card > span,
+[data-theme="dark"] .unified-balance-card label,
+[data-theme="dark"] .unified-balance-mini-grid span,
+[data-theme="dark"] .unified-balance-breakdown span,
+[data-theme="dark"] .unified-balance-fees span,
+[data-theme="dark"] .unified-balance-lasttx span {
+  color: #71809b;
+}
+
+[data-theme="dark"] .unified-balance-lasttx a {
+  color: #18d7ff;
+}
+
 [data-theme="dark"] .secondary:hover:not(:disabled),
 [data-theme="dark"] .wallet-panel a:hover,
 [data-theme="dark"] .button-link:hover {
@@ -9136,6 +9360,26 @@ label {
     max-height: calc(100dvh - 12px);
     overflow: auto;
     width: 100%;
+  }
+
+  .unified-balance-modal {
+    border-radius: 8px 8px 0 0;
+    max-height: calc(100dvh - 12px);
+    padding: 16px;
+    width: 100%;
+  }
+
+  .unified-balance-grid,
+  .unified-balance-mini-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .unified-balance-action-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .unified-balance-action-grid .unified-balance-primary {
+    grid-column: auto;
   }
 
   .modal-backdrop {

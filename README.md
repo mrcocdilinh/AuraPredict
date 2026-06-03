@@ -23,6 +23,7 @@ Tinh nang hien tai:
 - Source router trong indexer quet primary/fallback/inferred sources truoc khi Aura Agent review cac market dang deadline nhu blog, news, announce, fixtures hoac schedule. Ket qua quet nguon duoc dua vao AI nhu evidence ro rang thay vi de model tu doan theo tri nho.
 - V4 snapshot dieu khoan phi, creator bond, dispute bond, dispute window, min stake va proposal grace period theo tung market de thay doi cau hinh sau nay khong lam doi market cu.
 - V4 cho phep settlement asset 6 decimals cau hinh theo market, vi du USDC hoac EURC, va quan ly phi theo tung token; khong quy doi FX giua cac token.
+- Trong wallet menu, trang market dang giao dich, trang Profile va form tao market, nguoi dung co the mo Circle Unified Balance de deposit testnet USDC tu Base Sepolia, Arbitrum Sepolia hoac Ethereum Sepolia vao Circle Gateway, roi spend/mint USDC sang Arc Testnet. Flow nay chi fund Arc USDC, khong doi settlement token cua market.
 - Trong trang market dang giao dich hoac trang Profile, nguoi dung co the lay quote swap `USDC <-> EURC` tren Arc Testnet neu can dung token settlement cua market truoc khi stake. Frontend thu Circle App Kit truoc neu co `VITE_CIRCLE_APP_KIT_KEY`, sau do fallback sang LI.FI neu route native khong kha dung. UI hien so nhan toi thieu, cho chon price tolerance va yeu cau quote moi neu quote cu het han de giam swap revert tren thanh khoan testnet. Swap khong thay doi token tra thuong cua market.
 - Card market tren trang danh sach va Profile chi hien tom tat: category, trang thai, cau hoi, YES/NO %, pool amount, market id va volume. Nguoi dung click card de vao trang market moi stake, xem Aura/Oracle, dispute, finalize hoac claim.
 - V4 co bon huong resolution: creator + dispute review, creator + required authority review, authority/oracle only, va adapter-only cho oracle/committee sau nay. Production authority hien co the van hanh bang Circle Agent Wallet cho cac market moi.
@@ -84,7 +85,7 @@ VITE_PREDICTION_MARKET_ADDRESS=0x3c853AE2eC705B453c9657569b6335e762631536
 VITE_ARC_EURC_TOKEN_ADDRESS=0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a
 VITE_AURA_INDEXER_URL=https://api.aurapredict.xyz
 VITE_WALLETCONNECT_PROJECT_ID=...
-VITE_CIRCLE_APP_KIT_KEY=... # optional, enables Circle App Kit swap before LI.FI fallback
+VITE_CIRCLE_APP_KIT_KEY=... # optional, enables Circle App Kit swap before LI.FI fallback; Unified Balance uses @circle-fin/app-kit
 ```
 
 V3 archive reference:
@@ -170,5 +171,6 @@ curl https://api.aurapredict.xyz/health
 - Oracle phase 2 co the tu gui proposal onchain cho market khach quan nhu BTC/ETH price, gold/DXY, health/status API khi `AURA_ORACLE_AUTO_PROPOSE=1` va confidence du nguong. No khong tu finalize market co nguoi choi; dispute window va owner/authority review van giu nguyen.
 - De van hanh theo Circle Agent Wallet, set `AURA_RESOLVER_SIGNER_MODE=circle-cli`, `AURA_CIRCLE_AGENT_WALLET_ADDRESS=0x...`, dang nhap Circle CLI tren VPS, va dam bao agent wallet la resolver/authority/adapter cua market. Flow khuyen nghi cho market Oracle la `Authority / oracle only`, nhung authority cung co the propose trong cac mode creator-led neu chua co proposal.
 - Neu mo ca USDC va EURC, moi market chi settle trong token da chon; dashboard va `/api/stats` hien volume/liquidity rieng theo tung token, khong gop thanh mot tong FX.
+- Nut Unified Balance trong wallet/trading/profile/create la tien ich funding USDC cross-chain bang Circle Gateway: deposit vao Gateway tren chain nguon testnet, spend/mint ve Arc Testnet, va refresh so du Arc sau khi xong. No khong doi USDC sang EURC.
 - Nut swap trong trading panel va Profile chi la tien ich cho vi nguoi dung doi USDC/EURC truoc giao dich; route, so nhan uoc tinh va muc nhan toi thieu uu tien Circle App Kit khi co cau hinh, roi fallback LI.FI. Giao dich swap duoc ky trong vi. Quote cu het han sau thoi gian ngan va price tolerance do nguoi dung chon vi pool testnet co the bien dong nhanh.
 - Production dang dung deployment V4 da pin trong source; market V3 cu khong tu di chuyen sang contract moi nhung co the truy cap qua `?deployment=v3` de settle/claim.

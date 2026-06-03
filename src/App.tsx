@@ -74,10 +74,71 @@ type SwapProviderHealth = {
   circleMessage?: string;
   lifiMessage?: string;
 };
+type UnifiedBalanceSourceChainKey = "Base_Sepolia" | "Arbitrum_Sepolia" | "Ethereum_Sepolia";
+type UnifiedBalanceBusy = "idle" | "balances" | "estimate" | "deposit" | "spend" | "deposit-spend";
+type UnifiedBalanceChainBalance = {
+  chain: string;
+  confirmedBalance: string;
+  pendingBalance?: string;
+};
+type UnifiedBalanceSummary = {
+  totalConfirmedBalance: string;
+  totalPendingBalance?: string;
+  breakdown: UnifiedBalanceChainBalance[];
+};
+type UnifiedBalanceFeeLine = {
+  type: string;
+  token: string;
+  amount: string;
+  detail?: string;
+};
+type UnifiedBalanceTx = {
+  label: string;
+  chain?: string;
+  txHash?: string;
+  explorerUrl?: string;
+};
 
 const SWAP_TOLERANCE_OPTIONS = [50, 100, 300, 500] as const;
 const DEFAULT_SWAP_TOLERANCE_BPS = 300;
 const SWAP_QUOTE_MAX_AGE_MS = 30_000;
+const UNIFIED_BALANCE_SOURCE_CHAINS: Array<{
+  value: UnifiedBalanceSourceChainKey;
+  label: string;
+  chainIdHex: string;
+  chainName: string;
+  nativeCurrency: { name: string; symbol: string; decimals: number };
+  rpcUrls: string[];
+  blockExplorerUrls: string[];
+}> = [
+  {
+    value: "Base_Sepolia",
+    label: "Base Sepolia",
+    chainIdHex: "0x14a34",
+    chainName: "Base Sepolia",
+    nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
+    rpcUrls: ["https://sepolia.base.org"],
+    blockExplorerUrls: ["https://sepolia.basescan.org"]
+  },
+  {
+    value: "Arbitrum_Sepolia",
+    label: "Arbitrum Sepolia",
+    chainIdHex: "0x66eee",
+    chainName: "Arbitrum Sepolia",
+    nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
+    rpcUrls: ["https://sepolia-rollup.arbitrum.io/rpc"],
+    blockExplorerUrls: ["https://sepolia.arbiscan.io"]
+  },
+  {
+    value: "Ethereum_Sepolia",
+    label: "Ethereum Sepolia",
+    chainIdHex: "0xaa36a7",
+    chainName: "Ethereum Sepolia",
+    nativeCurrency: { name: "Sepolia Ether", symbol: "ETH", decimals: 18 },
+    rpcUrls: ["https://ethereum-sepolia-rpc.publicnode.com"],
+    blockExplorerUrls: ["https://sepolia.etherscan.io"]
+  }
+];
 const LIFI_QUOTE_ENDPOINT = "https://li.quest/v1/quote";
 const LIFI_PROBE_AMOUNTS = [1_000n, 10_000n, 100_000n, 1_000_000n, 5_000_000n, 10_000_000n];
 const AURA_RULE_JSON_PREFIX = "AURA_RULE_JSON:";
@@ -97,7 +158,15 @@ function providerHealthLabel(state: SwapProviderState) {
   return "Idle";
 }
 
-function FundOnArcActions({ compact = false, targetSymbol = "USDC" }: { compact?: boolean; targetSymbol?: string }) {
+function FundOnArcActions({
+  compact = false,
+  targetSymbol = "USDC",
+  onUnifiedBalance
+}: {
+  compact?: boolean;
+  targetSymbol?: string;
+  onUnifiedBalance?: () => void;
+}) {
   const symbol = targetSymbol || "USDC";
 
   return (
@@ -105,12 +174,18 @@ function FundOnArcActions({ compact = false, targetSymbol = "USDC" }: { compact?
       <a className="fund-on-arc-primary" href={ARC_FAUCET_URL} target="_blank" rel="noreferrer">
         Fund on Arc
       </a>
-      <a className="fund-on-arc-secondary" href={ARC_UNIFIED_BALANCE_URL} target="_blank" rel="noreferrer">
-        Unified Balance
-      </a>
+      {onUnifiedBalance ? (
+        <button className="fund-on-arc-secondary" type="button" onClick={onUnifiedBalance}>
+          Unified Balance
+        </button>
+      ) : (
+        <a className="fund-on-arc-secondary" href={ARC_UNIFIED_BALANCE_URL} target="_blank" rel="noreferrer">
+          Unified Balance
+        </a>
+      )}
       {!compact && (
         <small>
-          Need {symbol}? Claim testnet funds from Circle Faucet now, or review Arc Unified Balance for cross-app funding.
+          Need {symbol}? Claim testnet funds from Circle Faucet or move USDC from supported testnets with Arc Unified Balance.
         </small>
       )}
     </div>
@@ -1103,6 +1178,10 @@ async function createArcAppKitSwapRuntime(provider: EthereumProvider) {
   return { kit: new AppKit(), Blockchain, adapter };
 }
 
+async function createUnifiedBalanceRuntime(provider: EthereumProvider) {
+  return createArcAppKitSwapRuntime(provider);
+}
+
 async function estimateArcAppKitSwap(
   provider: EthereumProvider,
   pair: StablecoinSwapPair,
@@ -1146,6 +1225,119 @@ async function executeArcAppKitSwap(provider: EthereumProvider, pair: Stablecoin
       stopLimit: quote.minimumAmountOut
     }
   } as never);
+}
+
+function unifiedBalanceChainLabel(chain: string) {
+  if (chain === "Arc_Testnet") return "Arc Testnet";
+  const source = UNIFIED_BALANCE_SOURCE_CHAINS.find((item) => item.value === chain);
+  return source?.label ?? chain.replace(/_/g, " ");
+}
+
+function unifiedBalanceString(value: unknown, fallback = "0") {
+  if (typeof value === "string" && value.trim()) return value;
+  if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  if (typeof value === "bigint") return value.toString();
+  return fallback;
+}
+
+function formatUnifiedBalanceDecimal(value?: string) {
+  const raw = value && value.trim() ? value.trim() : "0";
+  const numeric = Number(raw);
+  if (!Number.isFinite(numeric)) return raw;
+  return new Intl.NumberFormat("en-US", {
+    minimumFractionDigits: numeric > 0 && numeric < 1 ? 4 : 0,
+    maximumFractionDigits: 6
+  }).format(numeric);
+}
+
+function hasUnifiedBalanceValue(value?: string) {
+  const numeric = Number(value || "0");
+  return Number.isFinite(numeric) && numeric > 0;
+}
+
+function normalizeUnifiedBalanceAmount(value: string) {
+  const amount = parseUsdcInput(value, ARC_NATIVE_USDC_DECIMALS);
+  if (amount <= 0n) throw new Error("Enter a USDC amount greater than 0.");
+  return formatUsdcInput(amount, ARC_NATIVE_USDC_DECIMALS);
+}
+
+function flattenUnifiedBalanceSummary(data: unknown): UnifiedBalanceSummary {
+  const record = data && typeof data === "object" ? (data as Record<string, unknown>) : {};
+  const accounts = Array.isArray(record.breakdown) ? record.breakdown : [];
+  const rows = accounts.flatMap((account) => {
+    const accountRecord = account && typeof account === "object" ? (account as Record<string, unknown>) : {};
+    const breakdown = Array.isArray(accountRecord.breakdown) ? accountRecord.breakdown : [];
+    return breakdown.map((entry) => {
+      const entryRecord = entry && typeof entry === "object" ? (entry as Record<string, unknown>) : {};
+      return {
+        chain: unifiedBalanceString(entryRecord.chain, "Unknown"),
+        confirmedBalance: unifiedBalanceString(entryRecord.confirmedBalance),
+        pendingBalance: entryRecord.pendingBalance === undefined ? undefined : unifiedBalanceString(entryRecord.pendingBalance)
+      };
+    });
+  });
+
+  return {
+    totalConfirmedBalance: unifiedBalanceString(record.totalConfirmedBalance),
+    totalPendingBalance: record.totalPendingBalance === undefined ? undefined : unifiedBalanceString(record.totalPendingBalance),
+    breakdown: rows.sort((left, right) => unifiedBalanceChainLabel(left.chain).localeCompare(unifiedBalanceChainLabel(right.chain)))
+  };
+}
+
+function flattenUnifiedBalanceFees(data: unknown): UnifiedBalanceFeeLine[] {
+  const record = data && typeof data === "object" ? (data as Record<string, unknown>) : {};
+  const fees = Array.isArray(record.fees) ? record.fees : [];
+  return fees.map((fee) => {
+    const feeRecord = fee && typeof fee === "object" ? (fee as Record<string, unknown>) : {};
+    const allocations = Array.isArray(feeRecord.allocations) ? feeRecord.allocations : [];
+    const detail = allocations
+      .map((allocation) => {
+        const allocationRecord = allocation && typeof allocation === "object" ? (allocation as Record<string, unknown>) : {};
+        const chain = unifiedBalanceString(allocationRecord.chain, "Chain");
+        const amount = unifiedBalanceString(allocationRecord.amount);
+        return `${unifiedBalanceChainLabel(chain)} ${formatUnifiedBalanceDecimal(amount)}`;
+      })
+      .filter(Boolean)
+      .join(" / ");
+    return {
+      type: unifiedBalanceString(feeRecord.type, "fee"),
+      token: unifiedBalanceString(feeRecord.token, "USDC"),
+      amount: unifiedBalanceString(feeRecord.amount),
+      detail
+    };
+  });
+}
+
+function unifiedBalanceTxFromResult(label: string, data: unknown): UnifiedBalanceTx {
+  const record = data && typeof data === "object" ? (data as Record<string, unknown>) : {};
+  return {
+    label,
+    chain: unifiedBalanceString(record.chain ?? record.destinationChain, ""),
+    txHash: unifiedBalanceString(record.txHash, ""),
+    explorerUrl: unifiedBalanceString(record.explorerUrl, "")
+  };
+}
+
+function createUnifiedBalanceSpendParams(
+  adapter: unknown,
+  blockchain: Record<string, unknown>,
+  sourceChain: UnifiedBalanceSourceChainKey,
+  amount: string,
+  recipientAddress: string
+) {
+  return {
+    from: {
+      adapter,
+      allocations: { amount, chain: sourceChain }
+    },
+    to: {
+      chain: blockchain.Arc_Testnet,
+      recipientAddress,
+      useForwarder: true
+    },
+    token: "USDC",
+    amount
+  };
 }
 
 function parseUsdcInput(value: string, decimals = ARC_NATIVE_USDC_DECIMALS) {
@@ -2297,9 +2489,9 @@ function LandingPage() {
       title: "Stablecoin settlement",
       text: "The current contract supports 6-decimal settlement assets by market, including Arc Testnet USDC and EURC, with selected-token balance checks before actions."
     },
-    {
-      title: "Stablecoin swap access",
-      text: "Wallets can request a USDC/EURC quote from a market or profile. Aura tries Circle App Kit first when configured, then falls back to LI.FI liquidity before the wallet signs."
+  {
+      title: "Arc funding and swap access",
+      text: "Wallets can fund Arc USDC through Circle Unified Balance, then request USDC/EURC quotes from a market or profile. Aura tries Circle App Kit first for Arc swaps, then falls back to LI.FI liquidity before the wallet signs."
     },
     {
       title: "Onchain market terms",
@@ -2323,7 +2515,7 @@ function LandingPage() {
     },
     {
       title: "Profiles and reputation",
-      text: "Set a username, share your profile, view USDC/EURC balances, track PNL, win rate, created markets, and prediction history."
+      text: "Set a username, share your profile, view USDC/EURC balances, open Unified Balance funding, track PNL, win rate, created markets, and prediction history."
     },
     {
       title: "Aura Points",
@@ -2367,7 +2559,7 @@ function LandingPage() {
   ];
   const dataFlow = [
     "The live AuraPredict indexer now powers market history, per-token volume, participants, activity, and leaderboards",
-    "Wallet UI shows USDC and EURC balances with copy-address, faucet, and swap access from markets or the user's profile",
+    "Wallet UI shows USDC and EURC balances with copy-address, faucet, Unified Balance funding, and swap access from markets or the user's profile",
     "Market cards are now compact click-through summaries; staking, Aura review, Oracle checks, dispute, finalize, and claim actions happen inside the market page",
     "The app checks selected-token balance and allowance before create, stake, or dispute transactions",
     "Aura Agent drafts clearer markets, checks similar questions, and prepares rules with source links",
@@ -2849,11 +3041,11 @@ function LandingPage() {
           </article>
           <article>
             <span>Wallet UX</span>
-            <strong>The wallet menu and profile show USDC/EURC balances, copy-address access, faucet shortcut, swap access, and selected-token balance checks before transactions.</strong>
+            <strong>The wallet menu and profile show USDC/EURC balances, copy-address access, faucet shortcut, Unified Balance funding, swap access, and selected-token balance checks before transactions.</strong>
           </article>
           <article>
             <span>Swap access</span>
-            <strong>A trader can obtain USDC or EURC through Circle App Kit first when configured, with LI.FI fallback, visible minimum receive, and adjustable tolerance before staking.</strong>
+            <strong>A trader can bring USDC to Arc through Circle Unified Balance, then swap USDC/EURC on Arc with visible minimum receive and adjustable tolerance before staking.</strong>
           </article>
           <article>
             <span>Settlement</span>
@@ -3103,6 +3295,14 @@ export default function App() {
   const [swapToleranceBps, setSwapToleranceBps] = useState(DEFAULT_SWAP_TOLERANCE_BPS);
   const [swapBusy, setSwapBusy] = useState<"idle" | "quote" | "execute">("idle");
   const [swapProviderHealth, setSwapProviderHealth] = useState<SwapProviderHealth>({ circle: "idle", lifi: "idle" });
+  const [unifiedBalanceModalOpen, setUnifiedBalanceModalOpen] = useState(false);
+  const [unifiedBalanceSourceChain, setUnifiedBalanceSourceChain] = useState<UnifiedBalanceSourceChainKey>("Base_Sepolia");
+  const [unifiedBalanceAmount, setUnifiedBalanceAmount] = useState("");
+  const [unifiedBalanceBusy, setUnifiedBalanceBusy] = useState<UnifiedBalanceBusy>("idle");
+  const [unifiedBalanceSummary, setUnifiedBalanceSummary] = useState<UnifiedBalanceSummary | null>(null);
+  const [unifiedBalanceFees, setUnifiedBalanceFees] = useState<UnifiedBalanceFeeLine[]>([]);
+  const [unifiedBalanceLastTx, setUnifiedBalanceLastTx] = useState<UnifiedBalanceTx | null>(null);
+  const [unifiedBalanceLog, setUnifiedBalanceLog] = useState<string[]>([]);
   const [profileSwapDirection, setProfileSwapDirection] = useState<StablecoinSwapDirection>("USDC_TO_EURC");
   const [activeCategory, setActiveCategory] = useState("All");
   const [marketViewMode, setMarketViewMode] = useState<MarketViewMode>("grid");
@@ -4399,6 +4599,11 @@ export default function App() {
     setNoticeTxHash(txHash || "");
   }, []);
 
+  const addUnifiedBalanceLog = useCallback((message: string) => {
+    const timestamp = new Date().toLocaleTimeString("en-US", { hour12: false });
+    setUnifiedBalanceLog((current) => [`${timestamp} - ${message}`, ...current].slice(0, 5));
+  }, []);
+
   const switchToArc = useCallback(async (provider?: EthereumProvider | null) => {
     const injected = getInjectedProvider(provider ?? selectedWalletProvider);
     const switchChain = async () => {
@@ -4450,6 +4655,49 @@ export default function App() {
     }
     setIsArcNetwork(true);
   }, [selectedWalletProvider]);
+
+  const switchToUnifiedBalanceSourceChain = useCallback(
+    async (sourceChain: UnifiedBalanceSourceChainKey, provider?: EthereumProvider | null) => {
+      const chain = UNIFIED_BALANCE_SOURCE_CHAINS.find((item) => item.value === sourceChain);
+      if (!chain) throw new Error("Unsupported Unified Balance source chain.");
+      const injected = getInjectedProvider(provider ?? selectedWalletProvider);
+      const chainId = chain.chainIdHex.toLowerCase();
+      const switchChain = async () => {
+        await injected.request({
+          method: "wallet_switchEthereumChain",
+          params: [{ chainId }]
+        });
+      };
+      const addChain = async () => {
+        try {
+          await injected.request({
+            method: "wallet_addEthereumChain",
+            params: [
+              {
+                chainId,
+                chainName: chain.chainName,
+                nativeCurrency: chain.nativeCurrency,
+                rpcUrls: chain.rpcUrls,
+                blockExplorerUrls: chain.blockExplorerUrls
+              }
+            ]
+          });
+        } catch (error) {
+          if (!isDuplicateRpcNetworkError(error)) throw error;
+        }
+      };
+
+      try {
+        await switchChain();
+      } catch (error) {
+        if (!isUnknownChainError(error)) throw error;
+        await addChain();
+        await switchChain();
+      }
+      setIsArcNetwork(false);
+    },
+    [selectedWalletProvider]
+  );
 
   const refreshNetworkState = useCallback(async (provider?: EthereumProvider | null) => {
     try {
@@ -4997,6 +5245,224 @@ export default function App() {
     },
     [account, refreshWalletBalance, selectedWalletProvider, setNotice, swapQuote, swapQuotePairKey, swapQuoteTime, switchToArc]
   );
+
+  const refreshUnifiedBalance = useCallback(async () => {
+    if (!account || !isAddress(account)) throw new Error("Connect wallet before using Unified Balance.");
+    const { kit, Blockchain, adapter } = await createUnifiedBalanceRuntime(getInjectedProvider(selectedWalletProvider));
+    const result = await kit.unifiedBalance.getBalances({
+      token: "USDC",
+      sources: {
+        adapter,
+        chains: [unifiedBalanceSourceChain, Blockchain.Arc_Testnet]
+      },
+      includePending: true,
+      networkType: "testnet"
+    } as never);
+    const summary = flattenUnifiedBalanceSummary(result);
+    setUnifiedBalanceSummary(summary);
+    return summary;
+  }, [account, selectedWalletProvider, unifiedBalanceSourceChain]);
+
+  const loadUnifiedBalance = useCallback(async () => {
+    try {
+      setUnifiedBalanceBusy("balances");
+      await refreshUnifiedBalance();
+      addUnifiedBalanceLog("Unified Balance refreshed.");
+    } catch (error) {
+      setNotice(`Unified Balance unavailable: ${compactErrorMessage(error)}`);
+    } finally {
+      setUnifiedBalanceBusy("idle");
+    }
+  }, [addUnifiedBalanceLog, refreshUnifiedBalance, setNotice]);
+
+  const openUnifiedBalanceModal = useCallback(() => {
+    if (!account || !isAddress(account)) {
+      setNotice("Connect wallet before using Unified Balance.");
+      setWalletModalOpen(true);
+      return;
+    }
+    setWalletMenuOpen(false);
+    setUnifiedBalanceModalOpen(true);
+  }, [account, setNotice]);
+
+  useEffect(() => {
+    if (!unifiedBalanceModalOpen || !account || !isAddress(account)) return;
+    void loadUnifiedBalance();
+  }, [account, loadUnifiedBalance, unifiedBalanceModalOpen, unifiedBalanceSourceChain]);
+
+  const estimateUnifiedBalanceSpend = useCallback(async () => {
+    try {
+      if (!account || !isAddress(account)) throw new Error("Connect wallet before using Unified Balance.");
+      const amount = normalizeUnifiedBalanceAmount(unifiedBalanceAmount);
+      setUnifiedBalanceBusy("estimate");
+      setUnifiedBalanceFees([]);
+      const { kit, Blockchain, adapter } = await createUnifiedBalanceRuntime(getInjectedProvider(selectedWalletProvider));
+      const estimate = await kit.unifiedBalance.estimateSpend(
+        createUnifiedBalanceSpendParams(adapter, Blockchain as Record<string, unknown>, unifiedBalanceSourceChain, amount, account) as never
+      );
+      setUnifiedBalanceFees(flattenUnifiedBalanceFees(estimate));
+      addUnifiedBalanceLog(`Estimated spend of ${amount} USDC to Arc.`);
+      setNotice(`Unified Balance estimate ready for ${amount} USDC to Arc Testnet.`);
+    } catch (error) {
+      setUnifiedBalanceFees([]);
+      setNotice(`Unified Balance estimate failed: ${compactErrorMessage(error)}`);
+    } finally {
+      setUnifiedBalanceBusy("idle");
+    }
+  }, [account, addUnifiedBalanceLog, selectedWalletProvider, setNotice, unifiedBalanceAmount, unifiedBalanceSourceChain]);
+
+  const depositUnifiedBalance = useCallback(async () => {
+    if (transactionLockRef.current) {
+      setNotice("A wallet confirmation is already open. Confirm or reject it before sending another transaction.");
+      return;
+    }
+    transactionLockRef.current = true;
+    setTransactionPending(true);
+    setUnifiedBalanceBusy("deposit");
+    try {
+      if (!account || !isAddress(account)) throw new Error("Connect wallet before using Unified Balance.");
+      const amount = normalizeUnifiedBalanceAmount(unifiedBalanceAmount);
+      await switchToUnifiedBalanceSourceChain(unifiedBalanceSourceChain);
+      const { kit, adapter } = await createUnifiedBalanceRuntime(getInjectedProvider(selectedWalletProvider));
+      addUnifiedBalanceLog(`Depositing ${amount} USDC from ${unifiedBalanceChainLabel(unifiedBalanceSourceChain)}.`);
+      setNotice(`Confirm deposit of ${amount} USDC from ${unifiedBalanceChainLabel(unifiedBalanceSourceChain)} to Circle Gateway.`);
+      const result = await kit.unifiedBalance.deposit({
+        from: { adapter, chain: unifiedBalanceSourceChain },
+        amount,
+        token: "USDC",
+        allowanceStrategy: "authorize"
+      } as never);
+      const tx = unifiedBalanceTxFromResult("Deposit to Gateway", result);
+      setUnifiedBalanceLastTx(tx);
+      addUnifiedBalanceLog(`Deposit confirmed${tx.txHash ? `: ${shortHash(tx.txHash)}` : "."}`);
+      setNotice(`Gateway deposit confirmed for ${amount} USDC. You can now spend it to Arc.`, tx.txHash as Hash | undefined);
+      await refreshUnifiedBalance();
+    } catch (error) {
+      setNotice(`Gateway deposit failed: ${compactErrorMessage(error)}`);
+    } finally {
+      transactionLockRef.current = false;
+      setTransactionPending(false);
+      setUnifiedBalanceBusy("idle");
+    }
+  }, [
+    account,
+    addUnifiedBalanceLog,
+    refreshUnifiedBalance,
+    selectedWalletProvider,
+    setNotice,
+    switchToUnifiedBalanceSourceChain,
+    unifiedBalanceAmount,
+    unifiedBalanceSourceChain
+  ]);
+
+  const spendUnifiedBalanceToArc = useCallback(async () => {
+    if (transactionLockRef.current) {
+      setNotice("A wallet confirmation is already open. Confirm or reject it before sending another transaction.");
+      return;
+    }
+    transactionLockRef.current = true;
+    setTransactionPending(true);
+    setUnifiedBalanceBusy("spend");
+    try {
+      if (!account || !isAddress(account)) throw new Error("Connect wallet before using Unified Balance.");
+      const amount = normalizeUnifiedBalanceAmount(unifiedBalanceAmount);
+      await switchToUnifiedBalanceSourceChain(unifiedBalanceSourceChain);
+      const { kit, Blockchain, adapter } = await createUnifiedBalanceRuntime(getInjectedProvider(selectedWalletProvider));
+      const params = createUnifiedBalanceSpendParams(
+        adapter,
+        Blockchain as Record<string, unknown>,
+        unifiedBalanceSourceChain,
+        amount,
+        account
+      );
+      addUnifiedBalanceLog(`Spending ${amount} USDC to Arc Testnet.`);
+      setNotice(`Confirm Unified Balance spend of ${amount} USDC. Circle Gateway will mint USDC to Arc Testnet.`);
+      const result = await kit.unifiedBalance.spend(params as never);
+      const tx = unifiedBalanceTxFromResult("Spend to Arc", result);
+      setUnifiedBalanceLastTx(tx);
+      setUnifiedBalanceFees(flattenUnifiedBalanceFees(result));
+      addUnifiedBalanceLog(`Spend to Arc confirmed${tx.txHash ? `: ${shortHash(tx.txHash)}` : "."}`);
+      setNotice(`Unified Balance spend complete. ${amount} USDC was minted to Arc Testnet.`, tx.txHash as Hash | undefined);
+      await switchToArc();
+      await sleep(1200);
+      await refreshWalletBalance();
+      await refreshUnifiedBalance();
+    } catch (error) {
+      setNotice(`Unified Balance spend failed: ${compactErrorMessage(error)}`);
+    } finally {
+      transactionLockRef.current = false;
+      setTransactionPending(false);
+      setUnifiedBalanceBusy("idle");
+    }
+  }, [
+    account,
+    addUnifiedBalanceLog,
+    refreshUnifiedBalance,
+    refreshWalletBalance,
+    selectedWalletProvider,
+    setNotice,
+    switchToArc,
+    switchToUnifiedBalanceSourceChain,
+    unifiedBalanceAmount,
+    unifiedBalanceSourceChain
+  ]);
+
+  const depositAndSpendUnifiedBalance = useCallback(async () => {
+    if (transactionLockRef.current) {
+      setNotice("A wallet confirmation is already open. Confirm or reject it before sending another transaction.");
+      return;
+    }
+    transactionLockRef.current = true;
+    setTransactionPending(true);
+    setUnifiedBalanceBusy("deposit-spend");
+    try {
+      if (!account || !isAddress(account)) throw new Error("Connect wallet before using Unified Balance.");
+      const amount = normalizeUnifiedBalanceAmount(unifiedBalanceAmount);
+      await switchToUnifiedBalanceSourceChain(unifiedBalanceSourceChain);
+      const { kit, Blockchain, adapter } = await createUnifiedBalanceRuntime(getInjectedProvider(selectedWalletProvider));
+      addUnifiedBalanceLog(`Depositing ${amount} USDC before Arc spend.`);
+      setNotice(`Step 1/2: confirm Gateway deposit of ${amount} USDC from ${unifiedBalanceChainLabel(unifiedBalanceSourceChain)}.`);
+      const deposit = await kit.unifiedBalance.deposit({
+        from: { adapter, chain: unifiedBalanceSourceChain },
+        amount,
+        token: "USDC",
+        allowanceStrategy: "authorize"
+      } as never);
+      const depositTx = unifiedBalanceTxFromResult("Deposit to Gateway", deposit);
+      setUnifiedBalanceLastTx(depositTx);
+      addUnifiedBalanceLog(`Deposit confirmed${depositTx.txHash ? `: ${shortHash(depositTx.txHash)}` : "."}`);
+      setNotice(`Step 2/2: confirm Unified Balance spend of ${amount} USDC to Arc Testnet.`);
+      const spend = await kit.unifiedBalance.spend(
+        createUnifiedBalanceSpendParams(adapter, Blockchain as Record<string, unknown>, unifiedBalanceSourceChain, amount, account) as never
+      );
+      const spendTx = unifiedBalanceTxFromResult("Spend to Arc", spend);
+      setUnifiedBalanceLastTx(spendTx);
+      setUnifiedBalanceFees(flattenUnifiedBalanceFees(spend));
+      addUnifiedBalanceLog(`Spend to Arc confirmed${spendTx.txHash ? `: ${shortHash(spendTx.txHash)}` : "."}`);
+      setNotice(`Unified Balance funding complete. ${amount} USDC is on Arc Testnet.`, spendTx.txHash as Hash | undefined);
+      await switchToArc();
+      await sleep(1200);
+      await refreshWalletBalance();
+      await refreshUnifiedBalance();
+    } catch (error) {
+      setNotice(`Unified Balance funding failed: ${compactErrorMessage(error)}`);
+    } finally {
+      transactionLockRef.current = false;
+      setTransactionPending(false);
+      setUnifiedBalanceBusy("idle");
+    }
+  }, [
+    account,
+    addUnifiedBalanceLog,
+    refreshUnifiedBalance,
+    refreshWalletBalance,
+    selectedWalletProvider,
+    setNotice,
+    switchToArc,
+    switchToUnifiedBalanceSourceChain,
+    unifiedBalanceAmount,
+    unifiedBalanceSourceChain
+  ]);
 
   const profileSwapPair = swapPairForDirection(profileSwapDirection);
   const profileSwapSourceBalance = profileSwapPair
@@ -8722,7 +9188,7 @@ export default function App() {
               </button>
             </div>
             <div className="trade-fund-row">
-              <FundOnArcActions compact targetSymbol={marketSymbol(selectedMarket)} />
+              <FundOnArcActions compact targetSymbol={marketSymbol(selectedMarket)} onUnifiedBalance={openUnifiedBalanceModal} />
             </div>
             {selectedSwapPair && (
               <section className="market-swap-panel">
@@ -9218,6 +9684,24 @@ export default function App() {
     );
   };
 
+  const unifiedBalanceSelectedSource =
+    UNIFIED_BALANCE_SOURCE_CHAINS.find((item) => item.value === unifiedBalanceSourceChain) || UNIFIED_BALANCE_SOURCE_CHAINS[0];
+  const unifiedBalanceAmountReady = parseUsdcInput(unifiedBalanceAmount, ARC_NATIVE_USDC_DECIMALS) > 0n;
+  const unifiedBalanceSourceBalance = unifiedBalanceSummary?.breakdown.find((entry) => entry.chain === unifiedBalanceSourceChain);
+  const unifiedBalanceArcBalance = unifiedBalanceSummary?.breakdown.find((entry) => entry.chain === "Arc_Testnet");
+  const unifiedBalanceBusyText =
+    unifiedBalanceBusy === "balances"
+      ? "Refreshing..."
+      : unifiedBalanceBusy === "estimate"
+      ? "Estimating..."
+      : unifiedBalanceBusy === "deposit"
+      ? "Depositing..."
+      : unifiedBalanceBusy === "spend"
+      ? "Spending..."
+      : unifiedBalanceBusy === "deposit-spend"
+      ? "Funding..."
+      : "";
+
   return (
     <main className="app-shell" id="top">
       <AppUpdateNotice />
@@ -9634,7 +10118,7 @@ export default function App() {
                         Refresh
                       </button>
                     </div>
-                    <FundOnArcActions compact targetSymbol={defaultSettlementSymbol} />
+                    <FundOnArcActions compact targetSymbol={defaultSettlementSymbol} onUnifiedBalance={openUnifiedBalanceModal} />
                     <button onClick={openProfile}>View Profile</button>
                     <button onClick={disconnectWallet}>Disconnect</button>
                   </div>
@@ -10386,7 +10870,7 @@ export default function App() {
                     <strong>USDC {formatUsdc(walletUsdcBalance, defaultSettlementDecimals)}</strong>
                     <strong>EURC {formatUsdc(walletEurcBalance, defaultSettlementDecimals)}</strong>
                     <small>Arc Testnet wallet balance</small>
-                    <FundOnArcActions compact targetSymbol={defaultSettlementSymbol} />
+                    <FundOnArcActions compact targetSymbol={defaultSettlementSymbol} onUnifiedBalance={openUnifiedBalanceModal} />
                     {profileSwapPair && (
                       <div className="profile-swap-panel">
                         <div className="profile-swap-title">
@@ -11595,7 +12079,7 @@ export default function App() {
                 <strong>Need creator bond or fees?</strong>
                 <small>Fund your Arc wallet before launching, then refresh your balance.</small>
               </div>
-              <FundOnArcActions compact targetSymbol={defaultSettlementSymbol} />
+              <FundOnArcActions compact targetSymbol={defaultSettlementSymbol} onUnifiedBalance={openUnifiedBalanceModal} />
             </div>
             {aiMarketDraft?.duplicateRisk && aiMarketDraft.duplicateRisk !== "LOW" && (
               <label className="duplicate-acknowledge">
@@ -11638,6 +12122,189 @@ export default function App() {
               </button>
             </div>
           </form>
+        </div>
+      )}
+
+      {unifiedBalanceModalOpen && (
+        <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Unified Balance funding">
+          <section className="modal-panel unified-balance-modal" aria-busy={unifiedBalanceBusy !== "idle"}>
+            <div className="modal-header">
+              <div>
+                <span className="section-label">Circle Gateway</span>
+                <h2>Unified Balance</h2>
+                <p>Move testnet USDC from supported chains into Gateway, then mint USDC to your Arc Testnet wallet.</p>
+              </div>
+              <button className="icon-button" type="button" onClick={() => setUnifiedBalanceModalOpen(false)}>
+                X
+              </button>
+            </div>
+            <div className="unified-balance-status-row">
+              <span>Wallet {account ? shortAddress(account) : "not connected"}</span>
+              <span>Destination Arc Testnet</span>
+              {unifiedBalanceBusyText && <strong>{unifiedBalanceBusyText}</strong>}
+            </div>
+            <div className="unified-balance-grid">
+              <article className="unified-balance-card unified-balance-controls">
+                <label>
+                  Source chain
+                  <select
+                    value={unifiedBalanceSourceChain}
+                    disabled={unifiedBalanceBusy !== "idle" || transactionPending}
+                    onChange={(event) => {
+                      setUnifiedBalanceSourceChain(event.target.value as UnifiedBalanceSourceChainKey);
+                      setUnifiedBalanceFees([]);
+                      setUnifiedBalanceLastTx(null);
+                    }}
+                  >
+                    {UNIFIED_BALANCE_SOURCE_CHAINS.map((chain) => (
+                      <option key={chain.value} value={chain.value}>
+                        {chain.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Amount USDC
+                  <input
+                    inputMode="decimal"
+                    placeholder="0.00"
+                    value={unifiedBalanceAmount}
+                    disabled={unifiedBalanceBusy !== "idle" || transactionPending}
+                    onChange={(event) => {
+                      setUnifiedBalanceAmount(event.target.value);
+                      setUnifiedBalanceFees([]);
+                    }}
+                  />
+                </label>
+                <div className="unified-balance-action-grid">
+                  <button
+                    className="secondary"
+                    disabled={unifiedBalanceBusy !== "idle"}
+                    onClick={loadUnifiedBalance}
+                    type="button"
+                  >
+                    {unifiedBalanceBusy === "balances" ? "Refreshing..." : "Refresh"}
+                  </button>
+                  <button
+                    className="secondary"
+                    disabled={unifiedBalanceBusy !== "idle" || !unifiedBalanceAmountReady}
+                    onClick={estimateUnifiedBalanceSpend}
+                    type="button"
+                  >
+                    {unifiedBalanceBusy === "estimate" ? "Estimating..." : "Estimate fees"}
+                  </button>
+                  <button
+                    disabled={unifiedBalanceBusy !== "idle" || transactionPending || !unifiedBalanceAmountReady}
+                    onClick={depositUnifiedBalance}
+                    type="button"
+                  >
+                    {unifiedBalanceBusy === "deposit" ? "Depositing..." : "Deposit to Gateway"}
+                  </button>
+                  <button
+                    disabled={unifiedBalanceBusy !== "idle" || transactionPending || !unifiedBalanceAmountReady}
+                    onClick={spendUnifiedBalanceToArc}
+                    type="button"
+                  >
+                    {unifiedBalanceBusy === "spend" ? "Spending..." : "Spend to Arc"}
+                  </button>
+                  <button
+                    className="unified-balance-primary"
+                    disabled={unifiedBalanceBusy !== "idle" || transactionPending || !unifiedBalanceAmountReady}
+                    onClick={depositAndSpendUnifiedBalance}
+                    type="button"
+                  >
+                    {unifiedBalanceBusy === "deposit-spend" ? "Funding..." : "Deposit + spend"}
+                  </button>
+                </div>
+                <small>
+                  Deposit uses {unifiedBalanceSelectedSource.label}. Spend uses Circle Gateway and forwards the Arc mint to your connected wallet.
+                </small>
+              </article>
+
+              <article className="unified-balance-card unified-balance-summary">
+                <span>Total confirmed Gateway balance</span>
+                <strong>{formatUnifiedBalanceDecimal(unifiedBalanceSummary?.totalConfirmedBalance)} USDC</strong>
+                {hasUnifiedBalanceValue(unifiedBalanceSummary?.totalPendingBalance) && (
+                  <small>Pending {formatUnifiedBalanceDecimal(unifiedBalanceSummary?.totalPendingBalance)} USDC</small>
+                )}
+                <div className="unified-balance-mini-grid">
+                  <div>
+                    <span>{unifiedBalanceSelectedSource.label}</span>
+                    <strong>{formatUnifiedBalanceDecimal(unifiedBalanceSourceBalance?.confirmedBalance)} USDC</strong>
+                    {hasUnifiedBalanceValue(unifiedBalanceSourceBalance?.pendingBalance) && (
+                      <small>Pending {formatUnifiedBalanceDecimal(unifiedBalanceSourceBalance?.pendingBalance)}</small>
+                    )}
+                  </div>
+                  <div>
+                    <span>Arc Testnet</span>
+                    <strong>{formatUnifiedBalanceDecimal(unifiedBalanceArcBalance?.confirmedBalance)} USDC</strong>
+                    {hasUnifiedBalanceValue(unifiedBalanceArcBalance?.pendingBalance) && (
+                      <small>Pending {formatUnifiedBalanceDecimal(unifiedBalanceArcBalance?.pendingBalance)}</small>
+                    )}
+                  </div>
+                </div>
+                <div className="unified-balance-breakdown">
+                  {(unifiedBalanceSummary?.breakdown || []).map((entry) => (
+                    <div key={entry.chain}>
+                      <span>{unifiedBalanceChainLabel(entry.chain)}</span>
+                      <strong>{formatUnifiedBalanceDecimal(entry.confirmedBalance)} USDC</strong>
+                    </div>
+                  ))}
+                  {unifiedBalanceSummary && unifiedBalanceSummary.breakdown.length === 0 && (
+                    <small>No Gateway balance found for the selected testnet pair yet.</small>
+                  )}
+                </div>
+              </article>
+            </div>
+
+            {unifiedBalanceFees.length > 0 && (
+              <div className="unified-balance-card unified-balance-fees">
+                <span>Estimated / executed fees</span>
+                {unifiedBalanceFees.map((fee, index) => (
+                  <div key={`${fee.type}-${index}`}>
+                    <strong>
+                      {fee.type.replace(/([A-Z])/g, " $1")} {formatUnifiedBalanceDecimal(fee.amount)} {fee.token}
+                    </strong>
+                    {fee.detail && <small>{fee.detail}</small>}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {unifiedBalanceLastTx && (
+              <div className="unified-balance-card unified-balance-lasttx">
+                <span>{unifiedBalanceLastTx.label}</span>
+                <strong>{unifiedBalanceLastTx.chain ? unifiedBalanceChainLabel(unifiedBalanceLastTx.chain) : "Gateway"}</strong>
+                {unifiedBalanceLastTx.txHash && <small>{shortHash(unifiedBalanceLastTx.txHash)}</small>}
+                {unifiedBalanceLastTx.explorerUrl && (
+                  <a href={unifiedBalanceLastTx.explorerUrl} target="_blank" rel="noreferrer">
+                    View transaction
+                  </a>
+                )}
+              </div>
+            )}
+
+            {unifiedBalanceLog.length > 0 && (
+              <div className="unified-balance-card unified-balance-events">
+                <span>Recent Unified Balance activity</span>
+                {unifiedBalanceLog.map((item) => (
+                  <small key={item}>{item}</small>
+                ))}
+              </div>
+            )}
+
+            <small className="unified-balance-note">
+              This flow only funds Arc USDC. Markets that settle in EURC still need the in-app Arc swap before staking.
+            </small>
+            <div className="modal-actions">
+              <a className="button-link" href={ARC_UNIFIED_BALANCE_URL} target="_blank" rel="noreferrer">
+                Docs
+              </a>
+              <button className="secondary" type="button" onClick={() => setUnifiedBalanceModalOpen(false)}>
+                Close
+              </button>
+            </div>
+          </section>
         </div>
       )}
 
@@ -11781,7 +12448,7 @@ export default function App() {
                 <div>
                   <strong>Fund on Arc</strong>
                   <p>Use Circle Faucet for testnet funds, then swap stablecoins inside AuraPredict when a route is available.</p>
-                  <FundOnArcActions compact targetSymbol={defaultSettlementSymbol} />
+                  <FundOnArcActions compact targetSymbol={defaultSettlementSymbol} onUnifiedBalance={openUnifiedBalanceModal} />
                 </div>
               </div>
               <button className="secondary" type="button" onClick={() => window.open("https://metamask.io", "_blank")}>
