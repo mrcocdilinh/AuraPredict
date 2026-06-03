@@ -93,10 +93,24 @@ Optional phase 2 auto-propose:
 AURA_ORACLE_AUTO_PROPOSE=1
 AURA_ORACLE_AUTO_PROPOSE_MIN_CONFIDENCE=78
 AURA_ORACLE_AUTO_PROPOSE_ADAPTERS=crypto-price,macro-yahoo-chart,status-health,status-page,liquidity-rule
+AURA_RESOLVER_SIGNER_MODE=private-key
 AURA_RESOLVER_PRIVATE_KEY=0x...
 ```
 
 Auto-propose only runs after `resolutionTime`, only when no result has already been proposed, and only when the resolver key is allowed by that market's resolution mode. YES/NO auto-propose requires both YES and NO pools to be funded. One-sided markets can only auto-propose Cancel through the liquidity rule. The normal dispute window, owner review, and finalization buttons remain the source of final settlement.
+
+Circle Agent Wallet signer mode:
+
+```bash
+AURA_RESOLVER_SIGNER_MODE=circle-cli
+AURA_CIRCLE_AGENT_WALLET_ADDRESS=0x_your_agent_wallet
+AURA_CIRCLE_CLI_PATH=circle
+AURA_CIRCLE_AGENT_CHAIN=ARC-TESTNET
+AURA_CIRCLE_EXECUTE_TIMEOUT_MS=60000
+AURA_CIRCLE_WALLET_ADDRESS_FLAG=--address
+```
+
+In this mode the indexer sends proposal transactions through `circle wallet execute` instead of loading `AURA_RESOLVER_PRIVATE_KEY`. The Circle wallet still must be the market resolver, market authority, contract owner, or configured adapter for the market's resolution mode. The VPS session must already be authenticated with Circle CLI, usually with `circle wallet login your@email --testnet`, and production shells should set `CIRCLE_ACCEPT_TERMS=1` so the CLI does not pause on first use.
 
 Manual API proposal is also gated:
 
@@ -173,13 +187,14 @@ Optional automation:
 ```bash
 AURA_RESOLUTION_AUTO_RUN=1
 AURA_RESOLUTION_AUTO_PROPOSE=0
+AURA_RESOLVER_SIGNER_MODE=private-key
 AURA_RESOLVER_PRIVATE_KEY=0x...
 AURA_RESOLUTION_MIN_CONFIDENCE=72
 AURA_RESOLUTION_CONSENSUS_COUNT=2
 AURA_ATTESTATION_PRIVATE_KEY=0x_optional_dedicated_ai_signer_key
 ```
 
-Keep `AURA_RESOLUTION_AUTO_PROPOSE=0` until the resolver key and evidence policy are tested. If enabled, the private key must be the market resolver, contract owner, or the authority captured on that market.
+Keep `AURA_RESOLUTION_AUTO_PROPOSE=0` until the resolver signer and evidence policy are tested. If enabled, the signer must be the market resolver, contract owner, or the authority captured on that market. Use the Circle Agent Wallet env block above when `AURA_RESOLVER_SIGNER_MODE=circle-cli`.
 When Gemini returns `429` (rate limit), the indexer puts that key on cooldown and rotates to the next key in `GEMINI_API_KEYS`. If all Gemini keys are cooling down or Gemini returns transient `5xx`, the indexer falls back to the configured provider if available.
 
 `POST /api/resolutions/:marketId/run` always requires `AURA_RESOLUTION_ADMIN_TOKEN`. If `AURA_RESOLUTION_AUTO_RUN=1`, the indexer only auto-generates the first receipt for each closed unresolved market; use the admin endpoint with `force: true` to rerun after adding better evidence.

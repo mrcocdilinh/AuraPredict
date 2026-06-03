@@ -147,6 +147,7 @@ AURA_ORACLE_AUTO_RUN=1
 AURA_ORACLE_HTTP_TIMEOUT_MS=8000
 AURA_ORACLE_AUTO_PROPOSE=0
 AURA_ORACLE_AUTO_PROPOSE_MIN_CONFIDENCE=78
+AURA_RESOLVER_SIGNER_MODE=private-key
 ```
 
 Indexer chay bang `pm2` trong `/opt/aurapredict`, doc bien moi truong tu `/opt/aurapredict/.env`, va duoc Nginx proxy tu `api.aurapredict.xyz` ve `127.0.0.1:8787`. Sau khi sua `.env` hoac cap nhat code indexer tren VPS, restart:
@@ -164,6 +165,7 @@ curl https://api.aurapredict.xyz/health
 - Contract hien la ban MVP testnet, chua audit.
 - V4 da mo duong cho authority/oracle/committee va adapter-only market sau nay, nhung chua thay the quy trinh compliance, audit, multisig va giam sat production.
 - Oracle phase 2 co the tu gui proposal onchain cho market khach quan nhu BTC/ETH price, gold/DXY, health/status API khi `AURA_ORACLE_AUTO_PROPOSE=1` va confidence du nguong. No khong tu finalize market co nguoi choi; dispute window va owner/authority review van giu nguyen.
+- De van hanh theo Circle Agent Wallet, set `AURA_RESOLVER_SIGNER_MODE=circle-cli`, `AURA_CIRCLE_AGENT_WALLET_ADDRESS=0x...`, dang nhap Circle CLI tren VPS, va dam bao agent wallet la resolver/authority/adapter cua market.
 - Neu mo ca USDC va EURC, moi market chi settle trong token da chon; dashboard va `/api/stats` hien volume/liquidity rieng theo tung token, khong gop thanh mot tong FX.
 - Nut swap trong trading panel va Profile chi la tien ich cho vi nguoi dung doi USDC/EURC truoc giao dich; route, so nhan uoc tinh va muc nhan toi thieu uu tien Circle App Kit khi co cau hinh, roi fallback LI.FI. Giao dich swap duoc ky trong vi. Quote cu het han sau thoi gian ngan va price tolerance do nguoi dung chon vi pool testnet co the bien dong nhanh.
 - Production dang dung deployment V4 da pin trong source; market V3 cu khong tu di chuyen sang contract moi nhung co the truy cap qua `?deployment=v3` de settle/claim.

@@ -1,4 +1,5 @@
 import "dotenv/config";
+import { spawn } from "node:child_process";
 import { createServer } from "node:http";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -43,6 +44,12 @@ const RESOLUTION_ADMIN_TOKEN = String(process.env.AURA_RESOLUTION_ADMIN_TOKEN ||
 const RESOLUTION_AUTO_RUN = String(process.env.AURA_RESOLUTION_AUTO_RUN || "").trim() === "1";
 const RESOLUTION_AUTO_PROPOSE = String(process.env.AURA_RESOLUTION_AUTO_PROPOSE || "").trim() === "1";
 const RESOLVER_PRIVATE_KEY = String(process.env.AURA_RESOLVER_PRIVATE_KEY || "").trim();
+const RESOLVER_SIGNER_MODE = String(process.env.AURA_RESOLVER_SIGNER_MODE || "private-key").trim().toLowerCase();
+const CIRCLE_AGENT_WALLET_ADDRESS = String(process.env.AURA_CIRCLE_AGENT_WALLET_ADDRESS || "").trim();
+const CIRCLE_CLI_PATH = String(process.env.AURA_CIRCLE_CLI_PATH || "circle").trim();
+const CIRCLE_AGENT_CHAIN = String(process.env.AURA_CIRCLE_AGENT_CHAIN || "ARC-TESTNET").trim();
+const CIRCLE_EXECUTE_TIMEOUT_MS = Math.max(1_000, Number(process.env.AURA_CIRCLE_EXECUTE_TIMEOUT_MS || 60_000) || 60_000);
+const CIRCLE_WALLET_ADDRESS_FLAG = String(process.env.AURA_CIRCLE_WALLET_ADDRESS_FLAG || "--address").trim();
 const AI_ATTESTATION_PRIVATE_KEY = String(process.env.AURA_ATTESTATION_PRIVATE_KEY || "").trim();
 const RESOLUTION_MIN_CONFIDENCE = Number(process.env.AURA_RESOLUTION_MIN_CONFIDENCE || 72);
 const RESOLUTION_CONSENSUS_COUNT = Number(process.env.AURA_RESOLUTION_CONSENSUS_COUNT || 2);
@@ -68,6 +75,8 @@ const V3_SETTLEMENT_DECIMALS = 6;
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 const ZERO_HASH = "0x0000000000000000000000000000000000000000000000000000000000000000";
 const AURA_RULE_JSON_PREFIX = "AURA_RULE_JSON:";
+const CIRCLE_SIGNER_MODES = new Set(["circle", "circle-cli", "agent-wallet", "circle-agent-wallet"]);
+const PRIVATE_KEY_SIGNER_MODES = new Set(["", "private-key", "wallet-private-key"]);
 const ARC_CHAIN = {
   id: 5042002,
   name: "Arc Testnet",
@@ -137,9 +146,11 @@ const client = createPublicClient({
     retryDelay: 500
   })
 });
+const circleAgentWalletAddress = isAddress(CIRCLE_AGENT_WALLET_ADDRESS) ? CIRCLE_AGENT_WALLET_ADDRESS : "";
 const resolverAccount = RESOLVER_PRIVATE_KEY ? privateKeyToAccount(RESOLVER_PRIVATE_KEY) : null;
+const resolverSignerAddress = resolverUsesCircleWallet() ? circleAgentWalletAddress : resolverAccount?.address || "";
 const attestationAccount = AI_ATTESTATION_PRIVATE_KEY ? privateKeyToAccount(AI_ATTESTATION_PRIVATE_KEY) : null;
-const walletClient = resolverAccount
+const walletClient = resolverAccount && !resolverUsesCircleWallet()
   ? createWalletClient({
       account: resolverAccount,
       chain: ARC_CHAIN,
@@ -547,6 +558,145 @@ function isStablecoinContract() {
 function currentContractAbi() {
   if (isV4Contract()) return arcPredictionMarketV4Abi;
   return isV3Contract() ? arcPredictionMarketV3Abi : arcPredictionMarketV2Abi;
+}
+
+function resolverUsesCircleWallet() {
+  return CIRCLE_SIGNER_MODES.has(RESOLVER_SIGNER_MODE);
+}
+
+function resolverSignerModeIsValid() {
+  return resolverUsesCircleWallet() || PRIVATE_KEY_SIGNER_MODES.has(RESOLVER_SIGNER_MODE);
+}
+
+function resolverMissingReason() {
+  if (!resolverSignerModeIsValid()) return "AURA_RESOLVER_SIGNER_MODE must be private-key or circle-cli.";
+  if (resolverUsesCircleWallet()) {
+    if (!CIRCLE_AGENT_WALLET_ADDRESS) return "AURA_CIRCLE_AGENT_WALLET_ADDRESS is not configured.";
+    if (!circleAgentWalletAddress) return "AURA_CIRCLE_AGENT_WALLET_ADDRESS is not a valid EVM address.";
+    if (!CIRCLE_CLI_PATH) return "AURA_CIRCLE_CLI_PATH is not configured.";
+    if (!CIRCLE_WALLET_ADDRESS_FLAG) return "AURA_CIRCLE_WALLET_ADDRESS_FLAG is not configured.";
+    return "Circle Agent Wallet signer is not configured.";
+  }
+  return "AURA_RESOLVER_PRIVATE_KEY is not configured.";
+}
+
+function hasResolverSigner() {
+  if (!resolverSignerModeIsValid()) return false;
+  if (resolverUsesCircleWallet()) return Boolean(circleAgentWalletAddress && CIRCLE_CLI_PATH && CIRCLE_WALLET_ADDRESS_FLAG);
+  return Boolean(walletClient && resolverAccount);
+}
+
+function circleCliArg(value) {
+  if (typeof value === "bigint") return value.toString();
+  if (typeof value === "number") return String(value);
+  return String(value);
+}
+
+function circleFunctionSignature(functionName) {
+  if (functionName === "cancelEmptyMarket") return "cancelEmptyMarket(uint256)";
+  if (functionName === "resolveWithAiAttestation") return "resolveWithAiAttestation(uint256,uint8,bytes32,bytes32,uint8,bytes)";
+  if (functionName === "cancel") return isStablecoinContract() ? "cancel(uint256,bytes32,bytes32)" : "cancel(uint256)";
+  if (functionName === "resolve") return isStablecoinContract() ? "resolve(uint256,uint8,bytes32,bytes32)" : "resolve(uint256,uint8)";
+  return "";
+}
+
+function compactCliOutput(value) {
+  return String(value || "").replace(/\s+/g, " ").trim().slice(0, 800);
+}
+
+function extractCircleTxHash(stdout, stderr) {
+  const raw = `${stdout || ""}\n${stderr || ""}`;
+  try {
+    const jsonStart = raw.indexOf("{");
+    const jsonEnd = raw.lastIndexOf("}");
+    if (jsonStart >= 0 && jsonEnd > jsonStart) {
+      const parsed = JSON.parse(raw.slice(jsonStart, jsonEnd + 1));
+      const txHash = parsed?.data?.txHash || parsed?.txHash || parsed?.transactionHash;
+      if (typeof txHash === "string" && /^0x[a-fA-F0-9]{64}$/.test(txHash)) return txHash;
+    }
+  } catch {
+    // Fall back to regex parsing below because some CLI versions include extra text around JSON.
+  }
+  const matches = raw.match(/0x[a-fA-F0-9]{64}/g) || [];
+  return matches.length > 0 ? matches[matches.length - 1] : "";
+}
+
+async function runCircleWalletExecute(functionName, args) {
+  const signature = circleFunctionSignature(functionName);
+  if (!signature) throw new Error(`Circle Agent Wallet cannot execute unsupported function ${functionName}.`);
+  if (!hasResolverSigner()) throw new Error(resolverMissingReason());
+
+  const cliArgs = [
+    "wallet",
+    "execute",
+    signature,
+    ...args.map(circleCliArg),
+    "--contract",
+    CONTRACT_ADDRESS,
+    CIRCLE_WALLET_ADDRESS_FLAG,
+    circleAgentWalletAddress,
+    "--chain",
+    CIRCLE_AGENT_CHAIN,
+    "--output",
+    "json"
+  ];
+
+  return new Promise((resolve, reject) => {
+    let stdout = "";
+    let stderr = "";
+    let settled = false;
+    let timeout;
+    const child = spawn(CIRCLE_CLI_PATH, cliArgs, {
+      env: process.env,
+      windowsHide: true
+    });
+
+    const finish = (error, value) => {
+      if (settled) return;
+      settled = true;
+      if (timeout) clearTimeout(timeout);
+      if (error) reject(error);
+      else resolve(value);
+    };
+
+    timeout = setTimeout(() => {
+      child.kill();
+      finish(new Error(`Circle CLI timed out after ${CIRCLE_EXECUTE_TIMEOUT_MS}ms.`));
+    }, CIRCLE_EXECUTE_TIMEOUT_MS);
+
+    child.stdout?.on("data", (chunk) => {
+      stdout += chunk.toString();
+    });
+    child.stderr?.on("data", (chunk) => {
+      stderr += chunk.toString();
+    });
+    child.on("error", (error) => {
+      finish(new Error(`Circle CLI failed to start: ${error.message}`));
+    });
+    child.on("close", (code) => {
+      if (code !== 0) {
+        finish(new Error(`Circle CLI exited with code ${code}: ${compactCliOutput(stderr || stdout)}`));
+        return;
+      }
+      const txHash = extractCircleTxHash(stdout, stderr);
+      if (!txHash) {
+        finish(new Error(`Circle CLI did not return a transaction hash: ${compactCliOutput(stdout || stderr)}`));
+        return;
+      }
+      finish(null, txHash);
+    });
+  });
+}
+
+async function writeResolverContract(functionName, args) {
+  if (resolverUsesCircleWallet()) return runCircleWalletExecute(functionName, args);
+  if (!walletClient) throw new Error(resolverMissingReason());
+  return walletClient.writeContract({
+    address: CONTRACT_ADDRESS,
+    abi: currentContractAbi(),
+    functionName,
+    args
+  });
 }
 
 async function detectContractVersion() {
@@ -2167,8 +2317,8 @@ async function buildOracleProposal(marketId, options = {}) {
 }
 
 function signerCanProposeMarket(market) {
-  if (!resolverAccount) return { ok: false, reason: "AURA_RESOLVER_PRIVATE_KEY is not configured." };
-  const signer = resolverAccount.address.toLowerCase();
+  if (!hasResolverSigner()) return { ok: false, reason: resolverMissingReason() };
+  const signer = resolverSignerAddress.toLowerCase();
   const owner = String(state.owner || "").toLowerCase();
   const marketAuthority = String(market.authority || "").toLowerCase();
   const resolver = String(market.resolver || "").toLowerCase();
@@ -2178,7 +2328,7 @@ function signerCanProposeMarket(market) {
 
   if (mode === 3) {
     if (isAuthority || (adapter && adapter !== ZERO_ADDRESS.toLowerCase() && signer === adapter)) return { ok: true };
-    return { ok: false, reason: "Resolver key is not the market authority or configured adapter." };
+    return { ok: false, reason: "Resolver signer is not the market authority or configured adapter." };
   }
 
   if (mode === 2) {
@@ -2187,12 +2337,12 @@ function signerCanProposeMarket(market) {
   }
 
   if (signer === resolver || isAuthority) return { ok: true };
-  return { ok: false, reason: "Resolver key is not the market resolver or authority." };
+  return { ok: false, reason: "Resolver signer is not the market resolver or authority." };
 }
 
 function oracleAutoProposeDecision(proposal, market) {
   if (!ORACLE_AUTO_PROPOSE) return { ok: false, reason: "AURA_ORACLE_AUTO_PROPOSE is not enabled." };
-  if (!walletClient || !resolverAccount) return { ok: false, reason: "AURA_RESOLVER_PRIVATE_KEY is not configured." };
+  if (!hasResolverSigner()) return { ok: false, reason: resolverMissingReason() };
   if (!proposal || proposal.status !== "ready") return { ok: false, reason: "Oracle proposal is not ready." };
   if (!market) return { ok: false, reason: "Market not found." };
   if (market.outcome !== Outcome.Unresolved) return { ok: false, reason: "Market is already finalized." };
@@ -2259,23 +2409,18 @@ async function proposeOracleOnchain(proposal) {
       : [BigInt(proposal.marketId), outcome];
 
   try {
-    const txHash = await walletClient.writeContract({
-      address: CONTRACT_ADDRESS,
-      abi: currentContractAbi(),
-      functionName,
-      args
-    });
+    const txHash = await writeResolverContract(functionName, args);
     proposal.txHash = txHash;
     proposal.status = "proposed";
     proposal.autoProposed = true;
     proposal.autoProposedAt = nowIso();
-    proposal.autoProposedBy = resolverAccount.address;
+    proposal.autoProposedBy = resolverSignerAddress;
     proposal.autoProposeSkipped = "";
     proposal.onchainFunction = functionName;
     const proposedAt = Math.floor(Date.now() / 1000);
     market.proposedOutcome = outcome;
     market.proposedAt = proposedAt;
-    market.proposedBy = resolverAccount.address;
+    market.proposedBy = resolverSignerAddress;
     market.proposalEvidenceHash = evidenceHash;
     market.aiReceiptHash = receiptHash;
     market.disputeDeadline = functionName === "cancelEmptyMarket" ? 0 : proposedAt + Number(market.termsDisputeWindow || state.disputeWindow || 0);
@@ -2796,7 +2941,7 @@ async function buildResolutionReceipt(marketId, options = {}) {
 
 async function proposeResolutionOnchain(receipt) {
   if (!RESOLUTION_AUTO_PROPOSE) return { skipped: "AURA_RESOLUTION_AUTO_PROPOSE is not enabled." };
-  if (!walletClient || !resolverAccount) return { skipped: "AURA_RESOLVER_PRIVATE_KEY is not configured." };
+  if (!hasResolverSigner()) return { skipped: resolverMissingReason() };
   if (receipt.status !== "ready" || receipt.proposedOutcomeValue === Outcome.Unresolved) {
     return { skipped: "Receipt is not approved for on-chain proposal." };
   }
@@ -2841,12 +2986,7 @@ async function proposeResolutionOnchain(receipt) {
     : functionName === "cancel"
       ? [BigInt(receipt.marketId)]
       : [BigInt(receipt.marketId), receipt.proposedOutcomeValue];
-  const txHash = await walletClient.writeContract({
-    address: CONTRACT_ADDRESS,
-    abi: currentContractAbi(),
-    functionName,
-    args
-  });
+  const txHash = await writeResolverContract(functionName, args);
   receipt.txHash = txHash;
   receipt.status = "proposed";
   resolutionState()[String(receipt.marketId)] = receipt;
