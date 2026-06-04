@@ -3501,7 +3501,7 @@ export default function App() {
     closeTime: "",
     resolutionTime: "",
     settlementToken: "",
-    resolutionMode: "0",
+    resolutionMode: "2",
     resolutionSource: "",
     resolutionRule: "",
     fallbackSource: ""
@@ -7278,7 +7278,7 @@ export default function App() {
         closeTime: "",
         resolutionTime: "",
         settlementToken: "",
-        resolutionMode: "0",
+        resolutionMode: "2",
         resolutionSource: "",
         resolutionRule: "",
         fallbackSource: ""
@@ -11658,6 +11658,15 @@ export default function App() {
                 </p>
               </article>
               <article>
+                <span className="section-label">Legal and risk notice</span>
+                <h3>Experimental software, not financial advice</h3>
+                <p>
+                  AuraPredict is not a regulated exchange, broker, gambling platform, investment product, or financial
+                  adviser. Testnet tokens have no real-world value. Market wording, AI summaries, oracle suggestions,
+                  source checks, odds, and payouts are provided for testing and research only.
+                </p>
+              </article>
+              <article>
                 <span className="section-label">Contract custody</span>
                 <h3>Funds live in the prediction market contract</h3>
                 <p>
@@ -11671,6 +11680,15 @@ export default function App() {
                 <p>
                   Aura Agent evidence summaries are decision support only. Final settlement still follows the contract
                   resolution flow, so ambiguous markets should include source links and remain open to dispute review.
+                </p>
+              </article>
+              <article>
+                <span className="section-label">Oracle policy</span>
+                <h3>Authority, adapters, and reputation remain visible</h3>
+                <p>
+                  Objective adapters may propose high-confidence outcomes, but funded markets still expose dispute,
+                  authority review, and finalization state. Committee or oracle reputation should be based on accuracy,
+                  coverage, reversals, response time, and evidence quality before any mainnet use.
                 </p>
               </article>
               <article>
@@ -12228,7 +12246,7 @@ export default function App() {
               Resolution source and rule are required before launch.
               Market close time is saved in UTC and must be at least 5 minutes after the current UTC time.
               {isStablecoinContractVersion(contractVersion) && " Resolution time is enforced onchain and cannot be earlier than close time."}
-              {contractVersion === "v4" && " The primary source, fallback source, and resolution rule are stored onchain; current markets remain creator-led with Aura and owner review until an approved oracle adapter is selected for a future market."}
+              {contractVersion === "v4" && " The primary source, fallback source, and resolution rule are stored onchain. New markets default to authority/oracle review so creators do not need to publish their own result."}
               {contractVersion === "legacy"
                 ? " This legacy contract does not use creator bonds or dispute windows."
                 : marketCreationFee > 0n

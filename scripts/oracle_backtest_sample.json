@@ -1,0 +1,58 @@
+[
+  {
+    "id": "btc-2026-06-03-0330",
+    "adapter": "crypto-price",
+    "oracleOutcome": "NO",
+    "actualOutcome": "NO",
+    "confidence": 91
+  },
+  {
+    "id": "eth-2026-06-03-0400",
+    "adapter": "crypto-price",
+    "oracleOutcome": "YES",
+    "actualOutcome": "YES",
+    "confidence": 86
+  },
+  {
+    "id": "gold-2026-06-04-1200",
+    "adapter": "macro-yahoo-chart",
+    "oracleOutcome": "NO",
+    "actualOutcome": "NO",
+    "confidence": 82
+  },
+  {
+    "id": "dxy-2026-06-04-1500",
+    "adapter": "macro-yahoo-chart",
+    "oracleOutcome": "YES",
+    "actualOutcome": "NO",
+    "confidence": 74
+  },
+  {
+    "id": "github-status-2026-06-05",
+    "adapter": "status-page",
+    "oracleOutcome": "NO",
+    "actualOutcome": "NO",
+    "confidence": 79
+  },
+  {
+    "id": "api-health-2026-06-05",
+    "adapter": "status-health",
+    "oracleOutcome": "YES",
+    "actualOutcome": "YES",
+    "confidence": 95
+  },
+  {
+    "id": "one-sided-liquidity",
+    "adapter": "liquidity-rule",
+    "oracleOutcome": "CANCEL",
+    "actualOutcome": "CANCEL",
+    "confidence": 100
+  },
+  {
+    "id": "ambiguous-source",
+    "adapter": "manual-review",
+    "oracleOutcome": "NEEDS_REVIEW",
+    "actualOutcome": "NO",
+    "confidence": 52
+  }
+]
