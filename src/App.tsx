@@ -293,6 +293,7 @@ type MarketViewMode = "grid" | "list";
 type ChartWindowKey = "1h" | "6h" | "1d" | "1w" | "1m" | "all";
 type MarketSortKey = "created" | "ending" | "volume" | "participants" | "yes" | "no";
 type SortDirection = "asc" | "desc";
+type NotificationFilter = NotificationType | "all";
 
 type LeaderboardRow = {
   address: string;
@@ -355,6 +356,28 @@ type MarketEvidence = {
   notes: string;
   addedBy: string;
   createdAt: string;
+};
+
+type NotificationType =
+  | "resolve"
+  | "finalize"
+  | "owner-review"
+  | "dispute-review"
+  | "stale-review"
+  | "proposal"
+  | "dispute-resolved"
+  | "claim"
+  | "result";
+
+type NotificationHistoryItem = {
+  key: string;
+  wallet: string;
+  type: NotificationType;
+  label: string;
+  title: string;
+  detail: string;
+  marketId?: number;
+  createdAt: number;
 };
 
 type EvidenceDraft = {
@@ -621,6 +644,7 @@ const FOLLOWED_CREATORS_KEY = "aurapredict.followedCreators";
 const MARKET_COMMENTS_KEY = "aurapredict.marketComments";
 const MARKET_EVIDENCE_KEY = "aurapredict.marketEvidence";
 const LOCAL_CLAIMED_MARKETS_KEY = "aurapredict.localClaimedMarkets";
+const NOTIFICATION_HISTORY_KEY = "aurapredict.notificationHistory";
 const ONBOARDING_DISMISSED_KEY = "aurapredict.onboardingDismissed";
 const MARKET_QUERY_KEY = "market";
 const PROFILE_QUERY_KEY = "profile";
@@ -3448,6 +3472,7 @@ export default function App() {
     participated: false,
     notParticipated: false
   });
+  const [notificationFilter, setNotificationFilter] = useState<NotificationFilter>("all");
   const [collectionPage, setCollectionPage] = useState(1);
   const [selectedMarketId, setSelectedMarketId] = useState<number | null>(null);
   const [selectedProfileAddress, setSelectedProfileAddress] = useState("");
@@ -3484,6 +3509,9 @@ export default function App() {
   );
   const [locallyClaimedMarkets, setLocallyClaimedMarkets] = useState<string[]>(() =>
     readJsonStorage(LOCAL_CLAIMED_MARKETS_KEY, [])
+  );
+  const [notificationHistory, setNotificationHistory] = useState<NotificationHistoryItem[]>(() =>
+    readJsonStorage(NOTIFICATION_HISTORY_KEY, [])
   );
   const [commentInputs, setCommentInputs] = useState<Record<number, string>>({});
   const [evidenceDrafts, setEvidenceDrafts] = useState<Record<number, EvidenceDraft>>({});
@@ -4187,6 +4215,41 @@ export default function App() {
     !!account &&
     ((!!owner && sameAddress(owner, account)) || (!!resolutionAuthority && sameAddress(resolutionAuthority, account)));
   const isProtocolOwner = !!account && !!owner && sameAddress(account, owner);
+  const ownerReviewReasonFor = useCallback(
+    (market: MarketView) => {
+      if (market.disputed) {
+        return `Formal dispute opened by ${displayNameForAddress(market.disputer)}. Owner/authority must choose the final outcome.`;
+      }
+
+      const receipt = aiResolutionReceipts[String(market.id)];
+      const aiOutcome = aiOutcomeFromReceipt(receipt);
+      if (
+        market.authorityReviewRequired &&
+        aiOutcome !== Outcome.Unresolved &&
+        aiOutcome !== Outcome.Canceled &&
+        market.proposedOutcome !== Outcome.Unresolved &&
+        market.proposedOutcome !== Outcome.Canceled &&
+        market.proposedOutcome !== aiOutcome
+      ) {
+        return `Aura suggested ${outcomeLabel(aiOutcome)}, but the resolver proposed ${outcomeLabel(market.proposedOutcome)}.`;
+      }
+
+      const receiptStatus = [receipt?.status, receipt?.proposedOutcome, receipt?.error]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      if (market.authorityReviewRequired && receiptStatus.includes("insufficient")) {
+        return "Aura returned insufficient evidence, so the resolver proposal needs owner/authority verification.";
+      }
+
+      if (market.authorityReviewRequired && !receipt) {
+        return "No saved Aura review is available for this proposal, so owner/authority verification is required.";
+      }
+
+      return "The proposal was flagged by the resolver/authority path and needs owner/authority verification before final settlement.";
+    },
+    [aiResolutionReceipts, displayNameForAddress]
+  );
   const ownerMismatchHistory = canReviewAsOwner
     ? markets.filter((market) => {
         if (market.proposedAt <= 0 || market.outcome === Outcome.Unresolved) return false;
@@ -4207,6 +4270,158 @@ export default function App() {
     disputeResolvedNotifications.length +
     claimNotifications.length +
     resultNotifications.length;
+  const activeNotificationItems = useMemo<NotificationHistoryItem[]>(() => {
+    if (!account) return [];
+    const wallet = account.toLowerCase();
+    const rows: NotificationHistoryItem[] = [];
+    resolveNotifications.forEach((market) => {
+      rows.push({
+        key: `${wallet}:resolve:${market.id}:${market.closeTime}`,
+        wallet,
+        type: "resolve",
+        label: "Result needed",
+        title: shortQuestion(market.question),
+        detail: `Closed ${closeDate(market.closeTime)}. Resolution proposal is needed.`,
+        marketId: market.id,
+        createdAt: 0
+      });
+    });
+    finalizeNotifications.forEach((market) => {
+      rows.push({
+        key: `${wallet}:finalize:${market.id}:${market.proposedAt}`,
+        wallet,
+        type: "finalize",
+        label: "Ready to finalize",
+        title: shortQuestion(market.question),
+        detail: `Proposed ${outcomeLabel(market.proposedOutcome)}. No dispute was opened.`,
+        marketId: market.id,
+        createdAt: 0
+      });
+    });
+    ownerAiMismatchNotifications.forEach((market) => {
+      rows.push({
+        key: `${wallet}:owner-ai-mismatch:${market.id}:${market.proposedAt}:${market.proposedOutcome}`,
+        wallet,
+        type: "owner-review",
+        label: "Owner review",
+        title: shortQuestion(market.question),
+        detail: ownerReviewReasonFor(market),
+        marketId: market.id,
+        createdAt: 0
+      });
+    });
+    disputeReviewNotifications.forEach((market) => {
+      rows.push({
+        key: `${wallet}:review:${market.id}:${market.proposedAt}:${market.disputed ? "dispute" : "authority"}`,
+        wallet,
+        type: market.disputed ? "dispute-review" : "owner-review",
+        label: market.disputed ? "Dispute review" : "Authority review",
+        title: shortQuestion(market.question),
+        detail: ownerReviewReasonFor(market),
+        marketId: market.id,
+        createdAt: 0
+      });
+    });
+    staleDisputeNotifications.forEach((market) => {
+      rows.push({
+        key: `${wallet}:stale-review:${market.id}:${market.proposedAt}`,
+        wallet,
+        type: "stale-review",
+        label: "Stale review",
+        title: shortQuestion(market.question),
+        detail: "Authority did not finalize after the grace period. Cancel refunds positions.",
+        marketId: market.id,
+        createdAt: 0
+      });
+    });
+    proposedResultNotifications.forEach((market) => {
+      const aiReceipt = aiResolutionReceipts[String(market.id)];
+      const aiSuggestedOutcome = aiOutcomeFromReceipt(aiReceipt);
+      rows.push({
+        key: `${wallet}:proposal:${market.id}:${market.proposedAt}:${market.proposedOutcome}`,
+        wallet,
+        type: "proposal",
+        label: "Result proposed",
+        title: shortQuestion(market.question),
+        detail: `Resolver proposed ${outcomeLabel(market.proposedOutcome)}${
+          aiSuggestedOutcome !== Outcome.Unresolved ? `. AI suggested ${outcomeLabel(aiSuggestedOutcome)}.` : "."
+        }`,
+        marketId: market.id,
+        createdAt: 0
+      });
+    });
+    disputeResolvedNotifications.forEach((market) => {
+      rows.push({
+        key: `${wallet}:dispute-resolved:${market.id}:${market.outcome}`,
+        wallet,
+        type: "dispute-resolved",
+        label: "Dispute resolved",
+        title: shortQuestion(market.question),
+        detail: `Final outcome is ${outcomeLabel(market.outcome)} after dispute review by owner/authority.`,
+        marketId: market.id,
+        createdAt: 0
+      });
+    });
+    claimNotifications.forEach((market) => {
+      rows.push({
+        key: `${wallet}:claim:${market.id}:${market.outcome}:${market.potentialPayout.toString()}`,
+        wallet,
+        type: "claim",
+        label: "Claim available",
+        title: shortQuestion(market.question),
+        detail: `${formatMarketAmount(market.potentialPayout, market)} ${marketSymbol(market)} ready.`,
+        marketId: market.id,
+        createdAt: 0
+      });
+    });
+    resultNotifications.forEach((market) => {
+      rows.push({
+        key: `${wallet}:result:${market.id}:${market.outcome}`,
+        wallet,
+        type: "result",
+        label: "Result posted",
+        title: shortQuestion(market.question),
+        detail: `${outcomeLabel(market.outcome)}. No payout is available for this position.`,
+        marketId: market.id,
+        createdAt: 0
+      });
+    });
+    return rows;
+  }, [
+    account,
+    aiResolutionReceipts,
+    claimNotifications,
+    disputeResolvedNotifications,
+    disputeReviewNotifications,
+    finalizeNotifications,
+    ownerAiMismatchNotifications,
+    ownerReviewReasonFor,
+    proposedResultNotifications,
+    resolveNotifications,
+    resultNotifications,
+    staleDisputeNotifications
+  ]);
+  const walletNotificationHistory = account
+    ? notificationHistory
+        .filter((item) => item.wallet === account.toLowerCase())
+        .sort((a, b) => b.createdAt - a.createdAt)
+    : [];
+  const visibleNotificationHistory =
+    notificationFilter === "all"
+      ? walletNotificationHistory
+      : walletNotificationHistory.filter((item) => item.type === notificationFilter);
+  const notificationFilterOptions: { value: NotificationFilter; label: string }[] = [
+    { value: "all", label: "All" },
+    { value: "claim", label: "Claims" },
+    { value: "result", label: "Results" },
+    { value: "proposal", label: "Proposals" },
+    { value: "resolve", label: "Resolve" },
+    { value: "finalize", label: "Finalize" },
+    { value: "owner-review", label: "Owner review" },
+    { value: "dispute-review", label: "Disputes" },
+    { value: "stale-review", label: "Stale" },
+    { value: "dispute-resolved", label: "Resolved disputes" }
+  ];
   const ownerUsageMetrics = {
     totalTrades: activities.length,
     comments: Object.values(marketComments).reduce((sum, rows) => sum + rows.length, 0),
@@ -4521,6 +4736,23 @@ export default function App() {
   useEffect(() => {
     window.localStorage.setItem(LOCAL_CLAIMED_MARKETS_KEY, JSON.stringify(locallyClaimedMarkets.slice(-400)));
   }, [locallyClaimedMarkets]);
+
+  useEffect(() => {
+    if (!account || activeNotificationItems.length === 0) return;
+    setNotificationHistory((current) => {
+      const seen = new Set(current.map((item) => item.key));
+      const timestamp = Math.floor(Date.now() / 1000);
+      const additions = activeNotificationItems
+        .filter((item) => !seen.has(item.key))
+        .map((item) => ({ ...item, createdAt: timestamp }));
+      if (additions.length === 0) return current;
+      const next = [...additions, ...current]
+        .sort((a, b) => b.createdAt - a.createdAt)
+        .slice(0, 500);
+      window.localStorage.setItem(NOTIFICATION_HISTORY_KEY, JSON.stringify(next));
+      return next;
+    });
+  }, [account, activeNotificationItems]);
 
   useEffect(() => {
     if (selectedMarketId === null) return;
@@ -8909,6 +9141,10 @@ export default function App() {
       : selectedMarket.proposedAt > 0 && selectedMarket.disputeDeadline > 0
       ? `Users with positions can dispute until ${closeDate(selectedMarket.disputeDeadline)}.`
       : "Dispute opens only after a result has been proposed.";
+    const selectedOwnerReviewReason =
+      canReviewAsOwner && (selectedMarket.disputed || Boolean(selectedMarket.authorityReviewRequired))
+        ? ownerReviewReasonFor(selectedMarket)
+        : "";
     const finalDecisionLabel =
       selectedMarket.outcome !== Outcome.Unresolved
         ? outcomeLabel(selectedMarket.outcome)
@@ -9261,6 +9497,13 @@ export default function App() {
                     <strong>{disputeDecisionLabel}</strong>
                     <small>{disputeDecisionDetail}</small>
                   </article>
+                  {selectedOwnerReviewReason && (
+                    <article>
+                      <span>Owner review reason</span>
+                      <strong>{selectedMarket.disputed ? "Formal dispute" : "Authority flag"}</strong>
+                      <small>{selectedOwnerReviewReason}</small>
+                    </article>
+                  )}
                   <article>
                     <span>Final reviewer action</span>
                     <strong>{finalDecisionLabel}</strong>
@@ -10288,7 +10531,7 @@ export default function App() {
                         <small>
                           {market.disputed
                             ? `Proposed ${outcomeLabel(market.proposedOutcome)}. Disputer ${displayNameForAddress(market.disputer)}.`
-                            : `Proposed ${outcomeLabel(market.proposedOutcome)}. This result is held for authority review.`}
+                            : `Proposed ${outcomeLabel(market.proposedOutcome)}. ${ownerReviewReasonFor(market)}`}
                         </small>
                         <div className="notification-actions">
                           <button className="secondary" onClick={() => openMarket(market.id, true)} type="button">
@@ -10687,7 +10930,8 @@ export default function App() {
               <div className="notifications-page-head">
                 <div>
                   <span className="section-label">Wallet actions</span>
-                  <h3>{notificationCount} pending notifications</h3>
+                  <h3>{walletNotificationHistory.length} saved notifications</h3>
+                  <p>{notificationCount} pending now. Newest notifications are shown first.</p>
                 </div>
                 {claimNotifications.length > 1 && (
                   <button onClick={claimAll} disabled={transactionPending} type="button">
@@ -10695,151 +10939,55 @@ export default function App() {
                   </button>
                 )}
               </div>
-              {notificationCount === 0 && (
+              <div className="notification-filter-row" aria-label="Notification filters">
+                {notificationFilterOptions.map((option) => (
+                  <button
+                    className={notificationFilter === option.value ? "active" : ""}
+                    key={option.value}
+                    onClick={() => setNotificationFilter(option.value)}
+                    type="button"
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+              {walletNotificationHistory.length === 0 && (
                 <div className="empty-state">
-                  <strong>No pending notifications</strong>
-                  <span>Claim, resolve, dispute, and result notices will appear here.</span>
+                  <strong>No saved notifications</strong>
+                  <span>Claim, resolve, dispute, and result notices will be saved here when they appear.</span>
                 </div>
               )}
-              {resolveNotifications.map((market) => {
-                const hint = resolveActionHint(market);
-                const cancelOnlyResolution = requiresCancelForLiquidity(market);
-                const resolutionReadyAt = resolutionUnlockTime(market);
-                const aiReceipt = aiResolutionReceipts[String(market.id)];
-                const aiSuggestedOutcome = aiOutcomeFromReceipt(aiReceipt);
-                const aiCanPropose = aiSuggestedOutcome === Outcome.Yes || aiSuggestedOutcome === Outcome.No;
-                const auraStatusText = cancelOnlyResolution
-                  ? "Cancel / refund required. Aura review is not needed."
-                  : aiCanPropose
-                  ? `AI suggests ${outcomeLabel(aiSuggestedOutcome)}`
-                  : resolveAuraStatusLabel(market);
+              {visibleNotificationHistory.length === 0 && walletNotificationHistory.length > 0 && (
+                <div className="empty-state">
+                  <strong>No notifications in this filter</strong>
+                  <span>Choose another type to view saved wallet notification history.</span>
+                </div>
+              )}
+              {visibleNotificationHistory.map((item) => {
+                const historyMarketId = item.marketId;
+                const market = historyMarketId !== undefined ? markets.find((row) => row.id === historyMarketId) : undefined;
+                const activeClaim = market && claimNotifications.some((row) => row.id === market.id);
                 return (
-                  <article className="notification-card" key={`page-resolve-${market.id}`}>
-                    <span>Result needed</span>
-                    <strong>{shortQuestion(market.question)}</strong>
-                    <small>Closed {closeDate(market.closeTime)}. Creator bond stays locked during dispute window.</small>
-                    {resolutionReadyAt > market.closeTime && (
-                      <small>Resolution unlock: {closeDate(resolutionReadyAt)} (rule timestamp).</small>
-                    )}
-                    <small>{auraStatusText}</small>
-                    {hint && <small>{hint}</small>}
-                    <small>Ended tab updates after finalization, not right after proposal.</small>
+                  <article className="notification-card notification-history-card" key={item.key}>
+                    <span>{item.label}</span>
+                    <strong>{historyMarketId !== undefined ? `#${historyMarketId} ${item.title}` : item.title}</strong>
+                    <small>{item.detail}</small>
+                    <small className="notification-time">Created {closeDate(item.createdAt)}</small>
                     <div className="notification-actions">
-                      <button className="secondary" onClick={() => openMarket(market.id, true)} type="button">Open Resolution</button>
-                    </div>
-                  </article>
-                );
-              })}
-              {finalizeNotifications.map((market) => (
-                <article className="notification-card" key={`page-finalize-${market.id}`}>
-                  <span>Ready to finalize</span>
-                  <strong>{shortQuestion(market.question)}</strong>
-                  <small>Proposed {outcomeLabel(market.proposedOutcome)}. No dispute was opened.</small>
-                  <div className="notification-actions">
-                    <button className="secondary" onClick={() => openMarket(market.id, true)} type="button">Open Resolution</button>
-                  </div>
-                </article>
-              ))}
-              {ownerAiMismatchNotifications.map((market) => {
-                const receipt = aiResolutionReceipts[String(market.id)];
-                const aiOutcome = aiOutcomeFromReceipt(receipt);
-                return (
-                  <article className="notification-card" key={`page-owner-ai-mismatch-${market.id}`}>
-                    <span>Owner review: AI mismatch</span>
-                    <strong>{shortQuestion(market.question)}</strong>
-                    <small>
-                      AI suggested {outcomeLabel(aiOutcome)} but resolver proposed {outcomeLabel(market.proposedOutcome)}.
-                    </small>
-                    <div className="notification-actions">
-                      <button className="secondary" onClick={() => openMarket(market.id, true)} type="button">Open Resolution</button>
-                    </div>
-                  </article>
-                );
-              })}
-              {disputeReviewNotifications.map((market) => (
-                <article className="notification-card" key={`page-review-${market.id}`}>
-                  <span>{market.disputed ? "Dispute review" : "Authority review"}</span>
-                  <strong>{shortQuestion(market.question)}</strong>
-                  <small>
-                    {market.disputed
-                      ? `Proposed ${outcomeLabel(market.proposedOutcome)}. Disputer ${displayNameForAddress(market.disputer)}.`
-                      : `Proposed ${outcomeLabel(market.proposedOutcome)}. This result is held for authority review.`}
-                  </small>
-                  <div className="notification-actions">
-                    <button className="secondary" onClick={() => openMarket(market.id, true)} type="button">Open Review</button>
-                  </div>
-                </article>
-              ))}
-              {staleDisputeNotifications.map((market) => (
-                <article className="notification-card" key={`page-stale-${market.id}`}>
-                  <span>Stale review</span>
-                  <strong>{shortQuestion(market.question)}</strong>
-                  <small>Authority did not finalize after the grace period. Cancel refunds positions.</small>
-                  <div className="notification-actions">
-                    <button className="secondary" onClick={() => openMarket(market.id, true)} type="button">Open Review</button>
-                  </div>
-                </article>
-              ))}
-              {proposedResultNotifications.map((market) => {
-                const aiReceipt = aiResolutionReceipts[String(market.id)];
-                const aiSuggestedOutcome = aiOutcomeFromReceipt(aiReceipt);
-                const dismissKey = `${account.toLowerCase()}:proposal:${market.id}:${market.proposedAt}:${market.proposedOutcome}`;
-                return (
-                  <article className="notification-card" key={`page-proposal-${market.id}-${market.proposedAt}`}>
-                    <span>Result proposed</span>
-                    <strong>{shortQuestion(market.question)}</strong>
-                    <small>
-                      Resolver proposed {outcomeLabel(market.proposedOutcome)}
-                      {aiSuggestedOutcome !== Outcome.Unresolved ? `. AI suggested ${outcomeLabel(aiSuggestedOutcome)}.` : "."}
-                    </small>
-                    <div className="notification-actions">
-                      {!market.disputed && market.disputeDeadline > nowSeconds && (
-                        <button className="secondary" onClick={() => disputeMarket(market.id)}>
-                          Dispute {formatMarketAmount(market.termsDisputeBond ?? disputeBond, market)} {marketSymbol(market)}
+                      {historyMarketId !== undefined && (
+                        <button className="secondary" onClick={() => openMarket(historyMarketId, item.type.includes("review") || item.type === "resolve" || item.type === "finalize")} type="button">
+                          View market
                         </button>
                       )}
-                      <button className="secondary" onClick={() => openMarket(market.id)} type="button">View market</button>
-                      <button className="secondary" onClick={() => dismissNotificationByKey(dismissKey)} type="button">Dismiss</button>
+                      {market && activeClaim && (
+                        <button onClick={() => claim(market.id)} disabled={transactionPending} type="button">
+                          Claim payout
+                        </button>
+                      )}
                     </div>
                   </article>
                 );
               })}
-              {disputeResolvedNotifications.map((market) => {
-                const dismissKey = `${account.toLowerCase()}:dispute-resolved:${market.id}:${market.outcome}`;
-                return (
-                  <article className="notification-card" key={`page-dispute-resolved-${market.id}-${market.outcome}`}>
-                    <span>Dispute resolved</span>
-                    <strong>{shortQuestion(market.question)}</strong>
-                    <small>Final outcome is {outcomeLabel(market.outcome)} after dispute review by owner/authority.</small>
-                    <div className="notification-actions">
-                      <button className="secondary" onClick={() => openMarket(market.id)} type="button">View market</button>
-                      <button className="secondary" onClick={() => dismissNotificationByKey(dismissKey)} type="button">Dismiss</button>
-                    </div>
-                  </article>
-                );
-              })}
-              {claimNotifications.map((market) => (
-                <article className="notification-card" key={`page-claim-${market.id}`}>
-                  <span>Claim available</span>
-                  <strong>{shortQuestion(market.question)}</strong>
-                  <small>{formatMarketAmount(market.potentialPayout, market)} {marketSymbol(market)} ready</small>
-                  <div className="notification-actions">
-                    <button onClick={() => claim(market.id)}>Claim payout</button>
-                    <button className="secondary" onClick={() => openMarket(market.id)} type="button">View market</button>
-                  </div>
-                </article>
-              ))}
-              {resultNotifications.map((market) => (
-                <article className="notification-card" key={`page-result-${market.id}`}>
-                  <span>Result posted</span>
-                  <strong>{shortQuestion(market.question)}</strong>
-                  <small>{outcomeLabel(market.outcome)}. No payout is available for this position.</small>
-                  <div className="notification-actions">
-                    <button className="secondary" onClick={() => dismissResultNotification(market)}>Dismiss</button>
-                    <button className="secondary" onClick={() => openMarket(market.id)} type="button">View market</button>
-                  </div>
-                </article>
-              ))}
             </section>
           ) : view === "owner" ? (
             <section className="owner-console">

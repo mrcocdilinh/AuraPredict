@@ -1710,6 +1710,48 @@ h3 {
   margin: 0;
 }
 
+.notifications-page-head p {
+  color: #667085;
+  font-size: 0.82rem;
+  font-weight: 760;
+  margin: 4px 0 0;
+}
+
+.notification-filter-row {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.notification-filter-row button {
+  background: #ffffff;
+  border: 1px solid #dfe6f1;
+  border-radius: 8px;
+  box-shadow: none;
+  color: #344054;
+  font-size: 0.78rem;
+  font-weight: 850;
+  min-height: 34px;
+  padding: 0 10px;
+}
+
+.notification-filter-row button.active,
+.notification-filter-row button:hover {
+  background: #101827;
+  border-color: #101827;
+  color: #ffffff;
+}
+
+.notification-history-card {
+  border-left: 3px solid #18d7ff;
+}
+
+.notification-card .notification-time {
+  color: #4568e8;
+  font-weight: 850;
+}
+
 .history-tx-row {
   align-items: center;
   display: flex;
@@ -7231,6 +7273,19 @@ label {
 [data-theme="dark"] .notifications-page-head {
   background: #0b1020;
   border-color: #202a3f;
+}
+
+[data-theme="dark"] .notification-filter-row button {
+  background: #0b1020;
+  border-color: #202a3f;
+  color: #dbeafe;
+}
+
+[data-theme="dark"] .notification-filter-row button.active,
+[data-theme="dark"] .notification-filter-row button:hover {
+  background: #18d7ff;
+  border-color: #18d7ff;
+  color: #06111e;
 }
 
 [data-theme="dark"] .compact-yes-tile {
