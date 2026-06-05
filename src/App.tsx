@@ -620,6 +620,7 @@ const MARKET_CACHE_KEY = "aurapredict.marketCache";
 const FOLLOWED_CREATORS_KEY = "aurapredict.followedCreators";
 const MARKET_COMMENTS_KEY = "aurapredict.marketComments";
 const MARKET_EVIDENCE_KEY = "aurapredict.marketEvidence";
+const LOCAL_CLAIMED_MARKETS_KEY = "aurapredict.localClaimedMarkets";
 const ONBOARDING_DISMISSED_KEY = "aurapredict.onboardingDismissed";
 const MARKET_QUERY_KEY = "market";
 const PROFILE_QUERY_KEY = "profile";
@@ -805,6 +806,10 @@ function readJsonStorage<T>(key: string, fallback: T) {
   } catch {
     return fallback;
   }
+}
+
+function claimedMarketKey(account: string, marketId: number) {
+  return `${account.toLowerCase()}:${marketId}`;
 }
 
 function readCachedMarkets() {
@@ -3454,6 +3459,9 @@ export default function App() {
   const [marketEvidence, setMarketEvidence] = useState<Record<string, MarketEvidence[]>>(() =>
     readJsonStorage(MARKET_EVIDENCE_KEY, {})
   );
+  const [locallyClaimedMarkets, setLocallyClaimedMarkets] = useState<string[]>(() =>
+    readJsonStorage(LOCAL_CLAIMED_MARKETS_KEY, [])
+  );
   const [commentInputs, setCommentInputs] = useState<Record<number, string>>({});
   const [evidenceDrafts, setEvidenceDrafts] = useState<Record<number, EvidenceDraft>>({});
   const [aiBusy, setAiBusy] = useState(false);
@@ -3631,16 +3639,25 @@ export default function App() {
     ? markets
         .map((market) => {
           const activityPosition = profileActivityPositions.get(market.id) ?? { yes: 0n, no: 0n };
-          const yesPosition = isOwnProfile ? market.yesPosition : activityPosition.yes;
-          const noPosition = isOwnProfile ? market.noPosition : activityPosition.no;
+          const hasHydratedPosition = market.yesPosition > 0n || market.noPosition > 0n || market.claimed;
+          const locallyClaimed = accountKey ? locallyClaimedMarkets.includes(claimedMarketKey(accountKey, market.id)) : false;
+          const effectiveClaimed = isOwnProfile ? market.claimed || locallyClaimed : false;
+          const yesPosition = isOwnProfile && hasHydratedPosition ? market.yesPosition : activityPosition.yes;
+          const noPosition = isOwnProfile && hasHydratedPosition ? market.noPosition : activityPosition.no;
           const settlement = settlementForPosition(market, protocolFeeBps, yesPosition, noPosition);
+          const localPotentialPayout =
+            isOwnProfile && effectiveClaimed
+              ? 0n
+              : isOwnProfile && market.outcome !== Outcome.Unresolved
+              ? market.potentialPayout > 0n ? market.potentialPayout : settlement.payout
+              : market.potentialPayout;
 
           return {
             ...market,
             yesPosition,
             noPosition,
-            claimed: isOwnProfile ? market.claimed : false,
-            potentialPayout: isOwnProfile ? market.potentialPayout : settlement.payout
+            claimed: effectiveClaimed,
+            potentialPayout: isOwnProfile ? localPotentialPayout : settlement.payout
           };
         })
         .filter((market) => hasUserPosition(market) || sameAddress(market.creator, viewedProfileAddress))
@@ -4470,6 +4487,10 @@ export default function App() {
   useEffect(() => {
     window.localStorage.setItem(MARKET_EVIDENCE_KEY, JSON.stringify(marketEvidence));
   }, [marketEvidence]);
+
+  useEffect(() => {
+    window.localStorage.setItem(LOCAL_CLAIMED_MARKETS_KEY, JSON.stringify(locallyClaimedMarkets.slice(-400)));
+  }, [locallyClaimedMarkets]);
 
   useEffect(() => {
     if (selectedMarketId === null) return;
@@ -6928,6 +6949,57 @@ export default function App() {
     }
   };
 
+  const markClaimedLocally = useCallback(
+    (marketId: number) => {
+      if (!accountKey) return;
+      const key = claimedMarketKey(accountKey, marketId);
+      setLocallyClaimedMarkets((current) => (current.includes(key) ? current : [...current, key].slice(-400)));
+      setMarkets((current) =>
+        current.map((market) =>
+          market.id === marketId ? { ...market, claimed: true, potentialPayout: 0n } : market
+        )
+      );
+    },
+    [accountKey]
+  );
+
+  const refreshClaimEligibility = useCallback(
+    async (marketId: number) => {
+      if (!account || !isAddress(account)) throw new Error("Connect wallet first.");
+      const [position, payout] = await Promise.all([
+        withRpcRetry(() => getPublicClient().readContract({
+          address: contractAddress,
+          abi: arcPredictionMarketAbi,
+          functionName: "positionOf",
+          args: [BigInt(marketId), account as Address]
+        })),
+        withRpcRetry(() => getPublicClient().readContract({
+          address: contractAddress,
+          abi: arcPredictionMarketAbi,
+          functionName: "potentialPayout",
+          args: [BigInt(marketId), account as Address]
+        }))
+      ]);
+      const claimed = Boolean(position[2]);
+      setMarkets((current) =>
+        current.map((market) =>
+          market.id === marketId
+            ? {
+                ...market,
+                yesPosition: position[0],
+                noPosition: position[1],
+                claimed,
+                potentialPayout: claimed ? 0n : payout
+              }
+            : market
+        )
+      );
+      if (claimed) markClaimedLocally(marketId);
+      return { claimed, payout };
+    },
+    [account, contractAddress, markClaimedLocally]
+  );
+
   const createMarket = async (event: React.FormEvent) => {
     event.preventDefault();
     try {
@@ -7872,8 +7944,22 @@ export default function App() {
   const claim = async (marketId: number) => {
     if (!account || !isAddress(account)) throw new Error("Connect wallet first.");
     await switchToArc();
+    const eligibility = await refreshClaimEligibility(marketId);
+    if (eligibility.claimed) {
+      setNotice("This payout was already claimed. Notification updated.");
+      setNotificationMenuOpen(false);
+      return;
+    }
+    if (eligibility.payout <= 0n) {
+      setNotice("No claimable payout is available onchain for this market. Notification updated.");
+      setMarkets((current) =>
+        current.map((market) => (market.id === marketId ? { ...market, potentialPayout: 0n } : market))
+      );
+      setNotificationMenuOpen(false);
+      return;
+    }
     const walletClient = getActiveWalletClient();
-    await runTransaction(
+    const completed = await runTransaction(
       () =>
         walletClient.writeContract({
           account: account as Address,
@@ -7883,8 +7969,11 @@ export default function App() {
           functionName: "claim",
           args: [BigInt(marketId)]
         }),
-      "Claiming payout..."
+      "Claiming payout...",
+      true,
+      () => markClaimedLocally(marketId)
     );
+    if (completed) setNotificationMenuOpen(false);
   };
 
   const withdrawPendingBalance = async (market: MarketView) => {
@@ -7947,6 +8036,8 @@ export default function App() {
       await switchToArc();
       const walletClient = getActiveWalletClient();
       for (const [index, market] of claimNotifications.entries()) {
+        const eligibility = await refreshClaimEligibility(market.id);
+        if (eligibility.claimed || eligibility.payout <= 0n) continue;
         const completed = await runTransaction(
           () =>
             walletClient.writeContract({
@@ -7957,7 +8048,9 @@ export default function App() {
               functionName: "claim",
               args: [BigInt(market.id)]
             }),
-          `Claiming payout ${index + 1}/${claimNotifications.length} from Market #${market.id}...`
+          `Claiming payout ${index + 1}/${claimNotifications.length} from Market #${market.id}...`,
+          true,
+          () => markClaimedLocally(market.id)
         );
         if (!completed) break;
       }
