@@ -598,7 +598,7 @@ const MARKET_INITIAL_LOAD = 9999;
 const MARKET_LOAD_STEP = 24;
 const MARKET_LOAD_CONCURRENCY = 4;
 const EVENT_LOAD_CONCURRENCY = 2;
-const RPC_RETRY_ATTEMPTS = 2;
+const RPC_RETRY_ATTEMPTS = 3;
 const RPC_RETRY_DELAY_MS = 450;
 const RPC_CALL_STAGGER_MS = 40;
 const CHART_LEFT = 8;
@@ -1087,6 +1087,14 @@ function compactErrorMessage(error: unknown) {
   const raw = errorMessage(error);
   const firstLine = raw.split("\n").find(Boolean) || raw;
   const lower = raw.toLowerCase();
+  if (
+    lower.includes("failed to fetch") ||
+    lower.includes("http request failed") ||
+    lower.includes("networkerror") ||
+    lower.includes("timeout")
+  ) {
+    return "Arc RPC request failed. This is usually a temporary network/RPC issue. Refresh or try again in a few seconds.";
+  }
   if (lower.includes("user rejected") || lower.includes("user denied")) return "Transaction rejected in wallet.";
   if (lower.includes("insufficient funds")) return "Insufficient wallet balance for this transaction. Check USDC for gas and the selected market token.";
   if (lower.includes("insufficientamountout") || lower.includes("0xe52970aa")) {
@@ -2344,6 +2352,17 @@ function isRateLimitError(error: unknown) {
   return message.includes("429") || message.includes("too many requests") || message.includes("rate limit");
 }
 
+function isTransientRpcError(error: unknown) {
+  const message = errorMessage(error).toLowerCase();
+  return (
+    isRateLimitError(error) ||
+    message.includes("failed to fetch") ||
+    message.includes("http request failed") ||
+    message.includes("networkerror") ||
+    message.includes("timeout")
+  );
+}
+
 async function withRpcRetry<T>(request: () => Promise<T>) {
   let lastError: unknown;
 
@@ -2352,7 +2371,7 @@ async function withRpcRetry<T>(request: () => Promise<T>) {
       return await request();
     } catch (error) {
       lastError = error;
-      if (!isRateLimitError(error) || attempt === RPC_RETRY_ATTEMPTS - 1) {
+      if (!isTransientRpcError(error) || attempt === RPC_RETRY_ATTEMPTS - 1) {
         throw error;
       }
 
