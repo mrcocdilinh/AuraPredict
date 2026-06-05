@@ -2694,12 +2694,41 @@ h3 {
   align-items: end;
   display: grid;
   gap: 10px;
-  grid-template-columns: repeat(3, minmax(180px, 240px)) 1fr;
+  grid-template-columns: repeat(3, minmax(170px, 220px)) minmax(210px, 260px) 1fr;
 }
 
 .collection-toolbar label {
   display: grid;
   gap: 5px;
+}
+
+.collection-check-filter {
+  border: 1px solid rgba(102, 112, 133, 0.2);
+  border-radius: 8px;
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  min-height: 36px;
+  padding: 7px 10px 8px;
+}
+
+.collection-check-filter legend {
+  color: #667085;
+  font-size: 0.76rem;
+  font-weight: 850;
+  padding: 0 4px;
+}
+
+.collection-check-filter label {
+  align-items: center;
+  display: flex;
+  gap: 7px;
+}
+
+.collection-check-filter input {
+  height: 15px;
+  margin: 0;
+  width: 15px;
 }
 
 .collection-toolbar label span,
@@ -7297,6 +7326,7 @@ label {
 }
 
 [data-theme="dark"] .collection-toolbar label span,
+[data-theme="dark"] .collection-check-filter legend,
 [data-theme="dark"] .collection-page-summary,
 [data-theme="dark"] .pagination-row span {
   color: #9aa7bd;

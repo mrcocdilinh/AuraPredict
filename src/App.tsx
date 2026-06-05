@@ -3425,6 +3425,10 @@ export default function App() {
   const [collectionSortKey, setCollectionSortKey] = useState<MarketSortKey>("created");
   const [collectionSortDirection, setCollectionSortDirection] = useState<SortDirection>("desc");
   const [collectionSettlementToken, setCollectionSettlementToken] = useState("All");
+  const [collectionParticipationFilter, setCollectionParticipationFilter] = useState({
+    participated: false,
+    notParticipated: false
+  });
   const [collectionPage, setCollectionPage] = useState(1);
   const [selectedMarketId, setSelectedMarketId] = useState<number | null>(null);
   const [selectedProfileAddress, setSelectedProfileAddress] = useState("");
@@ -3833,7 +3837,14 @@ export default function App() {
     const settlementToken = market.settlementToken || defaultSettlementToken;
     return isAddress(settlementToken) && sameAddress(settlementToken, collectionSettlementToken);
   });
-  const collectionMarkets = [...baseCollectionMarkets].sort((a, b) => {
+  const participationFilteredCollectionMarkets = baseCollectionMarkets.filter((market) => {
+    const { participated, notParticipated } = collectionParticipationFilter;
+    if (!participated && !notParticipated) return true;
+    if (participated && notParticipated) return true;
+    const userParticipated = account ? hasUserPosition(market) : false;
+    return participated ? userParticipated : !userParticipated;
+  });
+  const collectionMarkets = [...participationFilteredCollectionMarkets].sort((a, b) => {
     let result = 0;
     if (collectionSortKey === "volume") {
       result = compareBigint(marketVolume(a), marketVolume(b));
@@ -11039,6 +11050,37 @@ export default function App() {
                     ))}
                   </select>
                 </label>
+                <fieldset className="collection-check-filter">
+                  <legend>Position</legend>
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={collectionParticipationFilter.participated}
+                      onChange={(event) => {
+                        setCollectionParticipationFilter((current) => ({
+                          ...current,
+                          participated: event.target.checked
+                        }));
+                        setCollectionPage(1);
+                      }}
+                    />
+                    <span>Participated</span>
+                  </label>
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={collectionParticipationFilter.notParticipated}
+                      onChange={(event) => {
+                        setCollectionParticipationFilter((current) => ({
+                          ...current,
+                          notParticipated: event.target.checked
+                        }));
+                        setCollectionPage(1);
+                      }}
+                    />
+                    <span>Not participated</span>
+                  </label>
+                </fieldset>
                 <div className="collection-page-summary">
                   Page {safeCollectionPage} of {collectionPageCount}
                 </div>
