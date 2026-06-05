@@ -8028,16 +8028,37 @@ export default function App() {
   const claimAll = async () => {
     try {
       if (!account || !isAddress(account)) throw new Error("Connect wallet first.");
-      if (claimNotifications.length === 0) {
+      const claimTargets = [...claimNotifications];
+      if (claimTargets.length === 0) {
         setNotice("No claimable payouts right now.");
         return;
       }
 
       await switchToArc();
       const walletClient = getActiveWalletClient();
-      for (const [index, market] of claimNotifications.entries()) {
-        const eligibility = await refreshClaimEligibility(market.id);
-        if (eligibility.claimed || eligibility.payout <= 0n) continue;
+      let claimedCount = 0;
+      let skippedCount = 0;
+      for (const [index, market] of claimTargets.entries()) {
+        let eligibility: { claimed: boolean; payout: bigint };
+        try {
+          eligibility = await refreshClaimEligibility(market.id);
+        } catch (error) {
+          skippedCount += 1;
+          setNotice(`Skipped Market #${market.id}: ${compactErrorMessage(error)}`);
+          continue;
+        }
+        if (eligibility.claimed) {
+          skippedCount += 1;
+          markClaimedLocally(market.id);
+          continue;
+        }
+        if (eligibility.payout <= 0n) {
+          skippedCount += 1;
+          setMarkets((current) =>
+            current.map((item) => (item.id === market.id ? { ...item, potentialPayout: 0n } : item))
+          );
+          continue;
+        }
         const completed = await runTransaction(
           () =>
             walletClient.writeContract({
@@ -8048,11 +8069,18 @@ export default function App() {
               functionName: "claim",
               args: [BigInt(market.id)]
             }),
-          `Claiming payout ${index + 1}/${claimNotifications.length} from Market #${market.id}...`,
-          true,
+          `Claiming payout ${index + 1}/${claimTargets.length} from Market #${market.id}...`,
+          false,
           () => markClaimedLocally(market.id)
         );
+        if (completed) claimedCount += 1;
         if (!completed) break;
+      }
+      void refreshWalletBalance();
+      void loadMarkets();
+      if (claimedCount > 0 || skippedCount > 0) {
+        setNotificationMenuOpen(false);
+        setNotice(`Claim all finished: ${claimedCount} claimed, ${skippedCount} already updated/skipped.`);
       }
     } catch (error) {
       setNotice(compactErrorMessage(error));
