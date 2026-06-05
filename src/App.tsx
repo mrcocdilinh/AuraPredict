@@ -6545,7 +6545,9 @@ export default function App() {
         MARKET_LOAD_CONCURRENCY,
         async (id) => {
           const row = await readMarketById(id, true);
-          if (id === 0 && row) setContractVersion(row.isLegacyMarket ? "legacy" : "dispute");
+          if (id === 0 && row && !isStablecoinContractVersion(detectedContractVersion)) {
+            setContractVersion(row.isLegacyMarket ? "legacy" : "dispute");
+          }
           return row?.market ?? null;
         }
       );
