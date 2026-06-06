@@ -2028,39 +2028,74 @@ function combineUtcDateTimeParts(datePart: string, timePart: string) {
 function parseAuraUtcCloseTimeFromText(value: string) {
   const text = value.trim();
   if (!text) return "";
-  const embeddedUtcMatch = text.match(
-    /(\d{4}-\d{2}-\d{2})[T\s]([01]\d|2[0-3]):([0-5]\d)(?::[0-5]\d)?\s*(UTC|Z)\b/i
-  );
-  if (embeddedUtcMatch) {
-    const [, datePart, hh, mm] = embeddedUtcMatch;
-    return combineUtcDateTimeParts(datePart, `${hh}:${mm}`);
-  }
-  const isoMatch = text.match(/(\d{4}-\d{2}-\d{2})[T\s]([01]\d|2[0-3]):([0-5]\d)(?::[0-5]\d)?\s*Z/i);
-  if (isoMatch) {
-    const [, datePart, hh, mm] = isoMatch;
-    return combineUtcDateTimeParts(datePart, `${hh}:${mm}`);
+  const embeddedUtcCandidates = [
+    ...text.matchAll(/(\d{4}-\d{2}-\d{2})[T\s]([01]\d|2[0-3]):([0-5]\d)(?::[0-5]\d)?\s*(UTC|Z)\b/gi),
+    ...text.matchAll(/(\d{4}-\d{2}-\d{2})[T\s]([01]\d|2[0-3]):([0-5]\d)(?::[0-5]\d)?\s*Z/gi)
+  ]
+    .map((match) => combineUtcDateTimeParts(match[1], `${match[2]}:${match[3]}`))
+    .filter(Boolean);
+  if (embeddedUtcCandidates.length > 0) {
+    return embeddedUtcCandidates.sort((a, b) => Number(parseUtcDateTime(a) - parseUtcDateTime(b))).at(-1) || "";
   }
   const direct = parseUtcDateTimeParts(text);
   if (direct) return combineUtcDateTimeParts(direct.date, direct.time);
 
+  const namedDateThen24hTimeMatch = text.match(
+    /([A-Za-z]+)\s+(\d{1,2}),\s*(\d{4}),?\s+([01]?\d|2[0-3]):([0-5]\d)\s*UTC/i
+  );
+  if (namedDateThen24hTimeMatch) {
+    const [, monthRaw, dayRaw, yearRaw, hhRaw, mmRaw] = namedDateThen24hTimeMatch;
+    const monthIndex = new Date(`${monthRaw} 1, 2000`).getMonth();
+    if (!Number.isNaN(monthIndex)) {
+      const datePart = `${yearRaw}-${String(monthIndex + 1).padStart(2, "0")}-${String(Number(dayRaw)).padStart(2, "0")}`;
+      const timePart = `${String(Number(hhRaw)).padStart(2, "0")}:${mmRaw}`;
+      return combineUtcDateTimeParts(datePart, timePart);
+    }
+  }
+
+  const namedDateWith24hTimeMatch = text.match(
+    /([01]?\d|2[0-3]):([0-5]\d)\s*UTC\s+(?:on\s+)?([A-Za-z]+)\s+(\d{1,2}),\s*(\d{4})/i
+  );
+  if (namedDateWith24hTimeMatch) {
+    const [, hhRaw, mmRaw, monthRaw, dayRaw, yearRaw] = namedDateWith24hTimeMatch;
+    const monthIndex = new Date(`${monthRaw} 1, 2000`).getMonth();
+    if (!Number.isNaN(monthIndex)) {
+      const datePart = `${yearRaw}-${String(monthIndex + 1).padStart(2, "0")}-${String(Number(dayRaw)).padStart(2, "0")}`;
+      const timePart = `${String(Number(hhRaw)).padStart(2, "0")}:${mmRaw}`;
+      return combineUtcDateTimeParts(datePart, timePart);
+    }
+  }
+
   const namedDateMatch = text.match(
     /(\d{1,2}):(\d{2})\s*(AM|PM)\s+UTC\s+on\s+([A-Za-z]+)\s+(\d{1,2}),\s*(\d{4})/i
   );
-  if (!namedDateMatch) return "";
-  const [, hhRaw, mmRaw, ampmRaw, monthRaw, dayRaw, yearRaw] = namedDateMatch;
-  const monthIndex = new Date(`${monthRaw} 1, 2000`).getMonth();
-  if (Number.isNaN(monthIndex)) return "";
-  let hour = Number(hhRaw);
-  const minute = Number(mmRaw);
-  const ampm = ampmRaw.toUpperCase();
-  if (ampm === "AM") {
-    if (hour === 12) hour = 0;
-  } else if (hour < 12) {
-    hour += 12;
+  if (namedDateMatch) {
+    const [, hhRaw, mmRaw, ampmRaw, monthRaw, dayRaw, yearRaw] = namedDateMatch;
+    const monthIndex = new Date(`${monthRaw} 1, 2000`).getMonth();
+    if (Number.isNaN(monthIndex)) return "";
+    let hour = Number(hhRaw);
+    const minute = Number(mmRaw);
+    const ampm = ampmRaw.toUpperCase();
+    if (ampm === "AM") {
+      if (hour === 12) hour = 0;
+    } else if (hour < 12) {
+      hour += 12;
+    }
+    const datePart = `${yearRaw}-${String(monthIndex + 1).padStart(2, "0")}-${String(Number(dayRaw)).padStart(2, "0")}`;
+    const timePart = `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+    return combineUtcDateTimeParts(datePart, timePart);
   }
-  const datePart = `${yearRaw}-${String(monthIndex + 1).padStart(2, "0")}-${String(Number(dayRaw)).padStart(2, "0")}`;
-  const timePart = `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
-  return combineUtcDateTimeParts(datePart, timePart);
+
+  const namedDateOnlyMatch = text.match(/\b(?:on|by|before|until)\s+([A-Za-z]+)\s+(\d{1,2}),\s*(\d{4})\b/i);
+  if (namedDateOnlyMatch) {
+    const [, monthRaw, dayRaw, yearRaw] = namedDateOnlyMatch;
+    const monthIndex = new Date(`${monthRaw} 1, 2000`).getMonth();
+    if (Number.isNaN(monthIndex)) return "";
+    const datePart = `${yearRaw}-${String(monthIndex + 1).padStart(2, "0")}-${String(Number(dayRaw)).padStart(2, "0")}`;
+    return combineUtcDateTimeParts(datePart, "23:59");
+  }
+
+  return "";
 }
 
 function parseResolutionReferenceTime(value: string) {

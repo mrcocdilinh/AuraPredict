@@ -3040,6 +3040,8 @@ function marketDraftPrompt(body) {
       '  "creatorNote": "one short warning or guidance sentence"',
       "}",
       "Use UTC. Avoid subjective criteria. If the market is ambiguous, rewrite it to be measurable.",
+      "If the user idea contains an explicit date or deadline, preserve that date in question, closeTime, and resolutionCriteria. Do not replace it with Preferred close time unless the user provided no date.",
+      "For stock market questions, avoid creating an official closing-price rule on a weekend or market holiday. Prefer a 'before 23:59 UTC on DATE' threshold rule when the user used 'before/by', or warn in creatorNote if the requested date is not a trading day.",
       "Only set duplicateRisk MEDIUM or HIGH when a similar market has the same concrete subject/entity and substantially overlapping outcome window.",
       "Do not raise duplicateRisk just because two markets share a metric such as 10K users, active addresses, volume, or the same category.",
       "Broad-scope markets such as 'any Arc dApp' are not duplicates of a named project market unless the named project already satisfies the same exact broad market outcome."
