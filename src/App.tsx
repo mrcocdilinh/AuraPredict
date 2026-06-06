@@ -445,6 +445,12 @@ type SocialProfileResponse = {
   follows?: string[];
 };
 
+type SocialProfileSaveResponse = SocialProfileResponse & {
+  code?: string;
+  error?: string;
+  username?: string;
+};
+
 type SocialNotificationsResponse = {
   notifications?: NotificationHistoryItem[];
   updatedAt?: string;
@@ -1189,6 +1195,40 @@ async function postIndexerJson<T>(path: string, payload: unknown): Promise<T | n
   } catch {
     return null;
   }
+}
+
+async function postIndexerJsonWithStatus<T extends { error?: string }>(
+  path: string,
+  payload: unknown
+): Promise<{ ok: boolean; status: number; data: T | null }> {
+  if (!INDEXER_URL || INDEXER_URL.includes("github.io") || VIEWING_V3_ARCHIVE) {
+    return { ok: false, status: 0, data: null };
+  }
+  try {
+    const response = await fetch(`${INDEXER_URL}${path}`, {
+      method: "POST",
+      headers: {
+        accept: "application/json",
+        "content-type": "application/json"
+      },
+      body: JSON.stringify(payload)
+    });
+    const data = (await response.json().catch(() => null)) as T | null;
+    return { ok: response.ok, status: response.status, data };
+  } catch {
+    return { ok: false, status: 0, data: null };
+  }
+}
+
+function normalizeProfileUsername(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "_")
+    .replace(/[^a-z0-9_]/g, "")
+    .replace(/_+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 20);
 }
 
 async function loadIndexedSnapshot(): Promise<IndexedSnapshot | null> {
@@ -6669,20 +6709,33 @@ export default function App() {
         return;
       }
 
-      const nextName = profileNameInput.trim().replace(/\s+/g, " ").slice(0, 24);
+      const nextName = normalizeProfileUsername(profileNameInput);
       if (nextName.length < 2) {
-        setNotice("Username must be at least 2 characters.");
+        setNotice("Username must use 2-20 characters: a-z, 0-9, or underscore.");
         return;
       }
 
-      const next = { ...profileNames, [accountKey]: nextName };
-      setProfileNames(next);
-      window.localStorage.setItem(PROFILE_NAMES_KEY, JSON.stringify(next));
-      const response = await postIndexerJson<{ profile: { name?: string; isPublic?: boolean } }>(
+      const response = await postIndexerJsonWithStatus<SocialProfileSaveResponse>(
         `/api/social/profiles/${account}`,
         { name: nextName, isPublic: profilePublicByAddress[accountKey] !== false }
       );
-      setNotice(response?.profile ? "Username saved." : "Username saved for this wallet.");
+      if (!response.ok) {
+        if (response.data?.code === "USERNAME_TAKEN") {
+          setNotice(`Username "${response.data.username || nextName}" is already taken.`);
+          return;
+        }
+        if (response.status > 0) {
+          setNotice(response.data?.error || "Username could not be saved.");
+          return;
+        }
+      }
+
+      const savedName = response.data?.profile?.name?.trim() || nextName;
+      const next = { ...profileNames, [accountKey]: savedName };
+      setProfileNames(next);
+      setProfileNameInput(savedName);
+      window.localStorage.setItem(PROFILE_NAMES_KEY, JSON.stringify(next));
+      setNotice(response.ok ? "Username saved." : "Indexer unavailable; username saved locally only.");
     },
     [account, accountKey, isOwnProfile, profileNameInput, profileNames, profilePublicByAddress]
   );
@@ -11930,8 +11983,8 @@ export default function App() {
                   <div className="profile-identity">
                     <form className="profile-name-form" onSubmit={saveProfileName}>
                       <input
-                        maxLength={24}
-                        placeholder={isOwnProfile ? "Set username" : profileDisplayName}
+                        maxLength={20}
+                        placeholder={isOwnProfile ? "username" : profileDisplayName}
                         value={isOwnProfile ? profileNameInput : ""}
                         onChange={(event) => setProfileNameInput(event.target.value)}
                         disabled={!isOwnProfile}
@@ -11940,6 +11993,7 @@ export default function App() {
                         Save
                       </button>
                     </form>
+                    {isOwnProfile && <small className="profile-username-help">Unique username, 2-20 chars: a-z, 0-9, underscore.</small>}
                     <h2>{profileDisplayName}</h2>
                     <div className="profile-id-row">
                       <span>
@@ -12519,47 +12573,46 @@ export default function App() {
             </section>
           ) : view === "leaderboard" ? (
             <section className="leaderboard-panel">
-              <div className="leaderboard-controls">
-                <div className="leaderboard-control-group">
+              <div className="leaderboard-filterbar" aria-label="Leaderboard filters">
+                <label className="leaderboard-select-filter">
                   <span>Rank by</span>
-                  {LEADERBOARD_METRICS.map((metric) => (
-                    <button
-                      className={leaderboardMetric === metric.value ? "category-pill active" : "category-pill"}
-                      key={metric.value}
-                      onClick={() => setLeaderboardMetric(metric.value)}
-                    >
-                      {metric.label}
-                    </button>
-                  ))}
-                </div>
-                <div className="leaderboard-control-group">
+                  <select value={leaderboardMetric} onChange={(event) => setLeaderboardMetric(event.target.value as LeaderboardMetric)}>
+                    {LEADERBOARD_METRICS.map((metric) => (
+                      <option key={metric.value} value={metric.value}>
+                        {metric.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <div className="leaderboard-period-filter">
                   <span>Period</span>
-                  {LEADERBOARD_PERIODS.map((period) => (
-                    <button
-                      className={leaderboardPeriod === period.value ? "category-pill active" : "category-pill"}
-                      key={period.value}
-                      onClick={() => setLeaderboardPeriod(period.value)}
-                    >
-                      {period.label}
-                    </button>
-                  ))}
+                  <div className="leaderboard-period-tabs">
+                    {LEADERBOARD_PERIODS.map((period) => (
+                      <button
+                        aria-pressed={leaderboardPeriod === period.value}
+                        className={leaderboardPeriod === period.value ? "active" : ""}
+                        key={period.value}
+                        onClick={() => setLeaderboardPeriod(period.value)}
+                        type="button"
+                      >
+                        {period.label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-                <div className="leaderboard-control-group leaderboard-control-wide">
+                <label className="leaderboard-select-filter">
                   <span>Category</span>
-                  {CATEGORIES.map((category) => (
-                    <button
-                      className={leaderboardCategory === category ? "category-pill active" : "category-pill"}
-                      key={`leaderboard-category-${category}`}
-                      onClick={() => setLeaderboardCategory(category)}
-                      type="button"
-                    >
-                      {category}
-                    </button>
-                  ))}
-                </div>
+                  <select value={leaderboardCategory} onChange={(event) => setLeaderboardCategory(event.target.value)}>
+                    {CATEGORIES.map((category) => (
+                      <option key={`leaderboard-category-${category}`} value={category}>
+                        {category}
+                      </option>
+                    ))}
+                  </select>
+                </label>
               </div>
 
-              <section className="aura-formula-card">
+              <section className="aura-formula-card aura-formula-card-compact">
                 <div>
                   <span className="section-label">Aura Points formula</span>
                   <h3>Base 25 + volume x10 + positive PNL x12 + wins x90 + settled x18 + created x35 + win rate x4.</h3>

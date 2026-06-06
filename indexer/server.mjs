@@ -243,6 +243,7 @@ function emptyState() {
     snapshots: [],
     social: {
       profiles: {},
+      usernames: {},
       follows: {},
       comments: {},
       evidence: {},
@@ -1087,6 +1088,7 @@ function socialState() {
   if (!state.social) {
     state.social = {
       profiles: {},
+      usernames: {},
       follows: {},
       comments: {},
       evidence: {},
@@ -1094,10 +1096,12 @@ function socialState() {
     };
   }
   state.social.profiles ??= {};
+  state.social.usernames ??= {};
   state.social.follows ??= {};
   state.social.comments ??= {};
   state.social.evidence ??= {};
   state.social.notifications ??= {};
+  rebuildUsernameIndex(state.social);
   return state.social;
 }
 
@@ -1124,6 +1128,32 @@ function readRequestBody(req) {
 
 function cleanText(value, maxLength) {
   return String(value ?? "").trim().replace(/\s+/g, " ").slice(0, maxLength);
+}
+
+function normalizeUsername(value) {
+  return cleanText(value, 24)
+    .toLowerCase()
+    .replace(/\s+/g, "_")
+    .replace(/[^a-z0-9_]/g, "")
+    .replace(/_+/g, "_")
+    .replace(/^_+|_+$/g, "");
+}
+
+function cleanUsername(value) {
+  const normalized = normalizeUsername(value).slice(0, 20);
+  if (normalized.length < 2) return "";
+  return normalized;
+}
+
+function rebuildUsernameIndex(social) {
+  const next = {};
+  for (const [address, profile] of Object.entries(social.profiles ?? {})) {
+    const key = cleanAddress(profile?.address || address)?.toLowerCase();
+    const username = cleanUsername(profile?.name);
+    if (!key || !username) continue;
+    if (!next[username]) next[username] = key;
+  }
+  social.usernames = next;
 }
 
 function cleanAddress(value) {
@@ -3878,10 +3908,35 @@ async function route(req, res) {
         const body = await readRequestBody(req);
         const key = address.toLowerCase();
         const current = social.profiles[key] ?? { address, joinedAt: nowIso() };
+        const requestedName = typeof body.name === "string" ? body.name : current.name || "";
+        const nextName = cleanUsername(requestedName);
+        if (requestedName.trim() && !nextName) {
+          return json(res, 400, {
+            code: "INVALID_USERNAME",
+            error: "Username must use 2-20 characters: a-z, 0-9, or underscore."
+          });
+        }
+
+        const previousName = cleanUsername(current.name);
+        if (nextName) {
+          const existingAddress = social.usernames[nextName];
+          if (existingAddress && existingAddress !== key) {
+            return json(res, 409, {
+              code: "USERNAME_TAKEN",
+              error: "Username already taken.",
+              username: nextName
+            });
+          }
+        }
+        if (previousName && social.usernames[previousName] === key && previousName !== nextName) {
+          delete social.usernames[previousName];
+        }
+        if (nextName) social.usernames[nextName] = key;
+
         social.profiles[key] = {
           ...current,
           address,
-          name: cleanText(body.name, 24),
+          name: nextName,
           isPublic: body.isPublic !== false,
           updatedAt: nowIso()
         };

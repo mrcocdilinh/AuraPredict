@@ -2976,6 +2976,77 @@ h3 {
   gap: 8px;
 }
 
+.leaderboard-filterbar {
+  align-items: end;
+  background: rgba(248, 250, 252, 0.82);
+  border: 1px solid #dfe6f1;
+  border-radius: 10px;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(160px, 0.75fr) minmax(260px, 1fr) minmax(160px, 0.75fr);
+  padding: 10px;
+}
+
+.leaderboard-select-filter,
+.leaderboard-period-filter {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.leaderboard-select-filter > span,
+.leaderboard-period-filter > span {
+  color: #536178;
+  font-size: 0.68rem;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.leaderboard-select-filter select {
+  appearance: none;
+  background:
+    linear-gradient(45deg, transparent 50%, #536178 50%) calc(100% - 17px) 54% / 6px 6px no-repeat,
+    linear-gradient(135deg, #536178 50%, transparent 50%) calc(100% - 12px) 54% / 6px 6px no-repeat,
+    #ffffff;
+  border: 1px solid #d7e3f2;
+  border-radius: 9px;
+  color: #172033;
+  font: inherit;
+  font-size: 0.86rem;
+  font-weight: 900;
+  min-height: 40px;
+  padding: 0 34px 0 12px;
+  width: 100%;
+}
+
+.leaderboard-period-tabs {
+  background: #eef6fb;
+  border: 1px solid #d7e3f2;
+  border-radius: 10px;
+  display: grid;
+  gap: 4px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  padding: 4px;
+}
+
+.leaderboard-period-tabs button {
+  background: transparent;
+  border: 0;
+  border-radius: 8px;
+  box-shadow: none;
+  color: #536178;
+  font-size: 0.78rem;
+  font-weight: 950;
+  min-height: 32px;
+  padding: 0 10px;
+}
+
+.leaderboard-period-tabs button.active,
+.leaderboard-period-tabs button:hover:not(:disabled) {
+  background: #101827;
+  color: #ffffff;
+}
+
 .leaderboard-table {
   background: #ffffff;
   border: 1px solid #dfe6f1;
@@ -3081,6 +3152,11 @@ h3 {
 .aura-formula-card {
   align-items: center;
   grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.aura-formula-card-compact {
+  gap: 10px;
+  padding: 12px 14px;
 }
 
 .aura-formula-card h3,
@@ -7010,6 +7086,12 @@ label {
   min-height: 36px;
 }
 
+.profile-username-help {
+  color: #667085;
+  font-size: 0.76rem;
+  font-weight: 760;
+}
+
 .profile-id-row,
 .profile-chip-row,
 .profile-actions,
@@ -8128,6 +8210,40 @@ label {
   color: #8aa0bf;
 }
 
+[data-theme="dark"] .leaderboard-filterbar {
+  background: rgba(15, 23, 42, 0.72);
+  border-color: #22314a;
+}
+
+[data-theme="dark"] .leaderboard-select-filter > span,
+[data-theme="dark"] .leaderboard-period-filter > span {
+  color: #8aa0bf;
+}
+
+[data-theme="dark"] .leaderboard-select-filter select {
+  background:
+    linear-gradient(45deg, transparent 50%, #9fb2cf 50%) calc(100% - 17px) 54% / 6px 6px no-repeat,
+    linear-gradient(135deg, #9fb2cf 50%, transparent 50%) calc(100% - 12px) 54% / 6px 6px no-repeat,
+    #0b1020;
+  border-color: #26334a;
+  color: #d8e1f0;
+}
+
+[data-theme="dark"] .leaderboard-period-tabs {
+  background: #0b1020;
+  border-color: #26334a;
+}
+
+[data-theme="dark"] .leaderboard-period-tabs button {
+  color: #d8e1f0;
+}
+
+[data-theme="dark"] .leaderboard-period-tabs button.active,
+[data-theme="dark"] .leaderboard-period-tabs button:hover:not(:disabled) {
+  background: #18d7ff;
+  color: #06111e;
+}
+
 [data-theme="dark"] .leaderboard-controls .category-pill.active,
 [data-theme="dark"] .leaderboard-controls .category-pill:hover:not(:disabled) {
   background: #18d7ff;
@@ -8628,6 +8744,10 @@ label {
 [data-theme="dark"] .timeline-step strong,
 [data-theme="dark"] .related-market-card strong {
   color: #f7f9ff;
+}
+
+[data-theme="dark"] .profile-username-help {
+  color: #8aa0bf;
 }
 
 [data-theme="dark"] .detail-chart-header h2 b {
@@ -9346,6 +9466,14 @@ label {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .leaderboard-filterbar {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .leaderboard-period-filter {
+    grid-column: 1 / -1;
+  }
+
   .leaderboard-control-wide {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
@@ -9541,6 +9669,14 @@ label {
   .leaderboard-controls,
   .leaderboard-control-wide {
     grid-template-columns: 1fr;
+  }
+
+  .leaderboard-filterbar {
+    grid-template-columns: 1fr;
+  }
+
+  .leaderboard-period-filter {
+    grid-column: auto;
   }
 
   .leaderboard-control-group,
