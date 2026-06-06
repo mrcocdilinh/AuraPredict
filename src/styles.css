@@ -11113,6 +11113,21 @@ label {
   z-index: 3;
 }
 
+.chart-frame .chart-y-labels {
+  bottom: 7%;
+  color: #d8f6ff;
+  font-size: 0.72rem;
+  font-weight: 900;
+  pointer-events: none;
+  position: absolute;
+  right: 12px;
+  text-align: right;
+  text-shadow: 0 1px 10px rgba(0, 0, 0, 0.46);
+  top: 6%;
+  width: 58px;
+  z-index: 4;
+}
+
 .hero-activity-axis,
 .chart-time-row,
 .chart-y-labels {
@@ -11172,7 +11187,9 @@ label {
 }
 
 [data-theme="dark"] .chart-y-labels span {
-  background: rgba(7, 19, 35, 0.72);
+  background: rgba(7, 19, 35, 0.82);
+  border: 1px solid rgba(122, 210, 255, 0.18);
+  color: #d8f6ff;
 }
 
 [data-theme="dark"] .chart-side-toggle {
@@ -11286,6 +11303,7 @@ label {
 [data-theme="light"] .chart-y-labels span {
   background: rgba(250, 253, 255, 0.82);
   box-shadow: 0 1px 5px rgba(35, 76, 109, 0.08);
+  color: #27415f;
 }
 
 [data-theme="light"] .chart-frame .edge-grid {
