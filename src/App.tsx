@@ -11539,12 +11539,12 @@ export default function App() {
                   <button className="secondary" onClick={loadMarkets} disabled={loading || !hasContract}>
                     {loading ? "Refreshing..." : "Refresh"}
                   </button>
+                  {view !== "ended" && view !== "leaderboard" && view !== "profile" && <button onClick={openCreateMarket}>Create Market</button>}
                   {view !== "leaderboard" && view !== "profile" && hasMoreMarkets && (
                     <button className="secondary" onClick={() => loadMoreMarkets(false)} disabled={loading || !hasContract} type="button">
                       Load more
                     </button>
                   )}
-                  {view !== "ended" && view !== "leaderboard" && view !== "profile" && <button onClick={openCreateMarket}>Create Market</button>}
                 </>
               )}
             </div>

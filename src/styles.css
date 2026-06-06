@@ -11832,6 +11832,54 @@ label {
   min-width: 138px;
 }
 
+.detail-chart-card > .edge-legend {
+  align-items: center;
+  background: rgba(248, 252, 255, 0.88);
+  border: 1px solid rgba(186, 214, 231, 0.78);
+  border-radius: 999px;
+  box-shadow: 0 8px 20px rgba(15, 54, 78, 0.06);
+  color: #27415f;
+  display: inline-flex;
+  gap: 10px;
+  justify-self: start;
+  margin-top: 2px;
+  padding: 7px 10px;
+  position: relative;
+  z-index: 2;
+}
+
+.detail-chart-card > .edge-legend span {
+  align-items: center;
+  display: inline-flex;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.detail-chart-card > .edge-legend .won {
+  color: #0f9f78;
+  font-weight: 900;
+}
+
+.detail-chart-card > .edge-legend .lost {
+  color: #e11d48;
+  font-weight: 900;
+}
+
+[data-theme="dark"] .detail-chart-card > .edge-legend {
+  background: rgba(8, 21, 38, 0.88);
+  border-color: rgba(78, 178, 219, 0.34);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.2);
+  color: #d8f6ff;
+}
+
+[data-theme="dark"] .detail-chart-card > .edge-legend .won {
+  color: #31e3b2;
+}
+
+[data-theme="dark"] .detail-chart-card > .edge-legend .lost {
+  color: #ff7aa0;
+}
+
 @media (max-width: 1120px) {
   .profile-stat-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -11930,6 +11978,18 @@ label {
     white-space: nowrap;
   }
 
+  .board-header .board-actions:not(.market-detail-board-actions):not(.profile-board-actions) {
+    display: grid;
+    gap: 8px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+  }
+
+  .board-header .board-actions:not(.market-detail-board-actions):not(.profile-board-actions) button {
+    min-width: 0;
+    width: 100%;
+  }
+
   .market-detail-board-actions {
     display: grid;
     gap: 8px;
@@ -12001,6 +12061,20 @@ label {
   .profile-chip-row,
   .profile-badge-row {
     gap: 6px;
+  }
+
+  .detail-chart-card > .edge-legend {
+    border-radius: 8px;
+    display: grid;
+    gap: 8px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    justify-self: stretch;
+    margin-top: 4px;
+    padding: 8px;
+  }
+
+  .detail-chart-card > .edge-legend span {
+    justify-content: center;
   }
 }
 

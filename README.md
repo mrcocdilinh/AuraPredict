@@ -1,69 +1,54 @@
 # AuraPredict
 
-AuraPredict la dapp Prediction Market chay tren Arc Testnet. Du an gom:
+AuraPredict is an AI-assisted prediction market dapp built on Arc Testnet. It lets users create YES/NO markets, stake testnet USDC or EURC, review market evidence, and resolve outcomes through a mix of creator proposals, authority review, oracle checks, and dispute windows.
 
-- Smart contract Solidity: `contracts/ArcPredictionMarket.sol`
-- Hardhat compile, test, deploy: `hardhat.config.cjs`, `scripts/deploy.js`
-- Frontend Vite React: `src/`
-- Local backend/indexer doc event Arc nhanh hon: `indexer/`
-- Static docs site cho `docs.aurapredict.xyz`: `docs/`
-- Huong dan deploy ngan gon: `DEPLOY_AURAPREDICT.md`
-- Risk/oracle/QA policy: `docs/RISK_ORACLE_AND_QA.md`
+The project is a testnet MVP and a public builder project for the Arc ecosystem. It is not a financial product, broker, investment platform, or real-money betting service.
 
-Tinh nang hien tai:
+## What Is Included
 
-- Tat ca deadline va dong ho hien thi theo UTC.
-- Market chia thanh Fresh, Hottest va Closing Soon.
-- Hottest sap xep theo so vi da tham gia, doc tu `traderCount` trong contract.
-- Thanh activity ticker doc event `BetPlaced` de hien nguoi choi vua stake YES/NO.
-- Frontend uu tien doc market, stats, leaderboard va history tu AuraPredict Indexer neu `VITE_AURA_INDEXER_URL` kha dung; neu khong co thi fallback ve Arc RPC nhu cu.
-- Aura Agent giup draft market va goi y ket qua; thao tac de xuat/finalize van la giao dich onchain duoc ky boi vi co tham quyen.
-- Oracle proposal v1 chay trong indexer de tu kiem tra cac market khach quan nhu gia crypto, macro chart va health/status API ma khong ton quota AI; khi confidence du nguong va signer duoc cau hinh, indexer co the gui proposal onchain qua Circle Agent Wallet nhung khong tu finalize tien.
-- Contract V4 tach `closeTime` cua giao dich voi `resolutionTime` cua su kien; contract khong cho cong bo ket qua truoc `resolutionTime`.
-- V4 luu primary source, fallback source va resolution rule onchain de dieu khoan market khong bi phu thuoc vao frontend/indexer. Frontend moi con gan them mot dong metadata `AURA_RULE_JSON` vao rule de Aura Agent, Oracle, creator va final reviewer doc cung mot bo dieu kien co cau truc.
-- Source router trong indexer quet primary/fallback/inferred sources truoc khi Aura Agent review cac market dang deadline nhu blog, news, announce, fixtures hoac schedule. Ket qua quet nguon duoc dua vao AI nhu evidence ro rang thay vi de model tu doan theo tri nho.
-- V4 snapshot dieu khoan phi, creator bond, dispute bond, dispute window, min stake va proposal grace period theo tung market de thay doi cau hinh sau nay khong lam doi market cu.
-- V4 cho phep settlement asset 6 decimals cau hinh theo market, vi du USDC hoac EURC, va quan ly phi theo tung token; khong quy doi FX giua cac token.
-- Trong wallet menu, trang market dang giao dich, trang Profile va form tao market, nguoi dung co the mo Circle Unified Balance de deposit testnet USDC tu Base Sepolia, Arbitrum Sepolia hoac Ethereum Sepolia vao Circle Gateway, roi spend/mint USDC sang Arc Testnet. UI hien so du USDC trong vi theo tung chain, Gateway confirmed/pending balance, va co nut retry spend neu deposit da tru chain nguon nhung mint ve Arc bi loi. Flow nay chi fund Arc USDC, khong doi settlement token cua market.
-- Trong trang market dang giao dich hoac trang Profile, nguoi dung co the lay quote swap `USDC <-> EURC` tren Arc Testnet neu can dung token settlement cua market truoc khi stake. Frontend thu Circle App Kit truoc neu co `VITE_CIRCLE_APP_KIT_KEY`, sau do fallback sang LI.FI neu route native khong kha dung. UI hien so nhan toi thieu, cho chon price tolerance va yeu cau quote moi neu quote cu het han de giam swap revert tren thanh khoan testnet. Swap khong thay doi token tra thuong cua market.
-- Card market tren trang danh sach va Profile chi hien tom tat: category, trang thai, cau hoi, YES/NO %, pool amount, market id va volume. Nguoi dung click card de vao trang market moi stake, xem Aura/Oracle, dispute, finalize hoac claim.
-- V4 co bon huong resolution: creator + dispute review, creator + required authority review, authority/oracle only, va adapter-only cho oracle/committee sau nay. Production authority hien co the van hanh bang Circle Agent Wallet cho cac market moi.
-- Proposal V4 co the dung Aura signed attestation neu cau hinh signer. Neu chua bat signer hoac creator di nguoc Aura, contract day proposal vao authority review.
-- V4 co policy gate co ban: tam dung tao/cuoc moi, gioi han vi duoc tao market va chan account mo position moi; resolve, refund va claim cua market dang ton tai van hoat dong.
-- Market da qua resolution time nhung khong ai propose co the cancel sau grace period de tra bond/refund, tranh ket tien vo han.
-- Market khong co thanh khoan co the cancel sau resolution time ma khong can ton luot goi AI; bond/refund duoc rut theo pull-withdrawal.
-- Tung market co lich su bet va o tim kiem vi rieng; tab Ended cung co tim kiem rieng cho market da ket thuc.
+- Solidity smart contract: `contracts/ArcPredictionMarket.sol`
+- Hardhat compile, test, and deploy scripts
+- Vite + React frontend in `src/`
+- Local backend/indexer in `indexer/`
+- Static documentation site in `docs/`
+- Deployment guide: `DEPLOY_AURAPREDICT.md`
+- Risk, oracle, and QA policy: `docs/RISK_ORACLE_AND_QA.md`
 
-Production hien dung contract V4 tren Arc Testnet tai `0x3c853AE2eC705B453c9657569b6335e762631536`, bat dau tu block `44083985`. Frontend va indexer duoc pin vao deployment V4 nay.
-Market V3 cu va tien cua chung van ton tai tren contract cu tai `0x4399ea3f59AA14e4D19217f1af2aD0681f5FafFd`. Giao dien chinh tao market moi tren V4; neu can xem/settle/claim market V3 cu, mo app voi query `?deployment=v3`.
+## Current Features
 
-Oracle proposal v1 ho tro:
+- Arc Testnet prediction markets with configurable settlement asset per market.
+- USDC and EURC support, with per-token volume and liquidity tracking.
+- UTC-first market timing for close time, resolution time, dispute windows, and finalization.
+- Market discovery views for live, ended, hot, fresh, and closing-soon markets.
+- Activity ticker showing recent YES/NO stakes.
+- Market detail pages with odds history, staking, evidence, comments, holders, activity, dispute, finalize, and claim surfaces.
+- Aura Agent market drafting and result-review support.
+- Oracle proposal flow for objective markets such as crypto prices, macro chart values, public health/status checks, and simple liquidity edge cases.
+- Circle Agent Wallet support for authority/oracle proposal signing.
+- Circle Gateway-based USDC funding utility for moving testnet USDC from supported source chains to Arc Testnet.
+- In-app USDC/EURC swap helper using Circle App Kit first, with LI.FI fallback when available.
+- Off-chain social data for profiles, comments, notifications, evidence links, and username reservations through the AuraPredict indexer.
+- Public docs, risk disclosures, oracle policy, backtest sample, and frontend E2E coverage for core market flows.
 
-- Crypto price: BTC, ETH, SOL, BNB, XRP, ADA, DOGE, AVAX, LINK qua Binance 1-minute kline, fallback CoinGecko gan thoi diem khi can.
-- Macro chart: gold va US Dollar Index qua Yahoo chart data gan moc resolution.
-- Health/status API: endpoint co `ok: true`, HTTP 200, hoac status page public nhu GitHub/OpenAI.
-- Liquidity rule: neu YES pool hoac NO pool bang 0, Oracle goi y Cancel/Refund thay vi chon YES/NO.
-- Cac market ngoai adapter, vi du tin tuc phuc tap hoac sports, van di qua Aura Agent/evidence/authority review.
-- Khi market co metadata `AURA_RULE_JSON`, Oracle uu tien asset, comparator, target, source va resolution time trong metadata thay vi doan text tu do. Dieu nay giup giam tinh trang AI/Oracle/creator hieu khac nhau cung mot cau hoi.
-- Khi `AURA_ORACLE_AUTO_PROPOSE=1`, confidence dat nguong va vi signer duoc phep theo resolution mode, Oracle co the submit proposal dau tien onchain. Dispute window, authority review va finalization van do contract xu ly.
+## Active Testnet Deployment
 
-## Arc Testnet
+AuraPredict currently targets the V4 contract on Arc Testnet:
 
-- Chain ID: `5042002` (`0x4CEF52`)
+- Chain ID: `5042002`
 - RPC: `https://rpc.testnet.arc.network`
 - Explorer: `https://testnet.arcscan.app`
 - Active V4 contract: `0x3c853AE2eC705B453c9657569b6335e762631536`
 - Archived V3 contract: `0x4399ea3f59AA14e4D19217f1af2aD0681f5FafFd`
-- Gas token: native `USDC`; V4 dung cung tai san USDC qua ERC-20 interface `0x3600000000000000000000000000000000000000` (6 decimals) cho allowance/transfer.
+- Arc native gas token: USDC
 - Faucet: `https://faucet.circle.com`
 
-Nguon tham khao: [Arc RPC endpoints](https://docs.arc.io/arc/references/rpc-endpoints), [Add Arc to a Wallet](https://docs.arc.io/integrate/wallets).
+New markets are created on V4. Older V3 markets still exist on the archived contract and can be accessed with `?deployment=v3` when needed.
 
-## Chay nhanh tren may cua ban
+## Quick Start
 
 ```bash
 npm install
-copy .env.example .env
+cp .env.example .env
 npm run compile
 npm test
 npm run test:e2e
@@ -72,111 +57,93 @@ npm run indexer
 npm run dev
 ```
 
-Deployment V4 dang hoat dong tren Arc Testnet:
+On Windows PowerShell, use `copy .env.example .env` instead of `cp`.
 
-```bash
-VITE_PREDICTION_MARKET_ADDRESS=0x3c853AE2eC705B453c9657569b6335e762631536
-VITE_PREDICTION_MARKET_START_BLOCK=44083985
-ARC_USDC_TOKEN_ADDRESS=0x3600000000000000000000000000000000000000
-ARC_EURC_TOKEN_ADDRESS=0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a
-```
+## Configuration
 
-Deployment production duoc pin truc tiep trong frontend va indexer. Cac gia tri tham chieu V4 hien tai la:
+The app uses `.env` values for the active contract, Arc RPC, token addresses, WalletConnect, indexer URL, Circle App Kit, oracle automation, and signer settings.
 
-```bash
-VITE_PREDICTION_MARKET_ADDRESS=0x3c853AE2eC705B453c9657569b6335e762631536
-VITE_ARC_EURC_TOKEN_ADDRESS=0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a
-VITE_AURA_INDEXER_URL=https://api.aurapredict.xyz
-VITE_WALLETCONNECT_PROJECT_ID=...
-VITE_CIRCLE_APP_KIT_KEY=... # optional, enables Circle App Kit swap before LI.FI fallback; Unified Balance uses @circle-fin/app-kit
-```
+For local development, start from `.env.example` and only fill in the services you actually use. The frontend can run directly against Arc RPC, while production is expected to use the AuraPredict indexer for faster market stats, leaderboard, history, profiles, comments, notifications, and evidence data.
 
-V3 archive reference:
+Important production references:
 
-```bash
-V3_PREDICTION_MARKET_ADDRESS=0x4399ea3f59AA14e4D19217f1af2aD0681f5FafFd
-V3_PREDICTION_MARKET_START_BLOCK=44074836
-```
+- Frontend indexer URL: `https://api.aurapredict.xyz`
+- Indexer health: `https://api.aurapredict.xyz/health`
+- Indexer stats: `https://api.aurapredict.xyz/api/stats`
 
-Doc file `DEPLOY_AURAPREDICT.md` neu ban muon dua code len GitHub va deploy len Vercel theo tung buoc.
-Doc them `indexer/README.md` neu ban muon chay backend/indexer rieng cho leaderboard, stats va history nhanh hon.
-Doc `docs/RISK_ORACLE_AND_QA.md` ghi legal/risk notice, oracle committee policy, backtest/calibration cho nguong 78%, E2E scope va checklist test Unified Balance pending/retry sau deploy.
+Do not commit `.env`, private keys, API keys, Circle credentials, or wallet secrets.
 
-## Tao market test tren V4
+## Indexer
 
-File `scripts/seed_markets_v4_test_20.json` chua 20 market test nhieu chu de, moi market co source/rule rieng va close time tuong doi. Chay lenh sau khi vi deploy co du Arc Testnet USDC:
+The indexer reads Arc contract events and exposes faster API surfaces for:
 
-```powershell
-$env:PREDICTION_MARKET_ADDRESS="0x3c853AE2eC705B453c9657569b6335e762631536"
-$env:SEED_FILE="scripts/seed_markets_v4_test_20.json"
-npm.cmd run seed:markets
-```
+- Market stats
+- Leaderboard
+- Trade history
+- Activity ticker
+- Social profiles
+- Comments
+- Notifications
+- Evidence links
+- Oracle review receipts
 
-Script se kiem tra balance truoc, approve dung bond/fee can thiet, va tao market tren V4. Dung `npm.cmd run seed:markets:dry` de kiem tra file ma khong gui transaction.
+For setup details, see `indexer/README.md`.
 
-## Mobile wallet connect
+## Oracle And Resolution Flow
 
-App ho tro 2 cach ket noi tren mobile:
+AuraPredict V4 separates market trading close time from event resolution time. Results cannot be proposed before the event resolution timestamp.
 
-- Injected provider khi mo AuraPredict trong browser cua MetaMask, Rabby, Zerion, OKX.
-- WalletConnect khi mo bang Chrome/Safari mobile va muon nhay sang wallet app de approve.
+Supported resolution paths include:
 
-De bat WalletConnect tren production, tao project id tai WalletConnect Cloud va them env vao Vercel app project:
+- Creator proposal with dispute review
+- Creator proposal with required authority review
+- Authority/oracle-only proposal
+- Adapter-only path for future oracle or committee integrations
 
-```bash
-VITE_WALLETCONNECT_PROJECT_ID=your_project_id
-```
+The oracle layer can assist with objective markets such as crypto price checks, macro chart checks, status-page checks, and liquidity-related cancellation suggestions. The current confidence threshold is experimental and should be calibrated with historical backtests before any production-grade use.
 
-Sau khi them env, redeploy frontend. Neu khong co bien nay, nut WalletConnect se hien huong dan cau hinh va cac nut deep link van mo dapp trong browser cua tung vi.
+For the full policy, see `docs/RISK_ORACLE_AND_QA.md`.
 
-## Docs subdomain
+## Circle And Arc Integrations
 
-Thu muc `docs/` la static site rieng cho `docs.aurapredict.xyz`. Tren Vercel, tao mot project rieng tu cung repo nay, dat `Root Directory` la `docs`, framework `Other`, khong can build command, va them custom domain `docs.aurapredict.xyz`.
+AuraPredict uses Arc and Circle tooling in several places:
 
-Khong tro project app chinh sang `docs/`; app chinh van dung repo root cho `aurapredict.xyz`.
+- Arc Testnet contract deployment and settlement.
+- USDC as native gas on Arc.
+- USDC/EURC market settlement assets.
+- Circle Agent Wallet for authority/oracle proposal support.
+- Circle Gateway funding utility for testnet USDC movement to Arc.
+- Circle App Kit swap path when available, with LI.FI fallback.
 
-## Production indexer
+Unified Balance funding is a convenience flow for getting USDC onto Arc Testnet. It does not change a market's selected settlement asset and does not convert USDC to EURC by itself.
 
-Production hien tai dung indexer tu host tren VPS va public qua Nginx + HTTPS:
+## Docs Site
+
+The `docs/` folder is a static documentation site intended for `docs.aurapredict.xyz`.
+
+On Vercel, deploy it as a separate project from the same repository with:
+
+- Root Directory: `docs`
+- Framework: Other
+- Build command: none
+
+The main dapp should continue to deploy from the repository root.
+
+## Test Markets
+
+Sample V4 markets are available in:
 
 ```text
-https://api.aurapredict.xyz/health
-https://api.aurapredict.xyz/api/stats
+scripts/seed_markets_v4_test_20.json
 ```
 
-Frontend production tren Vercel su dung:
+Use the seed scripts only with a funded Arc Testnet wallet and after confirming the target contract address.
 
-```bash
-VITE_AURA_INDEXER_URL=https://api.aurapredict.xyz
-VITE_PREDICTION_MARKET_START_BLOCK=44083985
-AURA_ORACLE_AUTO_RUN=1
-AURA_ORACLE_HTTP_TIMEOUT_MS=8000
-AURA_ORACLE_AUTO_PROPOSE=1
-AURA_ORACLE_AUTO_PROPOSE_MIN_CONFIDENCE=78
-AURA_RESOLVER_SIGNER_MODE=circle-cli
-AURA_CIRCLE_AGENT_WALLET_ADDRESS=0x035e03f8c0a9d22a24b8212c466895a210645dc6
-AURA_CIRCLE_AGENT_CHAIN=ARC-TESTNET
-```
+## Safety Notes
 
-Indexer chay bang `pm2` trong `/opt/aurapredict`, doc bien moi truong tu `/opt/aurapredict/.env`, va duoc Nginx proxy tu `api.aurapredict.xyz` ve `127.0.0.1:8787`. Sau khi sua `.env` hoac cap nhat code indexer tren VPS, restart:
-
-```bash
-cd /opt/aurapredict
-pm2 restart aurapredict-indexer
-curl https://api.aurapredict.xyz/health
-```
-
-## Luu y an toan
-
-- Khong commit file `.env`.
-- Khong dua `PRIVATE_KEY` len GitHub hoac Vercel.
-- Contract hien la ban MVP testnet, chua audit.
-- AuraPredict khong phai san giao dich, broker, nen tang ca cuoc, san pham dau tu hay tu van tai chinh. Testnet token khong co gia tri that; AI/oracle/source checks chi la ho tro nghien cuu va co the sai/cham/khong day du.
-- V4 da mo duong cho authority/oracle/committee va adapter-only market sau nay, nhung chua thay the quy trinh compliance, audit, multisig va giam sat production.
-- Oracle phase 2 co the tu gui proposal onchain cho market khach quan nhu BTC/ETH price, gold/DXY, health/status API khi `AURA_ORACLE_AUTO_PROPOSE=1` va confidence du nguong. No khong tu finalize market co nguoi choi; dispute window va owner/authority review van giu nguyen.
-- Nguong Oracle 78% hien la nguong thuc nghiem. Dung `npm run oracle:backtest` voi dataset lich su de do accuracy, coverage va calibration gap truoc khi xem la production-ready.
-- De van hanh theo Circle Agent Wallet, set `AURA_RESOLVER_SIGNER_MODE=circle-cli`, `AURA_CIRCLE_AGENT_WALLET_ADDRESS=0x...`, dang nhap Circle CLI tren VPS, va dam bao agent wallet la resolver/authority/adapter cua market. Flow khuyen nghi cho market Oracle la `Authority / oracle only`, nhung authority cung co the propose trong cac mode creator-led neu chua co proposal.
-- Neu mo ca USDC va EURC, moi market chi settle trong token da chon; dashboard va `/api/stats` hien volume/liquidity rieng theo tung token, khong gop thanh mot tong FX.
-- Nut Unified Balance trong wallet/trading/profile/create la tien ich funding USDC cross-chain bang Circle Gateway: deposit vao Gateway tren chain nguon testnet, spend/mint ve Arc Testnet, va refresh so du Arc sau khi xong. UI co mot nut chinh de lam ca hai buoc, hien so du USDC trong vi theo tung chain, va de nut deposit/retry trong Advanced recovery cho truong hop deposit da confirmed/pending ma buoc mint ve Arc bi gian doan. No khong doi USDC sang EURC.
-- Nut swap trong trading panel va Profile chi la tien ich cho vi nguoi dung doi USDC/EURC truoc giao dich; route, so nhan uoc tinh va muc nhan toi thieu uu tien Circle App Kit khi co cau hinh, roi fallback LI.FI. Giao dich swap duoc ky trong vi. Quote cu het han sau thoi gian ngan va price tolerance do nguoi dung chon vi pool testnet co the bien dong nhanh.
-- Production dang dung deployment V4 da pin trong source; market V3 cu khong tu di chuyen sang contract moi nhung co the truy cap qua `?deployment=v3` de settle/claim.
+- This is a testnet MVP and has not been audited.
+- Testnet tokens have no real value.
+- AI, oracle checks, source routing, and automated proposals can be wrong, incomplete, delayed, or unavailable.
+- Dispute windows and authority review are part of the safety model, not a replacement for audits, compliance, monitoring, or multisig governance.
+- Each market settles only in its selected token. AuraPredict does not perform FX conversion between settlement assets.
+- Do not use this project as financial, legal, investment, trading, or betting advice.
