@@ -9797,12 +9797,16 @@ export default function App() {
           <div className="detail-primary-column">
           <section className="detail-chart-card">
             <div className="detail-chart-header">
-              <div>
+              <div className="detail-chart-title">
                 <span className="section-label">Odds movement</span>
                 <h2>
                   <b>{chartPrimaryPercent.toFixed(0)}%</b>
                   <span>{chartPrimaryLabel} chance</span>
                 </h2>
+                <div className="chart-inline-legend" aria-label="Current YES and NO odds">
+                  <span className="yes">YES {selectedMarketYesPercent.toFixed(1)}%</span>
+                  <span className="no">NO {selectedMarketNoPercent.toFixed(1)}%</span>
+                </div>
               </div>
               <div className="chart-header-actions">
                 <div className="chart-window-tabs">
@@ -9936,10 +9940,6 @@ export default function App() {
                     {tick.label}
                   </span>
                 ))}
-            </div>
-            <div className="edge-legend">
-              <span className="won">YES {selectedMarketYesPercent.toFixed(1)}%</span>
-              <span className="lost">NO {selectedMarketNoPercent.toFixed(1)}%</span>
             </div>
           </section>
 

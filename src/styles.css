@@ -11832,51 +11832,70 @@ label {
   min-width: 138px;
 }
 
-.detail-chart-card > .edge-legend {
-  align-items: center;
-  background: rgba(248, 252, 255, 0.88);
-  border: 1px solid rgba(186, 214, 231, 0.78);
-  border-radius: 999px;
-  box-shadow: 0 8px 20px rgba(15, 54, 78, 0.06);
-  color: #27415f;
-  display: inline-flex;
-  gap: 10px;
-  justify-self: start;
-  margin-top: 2px;
-  padding: 7px 10px;
-  position: relative;
-  z-index: 2;
+.detail-chart-title {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
 }
 
-.detail-chart-card > .edge-legend span {
+.chart-inline-legend {
   align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.chart-inline-legend span {
+  align-items: center;
+  background: rgba(248, 252, 255, 0.9);
+  border: 1px solid rgba(186, 214, 231, 0.82);
+  border-radius: 999px;
+  box-shadow: 0 8px 20px rgba(15, 54, 78, 0.06);
   display: inline-flex;
+  font-size: 0.78rem;
+  font-weight: 950;
+  gap: 7px;
   line-height: 1;
+  padding: 8px 10px;
   white-space: nowrap;
 }
 
-.detail-chart-card > .edge-legend .won {
+.chart-inline-legend span::before {
+  border-radius: 999px;
+  content: "";
+  height: 9px;
+  width: 9px;
+}
+
+.chart-inline-legend .yes {
   color: #0f9f78;
-  font-weight: 900;
 }
 
-.detail-chart-card > .edge-legend .lost {
+.chart-inline-legend .yes::before {
+  background: #12b981;
+  box-shadow: 0 0 0 3px rgba(18, 185, 129, 0.12);
+}
+
+.chart-inline-legend .no {
   color: #e11d48;
-  font-weight: 900;
 }
 
-[data-theme="dark"] .detail-chart-card > .edge-legend {
+.chart-inline-legend .no::before {
+  background: #ff6b35;
+  box-shadow: 0 0 0 3px rgba(255, 107, 53, 0.12);
+}
+
+[data-theme="dark"] .chart-inline-legend span {
   background: rgba(8, 21, 38, 0.88);
   border-color: rgba(78, 178, 219, 0.34);
   box-shadow: 0 10px 24px rgba(0, 0, 0, 0.2);
-  color: #d8f6ff;
 }
 
-[data-theme="dark"] .detail-chart-card > .edge-legend .won {
+[data-theme="dark"] .chart-inline-legend .yes {
   color: #31e3b2;
 }
 
-[data-theme="dark"] .detail-chart-card > .edge-legend .lost {
+[data-theme="dark"] .chart-inline-legend .no {
   color: #ff7aa0;
 }
 
@@ -12063,17 +12082,14 @@ label {
     gap: 6px;
   }
 
-  .detail-chart-card > .edge-legend {
-    border-radius: 8px;
+  .chart-inline-legend {
     display: grid;
     gap: 8px;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    justify-self: stretch;
-    margin-top: 4px;
-    padding: 8px;
+    width: 100%;
   }
 
-  .detail-chart-card > .edge-legend span {
+  .chart-inline-legend span {
     justify-content: center;
   }
 }
