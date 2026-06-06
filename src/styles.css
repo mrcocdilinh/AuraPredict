@@ -11792,3 +11792,241 @@ label {
       #eff8fc;
   }
 }
+
+.profile-board-actions {
+  justify-content: flex-end;
+}
+
+.profile-board-actions button {
+  min-width: 132px;
+}
+
+.profile-stat-grid {
+  align-items: stretch;
+  grid-template-columns: minmax(240px, 1fr) minmax(240px, 1fr) repeat(2, minmax(150px, 0.72fr));
+}
+
+.profile-liquidity-card {
+  grid-column: span 2;
+  grid-row: span 2;
+}
+
+.profile-stat-card:not(.profile-liquidity-card) {
+  align-content: space-between;
+  min-height: 128px;
+}
+
+.profile-hero-card {
+  grid-template-columns: minmax(0, 1fr) minmax(220px, auto);
+}
+
+.profile-actions {
+  align-content: start;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.profile-actions button {
+  min-width: 138px;
+}
+
+@media (max-width: 1120px) {
+  .profile-stat-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .profile-liquidity-card {
+    grid-column: span 1;
+    grid-row: auto;
+  }
+}
+
+@media (max-width: 640px) {
+  .topbar {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .topbar-center {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    justify-content: stretch;
+    width: 100%;
+  }
+
+  .nav-tabs {
+    background: transparent;
+    border: 0;
+    display: grid;
+    gap: 6px;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    justify-content: stretch;
+    overflow: visible;
+    padding: 0;
+    width: 100%;
+  }
+
+  .nav-tabs .tab {
+    justify-content: center;
+    min-width: 0;
+    padding: 0 6px;
+    width: 100%;
+  }
+
+  .market-search {
+    flex: none;
+    justify-self: stretch;
+    max-width: none;
+    min-width: 0;
+    width: 100%;
+  }
+
+  .wallet-panel {
+    align-items: center;
+    display: flex;
+    gap: 6px;
+    grid-column: 2;
+    grid-row: 1;
+    justify-content: flex-end;
+    width: auto;
+  }
+
+  .wallet-panel .theme-menu {
+    display: block;
+    flex: 0 0 auto;
+  }
+
+  .wallet-panel .notification-menu {
+    flex: 0 0 auto;
+  }
+
+  .wallet-panel .wallet-menu {
+    flex: 0 1 auto;
+    max-width: 132px;
+  }
+
+  .wallet-panel > button {
+    flex: 0 0 auto;
+    margin-left: 0;
+    min-width: 112px;
+  }
+
+  .activity-ticker {
+    min-height: 50px;
+  }
+
+  .activity-ticker .ticker-track {
+    gap: 28px;
+    padding: 8px 0;
+  }
+
+  .activity-ticker .ticker-item {
+    max-width: none;
+    overflow: visible;
+    text-overflow: clip;
+    white-space: nowrap;
+  }
+
+  .market-detail-board-actions {
+    display: grid;
+    gap: 8px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+  }
+
+  .market-detail-board-actions button {
+    width: 100%;
+  }
+
+  .profile-board-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+    justify-items: stretch;
+    width: 100%;
+  }
+
+  .profile-board-actions button {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .profile-hero-card {
+    gap: 14px;
+    grid-template-columns: 1fr;
+    padding: 14px;
+  }
+
+  .profile-head {
+    align-items: start;
+    grid-template-columns: 48px minmax(0, 1fr);
+  }
+
+  .profile-avatar {
+    font-size: 1.18rem;
+    height: 48px;
+    width: 48px;
+  }
+
+  .profile-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    justify-items: stretch;
+  }
+
+  .profile-actions button {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .profile-name-form {
+    grid-template-columns: minmax(0, 1fr) auto;
+    max-width: none;
+  }
+
+  .profile-stat-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .profile-liquidity-card {
+    grid-column: auto;
+  }
+
+  .profile-stat-card:not(.profile-liquidity-card) {
+    min-height: auto;
+  }
+
+  .profile-chip-row,
+  .profile-badge-row {
+    gap: 6px;
+  }
+}
+
+@media (max-width: 420px) {
+  .brand .arc-topbar-chip {
+    display: inline-flex;
+    max-width: none;
+  }
+
+  .brand-name {
+    max-width: 112px;
+  }
+
+  .nav-tabs .tab {
+    font-size: 0.72rem;
+    min-height: 40px;
+    padding: 0 4px;
+  }
+
+  .wallet-panel .wallet-menu {
+    max-width: 112px;
+  }
+
+  .theme-trigger,
+  .notification-button {
+    height: 40px;
+    width: 40px;
+  }
+}

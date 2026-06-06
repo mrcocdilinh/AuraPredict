@@ -11511,7 +11511,11 @@ export default function App() {
                 </p>
               )}
             </div>
-            <div className="board-actions">
+            <div
+              className={`board-actions ${view === "market" ? "market-detail-board-actions" : ""} ${
+                view === "profile" ? "profile-board-actions" : ""
+              }`}
+            >
               {view === "security" ? (
                 <button className="secondary" onClick={backToMarkets} type="button">
                   Back to markets
@@ -11535,12 +11539,12 @@ export default function App() {
                   <button className="secondary" onClick={loadMarkets} disabled={loading || !hasContract}>
                     {loading ? "Refreshing..." : "Refresh"}
                   </button>
-                  {view !== "leaderboard" && hasMoreMarkets && (
+                  {view !== "leaderboard" && view !== "profile" && hasMoreMarkets && (
                     <button className="secondary" onClick={() => loadMoreMarkets(false)} disabled={loading || !hasContract} type="button">
                       Load more
                     </button>
                   )}
-                  {view !== "ended" && view !== "leaderboard" && <button onClick={openCreateMarket}>Create Market</button>}
+                  {view !== "ended" && view !== "leaderboard" && view !== "profile" && <button onClick={openCreateMarket}>Create Market</button>}
                 </>
               )}
             </div>
