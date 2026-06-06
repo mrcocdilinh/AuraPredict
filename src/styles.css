@@ -5270,6 +5270,17 @@ label {
   stroke: #ff6b35;
 }
 
+.detail-yes-line.is-focused,
+.detail-no-line.is-focused {
+  opacity: 1;
+  stroke-width: 2;
+}
+
+.detail-yes-line.is-muted,
+.detail-no-line.is-muted {
+  opacity: 0.58;
+}
+
 .secondary-line {
   opacity: 0.72;
 }
@@ -5293,9 +5304,15 @@ label {
 }
 
 .chart-crosshair {
-  background: linear-gradient(180deg, transparent, rgba(24, 215, 255, 0.82), transparent);
+  background: repeating-linear-gradient(
+    to bottom,
+    rgba(184, 205, 226, 0.82) 0,
+    rgba(184, 205, 226, 0.82) 5px,
+    transparent 5px,
+    transparent 10px
+  );
   bottom: 18px;
-  box-shadow: 0 0 18px rgba(24, 215, 255, 0.18);
+  box-shadow: 0 0 18px rgba(24, 215, 255, 0.12);
   pointer-events: none;
   position: absolute;
   top: 12px;
@@ -5312,6 +5329,18 @@ label {
 
 .chart-crosshair.is-active {
   opacity: 0.95;
+}
+
+.chart-date-label {
+  color: #d5e8ff;
+  font-size: 0.72rem;
+  font-weight: 900;
+  pointer-events: none;
+  position: absolute;
+  top: 14px;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  z-index: 3;
 }
 
 .chart-hover-dot {
@@ -5388,6 +5417,40 @@ label {
 
 .chart-tooltip strong {
   font-size: 0.86rem;
+}
+
+.chart-outcome-tooltip {
+  align-items: center;
+  background: rgba(12, 18, 32, 0.9);
+  border-color: rgba(159, 181, 214, 0.22);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.28);
+  display: inline-flex;
+  min-width: 0;
+  padding: 7px 10px;
+  z-index: 5;
+}
+
+.chart-outcome-tooltip::before {
+  border-radius: 999px;
+  content: "";
+  height: 8px;
+  margin-right: 7px;
+  width: 8px;
+}
+
+.chart-outcome-tooltip.yes::before {
+  background: #12b981;
+  box-shadow: 0 0 0 3px rgba(18, 185, 129, 0.16);
+}
+
+.chart-outcome-tooltip.no::before {
+  background: #ff6b35;
+  box-shadow: 0 0 0 3px rgba(255, 107, 53, 0.14);
+}
+
+.chart-outcome-tooltip strong {
+  font-size: 0.78rem;
+  line-height: 1;
 }
 
 .tooltip-yes {
@@ -11192,6 +11255,10 @@ label {
   color: #d8f6ff;
 }
 
+[data-theme="dark"] .chart-date-label {
+  color: #d5e8ff;
+}
+
 [data-theme="dark"] .chart-side-toggle {
   background: rgba(14, 27, 47, 0.92);
   border-color: rgba(99, 176, 218, 0.36);
@@ -11304,6 +11371,17 @@ label {
   background: rgba(250, 253, 255, 0.82);
   box-shadow: 0 1px 5px rgba(35, 76, 109, 0.08);
   color: #27415f;
+}
+
+[data-theme="light"] .chart-date-label {
+  color: #27415f;
+  text-shadow: none;
+}
+
+[data-theme="light"] .chart-outcome-tooltip {
+  background: rgba(255, 255, 255, 0.96);
+  border-color: rgba(143, 166, 193, 0.34);
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.14);
 }
 
 [data-theme="light"] .chart-frame .edge-grid {

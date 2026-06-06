@@ -2015,13 +2015,6 @@ function clampChartValue(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
 }
 
-function nicePercentStep(span: number) {
-  if (span <= 6) return 1;
-  if (span <= 14) return 2;
-  if (span <= 32) return 5;
-  return 10;
-}
-
 function formatChartPercent(value: number) {
   const rounded = Math.abs(value - Math.round(value)) < 0.05 ? Math.round(value) : Number(value.toFixed(1));
   return `${rounded}%`;
@@ -9355,32 +9348,14 @@ export default function App() {
     const chartPrimaryPercent = selectedChartSide === Outcome.No ? selectedMarketNoPercent : selectedMarketYesPercent;
     const chartPrimaryLabel = selectedChartSide === Outcome.No ? "NO" : "YES";
     const chartOppositeLabel = oppositeChartSide === Outcome.No ? "NO" : "YES";
-    const chartLinePercent = (point: (typeof chartRows)[number]) =>
-      selectedChartSide === Outcome.No ? point.noPercent : point.yesPercent;
-    const chartVisiblePercents = chartRows.length > 0 ? chartRows.map(chartLinePercent) : [chartPrimaryPercent];
-    const chartRawMin = Math.min(...chartVisiblePercents, chartPrimaryPercent);
-    const chartRawMax = Math.max(...chartVisiblePercents, chartPrimaryPercent);
-    const chartRawSpan = Math.max(1, chartRawMax - chartRawMin);
-    const chartStep = nicePercentStep(chartRawSpan);
-    const chartScaleMin = clampChartValue(Math.floor((chartRawMin - Math.max(1, chartRawSpan * 0.22)) / chartStep) * chartStep, 0, 99);
-    const chartScaleMax = clampChartValue(
-      Math.max(chartScaleMin + chartStep, Math.ceil((chartRawMax + Math.max(1, chartRawSpan * 0.22)) / chartStep) * chartStep),
-      chartScaleMin + chartStep,
-      100
-    );
-    const chartYForPercent = (value: number) =>
-      CHART_BOTTOM - ((clampChartValue(value, chartScaleMin, chartScaleMax) - chartScaleMin) / (chartScaleMax - chartScaleMin)) * CHART_HEIGHT;
-    const chartLineY = (point: (typeof chartRows)[number]) => chartYForPercent(chartLinePercent(point));
-    const chartLinePath = smoothPathFromPoints(chartRows.map((point) => ({ x: point.x, y: chartLineY(point) })));
-    const chartAreaPath =
-      chartRows.length > 0 && chartLinePath
-        ? `${chartLinePath} L${chartRows[chartRows.length - 1].x},${CHART_BOTTOM} L${chartRows[0].x},${CHART_BOTTOM} Z`
-        : "";
-    const chartYTicks = Array.from({ length: 5 }, (_, index) => {
-      const value = chartScaleMax - ((chartScaleMax - chartScaleMin) * index) / 4;
-      const y = CHART_TOP + ((chartScaleMax - value) / (chartScaleMax - chartScaleMin)) * CHART_HEIGHT;
-      return { value, y, label: formatChartPercent(value) };
-    });
+    const chartYForPercent = (value: number) => CHART_BOTTOM - (clampChartValue(value, 0, 100) / 100) * CHART_HEIGHT;
+    const chartYesPath = smoothPathFromPoints(chartRows.map((point) => ({ x: point.x, y: chartYForPercent(point.yesPercent) })));
+    const chartNoPath = smoothPathFromPoints(chartRows.map((point) => ({ x: point.x, y: chartYForPercent(point.noPercent) })));
+    const chartYTicks = [100, 75, 50, 25, 0].map((value) => ({
+      value,
+      y: chartYForPercent(value),
+      label: formatChartPercent(value)
+    }));
     const chartLastPoint = chartRows[chartRows.length - 1];
     const chartPointerActive = chartHoverRatio !== null;
     const chartHoverPoint = (() => {
@@ -9400,15 +9375,15 @@ export default function App() {
         x: hoverX,
         yesPercent,
         noPercent,
-        yesY: CHART_BOTTOM - (yesPercent / 100) * CHART_HEIGHT,
-        noY: CHART_BOTTOM - (noPercent / 100) * CHART_HEIGHT
+        yesY: chartYForPercent(yesPercent),
+        noY: chartYForPercent(noPercent)
       };
     })();
     const chartFocusPoint = chartHoverPoint || chartLastPoint;
     const chartTooltipLeft = chartFocusPoint ? Math.min(88, Math.max(12, chartFocusPoint.x)) : 0;
-    const chartTooltipTop = chartFocusPoint ? Math.min(68, Math.max(16, (chartLineY(chartFocusPoint) / 58) * 100 + 8)) : 0;
     const chartTooltipSide = chartFocusPoint && chartFocusPoint.x > 68 ? "left" : "right";
-    const chartFocusPercent = chartFocusPoint ? chartLinePercent(chartFocusPoint) : chartPrimaryPercent;
+    const chartFocusYesY = chartFocusPoint ? chartYForPercent(chartFocusPoint.yesPercent) : CHART_BOTTOM;
+    const chartFocusNoY = chartFocusPoint ? chartYForPercent(chartFocusPoint.noPercent) : CHART_BOTTOM;
     const chartTradeCount = selectedMarketActivities.length;
     const submitLabel = !selectedTradeSide
       ? "Select YES or NO"
@@ -9800,7 +9775,7 @@ export default function App() {
                   }
                   type="button"
                 >
-                  View {chartOppositeLabel}
+                  Focus {chartOppositeLabel}
                 </button>
               </div>
             </div>
@@ -9841,42 +9816,52 @@ export default function App() {
             >
               <svg className="detail-chart" viewBox="0 0 100 58" preserveAspectRatio="none" role="img" aria-label="Market odds chart">
                 <path className="edge-grid" d="M8 8H92 M8 19.5H92 M8 31H92 M8 42.5H92 M8 54H92" />
-                {chartAreaPath && (
-                  <path
-                    className={selectedChartSide === Outcome.No ? "detail-no-area" : "detail-yes-area"}
-                    d={chartAreaPath}
-                  />
-                )}
                 <path
-                  className={selectedChartSide === Outcome.No ? "detail-no-line" : "detail-yes-line"}
-                  d={chartLinePath}
+                  className={`detail-yes-line ${selectedChartSide === Outcome.Yes ? "is-focused" : "is-muted"}`}
+                  d={chartYesPath}
+                />
+                <path
+                  className={`detail-no-line ${selectedChartSide === Outcome.No ? "is-focused" : "is-muted"}`}
+                  d={chartNoPath}
                 />
                 {chartLastPoint && (
-                  <circle
-                    className={`chart-end-dot ${selectedChartSide === Outcome.No ? "no" : "yes"}`}
-                    cx={chartLastPoint.x}
-                    cy={chartLineY(chartLastPoint)}
-                    r="1.35"
-                  />
+                  <>
+                    <circle className="chart-end-dot yes" cx={chartLastPoint.x} cy={chartYForPercent(chartLastPoint.yesPercent)} r="1.2" />
+                    <circle className="chart-end-dot no" cx={chartLastPoint.x} cy={chartYForPercent(chartLastPoint.noPercent)} r="1.2" />
+                  </>
                 )}
               </svg>
               {chartFocusPoint && (
                 <>
                   <span className={`chart-crosshair ${chartPointerActive ? "is-active" : "is-idle"}`} style={{ left: `${chartFocusPoint.x}%` }} />
+                  {chartPointerActive && (
+                    <span className="chart-date-label" style={{ left: `${chartFocusPoint.x}%` }}>
+                      {chartTimeLabel(chartFocusPoint.timestamp, true)}
+                    </span>
+                  )}
                   <span
-                    className={`chart-hover-dot ${selectedChartSide === Outcome.No ? "no" : "yes"} ${chartPointerActive ? "is-active" : "is-idle"}`}
-                    style={{ left: `${chartFocusPoint.x}%`, top: `${(chartLineY(chartFocusPoint) / 58) * 100}%` }}
+                    className={`chart-hover-dot yes ${chartPointerActive ? "is-active" : "is-idle"}`}
+                    style={{ left: `${chartFocusPoint.x}%`, top: `${(chartFocusYesY / 58) * 100}%` }}
+                  />
+                  <span
+                    className={`chart-hover-dot no ${chartPointerActive ? "is-active" : "is-idle"}`}
+                    style={{ left: `${chartFocusPoint.x}%`, top: `${(chartFocusNoY / 58) * 100}%` }}
                   />
                   {chartPointerActive && (
-                    <div
-                      className={`chart-tooltip is-${chartTooltipSide}`}
-                      style={{ left: `${chartTooltipLeft}%`, top: `${chartTooltipTop}%` }}
-                    >
-                      <span>{chartTimeLabel(chartFocusPoint.timestamp, true)}</span>
-                      <strong className={selectedChartSide === Outcome.No ? "tooltip-no" : "tooltip-yes"}>
-                        {chartPrimaryLabel} {chartFocusPercent.toFixed(1)}%
-                      </strong>
-                    </div>
+                    <>
+                      <div
+                        className={`chart-tooltip chart-outcome-tooltip yes is-${chartTooltipSide}`}
+                        style={{ left: `${chartTooltipLeft}%`, top: `${(chartFocusYesY / 58) * 100}%` }}
+                      >
+                        <strong className="tooltip-yes">YES {chartFocusPoint.yesPercent.toFixed(1)}%</strong>
+                      </div>
+                      <div
+                        className={`chart-tooltip chart-outcome-tooltip no is-${chartTooltipSide}`}
+                        style={{ left: `${chartTooltipLeft}%`, top: `${(chartFocusNoY / 58) * 100}%` }}
+                      >
+                        <strong className="tooltip-no">NO {chartFocusPoint.noPercent.toFixed(1)}%</strong>
+                      </div>
+                    </>
                   )}
                 </>
               )}
