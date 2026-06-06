@@ -5850,6 +5850,104 @@ label {
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
 }
 
+.ai-insight-strip {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(0, 1.35fr) minmax(280px, 0.65fr);
+  margin-top: 14px;
+}
+
+.ai-insight-main,
+.ai-receipt-card,
+.market-quality-card {
+  background: #ffffff;
+  border: 1px solid #dfe6f1;
+  border-radius: 8px;
+  color: #172033;
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  padding: 14px;
+}
+
+.ai-insight-metrics,
+.ai-receipt-grid,
+.quality-signal-grid {
+  display: grid;
+  gap: 8px;
+}
+
+.ai-insight-metrics {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.ai-receipt-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.quality-signal-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.ai-insight-metrics div,
+.ai-receipt-grid div,
+.quality-signal {
+  background: #f8fafc;
+  border: 1px solid #e5ebf4;
+  border-radius: 8px;
+  display: grid;
+  gap: 4px;
+  padding: 9px;
+}
+
+.ai-insight-metrics span,
+.ai-receipt-grid span,
+.quality-signal {
+  color: #667085;
+  font-size: 0.72rem;
+  font-weight: 820;
+}
+
+.ai-insight-metrics strong,
+.ai-receipt-grid strong,
+.quality-signal strong {
+  color: #101827;
+  display: block;
+  font-size: 0.95rem;
+}
+
+.ai-insight-main p,
+.ai-receipt-card p,
+.oracle-reputation-panel p {
+  color: #536178;
+  line-height: 1.45;
+  margin: 0;
+}
+
+.ai-receipt-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.quality-signal.good {
+  background: #ecfdf5;
+  border-color: #bbf7d0;
+  color: #047857;
+}
+
+.quality-signal.warn {
+  background: #fff7ed;
+  border-color: #fed7aa;
+  color: #9a3412;
+}
+
+.quality-signal.bad {
+  background: #fff1f2;
+  border-color: #fecdd3;
+  color: #be123c;
+}
+
 .agent-panel,
 .top-traders-panel,
 .market-history-panel {
@@ -7651,6 +7749,9 @@ label {
 
 [data-theme="dark"] .aura-formula-card,
 [data-theme="dark"] .onboarding-card,
+[data-theme="dark"] .ai-insight-main,
+[data-theme="dark"] .ai-receipt-card,
+[data-theme="dark"] .market-quality-card,
 [data-theme="dark"] .agent-panel,
 [data-theme="dark"] .top-traders-panel,
 [data-theme="dark"] .market-history-panel,
@@ -7670,6 +7771,9 @@ label {
 [data-theme="dark"] .aura-formula-card h3,
 [data-theme="dark"] .onboarding-card h3,
 [data-theme="dark"] .panel-heading h3,
+[data-theme="dark"] .ai-insight-metrics strong,
+[data-theme="dark"] .ai-receipt-grid strong,
+[data-theme="dark"] .quality-signal strong,
 [data-theme="dark"] .agent-result strong,
 [data-theme="dark"] .top-trader-list article > span,
 [data-theme="dark"] .market-history-list article strong,
@@ -7681,6 +7785,11 @@ label {
 
 [data-theme="dark"] .aura-formula-card p,
 [data-theme="dark"] .onboarding-card p,
+[data-theme="dark"] .ai-insight-main p,
+[data-theme="dark"] .ai-receipt-card p,
+[data-theme="dark"] .ai-insight-metrics span,
+[data-theme="dark"] .ai-receipt-grid span,
+[data-theme="dark"] .oracle-reputation-panel p,
 [data-theme="dark"] .agent-result p,
 [data-theme="dark"] .security-page p,
 [data-theme="dark"] .security-page li,
@@ -7696,6 +7805,9 @@ label {
 
 [data-theme="dark"] .reputation-badge,
 [data-theme="dark"] .onboarding-steps span,
+[data-theme="dark"] .ai-insight-metrics div,
+[data-theme="dark"] .ai-receipt-grid div,
+[data-theme="dark"] .quality-signal,
 [data-theme="dark"] .agent-result,
 [data-theme="dark"] .agent-checklist span,
 [data-theme="dark"] .agent-evidence-list article,
@@ -7798,6 +7910,24 @@ label {
 
 [data-theme="dark"] .similar-market-row small {
   color: #9aa7bd;
+}
+
+[data-theme="dark"] .quality-signal.good {
+  background: rgba(16, 185, 129, 0.11);
+  border-color: rgba(16, 185, 129, 0.32);
+  color: #7de8bc;
+}
+
+[data-theme="dark"] .quality-signal.warn {
+  background: rgba(245, 158, 11, 0.11);
+  border-color: rgba(245, 158, 11, 0.32);
+  color: #f7c56b;
+}
+
+[data-theme="dark"] .quality-signal.bad {
+  background: rgba(244, 63, 94, 0.12);
+  border-color: rgba(244, 63, 94, 0.34);
+  color: #ff9bac;
 }
 
 [data-theme="dark"] .duplicate-acknowledge {
@@ -8752,6 +8882,7 @@ label {
   }
 
   .market-intelligence-grid,
+  .ai-insight-strip,
   .aura-formula-card,
   .onboarding-card,
   .security-page {
@@ -9278,6 +9409,7 @@ label {
 
   .wallet-button {
     justify-content: center;
+    min-width: 0;
     overflow: hidden;
     width: 100%;
   }
@@ -9809,6 +9941,7 @@ label {
   }
 
   .wallet-button {
+    min-width: 0;
     padding-inline: 10px;
   }
 
@@ -9992,6 +10125,12 @@ label {
     grid-template-columns: 1fr;
   }
 
+  .ai-insight-metrics,
+  .ai-receipt-grid,
+  .quality-signal-grid {
+    grid-template-columns: 1fr;
+  }
+
   .resolution-report-card {
     min-height: auto;
   }
@@ -10094,7 +10233,15 @@ label {
   }
 
   .wallet-panel .wallet-menu {
-    max-width: 138px;
+    max-width: min(132px, calc(100vw - 244px));
+    width: min(132px, calc(100vw - 244px));
+  }
+
+  .wallet-button {
+    max-width: 132px;
+    min-width: 0;
+    padding-inline: 8px;
+    width: 100%;
   }
 
   .hero-copy h1 {
@@ -10322,7 +10469,7 @@ label {
   cursor: pointer;
   font-size: 0.72rem;
   font-weight: 950;
-  min-height: 31px;
+  min-height: 34px;
   padding: 6px 12px;
 }
 
@@ -10357,8 +10504,8 @@ label {
   border-radius: 999px;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.045);
   color: #cfe4f6;
-  min-height: 24px;
-  padding: 3px 12px;
+  min-height: 32px;
+  padding: 5px 12px;
   text-decoration: none;
 }
 

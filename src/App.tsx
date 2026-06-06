@@ -526,6 +526,105 @@ type OracleProposalResponse = {
   proposal?: OracleProposal | null;
 };
 
+type AiMarketInsight = {
+  marketId: number;
+  question?: string;
+  category?: string;
+  status?: string;
+  marketYesPrice: number;
+  marketNoPrice: number;
+  estimatedYesProbability: number;
+  edge: number;
+  edgeSide: "YES" | "NO" | "balanced" | string;
+  confidence: number;
+  confidenceBand: string;
+  basis: string;
+  summary: string;
+  riskFlags: string[];
+  sourceUrls: string[];
+  receiptHash?: string;
+  oracleDataHash?: string;
+  txHash?: string;
+  updatedAt?: string;
+};
+
+type PublicOracleReceipt = {
+  marketId: number;
+  status: string;
+  finalOutcome: string;
+  proposedOutcome: string;
+  ai?: {
+    status: string;
+    outcome: string;
+    confidence: number;
+    agreed?: number | null;
+    receiptHash?: string;
+    provider?: string;
+    model?: string;
+    generatedAt?: string;
+    txHash?: string;
+  } | null;
+  oracle?: {
+    status: string;
+    adapter: string;
+    outcome: string;
+    confidence: number;
+    observedValue?: string;
+    dataHash?: string;
+    txHash?: string;
+    summary?: string;
+  } | null;
+  evidence?: MarketEvidence[];
+  sourceUrls?: string[];
+  hashes?: {
+    proposalEvidenceHash?: string;
+    aiReceiptHash?: string;
+    oracleDataHash?: string;
+  };
+};
+
+type OracleReputation = {
+  reputationScore: number;
+  tier: string;
+  coverage: number;
+  accuracy: number;
+  reversalRate: number;
+  avgOracleConfidence: number;
+  avgAiConfidence: number;
+  evidenceQuality: number;
+  oracleProposals: number;
+  aiReceipts: number;
+  finalizedMarkets: number;
+  disputedMarkets: number;
+  authorityReviewMarkets: number;
+  autoProposed: number;
+  adapters: Record<string, number>;
+  recent: Array<{
+    marketId: number;
+    question: string;
+    adapter: string;
+    status: string;
+    outcome: string;
+    confidence: number;
+    txHash?: string;
+    generatedAt?: string;
+  }>;
+  policy: string;
+  updatedAt?: string;
+};
+
+type PublicOracleReceiptResponse = {
+  receipt?: PublicOracleReceipt | null;
+};
+
+type AiMarketInsightResponse = {
+  insight?: AiMarketInsight | null;
+};
+
+type OracleReputationResponse = {
+  reputation?: OracleReputation | null;
+};
+
 type AuraBreakdown = {
   items: Array<{ label: string; detail: string; value: number }>;
   total: number;
@@ -1988,6 +2087,88 @@ function parseUtcInputToUnixSeconds(value: string) {
   }
 }
 
+function marketQualitySnapshot(
+  form: CreateFormState,
+  draft: AiMarketDraft | null,
+  hasRuleTimeMismatch: boolean,
+  hasResolutionTime: boolean
+) {
+  let score = 35;
+  const signals: Array<{ label: string; detail: string; state: "good" | "warn" | "bad" }> = [];
+  const questionLength = form.question.trim().length;
+  const ruleLength = form.resolutionRule.trim().length;
+  const sourceOk = isValidHttpUrl(normalizeReferenceUrl(form.resolutionSource));
+  const fallbackOk = !form.fallbackSource.trim() || isValidHttpUrl(normalizeReferenceUrl(form.fallbackSource));
+  const hasExactRuleTime = Boolean(parseResolutionReferenceTime(form.resolutionRule));
+
+  if (questionLength >= 24 && questionLength <= 180) {
+    score += 14;
+    signals.push({ label: "Question", detail: "Clear enough for a binary market.", state: "good" });
+  } else {
+    score -= 8;
+    signals.push({ label: "Question", detail: "Make the question specific but not overloaded.", state: "warn" });
+  }
+
+  if (sourceOk) {
+    score += 16;
+    signals.push({ label: "Primary source", detail: "Resolvable source URL is present.", state: "good" });
+  } else {
+    score -= 16;
+    signals.push({ label: "Primary source", detail: "Add an official or reliable URL.", state: "bad" });
+  }
+
+  if (ruleLength >= 70 && hasExactRuleTime) {
+    score += 18;
+    signals.push({ label: "Rule", detail: "Rule defines source, condition, and UTC event time.", state: "good" });
+  } else if (ruleLength >= 35) {
+    score += 5;
+    signals.push({ label: "Rule", detail: "Rule exists, but should define exact value and timestamp.", state: "warn" });
+  } else {
+    score -= 14;
+    signals.push({ label: "Rule", detail: "Resolution rule is too thin for dispute-safe settlement.", state: "bad" });
+  }
+
+  if (hasResolutionTime) {
+    score += 10;
+    signals.push({ label: "Timing", detail: "Separate resolution time is set onchain.", state: "good" });
+  } else {
+    signals.push({ label: "Timing", detail: "Set the actual event timestamp before launch.", state: "warn" });
+  }
+
+  if (hasRuleTimeMismatch) {
+    score -= 25;
+    signals.push({ label: "Rule time", detail: "Form time and rule time do not match.", state: "bad" });
+  }
+
+  if (fallbackOk) {
+    score += form.fallbackSource.trim() ? 6 : 0;
+  } else {
+    score -= 8;
+    signals.push({ label: "Fallback", detail: "Fallback source URL is invalid.", state: "warn" });
+  }
+
+  if (typeof draft?.clarityScore === "number") {
+    score = Math.round(score * 0.55 + draft.clarityScore * 0.45);
+  }
+  if (draft?.duplicateRisk === "HIGH") {
+    score -= 20;
+    signals.push({ label: "Duplicate risk", detail: "Aura found a highly similar market.", state: "bad" });
+  } else if (draft?.duplicateRisk === "MEDIUM") {
+    score -= 10;
+    signals.push({ label: "Duplicate risk", detail: "Similar markets may split liquidity.", state: "warn" });
+  } else if (draft?.duplicateRisk === "LOW") {
+    score += 5;
+    signals.push({ label: "Duplicate risk", detail: "Aura marked duplicate risk low.", state: "good" });
+  }
+
+  const normalizedScore = Math.max(0, Math.min(100, score));
+  return {
+    score: normalizedScore,
+    label: normalizedScore >= 85 ? "Strong" : normalizedScore >= 70 ? "Good" : normalizedScore >= 50 ? "Needs review" : "Risky",
+    signals: signals.slice(0, 6)
+  };
+}
+
 function defaultSourceByContext(category?: string, text?: string) {
   const cat = (category || "").toLowerCase();
   const content = (text || "").toLowerCase();
@@ -2745,6 +2926,32 @@ function LandingPage() {
       text: "When automation is enabled, a configured Circle Agent Wallet can submit high-confidence Oracle proposals on Arc while finalization still follows the contract's review windows."
     }
   ];
+  const infrastructureCards = [
+    {
+      title: "Prediction market API",
+      text: "Public endpoints expose markets, activity, AI insights, public oracle receipts, hot markets, and oracle reputation so other builders can consume AuraPredict data on Arc."
+    },
+    {
+      title: "Embeddable market cards",
+      text: "Each market can be shared as a compact card or embedded by URL, turning AuraPredict markets into portable forecasting components for partner apps and docs."
+    },
+    {
+      title: "Public oracle receipts",
+      text: "Aura and Oracle decisions publish outcome, confidence, source URLs, evidence hashes, receipt hashes, and transaction references before final settlement."
+    },
+    {
+      title: "Unified Balance funding",
+      text: "Circle Gateway and Unified Balance funding help users bring testnet USDC toward Arc before staking, while market actions stay wallet-signed on the Arc contract."
+    },
+    {
+      title: "AI market intelligence",
+      text: "Market detail compares current YES pricing with Aura's probability estimate, possible edge, confidence, and risk flags."
+    },
+    {
+      title: "Oracle Agent reputation",
+      text: "The owner dashboard tracks coverage, confidence, final-match accuracy, reversal rate, evidence depth, adapters, and auto-propose history."
+    }
+  ];
   const roadmapItems = [
     "Add websocket or event streaming for absolute realtime odds and cross-user updates",
     "Harden AI receipt review with better evidence policy, audit logs, and operator dashboards",
@@ -3013,6 +3220,34 @@ function LandingPage() {
             Oracle proposal v1 does not move funds by itself. The contract still enforces resolution time,
             review/dispute windows, and finalization. The proposal simply gives the signer, including the Circle Agent
             Wallet signer when configured, a clearer source-based report before choosing YES, NO, or Cancel.
+          </p>
+        </div>
+      </section>
+
+      <section className="landing-section" id="infrastructure">
+        <div className="landing-section-head">
+          <p className="landing-kicker">Open infrastructure</p>
+          <h2>Open Prediction Market Infrastructure on Arc.</h2>
+          <p>
+            AuraPredict is expanding from a trading dapp into a reusable prediction-market layer for Arc. Builders can
+            read market data, embed live cards, inspect AI and Oracle receipts, and route users into USDC funding before
+            they stake onchain.
+          </p>
+        </div>
+        <div className="landing-feature-grid">
+          {infrastructureCards.map((feature) => (
+            <article key={feature.title}>
+              <span />
+              <h3>{feature.title}</h3>
+              <p>{feature.text}</p>
+            </article>
+          ))}
+        </div>
+        <div className="docs-note">
+          <strong>AI proposes, evidence proves, smart contracts enforce.</strong>
+          <p>
+            Aura Agent helps create clearer markets and explain probabilities. Oracle adapters check objective sources.
+            Final proposals, disputes, review, and claims still follow the contract.
           </p>
         </div>
       </section>
@@ -3522,6 +3757,9 @@ export default function App() {
   const [aiResolutionReports, setAiResolutionReports] = useState<Record<number, AiResolutionReport>>({});
   const [aiResolutionReceipts, setAiResolutionReceipts] = useState<Record<string, AiResolutionReceipt | null>>({});
   const [oracleProposals, setOracleProposals] = useState<Record<string, OracleProposal | null>>({});
+  const [aiMarketInsights, setAiMarketInsights] = useState<Record<string, AiMarketInsight | null>>({});
+  const [publicOracleReceipts, setPublicOracleReceipts] = useState<Record<string, PublicOracleReceipt | null>>({});
+  const [oracleReputation, setOracleReputation] = useState<OracleReputation | null>(null);
   const [oracleBusyByMarket, setOracleBusyByMarket] = useState<Record<number, boolean>>({});
   const [auraResolutionStatusByMarket, setAuraResolutionStatusByMarket] = useState<Record<number, "idle" | "ready" | "failed">>({});
   const [mismatchConfirm, setMismatchConfirm] = useState<MismatchConfirmState | null>(null);
@@ -4774,10 +5012,29 @@ export default function App() {
       if (canceled || !response || !("proposal" in response)) return;
       setOracleProposals((current) => ({ ...current, [String(selectedMarketId)]: response.proposal ?? null }));
     });
+    fetchIndexerJson<AiMarketInsightResponse>(`/api/markets/${selectedMarketId}/ai-insight`).then((response) => {
+      if (canceled || !response || !("insight" in response)) return;
+      setAiMarketInsights((current) => ({ ...current, [String(selectedMarketId)]: response.insight ?? null }));
+    });
+    fetchIndexerJson<PublicOracleReceiptResponse>(`/api/oracle-receipts/${selectedMarketId}`).then((response) => {
+      if (canceled || !response || !("receipt" in response)) return;
+      setPublicOracleReceipts((current) => ({ ...current, [String(selectedMarketId)]: response.receipt ?? null }));
+    });
     return () => {
       canceled = true;
     };
   }, [selectedMarketId]);
+
+  useEffect(() => {
+    let canceled = false;
+    fetchIndexerJson<OracleReputationResponse>("/api/oracle-reputation").then((response) => {
+      if (canceled || !response || !("reputation" in response)) return;
+      setOracleReputation(response.reputation ?? null);
+    });
+    return () => {
+      canceled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (!account) return;
@@ -6076,6 +6333,16 @@ export default function App() {
     ruleReferenceCloseTime &&
       (isStablecoinContractVersion(contractVersion) ? createForm.resolutionTime : createForm.closeTime) &&
       ruleReferenceCloseTime !== (isStablecoinContractVersion(contractVersion) ? createForm.resolutionTime : createForm.closeTime)
+  );
+  const createMarketQuality = useMemo(
+    () =>
+      marketQualitySnapshot(
+        createForm,
+        aiMarketDraft,
+        hasRuleCloseMismatch,
+        isStablecoinContractVersion(contractVersion) ? Boolean(createForm.resolutionTime.trim()) : Boolean(createForm.closeTime.trim())
+      ),
+    [aiMarketDraft, contractVersion, createForm, hasRuleCloseMismatch]
   );
   const createAuraStatusLabel =
     auraCreateStatus === "ready"
@@ -8984,6 +9251,8 @@ export default function App() {
     const hasWalletAccess = Boolean(account);
     const aiResolutionReport = aiResolutionReports[selectedMarket.id];
     const aiResolutionReceipt = aiResolutionReceipts[String(selectedMarket.id)];
+    const selectedAiInsight = aiMarketInsights[String(selectedMarket.id)];
+    const selectedPublicReceipt = publicOracleReceipts[String(selectedMarket.id)];
     const hasSavedAiReview = Boolean(aiResolutionReport || aiResolutionReceipt);
     const selectedMarketIsSettled = selectedMarket.outcome !== Outcome.Unresolved;
     const showResolutionAssistant = !selectedMarketIsSettled || Boolean(aiResolutionReport);
@@ -9181,6 +9450,11 @@ export default function App() {
       selectedRuleFallback ? `Fallback source: ${selectedRuleFallback}` : "",
       selectedHumanRule ? `Rule: ${selectedHumanRule}` : ""
     ].filter(Boolean);
+    const aiInsightEdgeLabel = selectedAiInsight
+      ? selectedAiInsight.edgeSide === "balanced"
+        ? "Balanced"
+        : `${selectedAiInsight.edgeSide} ${Math.abs(selectedAiInsight.edge).toFixed(1)} pt edge`
+      : "Loading";
     const scrollToAuraDetails = () => {
       document.getElementById("aura-resolution-details")?.scrollIntoView({ block: "start", behavior: "smooth" });
     };
@@ -9947,6 +10221,89 @@ export default function App() {
               </button>
             </aside>
           )}
+        </section>
+
+        <section className="ai-insight-strip" aria-label="Aura AI market insight">
+          <article className="ai-insight-main">
+            <div className="panel-heading">
+              <div>
+                <span className="section-label">Aura AI Insight</span>
+                <h3>Model view vs market price</h3>
+              </div>
+              <span className="agent-confidence">
+                {selectedAiInsight ? selectedAiInsight.confidenceBand : "Loading"}
+              </span>
+            </div>
+            <div className="ai-insight-metrics">
+              <div>
+                <span>Market YES</span>
+                <strong>{selectedAiInsight ? `${selectedAiInsight.marketYesPrice.toFixed(1)}%` : `${selectedMarketYesPercent.toFixed(1)}%`}</strong>
+              </div>
+              <div>
+                <span>AI YES estimate</span>
+                <strong>{selectedAiInsight ? `${selectedAiInsight.estimatedYesProbability}%` : "--"}</strong>
+              </div>
+              <div>
+                <span>Possible edge</span>
+                <strong>{aiInsightEdgeLabel}</strong>
+              </div>
+              <div>
+                <span>Basis</span>
+                <strong>{selectedAiInsight?.basis || "Market data"}</strong>
+              </div>
+            </div>
+            <p>
+              {selectedAiInsight?.summary ||
+                "Aura is preparing an insight from market price, saved AI receipts, objective Oracle proposals, and public evidence."}
+            </p>
+            {selectedAiInsight?.riskFlags && selectedAiInsight.riskFlags.length > 0 && (
+              <div className="agent-checklist ai-insight-risks">
+                {selectedAiInsight.riskFlags.slice(0, 4).map((risk) => (
+                  <span key={risk}>{risk}</span>
+                ))}
+              </div>
+            )}
+          </article>
+          <article className="ai-receipt-card">
+            <div>
+              <span className="section-label">Public oracle receipt</span>
+              <h3>{selectedPublicReceipt?.status ? selectedPublicReceipt.status.replace(/_/g, " ") : "No receipt yet"}</h3>
+              <p>
+                {selectedPublicReceipt?.oracle?.summary ||
+                  selectedPublicReceipt?.ai?.status ||
+                  "When Aura or Oracle checks this market, the public receipt shows outcome, confidence, evidence links, hashes, and transaction references."}
+              </p>
+            </div>
+            <div className="ai-receipt-grid">
+              <div>
+                <span>AI</span>
+                <strong>{selectedPublicReceipt?.ai ? `${selectedPublicReceipt.ai.outcome} ${selectedPublicReceipt.ai.confidence}%` : "Waiting"}</strong>
+              </div>
+              <div>
+                <span>Oracle</span>
+                <strong>{selectedPublicReceipt?.oracle ? `${selectedPublicReceipt.oracle.outcome} ${selectedPublicReceipt.oracle.confidence}%` : "Waiting"}</strong>
+              </div>
+              <div>
+                <span>Final</span>
+                <strong>{selectedPublicReceipt?.finalOutcome || "Live"}</strong>
+              </div>
+            </div>
+            <div className="ai-receipt-actions">
+              {selectedAiInsight?.receiptHash && selectedAiInsight.receiptHash !== ZERO_HASH && (
+                <button className="secondary" onClick={() => copyTextToClipboard(selectedAiInsight.receiptHash || "", "AI receipt hash copied.")} type="button">
+                  Copy AI hash
+                </button>
+              )}
+              {selectedPublicReceipt?.oracle?.txHash && (
+                <a className="tx-link-button" href={`${ARC_EXPLORER_URL}/tx/${selectedPublicReceipt.oracle.txHash}`} target="_blank" rel="noreferrer">
+                  Oracle tx
+                </a>
+              )}
+              <button className="secondary" onClick={() => copyTextToClipboard(`${INDEXER_URL}/api/oracle-receipts/${selectedMarket.id}`, "Public receipt API copied.")} type="button">
+                Copy receipt API
+              </button>
+            </div>
+          </article>
         </section>
 
         {hasWalletAccess ? (
@@ -11084,6 +11441,39 @@ export default function App() {
                         <div><span>Dispute bond</span><strong>{formatUsdc(disputeBond, defaultSettlementDecimals)} {defaultSettlementSymbol}</strong></div>
                         <div><span>Project fee</span><strong>{(protocolFeeBps / 100).toFixed(2)}%</strong></div>
                       </div>
+                    </article>
+
+                    <article className="owner-panel owner-panel-wide oracle-reputation-panel">
+                      <div className="panel-heading">
+                        <div>
+                          <span className="section-label">Aura Oracle Agent reputation</span>
+                          <h3>{oracleReputation?.tier || "Waiting for indexer"}</h3>
+                        </div>
+                        <span className="agent-confidence">{oracleReputation ? `${oracleReputation.reputationScore}% score` : "Syncing"}</span>
+                      </div>
+                      <div className="owner-report-grid">
+                        <div><span>Coverage</span><strong>{oracleReputation ? `${oracleReputation.coverage}%` : "--"}</strong></div>
+                        <div><span>Final-match accuracy</span><strong>{oracleReputation ? `${oracleReputation.accuracy}%` : "--"}</strong></div>
+                        <div><span>Reversal rate</span><strong>{oracleReputation ? `${oracleReputation.reversalRate}%` : "--"}</strong></div>
+                        <div><span>Oracle confidence</span><strong>{oracleReputation ? `${oracleReputation.avgOracleConfidence}%` : "--"}</strong></div>
+                        <div><span>AI confidence</span><strong>{oracleReputation ? `${oracleReputation.avgAiConfidence}%` : "--"}</strong></div>
+                        <div><span>Evidence quality</span><strong>{oracleReputation ? `${oracleReputation.evidenceQuality}%` : "--"}</strong></div>
+                        <div><span>Oracle proposals</span><strong>{oracleReputation?.oracleProposals ?? "--"}</strong></div>
+                        <div><span>AI receipts</span><strong>{oracleReputation?.aiReceipts ?? "--"}</strong></div>
+                        <div><span>Auto-proposed</span><strong>{oracleReputation?.autoProposed ?? "--"}</strong></div>
+                        <div><span>Authority review</span><strong>{oracleReputation?.authorityReviewMarkets ?? "--"}</strong></div>
+                      </div>
+                      {oracleReputation?.policy && <p>{oracleReputation.policy}</p>}
+                      {oracleReputation?.recent && oracleReputation.recent.length > 0 && (
+                        <div className="oracle-reputation-list">
+                          {oracleReputation.recent.slice(0, 4).map((row) => (
+                            <button className="similar-market-row" key={`oracle-reputation-${row.marketId}-${row.generatedAt || row.status}`} onClick={() => openMarket(row.marketId)} type="button">
+                              <strong>#{row.marketId} {shortQuestion(row.question)}</strong>
+                              <small>{row.adapter || "oracle"} / {row.outcome} / {row.confidence}% confidence / {row.status}</small>
+                            </button>
+                          ))}
+                        </div>
+                      )}
                     </article>
                   </div>
                 </>
@@ -12331,6 +12721,23 @@ export default function App() {
               <button className="aura-ask-button" disabled={aiBusy || createForm.question.trim().length < 4} onClick={askAuraForMarketDraft} type="button">
                 {aiBusy ? "Aura thinking..." : "Ask Aura Agent"}
               </button>
+            </div>
+            <div className="market-quality-card">
+              <div className="panel-heading">
+                <div>
+                  <span className="section-label">AI market quality</span>
+                  <h3>{createMarketQuality.label}</h3>
+                </div>
+                <span className="agent-confidence">{createMarketQuality.score}% score</span>
+              </div>
+              <div className="quality-signal-grid">
+                {createMarketQuality.signals.map((signal) => (
+                  <span className={`quality-signal ${signal.state}`} key={`${signal.label}-${signal.detail}`}>
+                    <strong>{signal.label}</strong>
+                    {signal.detail}
+                  </span>
+                ))}
+              </div>
             </div>
             {aiMarketDraft && (
               <div className="aura-draft-card">

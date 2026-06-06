@@ -1176,6 +1176,354 @@ function outcomeValue(outcome) {
   return Outcome.Unresolved;
 }
 
+function pct(value, total) {
+  if (total <= 0n) return 50;
+  return Math.round(Number((value * 10_000n) / total)) / 100;
+}
+
+function confidenceBand(score) {
+  const value = Number(score || 0);
+  if (value >= 80) return "High";
+  if (value >= 60) return "Medium";
+  if (value > 0) return "Low";
+  return "Market-only";
+}
+
+function marketPools(market) {
+  const yesPool = toBigint(market?.yesPool);
+  const noPool = toBigint(market?.noPool);
+  const total = yesPool + noPool;
+  return {
+    yesPool,
+    noPool,
+    total,
+    yesPercent: pct(yesPool, total),
+    noPercent: pct(noPool, total)
+  };
+}
+
+function receiptDecisionValue(receipt) {
+  if (!receipt) return Outcome.Unresolved;
+  if (typeof receipt.proposedOutcomeValue === "number") return outcomeValue(receipt.proposedOutcomeValue);
+  return outcomeValue(receipt.consensus?.outcome || receipt.proposedOutcome);
+}
+
+function oracleDecisionValue(proposal) {
+  if (!proposal) return Outcome.Unresolved;
+  if (typeof proposal.outcomeValue === "number") return outcomeValue(proposal.outcomeValue);
+  return outcomeValue(proposal.outcome);
+}
+
+function clampPercent(value) {
+  return Math.max(1, Math.min(99, Math.round(Number(value || 0))));
+}
+
+function probabilityFromDecision(decision, confidence, fallback) {
+  const score = Number(confidence || 0);
+  if (decision === Outcome.Yes) return clampPercent(score || Math.max(fallback, 55));
+  if (decision === Outcome.No) return clampPercent(100 - (score || Math.max(100 - fallback, 55)));
+  return clampPercent(fallback);
+}
+
+function sourceUrlsFromReceipt(receipt) {
+  const rows = [];
+  for (const item of Array.isArray(receipt?.evidence) ? receipt.evidence : []) {
+    const url = cleanUrl(item?.url);
+    if (url && !rows.includes(url)) rows.push(url);
+  }
+  for (const review of Array.isArray(receipt?.reviews) ? receipt.reviews : []) {
+    for (const item of Array.isArray(review?.keyEvidence) ? review.keyEvidence : []) {
+      const url = cleanUrl(item?.url);
+      if (url && !rows.includes(url)) rows.push(url);
+    }
+  }
+  return rows;
+}
+
+function aiInsightForMarket(market) {
+  const receipt = resolutionState()[String(market.id)] || null;
+  const proposal = oracleState()[String(market.id)] || null;
+  const pools = marketPools(market);
+  const receiptDecision = receiptDecisionValue(receipt);
+  const oracleDecision = oracleDecisionValue(proposal);
+  const receiptConfidence = Number(receipt?.consensus?.confidence || 0);
+  const oracleConfidence = Number(proposal?.confidence || 0);
+  const decision = receiptDecision !== Outcome.Unresolved ? receiptDecision : oracleDecision;
+  const confidence = receiptDecision !== Outcome.Unresolved ? receiptConfidence : oracleConfidence;
+  const estimatedYesProbability = probabilityFromDecision(decision, confidence, pools.yesPercent);
+  const edge = Math.round((estimatedYesProbability - pools.yesPercent) * 10) / 10;
+  const edgeSide = Math.abs(edge) < 8 ? "balanced" : edge > 0 ? "YES" : "NO";
+  const lowLiquidity = pools.total < 5_000_000n;
+  const oneSided = pools.yesPool === 0n || pools.noPool === 0n;
+  const sourceUrls = [
+    ...sourceUrlsFromReceipt(receipt),
+    ...(Array.isArray(proposal?.sourceUrls) ? proposal.sourceUrls.map(cleanUrl).filter(Boolean) : []),
+    ...marketSourceUrls(market)
+  ].filter((url, index, rows) => url && rows.indexOf(url) === index).slice(0, 6);
+  const riskFlags = [
+    lowLiquidity ? "Low liquidity can make the market price noisy." : "",
+    oneSided ? "One-sided pool may require Cancel/Refund instead of YES/NO." : "",
+    !receipt ? "No saved Aura resolution receipt yet." : "",
+    !proposal ? "No objective Oracle proposal yet." : "",
+    Number(market.resolutionTime || market.closeTime || 0) > Math.floor(Date.now() / 1000)
+      ? "Resolution time has not passed yet."
+      : "",
+    market.disputed ? "A dispute is open." : "",
+    market.authorityReviewRequired ? "Authority review is required." : ""
+  ].filter(Boolean);
+  const basis =
+    receiptDecision !== Outcome.Unresolved
+      ? "Aura AI receipt"
+      : oracleDecision !== Outcome.Unresolved
+        ? "Objective Oracle proposal"
+        : "Market price baseline";
+  const summary =
+    basis === "Market price baseline"
+      ? "Aura has no saved AI or Oracle result yet, so the insight starts from current YES/NO market pricing."
+      : `${basis} currently points to ${outcomeName(decision)} with ${confidence || 0}% confidence.`;
+
+  return {
+    marketId: market.id,
+    question: market.question,
+    category: market.category || "Other",
+    status: market.outcome !== Outcome.Unresolved ? "finalized" : Number(market.proposedAt || 0) > 0 ? "proposed" : "open",
+    marketYesPrice: pools.yesPercent,
+    marketNoPrice: pools.noPercent,
+    estimatedYesProbability,
+    edge,
+    edgeSide,
+    confidence: confidence || 0,
+    confidenceBand: confidenceBand(confidence),
+    basis,
+    summary,
+    riskFlags,
+    sourceUrls,
+    receiptHash: receipt?.receiptHash || "",
+    oracleDataHash: proposal?.dataHash || "",
+    txHash: receipt?.txHash || proposal?.txHash || "",
+    updatedAt: nowIso()
+  };
+}
+
+function publicOracleReceiptForMarket(marketId) {
+  const market = state.markets[String(marketId)];
+  if (!market) return null;
+  const receipt = resolutionState()[String(marketId)] || null;
+  const proposal = oracleState()[String(marketId)] || null;
+  const aiDecision = receiptDecisionValue(receipt);
+  const oracleDecision = oracleDecisionValue(proposal);
+  const finalDecision = outcomeValue(market.outcome);
+  return {
+    marketId,
+    question: market.question,
+    category: market.category || "Other",
+    resolutionTime: marketResolutionTime(market),
+    status: finalDecision !== Outcome.Unresolved ? "finalized" : market.disputed ? "disputed" : market.proposedAt > 0 ? "proposed" : "awaiting_proposal",
+    finalOutcome: outcomeName(finalDecision),
+    proposedOutcome: outcomeName(market.proposedOutcome),
+    ai: receipt
+      ? {
+          status: receipt.status || "",
+          outcome: outcomeName(aiDecision),
+          confidence: Number(receipt.consensus?.confidence || 0),
+          agreed: receipt.consensus?.agreed ?? null,
+          receiptHash: receipt.receiptHash || "",
+          provider: receipt.provider || "",
+          model: receipt.model || "",
+          generatedAt: receipt.generatedAt || "",
+          attestationSigner: receipt.attestationSigner || "",
+          txHash: receipt.txHash || ""
+        }
+      : null,
+    oracle: proposal
+      ? {
+          status: proposal.status || "",
+          adapter: proposal.adapter || "",
+          outcome: outcomeName(oracleDecision),
+          confidence: Number(proposal.confidence || 0),
+          observedValue: proposal.observedValue || "",
+          observedAt: proposal.observedAt || "",
+          dataHash: proposal.dataHash || "",
+          txHash: proposal.txHash || "",
+          autoProposed: Boolean(proposal.autoProposed),
+          summary: proposal.summary || ""
+        }
+      : null,
+    evidence: [
+      ...(Array.isArray(receipt?.evidence) ? receipt.evidence : []),
+      ...oracleEvidenceRowsForMarket(marketId)
+    ].slice(0, 10),
+    sourceUrls: [
+      ...sourceUrlsFromReceipt(receipt),
+      ...(Array.isArray(proposal?.sourceUrls) ? proposal.sourceUrls.map(cleanUrl).filter(Boolean) : []),
+      ...marketSourceUrls(market)
+    ].filter((url, index, rows) => url && rows.indexOf(url) === index).slice(0, 8),
+    dispute: {
+      disputed: Boolean(market.disputed),
+      authorityReviewRequired: Boolean(market.authorityReviewRequired),
+      disputeDeadline: Number(market.disputeDeadline || 0),
+      disputer: market.disputer || ZERO_ADDRESS
+    },
+    hashes: {
+      proposalEvidenceHash: market.proposalEvidenceHash || ZERO_HASH,
+      aiReceiptHash: market.aiReceiptHash || receipt?.receiptHash || ZERO_HASH,
+      oracleDataHash: proposal?.dataHash || ZERO_HASH
+    },
+    updatedAt: state.updatedAt || nowIso()
+  };
+}
+
+function oracleReputationSummary() {
+  const proposals = Object.values(oracleState());
+  const receipts = Object.values(resolutionState());
+  const markets = Object.values(state.markets);
+  const finalized = markets.filter((market) => outcomeValue(market.outcome) !== Outcome.Unresolved);
+  const proposalRows = proposals.filter((proposal) => Number.isInteger(Number(proposal?.marketId)));
+  const receiptRows = receipts.filter((receipt) => Number.isInteger(Number(receipt?.marketId)));
+  const finalMatches = proposalRows.filter((proposal) => {
+    const market = state.markets[String(proposal.marketId)];
+    return market && outcomeValue(market.outcome) !== Outcome.Unresolved && oracleDecisionValue(proposal) === outcomeValue(market.outcome);
+  }).length;
+  const finalMisses = proposalRows.filter((proposal) => {
+    const market = state.markets[String(proposal.marketId)];
+    return market && outcomeValue(market.outcome) !== Outcome.Unresolved && oracleDecisionValue(proposal) !== Outcome.Unresolved && oracleDecisionValue(proposal) !== outcomeValue(market.outcome);
+  }).length;
+  const avgOracleConfidence =
+    proposalRows.length > 0
+      ? Math.round(proposalRows.reduce((sum, proposal) => sum + Number(proposal.confidence || 0), 0) / proposalRows.length)
+      : 0;
+  const avgAiConfidence =
+    receiptRows.length > 0
+      ? Math.round(receiptRows.reduce((sum, receipt) => sum + Number(receipt.consensus?.confidence || 0), 0) / receiptRows.length)
+      : 0;
+  const evidenceRows = proposalRows.reduce(
+    (sum, proposal) =>
+      sum + (Array.isArray(proposal.sourceUrls) ? proposal.sourceUrls.length : 0) + (Array.isArray(proposal.checks) ? proposal.checks.length : 0),
+    0
+  );
+  const evidenceQuality = proposalRows.length > 0 ? Math.min(100, Math.round((evidenceRows / proposalRows.length) * 18)) : 0;
+  const accuracy = finalMatches + finalMisses > 0 ? Math.round((finalMatches / (finalMatches + finalMisses)) * 100) : 0;
+  const reversalRate = finalMatches + finalMisses > 0 ? Math.round((finalMisses / (finalMatches + finalMisses)) * 100) : 0;
+  const coverage = markets.length > 0 ? Math.round((proposalRows.length / markets.length) * 100) : 0;
+  const reputationScore = Math.round(
+    Math.min(100, coverage * 0.2 + avgOracleConfidence * 0.22 + avgAiConfidence * 0.16 + evidenceQuality * 0.18 + accuracy * 0.24)
+  );
+  const adapters = {};
+  for (const proposal of proposalRows) {
+    const key = proposal.adapter || "unknown";
+    adapters[key] = (adapters[key] || 0) + 1;
+  }
+  const recent = proposalRows
+    .slice()
+    .sort((a, b) => String(b.generatedAt || "").localeCompare(String(a.generatedAt || "")))
+    .slice(0, 8)
+    .map((proposal) => {
+      const market = state.markets[String(proposal.marketId)];
+      return {
+        marketId: proposal.marketId,
+        question: market?.question || `Market #${proposal.marketId}`,
+        adapter: proposal.adapter || "",
+        status: proposal.status || "",
+        outcome: outcomeName(oracleDecisionValue(proposal)),
+        confidence: Number(proposal.confidence || 0),
+        txHash: proposal.txHash || "",
+        generatedAt: proposal.generatedAt || ""
+      };
+    });
+
+  return {
+    reputationScore,
+    tier: reputationScore >= 85 ? "Production candidate" : reputationScore >= 65 ? "Operator ready" : reputationScore >= 40 ? "Needs calibration" : "Early testnet",
+    coverage,
+    accuracy,
+    reversalRate,
+    avgOracleConfidence,
+    avgAiConfidence,
+    evidenceQuality,
+    oracleProposals: proposalRows.length,
+    aiReceipts: receiptRows.length,
+    finalizedMarkets: finalized.length,
+    disputedMarkets: markets.filter((market) => market.disputed).length,
+    authorityReviewMarkets: markets.filter((market) => market.authorityReviewRequired).length,
+    autoProposed: proposalRows.filter((proposal) => proposal.autoProposed).length,
+    adapters,
+    recent,
+    policy:
+      "Experimental testnet reputation. Score combines coverage, confidence, final-match accuracy, reversal rate, and evidence depth. The 78% auto-propose gate still needs backtesting before mainnet.",
+    updatedAt: state.updatedAt || nowIso()
+  };
+}
+
+function hotAiMarkets(limit = 8) {
+  return Object.values(state.markets)
+    .filter((market) => outcomeValue(market.outcome) === Outcome.Unresolved)
+    .map((market) => ({ market, insight: aiInsightForMarket(market), volume: marketPools(market).total }))
+    .sort((a, b) => (b.volume > a.volume ? 1 : b.volume < a.volume ? -1 : Number(b.market.id) - Number(a.market.id)))
+    .slice(0, limit)
+    .map(({ market, insight }) => ({
+      market: {
+        id: market.id,
+        question: market.question,
+        category: market.category || "Other",
+        closeTime: market.closeTime,
+        resolutionTime: marketResolutionTime(market),
+        settlementSymbol: market.settlementSymbol || "USDC",
+        traderCount: market.traderCount,
+        yesPool: market.yesPool,
+        noPool: market.noPool
+      },
+      insight
+    }));
+}
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function embedMarketHtml(market) {
+  const insight = aiInsightForMarket(market);
+  const appUrl = `https://app.aurapredict.xyz/?market=${encodeURIComponent(String(market.id))}`;
+  return `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AuraPredict Market #${escapeHtml(market.id)}</title>
+  <style>
+    :root{color-scheme:dark;font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#070c18;color:#eef6ff}
+    body{margin:0;padding:16px;background:#070c18}
+    .card{border:1px solid #25415d;border-radius:10px;background:linear-gradient(135deg,#0d1730,#071221);box-shadow:0 18px 48px rgba(0,0,0,.35);padding:16px;max-width:520px}
+    .label{color:#18d7ff;font-size:12px;font-weight:900;text-transform:uppercase;letter-spacing:.08em}
+    h1{font-size:20px;line-height:1.2;margin:8px 0 14px}
+    .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+    .cell{border:1px solid #223752;border-radius:8px;background:#0a1020;padding:10px}
+    .cell span{display:block;color:#91a5bf;font-size:11px;font-weight:800;text-transform:uppercase}
+    .cell strong{display:block;margin-top:4px;font-size:16px}
+    p{color:#aab8cf;font-size:13px;line-height:1.45}
+    a{display:inline-flex;margin-top:12px;min-height:40px;align-items:center;border-radius:8px;background:#18d7ff;color:#06111e;font-weight:900;padding:0 14px;text-decoration:none}
+  </style>
+</head>
+<body>
+  <article class="card">
+    <span class="label">AuraPredict market #${escapeHtml(market.id)} on Arc</span>
+    <h1>${escapeHtml(market.question)}</h1>
+    <div class="grid">
+      <div class="cell"><span>Market YES</span><strong>${escapeHtml(insight.marketYesPrice)}%</strong></div>
+      <div class="cell"><span>AI estimate</span><strong>${escapeHtml(insight.estimatedYesProbability)}%</strong></div>
+      <div class="cell"><span>Edge</span><strong>${escapeHtml(insight.edgeSide)}</strong></div>
+    </div>
+    <p>${escapeHtml(insight.summary)}</p>
+    <a href="${appUrl}" target="_blank" rel="noreferrer">Open on AuraPredict</a>
+  </article>
+</body>
+</html>`;
+}
+
 function isBytes32(value) {
   return /^0x[a-fA-F0-9]{64}$/.test(String(value || ""));
 }
@@ -3129,6 +3477,16 @@ function json(res, status, payload) {
   res.end(body);
 }
 
+function html(res, status, body) {
+  res.writeHead(status, {
+    "content-type": "text/html; charset=utf-8",
+    "access-control-allow-origin": "*",
+    "access-control-allow-methods": "GET, OPTIONS",
+    "access-control-allow-headers": "content-type, authorization, x-aura-admin-token"
+  });
+  res.end(body);
+}
+
 function notFound(res) {
   json(res, 404, { error: "Not found" });
 }
@@ -3196,6 +3554,12 @@ async function route(req, res) {
     }
 
     if (segments[0] === "api" && segments[1] === "ai") {
+      if (req.method === "GET" && segments[2] === "hot-markets") {
+        const limit = Math.max(1, Math.min(24, Number(url.searchParams.get("limit") || 8)));
+        json(res, 200, { markets: hotAiMarkets(limit), updatedAt: state.updatedAt || nowIso() });
+        return;
+      }
+
       if (req.method !== "POST") return notFound(res);
       const body = await readRequestBody(req);
       const systemInstruction = [
@@ -3258,6 +3622,31 @@ async function route(req, res) {
       }
 
       return notFound(res);
+    }
+
+    if (segments[0] === "api" && segments[1] === "oracle-reputation") {
+      if (req.method !== "GET") return notFound(res);
+      json(res, 200, { reputation: oracleReputationSummary(), updatedAt: state.updatedAt || nowIso() });
+      return;
+    }
+
+    if (segments[0] === "api" && segments[1] === "oracle-receipts" && segments[2]) {
+      if (req.method !== "GET") return notFound(res);
+      const marketId = Number(segments[2]);
+      if (!Number.isInteger(marketId) || marketId < 0) return json(res, 400, { error: "Invalid market id." });
+      const receipt = publicOracleReceiptForMarket(marketId);
+      if (!receipt) return notFound(res);
+      json(res, 200, { receipt, updatedAt: state.updatedAt || nowIso() });
+      return;
+    }
+
+    if (segments[0] === "api" && segments[1] === "embed" && segments[2] === "market" && segments[3]) {
+      if (req.method !== "GET") return notFound(res);
+      const marketId = Number(segments[3]);
+      const market = state.markets[String(marketId)];
+      if (!market) return notFound(res);
+      html(res, 200, embedMarketHtml(market));
+      return;
     }
 
     if (segments[0] === "api" && segments[1] === "resolutions") {
@@ -3435,6 +3824,14 @@ async function route(req, res) {
       const limit = Number(url.searchParams.get("limit") || 0);
       const markets = Object.values(state.markets).sort((a, b) => b.id - a.id);
       json(res, 200, { markets: limit > 0 ? markets.slice(0, limit) : markets, total: state.marketCount, updatedAt: state.updatedAt });
+      return;
+    }
+
+    if (segments[0] === "api" && segments[1] === "markets" && segments[2] && segments[3] === "ai-insight") {
+      const marketId = Number(segments[2]);
+      const market = state.markets[String(marketId)];
+      if (!market) return notFound(res);
+      json(res, 200, { insight: aiInsightForMarket(market), updatedAt: state.updatedAt || nowIso() });
       return;
     }
 

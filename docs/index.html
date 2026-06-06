@@ -29,6 +29,7 @@
         <a href="#creators">Creators</a>
         <a href="#contract">Contract</a>
         <a href="#oracle">Oracle</a>
+        <a href="#infrastructure">Infrastructure</a>
         <a href="#indexer">Indexer</a>
         <a href="#deploy">Deploy</a>
         <a href="#security">Security</a>
@@ -500,6 +501,47 @@
         </div>
       </section>
 
+      <section id="infrastructure" class="docs-section">
+        <div class="section-label">Open infrastructure</div>
+        <div class="section-body">
+          <h2>Open Prediction Market Infrastructure on Arc</h2>
+          <p>
+            AuraPredict is not only a YES/NO trading UI. The current stack exposes reusable market data,
+            AI insight, public oracle receipts, embeddable market cards, and Unified Balance funding flows so other Arc
+            apps can route users into prediction-market activity without rebuilding the whole settlement layer.
+          </p>
+          <div class="two-column">
+            <article>
+              <h3>API and hot-market feeds</h3>
+              <p>Builders can read live markets, activity, AI insight, hot-market summaries, public receipts, and oracle reputation from the indexer.</p>
+            </article>
+            <article>
+              <h3>Embeddable cards</h3>
+              <p>A compact market HTML endpoint can be embedded in partner pages, docs, and demos while users still open AuraPredict for wallet-signed actions.</p>
+            </article>
+            <article>
+              <h3>Public oracle receipts</h3>
+              <p>Each AI/Oracle check can expose outcome, confidence, evidence links, receipt hash, data hash, tx hash, and dispute state.</p>
+            </article>
+            <article>
+              <h3>Unified Balance funding</h3>
+              <p>The app helps users bring testnet USDC toward Arc before staking; market contracts still hold funds and enforce final settlement.</p>
+            </article>
+          </div>
+          <div class="reference-table">
+            <article><span>AI insight</span><strong>GET /api/markets/:id/ai-insight</strong></article>
+            <article><span>Public receipt</span><strong>GET /api/oracle-receipts/:marketId</strong></article>
+            <article><span>Oracle reputation</span><strong>GET /api/oracle-reputation</strong></article>
+            <article><span>Hot AI markets</span><strong>GET /api/ai/hot-markets?limit=8</strong></article>
+            <article><span>Embed card</span><strong>GET /api/embed/market/:marketId</strong></article>
+            <article><span>Funding UX</span><strong>Circle Gateway and Unified Balance actions in app wallet/profile/market flows</strong></article>
+          </div>
+          <div class="note">
+            Boundary: these APIs are read-only. AI proposes and explains; evidence and hashes make the decision inspectable; the Arc contract still enforces proposal, dispute, finalization, and claim rules.
+          </div>
+        </div>
+      </section>
+
       <section id="indexer" class="docs-section">
         <div class="section-label">Indexer</div>
         <div class="section-body">
@@ -529,8 +571,12 @@ npm run dev</code></pre>
             <article><span>Stats</span><strong>/api/stats includes per-token assetBreakdown for USDC/EURC volume reporting</strong></article>
             <article><span>Markets</span><strong>/api/markets</strong></article>
             <article><span>Activity</span><strong>/api/activity</strong></article>
+            <article><span>AI insight</span><strong>/api/markets/:id/ai-insight</strong></article>
             <article><span>AI receipts</span><strong>/api/resolutions/:marketId</strong></article>
             <article><span>Oracle proposal</span><strong>/api/oracles/:marketId and /api/oracles/:marketId/run</strong></article>
+            <article><span>Public receipt</span><strong>/api/oracle-receipts/:marketId</strong></article>
+            <article><span>Oracle reputation</span><strong>/api/oracle-reputation</strong></article>
+            <article><span>Embed card</span><strong>/api/embed/market/:marketId</strong></article>
             <article><span>Market history</span><strong>/api/markets/:marketId returns trades for wallet search</strong></article>
           </div>
         </div>

@@ -183,6 +183,31 @@ async function mockAuraBackend(page: Page) {
       });
     }
     if (pathname === "/api/markets") return route.fulfill({ json: { markets, total: markets.length, updatedAt: new Date().toISOString() } });
+    if (pathname.match(/^\/api\/markets\/\d+\/ai-insight$/)) {
+      const id = Number(pathname.split("/")[3]);
+      return route.fulfill({
+        json: {
+          insight: {
+            marketId: id,
+            question: markets.find((item) => item.id === id)?.question,
+            category: "Arc",
+            status: "open",
+            marketYesPrice: 80,
+            marketNoPrice: 20,
+            estimatedYesProbability: 74,
+            edge: -6,
+            edgeSide: "balanced",
+            confidence: 68,
+            confidenceBand: "Medium",
+            basis: "Market price baseline",
+            summary: "Aura compares current market pricing with saved AI and Oracle evidence.",
+            riskFlags: ["No saved Aura resolution receipt yet."],
+            sourceUrls: ["https://example.com/primary"],
+            updatedAt: new Date().toISOString()
+          }
+        }
+      });
+    }
     if (pathname.startsWith("/api/markets/")) {
       const id = Number(pathname.split("/").pop());
       return route.fulfill({ json: { market: markets.find((item) => item.id === id) ?? null } });
@@ -202,6 +227,49 @@ async function mockAuraBackend(page: Page) {
     if (pathname.startsWith("/api/social/profiles/")) return route.fulfill({ json: { profile: null, follows: [], updatedAt: new Date().toISOString() } });
     if (pathname.startsWith("/api/resolutions/")) return route.fulfill({ json: { receipt: null, updatedAt: new Date().toISOString() } });
     if (pathname.startsWith("/api/oracles/")) return route.fulfill({ json: { proposal: null, updatedAt: new Date().toISOString() } });
+    if (pathname.startsWith("/api/oracle-receipts/")) {
+      return route.fulfill({
+        json: {
+          receipt: {
+            marketId: Number(pathname.split("/").pop()),
+            status: "awaiting_proposal",
+            finalOutcome: "INSUFFICIENT_EVIDENCE",
+            proposedOutcome: "INSUFFICIENT_EVIDENCE",
+            ai: null,
+            oracle: null,
+            evidence: [],
+            sourceUrls: ["https://example.com/primary"]
+          }
+        }
+      });
+    }
+    if (pathname === "/api/oracle-reputation") {
+      return route.fulfill({
+        json: {
+          reputation: {
+            reputationScore: 62,
+            tier: "Operator ready",
+            coverage: 50,
+            accuracy: 0,
+            reversalRate: 0,
+            avgOracleConfidence: 68,
+            avgAiConfidence: 0,
+            evidenceQuality: 40,
+            oracleProposals: 2,
+            aiReceipts: 0,
+            finalizedMarkets: 1,
+            disputedMarkets: 0,
+            authorityReviewMarkets: 0,
+            autoProposed: 1,
+            adapters: { "crypto-price": 1 },
+            recent: [],
+            policy: "Experimental testnet reputation.",
+            updatedAt: new Date().toISOString()
+          }
+        }
+      });
+    }
+    if (pathname === "/api/ai/hot-markets") return route.fulfill({ json: { markets: [], updatedAt: new Date().toISOString() } });
     return route.fulfill({ json: { ok: true } });
   });
 }
@@ -288,12 +356,15 @@ test("create market form defaults to authority/oracle review", async ({ page }) 
   await expect(page.getByLabel(/Resolution mode/i)).toHaveValue("2");
   await expect(page.getByLabel(/Resolution source URL/i)).toBeVisible();
   await expect(page.getByText(/New markets default to authority\/oracle review/i)).toBeVisible();
+  await expect(page.getByText(/AI market quality/i)).toBeVisible();
 });
 
 test("market detail exposes stake, resolution, dispute, finalize and claim surfaces", async ({ page }) => {
   await page.goto("/?market=1");
   await expect(page.getByText(/stake YES or NO/i)).toBeVisible();
   await expect(page.getByRole("img", { name: /Market odds chart/i })).toBeVisible();
+  await expect(page.getByText(/Aura AI Insight/i)).toBeVisible();
+  await expect(page.getByText(/Public oracle receipt/i)).toBeVisible();
   await expect(page.getByText(/Connect wallet to interact/i)).toBeVisible();
   await expect(page.getByRole("button", { name: /Connect Wallet/i }).first()).toBeVisible();
 

@@ -57,13 +57,30 @@ POST /api/social/markets/:id/evidence
 GET /api/social/profiles/:address
 POST /api/social/profiles/:address
 POST /api/social/profiles/:address/follows
+GET /api/markets/:id/ai-insight
 GET /api/oracles/:marketId
 POST /api/oracles/:marketId/run
+GET /api/oracle-receipts/:marketId
+GET /api/oracle-reputation
+GET /api/ai/hot-markets?limit=8
+GET /api/embed/market/:marketId
 ```
 
 The frontend uses `VITE_AURA_INDEXER_URL` when available and falls back to direct Arc RPC reads if the indexer is offline.
 When `VITE_AURA_INDEXER_URL` points to a live web service, the frontend also persists comments, evidence, follows, and profile metadata through these social endpoints. Static GitHub Pages exports remain read-only, so the app falls back to browser-local storage for social actions on that setup.
 V4 settlement assets are restricted to 6-decimal stablecoins. If more than one asset such as USDC and EURC is used, `/api/stats` includes `assetBreakdown` so volume and live liquidity can be reported per token instead of merged into one generic total. The indexer does not perform FX conversion.
+
+## Open Prediction Market Infrastructure
+
+AuraPredict exposes a small public infrastructure layer for other Arc builders:
+
+- `/api/markets/:id/ai-insight` compares market YES pricing with Aura's current probability estimate, possible edge, confidence, risk flags, and source basis.
+- `/api/oracle-receipts/:marketId` returns the public AI/Oracle receipt: outcome, confidence, evidence rows, source URLs, hashes, dispute status, and tx references.
+- `/api/oracle-reputation` summarizes Aura Oracle Agent coverage, confidence, final-match accuracy, reversal rate, evidence depth, adapter usage, and auto-propose history.
+- `/api/ai/hot-markets` returns active markets with AI insight summaries for homepage, partner widgets, or bots.
+- `/api/embed/market/:marketId` returns a compact HTML market card that can be used inside an iframe.
+
+These endpoints are read-only. They do not propose, finalize, dispute, or claim funds.
 
 ## Objective Oracle Proposals
 
