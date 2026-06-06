@@ -245,7 +245,8 @@ function emptyState() {
       profiles: {},
       follows: {},
       comments: {},
-      evidence: {}
+      evidence: {},
+      notifications: {}
     },
     resolutions: {},
     oracleProposals: {},
@@ -1088,13 +1089,15 @@ function socialState() {
       profiles: {},
       follows: {},
       comments: {},
-      evidence: {}
+      evidence: {},
+      notifications: {}
     };
   }
   state.social.profiles ??= {};
   state.social.follows ??= {};
   state.social.comments ??= {};
   state.social.evidence ??= {};
+  state.social.notifications ??= {};
   return state.social;
 }
 
@@ -1142,6 +1145,55 @@ function cleanUrl(value) {
 function appendSocialRow(collection, key, row, limit) {
   const rows = Array.isArray(collection[key]) ? collection[key] : [];
   collection[key] = [row, ...rows.filter((item) => item.id !== row.id)].slice(0, limit);
+}
+
+const SOCIAL_NOTIFICATION_TYPES = new Set([
+  "resolve",
+  "finalize",
+  "owner-review",
+  "dispute-review",
+  "stale-review",
+  "proposal",
+  "dispute-resolved",
+  "claim",
+  "result"
+]);
+
+function cleanNotificationRow(row, wallet) {
+  if (!row || typeof row !== "object") return null;
+  const type = cleanText(row.type, 40);
+  if (!SOCIAL_NOTIFICATION_TYPES.has(type)) return null;
+  const key = cleanText(row.key, 180);
+  if (!key) return null;
+  const createdAt = Number(row.createdAt);
+  const marketId = Number(row.marketId);
+  const notification = {
+    key,
+    wallet: wallet.toLowerCase(),
+    type,
+    label: cleanText(row.label, 48) || "Notification",
+    title: cleanText(row.title, 180) || "Market update",
+    detail: cleanText(row.detail, 320),
+    createdAt: Number.isFinite(createdAt) && createdAt > 0 ? Math.floor(createdAt) : Math.floor(Date.now() / 1000)
+  };
+  if (Number.isInteger(marketId) && marketId >= 0) notification.marketId = marketId;
+  return notification;
+}
+
+function mergeNotificationRows(currentRows, incomingRows, wallet, limit = 500) {
+  const rows = [...incomingRows, ...(Array.isArray(currentRows) ? currentRows : [])]
+    .map((row) => cleanNotificationRow(row, wallet))
+    .filter(Boolean)
+    .sort((a, b) => b.createdAt - a.createdAt);
+  const seen = new Set();
+  const merged = [];
+  for (const row of rows) {
+    if (seen.has(row.key)) continue;
+    seen.add(row.key);
+    merged.push(row);
+    if (merged.length >= limit) break;
+  }
+  return merged;
 }
 
 function resolutionState() {
@@ -3763,33 +3815,32 @@ async function route(req, res) {
         return;
       }
 
-      if (req.method === "GET" && segments[2] === "profiles" && segments[3]) {
+      if (req.method === "GET" && segments[2] === "profiles" && segments[3] && segments[4] === "notifications") {
         const address = cleanAddress(segments[3]);
         if (!address) return json(res, 400, { error: "Invalid address." });
         const key = address.toLowerCase();
         json(res, 200, {
-          profile: social.profiles[key] ?? null,
-          follows: social.follows[key] ?? [],
+          notifications: social.notifications[key] ?? [],
           updatedAt: state.updatedAt
         });
         return;
       }
 
-      if (req.method === "POST" && segments[2] === "profiles" && segments[3]) {
+      if (req.method === "POST" && segments[2] === "profiles" && segments[3] && segments[4] === "notifications") {
         const address = cleanAddress(segments[3]);
         if (!address) return json(res, 400, { error: "Invalid address." });
         const body = await readRequestBody(req);
         const key = address.toLowerCase();
-        const current = social.profiles[key] ?? { address, joinedAt: nowIso() };
-        social.profiles[key] = {
-          ...current,
-          address,
-          name: cleanText(body.name, 24),
-          isPublic: body.isPublic !== false,
-          updatedAt: nowIso()
-        };
+        const incoming = Array.isArray(body.notifications)
+          ? body.notifications
+          : Array.isArray(body.items)
+            ? body.items
+            : body.notification
+              ? [body.notification]
+              : [];
+        social.notifications[key] = mergeNotificationRows(social.notifications[key], incoming, address, 500);
         await saveState();
-        json(res, 200, { profile: social.profiles[key] });
+        json(res, 200, { notifications: social.notifications[key], updatedAt: state.updatedAt });
         return;
       }
 
@@ -3806,6 +3857,36 @@ async function route(req, res) {
         social.follows[key] = [...rows];
         await saveState();
         json(res, 200, { following: nextFollowing, follows: social.follows[key] });
+        return;
+      }
+
+      if (req.method === "GET" && segments[2] === "profiles" && segments[3] && !segments[4]) {
+        const address = cleanAddress(segments[3]);
+        if (!address) return json(res, 400, { error: "Invalid address." });
+        const key = address.toLowerCase();
+        json(res, 200, {
+          profile: social.profiles[key] ?? null,
+          follows: social.follows[key] ?? [],
+          updatedAt: state.updatedAt
+        });
+        return;
+      }
+
+      if (req.method === "POST" && segments[2] === "profiles" && segments[3] && !segments[4]) {
+        const address = cleanAddress(segments[3]);
+        if (!address) return json(res, 400, { error: "Invalid address." });
+        const body = await readRequestBody(req);
+        const key = address.toLowerCase();
+        const current = social.profiles[key] ?? { address, joinedAt: nowIso() };
+        social.profiles[key] = {
+          ...current,
+          address,
+          name: cleanText(body.name, 24),
+          isPublic: body.isPublic !== false,
+          updatedAt: nowIso()
+        };
+        await saveState();
+        json(res, 200, { profile: social.profiles[key] });
         return;
       }
 

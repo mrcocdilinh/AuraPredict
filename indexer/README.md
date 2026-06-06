@@ -57,6 +57,8 @@ POST /api/social/markets/:id/evidence
 GET /api/social/profiles/:address
 POST /api/social/profiles/:address
 POST /api/social/profiles/:address/follows
+GET /api/social/profiles/:address/notifications
+POST /api/social/profiles/:address/notifications
 GET /api/markets/:id/ai-insight
 GET /api/oracles/:marketId
 POST /api/oracles/:marketId/run
@@ -67,7 +69,7 @@ GET /api/embed/market/:marketId
 ```
 
 The frontend uses `VITE_AURA_INDEXER_URL` when available and falls back to direct Arc RPC reads if the indexer is offline.
-When `VITE_AURA_INDEXER_URL` points to a live web service, the frontend also persists comments, evidence, follows, and profile metadata through these social endpoints. Static GitHub Pages exports remain read-only, so the app falls back to browser-local storage for social actions on that setup.
+When `VITE_AURA_INDEXER_URL` points to a live web service, the frontend also persists comments, evidence, follows, profile metadata, and wallet notification history through these social endpoints. Static GitHub Pages exports remain read-only, so the app falls back to browser-local storage for social actions on that setup.
 V4 settlement assets are restricted to 6-decimal stablecoins. If more than one asset such as USDC and EURC is used, `/api/stats` includes `assetBreakdown` so volume and live liquidity can be reported per token instead of merged into one generic total. The indexer does not perform FX conversion.
 
 ## Open Prediction Market Infrastructure

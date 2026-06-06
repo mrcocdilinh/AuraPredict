@@ -381,6 +381,18 @@ type NotificationHistoryItem = {
   createdAt: number;
 };
 
+const NOTIFICATION_TYPE_VALUES: NotificationType[] = [
+  "resolve",
+  "finalize",
+  "owner-review",
+  "dispute-review",
+  "stale-review",
+  "proposal",
+  "dispute-resolved",
+  "claim",
+  "result"
+];
+
 type EvidenceDraft = {
   title: string;
   url: string;
@@ -431,6 +443,11 @@ type SocialProfileResponse = {
     joinedAt?: string;
   } | null;
   follows?: string[];
+};
+
+type SocialNotificationsResponse = {
+  notifications?: NotificationHistoryItem[];
+  updatedAt?: string;
 };
 
 type AiMarketDraft = {
@@ -930,6 +947,46 @@ function readJsonStorage<T>(key: string, fallback: T) {
   } catch {
     return fallback;
   }
+}
+
+function normalizeNotificationHistoryItem(item: unknown, walletOverride?: string): NotificationHistoryItem | null {
+  if (!item || typeof item !== "object") return null;
+  const row = item as Partial<NotificationHistoryItem>;
+  const type = typeof row.type === "string" && NOTIFICATION_TYPE_VALUES.includes(row.type as NotificationType)
+    ? (row.type as NotificationType)
+    : null;
+  const key = typeof row.key === "string" ? row.key.trim().slice(0, 180) : "";
+  const wallet = (walletOverride || (typeof row.wallet === "string" ? row.wallet : "")).toLowerCase();
+  if (!type || !key || !wallet) return null;
+  const createdAt = Number(row.createdAt);
+  const marketId = Number(row.marketId);
+  const normalized: NotificationHistoryItem = {
+    key,
+    wallet,
+    type,
+    label: typeof row.label === "string" && row.label.trim() ? row.label.trim().slice(0, 48) : "Notification",
+    title: typeof row.title === "string" && row.title.trim() ? row.title.trim().slice(0, 180) : "Market update",
+    detail: typeof row.detail === "string" ? row.detail.trim().slice(0, 320) : "",
+    createdAt: Number.isFinite(createdAt) && createdAt > 0 ? Math.floor(createdAt) : Math.floor(Date.now() / 1000)
+  };
+  if (Number.isInteger(marketId) && marketId >= 0) normalized.marketId = marketId;
+  return normalized;
+}
+
+function mergeNotificationHistoryItems(rows: unknown[], walletOverride?: string) {
+  const normalizedRows = rows
+    .map((row) => normalizeNotificationHistoryItem(row, walletOverride))
+    .filter(Boolean) as NotificationHistoryItem[];
+  normalizedRows.sort((a, b) => b.createdAt - a.createdAt);
+  const seen = new Set<string>();
+  const merged: NotificationHistoryItem[] = [];
+  for (const row of normalizedRows) {
+    if (seen.has(row.key)) continue;
+    seen.add(row.key);
+    merged.push(row);
+    if (merged.length >= 500) break;
+  }
+  return merged;
 }
 
 function claimedMarketKey(account: string, marketId: number) {
@@ -2996,7 +3053,7 @@ function LandingPage() {
   const roadmapItems = [
     "Add websocket or event streaming for absolute realtime odds and cross-user updates",
     "Harden AI receipt review with better evidence policy, audit logs, and operator dashboards",
-    "Persist social identity, comments, follows, evidence, and notifications beyond local browser storage",
+    "Back up off-chain social state with stronger moderation, export, and recovery tooling",
     "Expand oracle adapters, committee policies, and Circle Agent Wallet operations after evidence policy is hardened"
   ];
   const nextTheme = landingTheme === "dark" ? "light" : "dark";
@@ -3788,7 +3845,7 @@ export default function App() {
     readJsonStorage(LOCAL_CLAIMED_MARKETS_KEY, [])
   );
   const [notificationHistory, setNotificationHistory] = useState<NotificationHistoryItem[]>(() =>
-    readJsonStorage(NOTIFICATION_HISTORY_KEY, [])
+    mergeNotificationHistoryItems(readJsonStorage<unknown[]>(NOTIFICATION_HISTORY_KEY, []))
   );
   const [commentInputs, setCommentInputs] = useState<Record<number, string>>({});
   const [evidenceDrafts, setEvidenceDrafts] = useState<Record<number, EvidenceDraft>>({});
@@ -5018,7 +5075,39 @@ export default function App() {
   }, [locallyClaimedMarkets]);
 
   useEffect(() => {
+    window.localStorage.setItem(NOTIFICATION_HISTORY_KEY, JSON.stringify(notificationHistory.slice(0, 1_000)));
+  }, [notificationHistory]);
+
+  useEffect(() => {
+    if (!account) return;
+    const wallet = account.toLowerCase();
+    let canceled = false;
+
+    fetchIndexerJson<SocialNotificationsResponse>(`/api/social/profiles/${account}/notifications`).then((response) => {
+      if (canceled) return;
+      const serverRows = mergeNotificationHistoryItems(response?.notifications ?? [], wallet);
+      setNotificationHistory((current) => {
+        const localWalletRows = current.filter((item) => item.wallet === wallet);
+        const mergedWalletRows = mergeNotificationHistoryItems([...serverRows, ...localWalletRows], wallet);
+        const otherRows = current.filter((item) => item.wallet !== wallet);
+        const next = [...mergedWalletRows, ...otherRows].slice(0, 1_000);
+        if (mergedWalletRows.length > serverRows.length) {
+          void postIndexerJson<SocialNotificationsResponse>(`/api/social/profiles/${account}/notifications`, {
+            notifications: mergedWalletRows
+          });
+        }
+        return next;
+      });
+    });
+
+    return () => {
+      canceled = true;
+    };
+  }, [account]);
+
+  useEffect(() => {
     if (!account || activeNotificationItems.length === 0) return;
+    const wallet = account.toLowerCase();
     setNotificationHistory((current) => {
       const seen = new Set(current.map((item) => item.key));
       const timestamp = Math.floor(Date.now() / 1000);
@@ -5029,7 +5118,10 @@ export default function App() {
       const next = [...additions, ...current]
         .sort((a, b) => b.createdAt - a.createdAt)
         .slice(0, 500);
-      window.localStorage.setItem(NOTIFICATION_HISTORY_KEY, JSON.stringify(next));
+      const walletRows = next.filter((item) => item.wallet === wallet);
+      void postIndexerJson<SocialNotificationsResponse>(`/api/social/profiles/${account}/notifications`, {
+        notifications: walletRows
+      });
       return next;
     });
   }, [account, activeNotificationItems]);

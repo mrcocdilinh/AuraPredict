@@ -224,6 +224,9 @@ async function mockAuraBackend(page: Page) {
     }
     if (pathname === "/api/leaderboard") return route.fulfill({ json: { rows: [], period: "all", metric: "volume" } });
     if (pathname.startsWith("/api/social/markets/")) return route.fulfill({ json: { comments: [], evidence: [], updatedAt: new Date().toISOString() } });
+    if (pathname.endsWith("/notifications") && pathname.startsWith("/api/social/profiles/")) {
+      return route.fulfill({ json: { notifications: [], updatedAt: new Date().toISOString() } });
+    }
     if (pathname.startsWith("/api/social/profiles/")) return route.fulfill({ json: { profile: null, follows: [], updatedAt: new Date().toISOString() } });
     if (pathname.startsWith("/api/resolutions/")) return route.fulfill({ json: { receipt: null, updatedAt: new Date().toISOString() } });
     if (pathname.startsWith("/api/oracles/")) return route.fulfill({ json: { proposal: null, updatedAt: new Date().toISOString() } });
