@@ -8230,17 +8230,29 @@ label {
 }
 
 [data-theme="dark"] .leaderboard-period-tabs {
-  background: #0b1020;
+  background: rgba(5, 12, 26, 0.86);
   border-color: #26334a;
+  box-shadow: inset 0 1px 0 rgba(216, 225, 240, 0.05);
 }
 
 [data-theme="dark"] .leaderboard-period-tabs button {
-  color: #d8e1f0;
+  background: rgba(13, 23, 40, 0.86);
+  border: 1px solid transparent;
+  box-shadow: none;
+  color: #b8c7df;
 }
 
-[data-theme="dark"] .leaderboard-period-tabs button.active,
 [data-theme="dark"] .leaderboard-period-tabs button:hover:not(:disabled) {
-  background: #18d7ff;
+  background: rgba(24, 215, 255, 0.1);
+  border-color: rgba(24, 215, 255, 0.35);
+  color: #e7faff;
+  transform: none;
+}
+
+[data-theme="dark"] .leaderboard-period-tabs button.active {
+  background: linear-gradient(135deg, #18d7ff, #30e1b0);
+  border-color: rgba(24, 215, 255, 0.92);
+  box-shadow: 0 0 18px rgba(24, 215, 255, 0.2);
   color: #06111e;
 }
 
