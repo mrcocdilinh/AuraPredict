@@ -291,6 +291,7 @@ type MarketSectionKey = "fresh" | "hot" | "closing" | "live";
 type ThemeMode = "dark" | "light";
 type MarketViewMode = "grid" | "list";
 type ChartWindowKey = "1h" | "6h" | "1d" | "1w" | "1m" | "all";
+type MarketDetailTab = "overview" | "comments" | "activity" | "holders";
 type MarketSortKey = "created" | "ending" | "volume" | "participants" | "yes" | "no";
 type SortDirection = "asc" | "desc";
 type NotificationFilter = NotificationType | "all";
@@ -1915,6 +1916,11 @@ function closeDate(value: number) {
     minute: "2-digit",
     hour12: false
   }).format(new Date(value * 1000)) + " UTC";
+}
+
+function isoDateLabel(value?: string) {
+  const timestamp = Date.parse(value || "");
+  return Number.isFinite(timestamp) ? closeDate(Math.floor(timestamp / 1000)) : "Just now";
 }
 
 function closeDateLocal(value: number) {
@@ -3724,6 +3730,7 @@ export default function App() {
   const [activeCategory, setActiveCategory] = useState("All");
   const [marketViewMode, setMarketViewMode] = useState<MarketViewMode>("grid");
   const [detailChartWindow, setDetailChartWindow] = useState<ChartWindowKey>("all");
+  const [marketDetailTab, setMarketDetailTab] = useState<MarketDetailTab>("overview");
   const [chartHoverRatio, setChartHoverRatio] = useState<number | null>(null);
   const [projectStats, setProjectStats] = useState<ProjectStats | null>(null);
   const [view, setView] = useState<AppView>("markets");
@@ -6630,6 +6637,7 @@ export default function App() {
     setSelectedMarketId(marketId);
     if (focusResolution) setFocusResolutionMarketId(marketId);
     setSelectedProfileAddress("");
+    setMarketDetailTab("overview");
     updateMarketRoute(marketId);
     setView("market");
     setSearchQuery("");
@@ -6675,6 +6683,7 @@ export default function App() {
     (market: MarketView) => {
       setSelectedMarketId(market.id);
       setSelectedProfileAddress("");
+      setMarketDetailTab("overview");
       updateMarketRoute(market.id);
       setView("market");
       setActiveCategory("All");
@@ -9283,6 +9292,7 @@ export default function App() {
     const creatorKey = selectedMarket.creator.toLowerCase();
     const isFollowingCreator = followedCreators.includes(creatorKey);
     const selectedEvidenceRows = marketEvidence[String(selectedMarket.id)] || [];
+    const selectedCommentRows = marketComments[String(selectedMarket.id)] || [];
     const hasWalletAccess = Boolean(account);
     const aiResolutionReport = aiResolutionReports[selectedMarket.id];
     const aiResolutionReceipt = aiResolutionReceipts[String(selectedMarket.id)];
@@ -9525,6 +9535,20 @@ export default function App() {
           .toLowerCase();
         return searchable.includes(marketWalletQuery);
       });
+    const selectedEvidenceDraft = evidenceDrafts[selectedMarket.id] || { title: "", url: "", notes: "" };
+    const sourceLinks = [selectedRuleSource, selectedRuleFallback]
+      .filter((url, index, rows) => url && rows.indexOf(url) === index)
+      .slice(0, 3);
+    const overviewDescription =
+      selectedHumanRule ||
+      selectedAiInsight?.summary ||
+      `This market tracks whether ${selectedMarket.question.replace(/\?+$/g, "")}.`;
+    const detailTabs: Array<{ key: MarketDetailTab; label: string; count?: number }> = [
+      { key: "overview", label: "Overview" },
+      { key: "comments", label: "Comments", count: selectedCommentRows.length + selectedEvidenceRows.length },
+      { key: "activity", label: "Activity", count: selectedMarketActivities.length },
+      { key: "holders", label: "Top Holders", count: topTraderRows.length }
+    ];
     const copyTraderPosition = (trader: { address: string; yes: bigint; no: bigint; total: bigint }) => {
       const side = trader.no > trader.yes ? Outcome.No : Outcome.Yes;
       const copyAmount = trader.total > selectedMarketBalance ? selectedMarketBalance : trader.total;
@@ -10254,318 +10278,339 @@ export default function App() {
           )}
         </section>
 
-        <section className="ai-insight-strip" aria-label="Aura AI market insight">
-          <article className="ai-insight-main">
-            <div className="panel-heading">
-              <div>
-                <span className="section-label">Aura AI Insight</span>
-                <h3>Model view vs market price</h3>
-              </div>
-              <span className="agent-confidence">
-                {selectedAiInsight ? selectedAiInsight.confidenceBand : "Loading"}
-              </span>
-            </div>
-            <div className="ai-insight-metrics">
-              <div>
-                <span>Market YES</span>
-                <strong>{selectedAiInsight ? `${selectedAiInsight.marketYesPrice.toFixed(1)}%` : `${selectedMarketYesPercent.toFixed(1)}%`}</strong>
-              </div>
-              <div>
-                <span>AI YES estimate</span>
-                <strong>{selectedAiInsight ? `${selectedAiInsight.estimatedYesProbability}%` : "--"}</strong>
-              </div>
-              <div>
-                <span>Possible edge</span>
-                <strong>{aiInsightEdgeLabel}</strong>
-              </div>
-              <div>
-                <span>Basis</span>
-                <strong>{selectedAiInsight?.basis || "Market data"}</strong>
-              </div>
-            </div>
-            <p>
-              {selectedAiInsight?.summary ||
-                "Aura is preparing an insight from market price, saved AI receipts, objective Oracle proposals, and public evidence."}
-            </p>
-            {selectedAiInsight?.riskFlags && selectedAiInsight.riskFlags.length > 0 && (
-              <div className="agent-checklist ai-insight-risks">
-                {selectedAiInsight.riskFlags.slice(0, 4).map((risk) => (
-                  <span key={risk}>{risk}</span>
-                ))}
-              </div>
-            )}
-          </article>
-          <article className="ai-receipt-card">
-            <div>
-              <span className="section-label">Public oracle receipt</span>
-              <h3>{selectedPublicReceipt?.status ? selectedPublicReceipt.status.replace(/_/g, " ") : "No receipt yet"}</h3>
-              <p>
-                {selectedPublicReceipt?.oracle?.summary ||
-                  selectedPublicReceipt?.ai?.status ||
-                  "When Aura or Oracle checks this market, the public receipt shows outcome, confidence, evidence links, hashes, and transaction references."}
-              </p>
-            </div>
-            <div className="ai-receipt-grid">
-              <div>
-                <span>AI</span>
-                <strong>{selectedPublicReceipt?.ai ? `${selectedPublicReceipt.ai.outcome} ${selectedPublicReceipt.ai.confidence}%` : "Waiting"}</strong>
-              </div>
-              <div>
-                <span>Oracle</span>
-                <strong>{selectedPublicReceipt?.oracle ? `${selectedPublicReceipt.oracle.outcome} ${selectedPublicReceipt.oracle.confidence}%` : "Waiting"}</strong>
-              </div>
-              <div>
-                <span>Final</span>
-                <strong>{selectedPublicReceipt?.finalOutcome || "Live"}</strong>
-              </div>
-            </div>
-            <div className="ai-receipt-actions">
-              {selectedAiInsight?.receiptHash && selectedAiInsight.receiptHash !== ZERO_HASH && (
-                <button className="secondary" onClick={() => copyTextToClipboard(selectedAiInsight.receiptHash || "", "AI receipt hash copied.")} type="button">
-                  Copy AI hash
-                </button>
-              )}
-              {selectedPublicReceipt?.oracle?.txHash && (
-                <a className="tx-link-button" href={`${ARC_EXPLORER_URL}/tx/${selectedPublicReceipt.oracle.txHash}`} target="_blank" rel="noreferrer">
-                  Oracle tx
-                </a>
-              )}
-              <button className="secondary" onClick={() => copyTextToClipboard(`${INDEXER_URL}/api/oracle-receipts/${selectedMarket.id}`, "Public receipt API copied.")} type="button">
-                Copy receipt API
+        <section className="market-detail-tab-card">
+          <div className="market-detail-tabs" role="tablist" aria-label="Market detail sections">
+            {detailTabs.map((tab) => (
+              <button
+                aria-selected={marketDetailTab === tab.key}
+                className={marketDetailTab === tab.key ? "active" : ""}
+                key={tab.key}
+                onClick={() => setMarketDetailTab(tab.key)}
+                role="tab"
+                type="button"
+              >
+                {tab.label}
+                {typeof tab.count === "number" && <span>{tab.count}</span>}
               </button>
-            </div>
-          </article>
-        </section>
+            ))}
+          </div>
 
-        {hasWalletAccess ? (
-          <section className="market-intelligence-grid">
-            {showResolutionAssistant && (
-            <section className="agent-panel" id="aura-resolution-details">
-              <div className="panel-heading">
-                <div>
-                  <span className="section-label">{cancelOnlyResolution ? "Settlement rule" : "Aura Agent"}</span>
-                  <h3>{awaitingResolutionTime ? "Resolution review locked" : cancelOnlyResolution ? "Cancel / refund required" : "Resolution assistant"}</h3>
+          {marketDetailTab === "overview" && (
+            <div className="market-tab-panel">
+              <article className="market-overview-card">
+                <p className="market-overview-lede">{overviewDescription}</p>
+                <div className="overview-resolution-box">
+                  <div>
+                    <span className="section-label">Resolution</span>
+                    <strong>{selectedHumanRule || "This market resolves using the stated source rule and onchain settlement flow."}</strong>
+                  </div>
+                  <div className="overview-source-row">
+                    {sourceLinks.length > 0 ? (
+                      sourceLinks.map((url) => (
+                        <a href={url} key={url} target="_blank" rel="noreferrer">
+                          {urlHostLabel(url)}
+                        </a>
+                      ))
+                    ) : (
+                      <span>No public source link saved yet.</span>
+                    )}
+                  </div>
                 </div>
-                <span className="agent-confidence">{displayedAgentConfidence}% confidence</span>
-              </div>
-              <div className="agent-result">
-                <span>Suggested outcome</span>
-                <strong>{displayedAgentLabel}</strong>
-                <p>{displayedAgentSummary}</p>
-                {aiResolutionReport?.resolverAction && <p>{aiResolutionReport.resolverAction}</p>}
-              </div>
-              <div className="agent-checklist">
-                {displayedAgentChecklist.map((item) => (
-                  <span key={item}>{item}</span>
-                ))}
-              </div>
-              {aiResolutionReport?.evidence && aiResolutionReport.evidence.length > 0 && (
-                <div className="agent-evidence-list">
-                  {aiResolutionReport.evidence.slice(0, 3).map((item, index) => (
-                    <article key={`${item.title || "evidence"}-${index}`}>
-                      <strong>{item.title || `Evidence ${index + 1}`}</strong>
-                      {item.finding && <p>{item.finding}</p>}
+                <div className="overview-signal-grid">
+                  <article>
+                    <span>Aura AI Insight</span>
+                    <strong>{aiInsightEdgeLabel}</strong>
+                    <small>
+                      Market YES {selectedAiInsight ? selectedAiInsight.marketYesPrice.toFixed(1) : selectedMarketYesPercent.toFixed(1)}%
+                      {selectedAiInsight ? ` / AI ${selectedAiInsight.estimatedYesProbability}%` : ""}
+                    </small>
+                  </article>
+                  <article>
+                    <span>Public oracle receipt</span>
+                    <strong>{selectedPublicReceipt?.status ? selectedPublicReceipt.status.replace(/_/g, " ") : "No receipt yet"}</strong>
+                    <small>
+                      {selectedPublicReceipt?.oracle
+                        ? `${selectedPublicReceipt.oracle.outcome} ${selectedPublicReceipt.oracle.confidence}%`
+                        : "Oracle receipt appears after a check or proposal."}
+                    </small>
+                    <button className="secondary" onClick={() => copyTextToClipboard(`${INDEXER_URL}/api/oracle-receipts/${selectedMarket.id}`, "Public receipt API copied.")} type="button">
+                      Copy receipt API
+                    </button>
+                  </article>
+                  <article>
+                    <span>Settlement state</span>
+                    <strong>{settlementStage}</strong>
+                    <small>{finalDecisionDetail}</small>
+                  </article>
+                </div>
+              </article>
+
+              {hasWalletAccess ? (
+                <details className="market-advanced-drawer">
+                  <summary>
+                    <span>AI / Oracle review details</span>
+                    <strong>{displayedAgentConfidence}% confidence</strong>
+                  </summary>
+                  <div className="market-intelligence-grid">
+                    {showResolutionAssistant && (
+                      <section className="agent-panel" id="aura-resolution-details">
+                        <div className="panel-heading">
+                          <div>
+                            <span className="section-label">{cancelOnlyResolution ? "Settlement rule" : "Aura Agent"}</span>
+                            <h3>{awaitingResolutionTime ? "Resolution review locked" : cancelOnlyResolution ? "Cancel / refund required" : "Resolution assistant"}</h3>
+                          </div>
+                          <span className="agent-confidence">{displayedAgentConfidence}% confidence</span>
+                        </div>
+                        <div className="agent-result">
+                          <span>Suggested outcome</span>
+                          <strong>{displayedAgentLabel}</strong>
+                          <p>{displayedAgentSummary}</p>
+                          {aiResolutionReport?.resolverAction && <p>{aiResolutionReport.resolverAction}</p>}
+                        </div>
+                        <div className="agent-checklist">
+                          {displayedAgentChecklist.map((item) => (
+                            <span key={item}>{item}</span>
+                          ))}
+                        </div>
+                        {aiResolutionReport?.evidence && aiResolutionReport.evidence.length > 0 && (
+                          <div className="agent-evidence-list">
+                            {aiResolutionReport.evidence.slice(0, 3).map((item, index) => (
+                              <article key={`${item.title || "evidence"}-${index}`}>
+                                <strong>{item.title || `Evidence ${index + 1}`}</strong>
+                                {item.finding && <p>{item.finding}</p>}
+                                {item.url && (
+                                  <a href={item.url} target="_blank" rel="noreferrer">
+                                    Open source
+                                  </a>
+                                )}
+                              </article>
+                            ))}
+                          </div>
+                        )}
+                        {awaitingResolutionTime ? (
+                          <div className="resolver-note">Aura can review the outcome after the stated resolution time. No AI request is sent yet.</div>
+                        ) : cancelOnlyResolution ? (
+                          <div className="resolver-note">This market is cancel-only because both outcomes were not funded. Aura is not called for this action.</div>
+                        ) : !selectedMarketIsSettled ? (
+                          <button className="secondary" disabled={aiBusy} onClick={() => askAuraForResolution(selectedMarket)} type="button">
+                            {aiBusy ? "Aura thinking..." : aiResolutionReport || selectedAiCanPropose ? "Refresh Aura Agent" : "Ask Aura Agent"}
+                          </button>
+                        ) : (
+                          <div className="resolver-note">Finalized market. This saved Aura report is read-only; new AI reviews are disabled.</div>
+                        )}
+                        <button className="secondary" onClick={copyAgentReport} type="button">
+                          Copy report
+                        </button>
+                      </section>
+                    )}
+
+                    {aiResolutionReceipt && !cancelOnlyResolution && !awaitingResolutionTime && (
+                      <section className="agent-panel" id={!showResolutionAssistant ? "aura-resolution-details" : undefined}>
+                        <div className="panel-heading">
+                          <div>
+                            <span className="section-label">AI receipt</span>
+                            <h3>Resolver consensus</h3>
+                          </div>
+                          <span className="agent-confidence">{aiResolutionReceipt.consensus?.confidence ?? 0}% confidence</span>
+                        </div>
+                        <div className="agent-result">
+                          <span>Status</span>
+                          <strong>{aiResolutionReceipt.status || "pending"}</strong>
+                          <p>
+                            Consensus {aiResolutionReceipt.consensus?.outcome || aiResolutionReceipt.proposedOutcome || "not ready"}
+                            {typeof aiResolutionReceipt.consensus?.agreed === "number"
+                              ? ` from ${aiResolutionReceipt.consensus.agreed} AI reviewers.`
+                              : "."}
+                          </p>
+                          {aiResolutionReceipt.receiptHash && <p>Receipt hash {shortAddress(aiResolutionReceipt.receiptHash)}</p>}
+                          {aiResolutionReceipt.txHash && (
+                            <a href={`${ARC_EXPLORER_URL}/tx/${aiResolutionReceipt.txHash}`} target="_blank" rel="noreferrer">
+                              View resolver transaction
+                            </a>
+                          )}
+                          {aiResolutionReceipt.error && <p>{aiResolutionReceipt.error}</p>}
+                        </div>
+                      </section>
+                    )}
+
+                    {oracleProposal && (
+                      <section className="agent-panel oracle-panel">
+                        <div className="panel-heading">
+                          <div>
+                            <span className="section-label">Oracle proposal</span>
+                            <h3>{oracleProposal.adapter ? oracleProposal.adapter.replace(/-/g, " ") : "Objective data check"}</h3>
+                          </div>
+                          <span className="agent-confidence">{oracleProposal.confidence ?? 0}% confidence</span>
+                        </div>
+                        <div className="agent-result">
+                          <span>Status</span>
+                          <strong>{oracleDecisionLabel}</strong>
+                          {oracleProposal.summary && <p>{oracleProposal.summary}</p>}
+                          {oracleProposal.observedValue && <p>Observed: {oracleProposal.observedValue}</p>}
+                          {oracleProposal.dataHash && oracleProposal.dataHash !== ZERO_HASH && <p>Oracle hash {shortAddress(oracleProposal.dataHash)}</p>}
+                          {oracleProposal.autoProposed && oracleProposal.txHash && (
+                            <p>Oracle submitted this proposal onchain. Dispute and owner review remain available.</p>
+                          )}
+                          {oracleProposal.txHash && (
+                            <a href={`${ARC_EXPLORER_URL}/tx/${oracleProposal.txHash}`} target="_blank" rel="noreferrer">
+                              View oracle proposal transaction
+                            </a>
+                          )}
+                          {oracleProposal.autoProposeSkipped && <p>{oracleProposal.autoProposeSkipped}</p>}
+                          {oracleProposal.autoProposeError && <p>{oracleProposal.autoProposeError}</p>}
+                        </div>
+                      </section>
+                    )}
+                  </div>
+                </details>
+              ) : (
+                <section className="locked-market-tools">
+                  <strong>Wallet required for market tools</strong>
+                  <span>Aura Agent, copy trading, and resolver tools are available after wallet connection.</span>
+                </section>
+              )}
+            </div>
+          )}
+
+          {marketDetailTab === "comments" && (
+            <div className="market-tab-panel market-comments-grid">
+              <section className="market-discussion-card">
+                <div className="panel-heading">
+                  <div>
+                    <span className="section-label">Comments</span>
+                    <h3>Market discussion</h3>
+                  </div>
+                  <span>{selectedCommentRows.length} posts</span>
+                </div>
+                <div className="comment-composer">
+                  <textarea
+                    aria-label="Add market comment"
+                    disabled={!hasWalletAccess}
+                    placeholder={hasWalletAccess ? "Add a short market comment..." : "Connect wallet to comment"}
+                    value={commentInputs[selectedMarket.id] || ""}
+                    onChange={(event) =>
+                      setCommentInputs((current) => ({ ...current, [selectedMarket.id]: event.target.value }))
+                    }
+                  />
+                  <button disabled={!hasWalletAccess} onClick={() => postMarketComment(selectedMarket.id)} type="button">
+                    Post comment
+                  </button>
+                </div>
+                <div className="comment-list">
+                  {selectedCommentRows.length === 0 && <span>No comments yet.</span>}
+                  {selectedCommentRows.map((comment) => (
+                    <article key={comment.id}>
+                      <div>
+                        <strong>{displayNameForAddress(comment.author)}</strong>
+                        <small>{isoDateLabel(comment.createdAt)}</small>
+                      </div>
+                      <p>{comment.text}</p>
+                    </article>
+                  ))}
+                </div>
+              </section>
+
+              <section className="market-discussion-card">
+                <div className="panel-heading">
+                  <div>
+                    <span className="section-label">Evidence</span>
+                    <h3>Source links</h3>
+                  </div>
+                  <span>{selectedEvidenceRows.length} links</span>
+                </div>
+                <div className="evidence-composer">
+                  <input
+                    disabled={!hasWalletAccess}
+                    placeholder="Source title"
+                    value={selectedEvidenceDraft.title}
+                    onChange={(event) =>
+                      setEvidenceDrafts((current) => ({
+                        ...current,
+                        [selectedMarket.id]: { ...(current[selectedMarket.id] || { title: "", url: "", notes: "" }), title: event.target.value }
+                      }))
+                    }
+                  />
+                  <input
+                    disabled={!hasWalletAccess}
+                    placeholder="https://source.example"
+                    value={selectedEvidenceDraft.url}
+                    onChange={(event) =>
+                      setEvidenceDrafts((current) => ({
+                        ...current,
+                        [selectedMarket.id]: { ...(current[selectedMarket.id] || { title: "", url: "", notes: "" }), url: event.target.value }
+                      }))
+                    }
+                  />
+                  <textarea
+                    disabled={!hasWalletAccess}
+                    placeholder={hasWalletAccess ? "Why this source matters..." : "Connect wallet to save evidence"}
+                    value={selectedEvidenceDraft.notes}
+                    onChange={(event) =>
+                      setEvidenceDrafts((current) => ({
+                        ...current,
+                        [selectedMarket.id]: { ...(current[selectedMarket.id] || { title: "", url: "", notes: "" }), notes: event.target.value }
+                      }))
+                    }
+                  />
+                  <button disabled={!hasWalletAccess} onClick={() => saveMarketEvidence(selectedMarket.id)} type="button">
+                    Save evidence
+                  </button>
+                </div>
+                <div className="evidence-list">
+                  {selectedEvidenceRows.length === 0 && <span>No evidence saved yet.</span>}
+                  {selectedEvidenceRows.map((item) => (
+                    <article key={item.id}>
+                      <div>
+                        <strong>{item.title || "Evidence"}</strong>
+                        <small>{item.addedBy ? `${displayNameForAddress(item.addedBy)} / ` : ""}{isoDateLabel(item.createdAt)}</small>
+                      </div>
+                      {item.notes && <p>{item.notes}</p>}
                       {item.url && (
                         <a href={item.url} target="_blank" rel="noreferrer">
-                          Open source
+                          {urlHostLabel(item.url)}
                         </a>
                       )}
                     </article>
                   ))}
                 </div>
-              )}
-              {awaitingResolutionTime ? (
-                <div className="resolver-note">Aura can review the outcome after the stated resolution time. No AI request is sent yet.</div>
-              ) : cancelOnlyResolution ? (
-                <div className="resolver-note">This market is cancel-only because both outcomes were not funded. Aura is not called for this action.</div>
-              ) : !selectedMarketIsSettled ? (
-                <button className="secondary" disabled={aiBusy} onClick={() => askAuraForResolution(selectedMarket)} type="button">
-                  {aiBusy ? "Aura thinking..." : aiResolutionReport || selectedAiCanPropose ? "Refresh Aura Agent" : "Ask Aura Agent"}
-                </button>
-              ) : (
-                <div className="resolver-note">Finalized market. This saved Aura report is read-only; new AI reviews are disabled.</div>
-              )}
-              <button className="secondary" onClick={copyAgentReport} type="button">
-                Copy report
-              </button>
-            </section>
-            )}
-
-            {aiResolutionReceipt && !cancelOnlyResolution && !awaitingResolutionTime && (
-              <section className="agent-panel" id={!showResolutionAssistant ? "aura-resolution-details" : undefined}>
-                <div className="panel-heading">
-                  <div>
-                    <span className="section-label">AI receipt</span>
-                    <h3>Resolver consensus</h3>
-                  </div>
-                  <span className="agent-confidence">
-                    {aiResolutionReceipt.consensus?.confidence ?? 0}% confidence
-                  </span>
-                </div>
-                <div className="agent-result">
-                  <span>Status</span>
-                  <strong>{aiResolutionReceipt.status || "pending"}</strong>
-                  <p>
-                    Consensus {aiResolutionReceipt.consensus?.outcome || aiResolutionReceipt.proposedOutcome || "not ready"}
-                    {typeof aiResolutionReceipt.consensus?.agreed === "number"
-                      ? ` from ${aiResolutionReceipt.consensus.agreed} AI reviewers.`
-                      : "."}
-                  </p>
-                  {aiResolutionReceipt.receiptHash && <p>Receipt hash {shortAddress(aiResolutionReceipt.receiptHash)}</p>}
-                  {aiResolutionReceipt.txHash && (
-                    <a href={`${ARC_EXPLORER_URL}/tx/${aiResolutionReceipt.txHash}`} target="_blank" rel="noreferrer">
-                      View resolver transaction
-                    </a>
-                  )}
-                  {aiResolutionReceipt.error && <p>{aiResolutionReceipt.error}</p>}
-                </div>
-                {aiResolutionReceipt.reviews && aiResolutionReceipt.reviews.length > 0 && (
-                  <div className="agent-evidence-list">
-                    {aiResolutionReceipt.reviews.slice(0, 3).map((review: NonNullable<AiResolutionReceipt["reviews"]>[number], index: number) => (
-                      <article key={`receipt-review-${selectedMarket.id}-${index}`}>
-                        <strong>
-                          {review.outcome || "Review"} {typeof review.confidence === "number" ? `${review.confidence}%` : ""}
-                        </strong>
-                        {review.reasoning && <p>{review.reasoning}</p>}
-                        {review.risks && review.risks.length > 0 && <small>{review.risks.slice(0, 2).join(" / ")}</small>}
-                      </article>
-                    ))}
-                  </div>
-                )}
               </section>
-            )}
-
-            {oracleProposal && (
-              <section className="agent-panel oracle-panel">
-                <div className="panel-heading">
-                  <div>
-                    <span className="section-label">Oracle proposal</span>
-                    <h3>{oracleProposal.adapter ? oracleProposal.adapter.replace(/-/g, " ") : "Objective data check"}</h3>
-                  </div>
-                  <span className="agent-confidence">{oracleProposal.confidence ?? 0}% confidence</span>
-                </div>
-                <div className="agent-result">
-                  <span>Status</span>
-                  <strong>{oracleDecisionLabel}</strong>
-                  {oracleProposal.summary && <p>{oracleProposal.summary}</p>}
-                  {oracleProposal.observedValue && <p>Observed: {oracleProposal.observedValue}</p>}
-                  {oracleProposal.dataHash && oracleProposal.dataHash !== ZERO_HASH && <p>Oracle hash {shortAddress(oracleProposal.dataHash)}</p>}
-                  {oracleProposal.autoProposed && oracleProposal.txHash && (
-                    <p>Oracle submitted this proposal onchain. Dispute and owner review remain available.</p>
-                  )}
-                  {oracleProposal.txHash && (
-                    <a href={`${ARC_EXPLORER_URL}/tx/${oracleProposal.txHash}`} target="_blank" rel="noreferrer">
-                      View oracle proposal transaction
-                    </a>
-                  )}
-                  {oracleProposal.autoProposeSkipped && <p>{oracleProposal.autoProposeSkipped}</p>}
-                  {oracleProposal.autoProposeError && <p>{oracleProposal.autoProposeError}</p>}
-                </div>
-                {oracleProposal.checks && oracleProposal.checks.length > 0 && (
-                  <div className="agent-checklist">
-                    {oracleProposal.checks.slice(0, 4).map((item) => (
-                      <span key={item}>{item}</span>
-                    ))}
-                  </div>
-                )}
-                {oracleProposal.sourceUrls && oracleProposal.sourceUrls.length > 0 && (
-                  <div className="agent-evidence-list">
-                    {oracleProposal.sourceUrls.slice(0, 4).map((url) => (
-                      <article key={url}>
-                        <strong>{urlHostLabel(url)}</strong>
-                        <a href={url} target="_blank" rel="noreferrer">
-                          Open source
-                        </a>
-                      </article>
-                    ))}
-                  </div>
-                )}
-              </section>
-            )}
-
-            <section className="top-traders-panel">
-              <div className="panel-heading">
-                <div>
-                  <span className="section-label">Top traders</span>
-                  <h3>Copy trade setup</h3>
-                </div>
-                <span>{topTraderRows.length} wallets</span>
-              </div>
-              <div className="top-trader-list">
-                {topTraderRows.length === 0 && <span>No trader activity indexed for this market yet.</span>}
-                {topTraderRows.map((trader, index) => (
-                  <article key={trader.address}>
-                    <div>
-                      <strong>#{index + 1} {displayNameForAddress(trader.address)}</strong>
-                      <small>
-                        YES {formatMarketAmount(trader.yes, selectedMarket)} / NO {formatMarketAmount(trader.no, selectedMarket)}
-                      </small>
-                    </div>
-                    <span>{formatMarketAmount(trader.total, selectedMarket)} {marketSymbol(selectedMarket)}</span>
-                    <button className="secondary" onClick={() => copyTraderPosition(trader)} type="button">
-                      Copy
-                    </button>
-                  </article>
-                ))}
-              </div>
-            </section>
-          </section>
-        ) : (
-          <section className="locked-market-tools">
-            <strong>Wallet required for market tools</strong>
-            <span>Aura Agent, copy trading, and resolver tools are available after wallet connection.</span>
-          </section>
-        )}
-
-        <section className="market-history-panel">
-          <div className="panel-heading market-history-heading">
-            <div>
-              <span className="section-label">Player history</span>
-              <h3>Market #{selectedMarket.id} bets</h3>
             </div>
-            <label className="wallet-history-search">
-              <svg className="search-icon" viewBox="0 0 24 24" aria-hidden="true">
-                <circle cx="11" cy="11" r="7" />
-                <path d="m16 16 4 4" />
-              </svg>
-              <span className="search-prefix">Search</span>
-              <input
-                aria-label="Search wallet in this market"
-                placeholder="Wallet address or name"
-                value={marketWalletSearch}
-                onChange={(event) => setMarketWalletSearch(event.target.value)}
-              />
-            </label>
-          </div>
-          <div className="market-history-list">
-            {marketHistoryRows.length === 0 && (
-              <span>
-                {selectedMarketActivities.length === 0
-                  ? "No indexed bets for this market yet."
-                  : "No wallet matches this search."}
-              </span>
-            )}
-            {marketHistoryRows.map((activity) => (
-              <article key={activity.id}>
-                <div>
-                  <strong>{displayNameForAddress(activity.user)}</strong>
-                  <small>{shortAddress(activity.user)} / {closeDate(activity.timestamp)}</small>
+          )}
+
+          {marketDetailTab === "holders" && (
+            <div className="market-tab-panel">
+              <section className="top-traders-panel">
+                <div className="panel-heading">
+                  <div>
+                    <span className="section-label">Top traders</span>
+                    <h3>Copy trade setup</h3>
+                  </div>
+                  <span>{topTraderRows.length} wallets</span>
                 </div>
-                <span className={activity.side === Outcome.Yes ? "history-side yes" : "history-side no"}>
-                  {activity.side === Outcome.Yes ? "YES" : "NO"}
-                </span>
-                <strong>{formatMarketAmount(activity.amount, selectedMarket)} {marketSymbol(selectedMarket)}</strong>
-                {activity.txHash && (
-                  <a href={`${ARC_EXPLORER_URL}/tx/${activity.txHash}`} target="_blank" rel="noreferrer">
-                    Tx
-                  </a>
-                )}
-              </article>
-            ))}
-          </div>
+                <div className="top-trader-list">
+                  {topTraderRows.length === 0 && <span>No trader activity indexed for this market yet.</span>}
+                  {topTraderRows.map((trader, index) => (
+                    <article key={trader.address}>
+                      <div>
+                        <strong>#{index + 1} {displayNameForAddress(trader.address)}</strong>
+                        <small>
+                          YES {formatMarketAmount(trader.yes, selectedMarket)} / NO {formatMarketAmount(trader.no, selectedMarket)}
+                        </small>
+                      </div>
+                      <span>{formatMarketAmount(trader.total, selectedMarket)} {marketSymbol(selectedMarket)}</span>
+                      <button className="secondary" disabled={!hasWalletAccess} onClick={() => copyTraderPosition(trader)} type="button">
+                        Copy
+                      </button>
+                    </article>
+                  ))}
+                </div>
+              </section>
+            </div>
+          )}
         </section>
 
-        {hasWalletAccess && (
+        {marketDetailTab === "activity" && (
+          <>
           <section className="market-timeline">
           {[
             { label: "Created", active: true, detail: `Market #${selectedMarket.id}` },
@@ -10576,15 +10621,63 @@ export default function App() {
             { label: "Resolved", active: selectedMarket.outcome !== Outcome.Unresolved, detail: outcomeLabel(selectedMarket.outcome) }
           ].map((step, index) => (
             <div className={step.active ? "timeline-step active" : "timeline-step"} key={step.label}>
-              <span>{step.active ? "✓" : index + 1}</span>
+              <span>{step.active ? "OK" : index + 1}</span>
               <strong>{step.label}</strong>
               <small>{step.detail}</small>
             </div>
           ))}
           </section>
+          <section className="market-history-panel">
+            <div className="panel-heading market-history-heading">
+              <div>
+                <span className="section-label">Player history</span>
+                <h3>Market #{selectedMarket.id} bets</h3>
+              </div>
+              <label className="wallet-history-search">
+                <svg className="search-icon" viewBox="0 0 24 24" aria-hidden="true">
+                  <circle cx="11" cy="11" r="7" />
+                  <path d="m16 16 4 4" />
+                </svg>
+                <span className="search-prefix">Search</span>
+                <input
+                  aria-label="Search wallet in this market"
+                  placeholder="Wallet address or name"
+                  value={marketWalletSearch}
+                  onChange={(event) => setMarketWalletSearch(event.target.value)}
+                />
+              </label>
+            </div>
+            <div className="market-history-list">
+              {marketHistoryRows.length === 0 && (
+                <span>
+                  {selectedMarketActivities.length === 0
+                    ? "No indexed bets for this market yet."
+                    : "No wallet matches this search."}
+                </span>
+              )}
+              {marketHistoryRows.map((activity) => (
+                <article key={activity.id}>
+                  <div>
+                    <strong>{displayNameForAddress(activity.user)}</strong>
+                    <small>{shortAddress(activity.user)} / {closeDate(activity.timestamp)}</small>
+                  </div>
+                  <span className={activity.side === Outcome.Yes ? "history-side yes" : "history-side no"}>
+                    {activity.side === Outcome.Yes ? "YES" : "NO"}
+                  </span>
+                  <strong>{formatMarketAmount(activity.amount, selectedMarket)} {marketSymbol(selectedMarket)}</strong>
+                  {activity.txHash && (
+                    <a href={`${ARC_EXPLORER_URL}/tx/${activity.txHash}`} target="_blank" rel="noreferrer">
+                      Tx
+                    </a>
+                  )}
+                </article>
+              ))}
+            </div>
+          </section>
+          </>
         )}
 
-        {hasWalletAccess && relatedMarkets.length > 0 && (
+        {hasWalletAccess && marketDetailTab === "overview" && relatedMarkets.length > 0 && (
           <section className="related-market-section">
             <div className="market-section-header">
               <div className="market-section-title">

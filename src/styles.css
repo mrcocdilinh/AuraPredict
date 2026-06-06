@@ -5843,6 +5843,287 @@ label {
   padding: 16px;
 }
 
+.market-detail-tab-card {
+  background: #ffffff;
+  border: 1px solid #dfe6f1;
+  border-radius: 8px;
+  color: #172033;
+  display: grid;
+  gap: 0;
+  overflow: hidden;
+}
+
+.market-detail-tabs {
+  align-items: center;
+  border-bottom: 1px solid #e5ebf4;
+  display: flex;
+  gap: 22px;
+  overflow-x: auto;
+  padding: 0 18px;
+}
+
+.market-detail-tabs button {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  color: #8a94a8;
+  display: inline-flex;
+  flex: 0 0 auto;
+  font-size: 0.95rem;
+  font-weight: 900;
+  gap: 7px;
+  min-height: 58px;
+  padding: 0;
+}
+
+.market-detail-tabs button.active {
+  border-bottom-color: #101827;
+  color: #101827;
+}
+
+.market-detail-tabs button span {
+  background: #edf5ff;
+  border: 1px solid #dbeafe;
+  border-radius: 999px;
+  color: #2563eb;
+  font-size: 0.66rem;
+  min-width: 20px;
+  padding: 3px 6px;
+}
+
+.market-tab-panel {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+}
+
+.market-overview-card {
+  display: grid;
+  gap: 18px;
+}
+
+.market-overview-lede {
+  color: #334155;
+  font-size: 1rem;
+  line-height: 1.55;
+  margin: 0;
+  max-width: 980px;
+}
+
+.overview-resolution-box {
+  background: #eef6ff;
+  border: 1px solid #cfe4ff;
+  border-radius: 8px;
+  display: grid;
+  gap: 12px;
+  padding: 16px 18px;
+}
+
+.overview-resolution-box strong {
+  color: #0646d8;
+  display: block;
+  font-size: 1rem;
+  line-height: 1.55;
+  margin-top: 8px;
+}
+
+.overview-source-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.overview-source-row a,
+.overview-source-row span {
+  color: #2563eb;
+  font-size: 0.82rem;
+  font-weight: 820;
+}
+
+.overview-source-row a {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.overview-signal-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.overview-signal-grid article,
+.market-discussion-card {
+  background: #f8fafc;
+  border: 1px solid #e5ebf4;
+  border-radius: 8px;
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 12px;
+}
+
+.overview-signal-grid span {
+  color: #667085;
+  font-size: 0.72rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.overview-signal-grid strong {
+  color: #101827;
+  font-size: 0.95rem;
+  line-height: 1.25;
+}
+
+.overview-signal-grid small {
+  color: #536178;
+  font-size: 0.76rem;
+  font-weight: 760;
+  line-height: 1.35;
+}
+
+.overview-signal-grid button {
+  justify-self: start;
+  min-height: 30px;
+  padding: 0 10px;
+}
+
+.market-advanced-drawer {
+  background: #f8fafc;
+  border: 1px solid #e5ebf4;
+  border-radius: 8px;
+  padding: 0;
+}
+
+.market-advanced-drawer summary {
+  align-items: center;
+  cursor: pointer;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  list-style: none;
+  min-height: 48px;
+  padding: 0 14px;
+}
+
+.market-advanced-drawer summary::-webkit-details-marker {
+  display: none;
+}
+
+.market-advanced-drawer summary span {
+  color: #101827;
+  font-size: 0.9rem;
+  font-weight: 900;
+}
+
+.market-advanced-drawer summary strong {
+  background: #e7faff;
+  border: 1px solid #b4ecf8;
+  border-radius: 999px;
+  color: #08768a;
+  font-size: 0.7rem;
+  padding: 5px 8px;
+}
+
+.market-advanced-drawer[open] {
+  padding-bottom: 12px;
+}
+
+.market-advanced-drawer[open] .market-intelligence-grid {
+  padding: 0 12px;
+}
+
+.market-comments-grid {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+.comment-composer,
+.evidence-composer,
+.comment-list,
+.evidence-list {
+  display: grid;
+  gap: 8px;
+}
+
+.comment-composer textarea,
+.evidence-composer textarea,
+.evidence-composer input {
+  background: #ffffff;
+  border: 1px solid #dfe6f1;
+  border-radius: 8px;
+  color: #101827;
+  font: inherit;
+  min-height: 42px;
+  padding: 10px 12px;
+  width: 100%;
+}
+
+.comment-composer textarea,
+.evidence-composer textarea {
+  min-height: 92px;
+  resize: vertical;
+}
+
+.comment-composer button,
+.evidence-composer button {
+  justify-self: start;
+}
+
+.comment-list > span,
+.evidence-list > span {
+  color: #667085;
+  font-size: 0.82rem;
+  font-weight: 780;
+}
+
+.comment-list article,
+.evidence-list article {
+  background: #ffffff;
+  border: 1px solid #e5ebf4;
+  border-radius: 8px;
+  display: grid;
+  gap: 6px;
+  padding: 10px;
+}
+
+.comment-list article > div,
+.evidence-list article > div {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+}
+
+.comment-list strong,
+.evidence-list strong {
+  color: #101827;
+  font-size: 0.86rem;
+}
+
+.comment-list small,
+.evidence-list small {
+  color: #667085;
+  font-size: 0.72rem;
+  font-weight: 780;
+}
+
+.comment-list p,
+.evidence-list p {
+  color: #536178;
+  line-height: 1.45;
+  margin: 0;
+}
+
+.evidence-list a {
+  color: #08768a;
+  font-size: 0.78rem;
+  font-weight: 900;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
 .market-intelligence-grid {
   display: grid;
   align-items: stretch;
@@ -7752,9 +8033,12 @@ label {
 [data-theme="dark"] .ai-insight-main,
 [data-theme="dark"] .ai-receipt-card,
 [data-theme="dark"] .market-quality-card,
+[data-theme="dark"] .market-detail-tab-card,
+[data-theme="dark"] .market-overview-card,
 [data-theme="dark"] .agent-panel,
 [data-theme="dark"] .top-traders-panel,
 [data-theme="dark"] .market-history-panel,
+[data-theme="dark"] .market-discussion-card,
 [data-theme="dark"] .aura-breakdown-card,
 [data-theme="dark"] .security-page article {
   background: rgba(12, 17, 31, 0.96);
@@ -7771,12 +8055,17 @@ label {
 [data-theme="dark"] .aura-formula-card h3,
 [data-theme="dark"] .onboarding-card h3,
 [data-theme="dark"] .panel-heading h3,
+[data-theme="dark"] .market-detail-tabs button.active,
+[data-theme="dark"] .market-advanced-drawer summary span,
+[data-theme="dark"] .overview-signal-grid strong,
 [data-theme="dark"] .ai-insight-metrics strong,
 [data-theme="dark"] .ai-receipt-grid strong,
 [data-theme="dark"] .quality-signal strong,
 [data-theme="dark"] .agent-result strong,
 [data-theme="dark"] .top-trader-list article > span,
 [data-theme="dark"] .market-history-list article strong,
+[data-theme="dark"] .comment-list strong,
+[data-theme="dark"] .evidence-list strong,
 [data-theme="dark"] .aura-breakdown-grid strong,
 [data-theme="dark"] .leaderboard-wallet strong,
 [data-theme="dark"] .security-page h3 {
@@ -7785,10 +8074,13 @@ label {
 
 [data-theme="dark"] .aura-formula-card p,
 [data-theme="dark"] .onboarding-card p,
+[data-theme="dark"] .market-overview-lede,
+[data-theme="dark"] .overview-signal-grid small,
 [data-theme="dark"] .ai-insight-main p,
 [data-theme="dark"] .ai-receipt-card p,
 [data-theme="dark"] .ai-insight-metrics span,
 [data-theme="dark"] .ai-receipt-grid span,
+[data-theme="dark"] .overview-signal-grid span,
 [data-theme="dark"] .oracle-reputation-panel p,
 [data-theme="dark"] .agent-result p,
 [data-theme="dark"] .security-page p,
@@ -7798,6 +8090,12 @@ label {
 [data-theme="dark"] .top-trader-list small,
 [data-theme="dark"] .market-history-list article small,
 [data-theme="dark"] .market-history-list > span,
+[data-theme="dark"] .comment-list small,
+[data-theme="dark"] .comment-list p,
+[data-theme="dark"] .comment-list > span,
+[data-theme="dark"] .evidence-list small,
+[data-theme="dark"] .evidence-list p,
+[data-theme="dark"] .evidence-list > span,
 [data-theme="dark"] .aura-breakdown-grid span,
 [data-theme="dark"] .aura-breakdown-grid small {
   color: #9aa7bd;
@@ -7805,6 +8103,10 @@ label {
 
 [data-theme="dark"] .reputation-badge,
 [data-theme="dark"] .onboarding-steps span,
+[data-theme="dark"] .overview-signal-grid article,
+[data-theme="dark"] .market-advanced-drawer,
+[data-theme="dark"] .comment-list article,
+[data-theme="dark"] .evidence-list article,
 [data-theme="dark"] .ai-insight-metrics div,
 [data-theme="dark"] .ai-receipt-grid div,
 [data-theme="dark"] .quality-signal,
@@ -7818,6 +8120,50 @@ label {
 [data-theme="dark"] .aura-breakdown-grid div {
   background: #0b1020;
   border-color: #202a3f;
+}
+
+[data-theme="dark"] .market-detail-tabs {
+  border-bottom-color: #202a3f;
+}
+
+[data-theme="dark"] .market-detail-tabs button {
+  color: #8aa0bf;
+}
+
+[data-theme="dark"] .market-detail-tabs button.active {
+  border-bottom-color: #18d7ff;
+}
+
+[data-theme="dark"] .market-detail-tabs button span {
+  background: #0d2b3a;
+  border-color: #225c71;
+  color: #5be6ff;
+}
+
+[data-theme="dark"] .overview-resolution-box {
+  background: rgba(24, 215, 255, 0.08);
+  border-color: #225c71;
+}
+
+[data-theme="dark"] .overview-resolution-box strong,
+[data-theme="dark"] .overview-source-row a,
+[data-theme="dark"] .overview-source-row span,
+[data-theme="dark"] .evidence-list a {
+  color: #5be6ff;
+}
+
+[data-theme="dark"] .comment-composer textarea,
+[data-theme="dark"] .evidence-composer textarea,
+[data-theme="dark"] .evidence-composer input {
+  background: #0b1020;
+  border-color: #26334a;
+  color: #f7f9ff;
+}
+
+[data-theme="dark"] .comment-composer textarea::placeholder,
+[data-theme="dark"] .evidence-composer textarea::placeholder,
+[data-theme="dark"] .evidence-composer input::placeholder {
+  color: #8aa0bf;
 }
 
 [data-theme="dark"] .wallet-history-search,
@@ -8883,6 +9229,7 @@ label {
 
   .market-intelligence-grid,
   .ai-insight-strip,
+  .market-comments-grid,
   .aura-formula-card,
   .onboarding-card,
   .security-page {
@@ -10093,6 +10440,32 @@ label {
     line-height: 1.12;
   }
 
+  .market-detail-tabs {
+    gap: 16px;
+    padding: 0 12px;
+  }
+
+  .market-detail-tabs button {
+    font-size: 0.88rem;
+    min-height: 52px;
+  }
+
+  .market-tab-panel {
+    padding: 12px;
+  }
+
+  .overview-resolution-box {
+    padding: 14px;
+  }
+
+  .comment-list article > div,
+  .evidence-list article > div {
+    align-items: start;
+    display: grid;
+    gap: 4px;
+    justify-content: stretch;
+  }
+
   .detail-trade-card {
     position: static;
     top: auto;
@@ -10127,6 +10500,7 @@ label {
 
   .ai-insight-metrics,
   .ai-receipt-grid,
+  .overview-signal-grid,
   .quality-signal-grid {
     grid-template-columns: 1fr;
   }

@@ -363,18 +363,26 @@ test("market detail exposes stake, resolution, dispute, finalize and claim surfa
   await page.goto("/?market=1");
   await expect(page.getByText(/stake YES or NO/i)).toBeVisible();
   await expect(page.getByRole("img", { name: /Market odds chart/i })).toBeVisible();
+  await expect(page.getByRole("tab", { name: /Overview/i })).toBeVisible();
+  await expect(page.getByRole("tab", { name: /Comments/i })).toBeVisible();
+  await expect(page.getByRole("tab", { name: /Activity/i })).toBeVisible();
+  await expect(page.getByRole("tab", { name: /Top Holders/i })).toBeVisible();
   await expect(page.getByText(/Aura AI Insight/i)).toBeVisible();
   await expect(page.getByText(/Public oracle receipt/i)).toBeVisible();
   await expect(page.getByText(/Connect wallet to interact/i)).toBeVisible();
   await expect(page.getByRole("button", { name: /Connect Wallet/i }).first()).toBeVisible();
+  await page.getByRole("tab", { name: /Activity/i }).click();
+  await expect(page.getByText(/Player history/i)).toBeVisible();
+  await page.getByRole("tab", { name: /Top Holders/i }).click();
+  await expect(page.getByText(/Top traders/i)).toBeVisible();
 
   await page.goto("/?market=2");
-  await expect(page.getByText(/dispute and finalization controls/i)).toBeVisible();
+  await expect(page.getByRole("heading", { name: /dispute and finalization controls/i })).toBeVisible();
   await expect(page.getByText(/Connect wallet to interact/i)).toBeVisible();
   await expect(page.getByText(/Public preview/i)).toBeVisible();
 
   await page.goto("/?market=3");
-  await expect(page.getByText(/claim state after a market is finalized/i)).toBeVisible();
+  await expect(page.getByRole("heading", { name: /claim state after a market is finalized/i })).toBeVisible();
   await expect(page.getByText(/Finalized/i).first()).toBeVisible();
   await expect(page.getByText(/Connect wallet to interact/i)).toBeVisible();
 });
