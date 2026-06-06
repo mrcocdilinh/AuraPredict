@@ -9515,10 +9515,6 @@ export default function App() {
 
     return (
       <section className="market-detail-view">
-        <button className="secondary back-button" onClick={backToMarkets} type="button">
-          Back to markets
-        </button>
-
         <section className="market-detail-hero">
           <div className={`detail-question-panel ${selectedMarketImageVariant}`}>
             <img src={selectedMarketImage} alt="" />
