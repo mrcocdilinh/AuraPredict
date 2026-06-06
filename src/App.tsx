@@ -2011,6 +2011,22 @@ function chartAxisLabel(value: number, rangeSeconds: number) {
   return chartTimeLabel(value);
 }
 
+function clampChartValue(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function nicePercentStep(span: number) {
+  if (span <= 6) return 1;
+  if (span <= 14) return 2;
+  if (span <= 32) return 5;
+  return 10;
+}
+
+function formatChartPercent(value: number) {
+  const rounded = Math.abs(value - Math.round(value)) < 0.05 ? Math.round(value) : Number(value.toFixed(1));
+  return `${rounded}%`;
+}
+
 function smoothPathFromPoints(points: Array<{ x: number; y: number }>) {
   const cleanedPoints = points.reduce<Array<{ x: number; y: number }>>((acc, point) => {
     if (!Number.isFinite(point.x) || !Number.isFinite(point.y)) return acc;
@@ -4286,43 +4302,56 @@ export default function App() {
   const selectedMarketYesPercent = selectedMarket ? percent(selectedMarket.yesPool, selectedMarketTotal) : 50;
   const selectedMarketNoPercent = 100 - selectedMarketYesPercent;
   const activeChartWindow = CHART_WINDOWS.find((item) => item.value === detailChartWindow) ?? CHART_WINDOWS[CHART_WINDOWS.length - 1];
-  const detailChartRows = (() => {
-    if (!selectedMarket) return [];
+  const detailChartDomain = (() => {
+    if (!selectedMarket) return { start: 0, end: 60, range: 60 };
 
     const referenceEnd = Math.max(
       selectedMarket.createdAt || 0,
       Math.min(nowSeconds, selectedMarket.closeTime || nowSeconds)
     );
     const firstActivityTime = selectedMarketActivities[0]?.timestamp || selectedMarket.createdAt || referenceEnd;
-    const windowStart = activeChartWindow.seconds
-      ? Math.max(selectedMarket.createdAt || firstActivityTime, referenceEnd - activeChartWindow.seconds)
-      : Math.min(selectedMarket.createdAt || firstActivityTime, firstActivityTime);
+    const marketStart = selectedMarket.createdAt || firstActivityTime || Math.max(0, referenceEnd - 60 * 60);
+    const start = activeChartWindow.seconds
+      ? Math.max(marketStart, referenceEnd - activeChartWindow.seconds)
+      : Math.min(marketStart, firstActivityTime);
+    const end = Math.max(start + 60, referenceEnd);
+
+    return { start, end, range: Math.max(60, end - start) };
+  })();
+  const detailChartRows = (() => {
+    if (!selectedMarket) return [];
+
+    const { start: windowStart, end: windowEnd, range } = detailChartDomain;
     let yesPool = 0n;
     let noPool = 0n;
     const points: Array<{ timestamp: number; yesPercent: number; noPercent: number }> = [];
-    const pushPoint = (timestamp: number) => {
+    const poolYesPercent = () => {
       const total = yesPool + noPool;
-      const yes = total > 0n ? percent(yesPool, total) : selectedMarketYesPercent;
+      return total > 0n ? percent(yesPool, total) : selectedMarketTotal > 0n ? selectedMarketYesPercent : 50;
+    };
+    const pushPoint = (timestamp: number) => {
+      const yes = poolYesPercent();
       points.push({ timestamp, yesPercent: yes, noPercent: 100 - yes });
     };
 
     for (const activity of selectedMarketActivities) {
-      const timestamp = activity.timestamp || selectedMarket.createdAt || referenceEnd;
-      if (timestamp >= windowStart && points.length === 0) {
-        pushPoint(windowStart);
+      const timestamp = activity.timestamp || selectedMarket.createdAt || windowEnd;
+      if (timestamp < windowStart) {
+        if (activity.side === Outcome.Yes) yesPool += activity.amount;
+        if (activity.side === Outcome.No) noPool += activity.amount;
+        continue;
       }
+      if (timestamp > windowEnd) continue;
+      if (points.length === 0) pushPoint(windowStart);
       if (activity.side === Outcome.Yes) yesPool += activity.amount;
       if (activity.side === Outcome.No) noPool += activity.amount;
-      if (timestamp >= windowStart) pushPoint(timestamp);
+      pushPoint(timestamp);
     }
 
     if (points.length === 0) {
-      const fallbackStart = activeChartWindow.seconds
-        ? Math.max(0, referenceEnd - activeChartWindow.seconds)
-        : selectedMarket.createdAt || Math.max(0, referenceEnd - 60 * 60);
       points.push(
-        { timestamp: fallbackStart, yesPercent: selectedMarketYesPercent, noPercent: selectedMarketNoPercent },
-        { timestamp: referenceEnd, yesPercent: selectedMarketYesPercent, noPercent: selectedMarketNoPercent }
+        { timestamp: windowStart, yesPercent: poolYesPercent(), noPercent: 100 - poolYesPercent() },
+        { timestamp: windowEnd, yesPercent: selectedMarketYesPercent, noPercent: selectedMarketNoPercent }
       );
     }
 
@@ -4344,9 +4373,15 @@ export default function App() {
       (Math.abs(last.yesPercent - selectedMarketYesPercent) > 0.1 || Math.abs(last.noPercent - selectedMarketNoPercent) > 0.1)
     ) {
       points.push({
-        timestamp: Math.max(referenceEnd, last.timestamp + 60),
+        timestamp: windowEnd,
         yesPercent: selectedMarketYesPercent,
         noPercent: selectedMarketNoPercent
+      });
+    } else if (points.length > 0 && last.timestamp < windowEnd) {
+      points.push({
+        timestamp: windowEnd,
+        yesPercent: last.yesPercent,
+        noPercent: last.noPercent
       });
     }
     if (points.length === 1) {
@@ -4357,10 +4392,8 @@ export default function App() {
       });
     }
 
-    const minTime = Math.min(...points.map((point) => point.timestamp));
-    const maxTime = Math.max(minTime + 60, ...points.map((point) => point.timestamp));
     return points.map((point) => {
-      const x = CHART_LEFT + ((point.timestamp - minTime) / (maxTime - minTime)) * (CHART_RIGHT - CHART_LEFT);
+      const x = CHART_LEFT + ((point.timestamp - windowStart) / range) * (CHART_RIGHT - CHART_LEFT);
       return {
         ...point,
         x,
@@ -4370,15 +4403,12 @@ export default function App() {
     });
   })();
   const detailChartTicks = (() => {
-    if (detailChartRows.length === 0) return [];
-    const minTime = detailChartRows[0].timestamp;
-    const maxTime = detailChartRows[detailChartRows.length - 1].timestamp;
-    const range = Math.max(60, maxTime - minTime);
-    const includeDate = range >= 24 * 60 * 60;
+    if (!selectedMarket) return [];
+    const { start, range } = detailChartDomain;
     return Array.from({ length: 5 }, (_, index) => {
-      const timestamp = Math.round(minTime + (range * index) / 4);
+      const timestamp = Math.round(start + (range * index) / 4);
       const x = CHART_LEFT + (index / 4) * (CHART_RIGHT - CHART_LEFT);
-      return { x, label: chartTimeLabel(timestamp, includeDate) };
+      return { x, label: chartAxisLabel(timestamp, range) };
     });
   })();
   const relatedMarkets = selectedMarket
@@ -9325,16 +9355,32 @@ export default function App() {
     const chartPrimaryPercent = selectedChartSide === Outcome.No ? selectedMarketNoPercent : selectedMarketYesPercent;
     const chartPrimaryLabel = selectedChartSide === Outcome.No ? "NO" : "YES";
     const chartOppositeLabel = oppositeChartSide === Outcome.No ? "NO" : "YES";
-    const chartLineY = (point: (typeof chartRows)[number]) => selectedChartSide === Outcome.No ? point.noY : point.yesY;
     const chartLinePercent = (point: (typeof chartRows)[number]) =>
       selectedChartSide === Outcome.No ? point.noPercent : point.yesPercent;
-    const chartYesPath = smoothPathFromPoints(chartRows.map((point) => ({ x: point.x, y: point.yesY })));
-    const chartNoPath = smoothPathFromPoints(chartRows.map((point) => ({ x: point.x, y: point.noY })));
-    const chartLinePath = selectedChartSide === Outcome.No ? chartNoPath : chartYesPath;
+    const chartVisiblePercents = chartRows.length > 0 ? chartRows.map(chartLinePercent) : [chartPrimaryPercent];
+    const chartRawMin = Math.min(...chartVisiblePercents, chartPrimaryPercent);
+    const chartRawMax = Math.max(...chartVisiblePercents, chartPrimaryPercent);
+    const chartRawSpan = Math.max(1, chartRawMax - chartRawMin);
+    const chartStep = nicePercentStep(chartRawSpan);
+    const chartScaleMin = clampChartValue(Math.floor((chartRawMin - Math.max(1, chartRawSpan * 0.22)) / chartStep) * chartStep, 0, 99);
+    const chartScaleMax = clampChartValue(
+      Math.max(chartScaleMin + chartStep, Math.ceil((chartRawMax + Math.max(1, chartRawSpan * 0.22)) / chartStep) * chartStep),
+      chartScaleMin + chartStep,
+      100
+    );
+    const chartYForPercent = (value: number) =>
+      CHART_BOTTOM - ((clampChartValue(value, chartScaleMin, chartScaleMax) - chartScaleMin) / (chartScaleMax - chartScaleMin)) * CHART_HEIGHT;
+    const chartLineY = (point: (typeof chartRows)[number]) => chartYForPercent(chartLinePercent(point));
+    const chartLinePath = smoothPathFromPoints(chartRows.map((point) => ({ x: point.x, y: chartLineY(point) })));
     const chartAreaPath =
       chartRows.length > 0 && chartLinePath
         ? `${chartLinePath} L${chartRows[chartRows.length - 1].x},${CHART_BOTTOM} L${chartRows[0].x},${CHART_BOTTOM} Z`
         : "";
+    const chartYTicks = Array.from({ length: 5 }, (_, index) => {
+      const value = chartScaleMax - ((chartScaleMax - chartScaleMin) * index) / 4;
+      const y = CHART_TOP + ((chartScaleMax - value) / (chartScaleMax - chartScaleMin)) * CHART_HEIGHT;
+      return { value, y, label: formatChartPercent(value) };
+    });
     const chartLastPoint = chartRows[chartRows.length - 1];
     const chartPointerActive = chartHoverRatio !== null;
     const chartHoverPoint = (() => {
@@ -9734,6 +9780,7 @@ export default function App() {
                 <div className="chart-window-tabs">
                   {CHART_WINDOWS.map((windowOption) => (
                     <button
+                      aria-pressed={detailChartWindow === windowOption.value}
                       className={detailChartWindow === windowOption.value ? "active" : ""}
                       key={windowOption.value}
                       onClick={() => setDetailChartWindow(windowOption.value)}
@@ -9834,16 +9881,20 @@ export default function App() {
                 </>
               )}
               <div className="chart-y-labels" aria-hidden="true">
-                <span>100%</span>
-                <span>75%</span>
-                <span>50%</span>
-                <span>25%</span>
-                <span>0%</span>
+                {chartYTicks.map((tick) => (
+                  <span key={`${tick.y}-${tick.label}`} style={{ top: `${(tick.y / 58) * 100}%` }}>
+                    {tick.label}
+                  </span>
+                ))}
               </div>
             </div>
             <div className="chart-time-row">
-                {detailChartTicks.map((tick) => (
-                  <span key={`${tick.x}-${tick.label}`}>
+                {detailChartTicks.map((tick, index) => (
+                  <span
+                    className={index === 0 ? "is-first" : index === detailChartTicks.length - 1 ? "is-last" : ""}
+                    key={`${tick.x}-${tick.label}`}
+                    style={{ left: `${tick.x}%` }}
+                  >
                     {tick.label}
                   </span>
                 ))}
