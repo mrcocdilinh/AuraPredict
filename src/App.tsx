@@ -9540,9 +9540,8 @@ export default function App() {
       .filter((url, index, rows) => url && rows.indexOf(url) === index)
       .slice(0, 3);
     const overviewDescription =
-      selectedHumanRule ||
       selectedAiInsight?.summary ||
-      `This market tracks whether ${selectedMarket.question.replace(/\?+$/g, "")}.`;
+      `This market tracks whether ${selectedMarket.question.replace(/\?+$/g, "")}. The resolution below defines the source, timestamp, and outcome conditions.`;
     const detailTabs: Array<{ key: MarketDetailTab; label: string; count?: number }> = [
       { key: "overview", label: "Overview" },
       { key: "comments", label: "Comments", count: selectedCommentRows.length + selectedEvidenceRows.length },
