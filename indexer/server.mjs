@@ -247,6 +247,7 @@ function emptyState() {
       follows: {},
       comments: {},
       evidence: {},
+      reports: {},
       notifications: {}
     },
     resolutions: {},
@@ -1100,6 +1101,7 @@ function socialState() {
   state.social.follows ??= {};
   state.social.comments ??= {};
   state.social.evidence ??= {};
+  state.social.reports ??= {};
   state.social.notifications ??= {};
   rebuildUsernameIndex(state.social);
   return state.social;
@@ -1185,6 +1187,8 @@ const SOCIAL_NOTIFICATION_TYPES = new Set([
   "stale-review",
   "proposal",
   "dispute-resolved",
+  "report",
+  "flag",
   "claim",
   "result"
 ]);
@@ -1197,6 +1201,7 @@ function cleanNotificationRow(row, wallet) {
   if (!key) return null;
   const createdAt = Number(row.createdAt);
   const marketId = Number(row.marketId);
+  const claimedAt = Number(row.claimedAt);
   const notification = {
     key,
     wallet: wallet.toLowerCase(),
@@ -1207,6 +1212,7 @@ function cleanNotificationRow(row, wallet) {
     createdAt: Number.isFinite(createdAt) && createdAt > 0 ? Math.floor(createdAt) : Math.floor(Date.now() / 1000)
   };
   if (Number.isInteger(marketId) && marketId >= 0) notification.marketId = marketId;
+  if (Number.isFinite(claimedAt) && claimedAt > 0) notification.claimedAt = Math.floor(claimedAt);
   return notification;
 }
 
@@ -3799,8 +3805,18 @@ async function route(req, res) {
         json(res, 200, {
           comments: social.comments[marketId] ?? [],
           evidence: social.evidence[marketId] ?? [],
+          reports: social.reports[marketId] ?? [],
           updatedAt: state.updatedAt
         });
+        return;
+      }
+
+      if (req.method === "GET" && segments[2] === "reports") {
+        const reports = Object.values(social.reports ?? {})
+          .flat()
+          .sort((a, b) => Date.parse(b.createdAt || "") - Date.parse(a.createdAt || ""))
+          .slice(0, 200);
+        json(res, 200, { reports, updatedAt: state.updatedAt });
         return;
       }
 
@@ -3845,6 +3861,29 @@ async function route(req, res) {
         appendSocialRow(social.evidence, String(marketId), evidence, 40);
         await saveState();
         json(res, 201, { evidence, evidenceRows: social.evidence[String(marketId)] });
+        return;
+      }
+
+      if (req.method === "POST" && segments[2] === "markets" && segments[3] && segments[4] === "reports") {
+        const marketId = Number(segments[3]);
+        if (!Number.isInteger(marketId) || marketId < 0) return json(res, 400, { error: "Invalid market id." });
+        const body = await readRequestBody(req);
+        const reason = cleanText(body.reason, 520);
+        const sourceUrl = cleanUrl(body.url);
+        if (reason.length < 8) return json(res, 400, { error: "Report reason is too short." });
+        if (body.url && !sourceUrl) return json(res, 400, { error: "Report URL must be http or https." });
+        const report = {
+          id: `${marketId}-${Date.now()}`,
+          marketId,
+          reporter: cleanAddress(body.reporter) || "Guest",
+          reason,
+          url: sourceUrl,
+          status: "open",
+          createdAt: nowIso()
+        };
+        appendSocialRow(social.reports, String(marketId), report, 40);
+        await saveState();
+        json(res, 201, { report, reports: social.reports[String(marketId)] });
         return;
       }
 

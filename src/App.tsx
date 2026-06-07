@@ -359,6 +359,16 @@ type MarketEvidence = {
   createdAt: string;
 };
 
+type MarketReport = {
+  id: string;
+  marketId: number;
+  reporter: string;
+  reason: string;
+  url: string;
+  status: "open" | "dismissed" | "flagged";
+  createdAt: string;
+};
+
 type NotificationType =
   | "resolve"
   | "finalize"
@@ -367,6 +377,8 @@ type NotificationType =
   | "stale-review"
   | "proposal"
   | "dispute-resolved"
+  | "report"
+  | "flag"
   | "claim"
   | "result";
 
@@ -379,6 +391,7 @@ type NotificationHistoryItem = {
   detail: string;
   marketId?: number;
   createdAt: number;
+  claimedAt?: number;
 };
 
 const NOTIFICATION_TYPE_VALUES: NotificationType[] = [
@@ -389,6 +402,8 @@ const NOTIFICATION_TYPE_VALUES: NotificationType[] = [
   "stale-review",
   "proposal",
   "dispute-resolved",
+  "report",
+  "flag",
   "claim",
   "result"
 ];
@@ -433,6 +448,7 @@ type MismatchConfirmState = {
 type SocialMarketResponse = {
   comments?: MarketComment[];
   evidence?: MarketEvidence[];
+  reports?: MarketReport[];
 };
 
 type SocialProfileResponse = {
@@ -453,6 +469,11 @@ type SocialProfileSaveResponse = SocialProfileResponse & {
 
 type SocialNotificationsResponse = {
   notifications?: NotificationHistoryItem[];
+  updatedAt?: string;
+};
+
+type SocialReportsResponse = {
+  reports?: MarketReport[];
   updatedAt?: string;
 };
 
@@ -766,6 +787,7 @@ const MARKET_CACHE_KEY = "aurapredict.marketCache";
 const FOLLOWED_CREATORS_KEY = "aurapredict.followedCreators";
 const MARKET_COMMENTS_KEY = "aurapredict.marketComments";
 const MARKET_EVIDENCE_KEY = "aurapredict.marketEvidence";
+const MARKET_REPORTS_KEY = "aurapredict.marketReports";
 const LOCAL_CLAIMED_MARKETS_KEY = "aurapredict.localClaimedMarkets";
 const NOTIFICATION_HISTORY_KEY = "aurapredict.notificationHistory";
 const ONBOARDING_DISMISSED_KEY = "aurapredict.onboardingDismissed";
@@ -965,6 +987,7 @@ function normalizeNotificationHistoryItem(item: unknown, walletOverride?: string
   const wallet = (walletOverride || (typeof row.wallet === "string" ? row.wallet : "")).toLowerCase();
   if (!type || !key || !wallet) return null;
   const createdAt = Number(row.createdAt);
+  const claimedAt = Number(row.claimedAt);
   const marketId = Number(row.marketId);
   const normalized: NotificationHistoryItem = {
     key,
@@ -976,6 +999,7 @@ function normalizeNotificationHistoryItem(item: unknown, walletOverride?: string
     createdAt: Number.isFinite(createdAt) && createdAt > 0 ? Math.floor(createdAt) : Math.floor(Date.now() / 1000)
   };
   if (Number.isInteger(marketId) && marketId >= 0) normalized.marketId = marketId;
+  if (Number.isFinite(claimedAt) && claimedAt > 0) normalized.claimedAt = Math.floor(claimedAt);
   return normalized;
 }
 
@@ -3922,6 +3946,9 @@ export default function App() {
   const [marketEvidence, setMarketEvidence] = useState<Record<string, MarketEvidence[]>>(() =>
     readJsonStorage(MARKET_EVIDENCE_KEY, {})
   );
+  const [marketReports, setMarketReports] = useState<Record<string, MarketReport[]>>(() =>
+    readJsonStorage(MARKET_REPORTS_KEY, {})
+  );
   const [locallyClaimedMarkets, setLocallyClaimedMarkets] = useState<string[]>(() =>
     readJsonStorage(LOCAL_CLAIMED_MARKETS_KEY, [])
   );
@@ -3930,6 +3957,7 @@ export default function App() {
   );
   const [commentInputs, setCommentInputs] = useState<Record<number, string>>({});
   const [evidenceDrafts, setEvidenceDrafts] = useState<Record<number, EvidenceDraft>>({});
+  const [reportDrafts, setReportDrafts] = useState<Record<number, { reason: string; url: string }>>({});
   const [aiBusy, setAiBusy] = useState(false);
   const [aiMarketDraft, setAiMarketDraft] = useState<AiMarketDraft | null>(null);
   const [auraCreateStatus, setAuraCreateStatus] = useState<"idle" | "ready" | "failed">("idle");
@@ -4851,6 +4879,8 @@ export default function App() {
     { value: "finalize", label: "Finalize" },
     { value: "owner-review", label: "Owner review" },
     { value: "dispute-review", label: "Disputes" },
+    { value: "report", label: "Reports" },
+    { value: "flag", label: "Flags" },
     { value: "stale-review", label: "Stale" },
     { value: "dispute-resolved", label: "Resolved disputes" }
   ];
@@ -4858,9 +4888,15 @@ export default function App() {
     totalTrades: activities.length,
     comments: Object.values(marketComments).reduce((sum, rows) => sum + rows.length, 0),
     evidence: Object.values(marketEvidence).reduce((sum, rows) => sum + rows.length, 0),
+    reports: Object.values(marketReports).reduce((sum, rows) => sum + rows.filter((row) => row.status === "open").length, 0),
     publicProfiles: Object.values(profilePublicByAddress).filter((value) => value !== false).length,
     namedProfiles: Object.values(profileNames).filter((name) => name.trim()).length
   };
+  const ownerOpenReports = Object.values(marketReports)
+    .flat()
+    .filter((report) => report.status === "open")
+    .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))
+    .slice(0, 12);
   const ownerFeeRows = knownSettlementTokens.map((asset) => ({
     ...asset,
     amount:
@@ -5166,6 +5202,10 @@ export default function App() {
   }, [marketEvidence]);
 
   useEffect(() => {
+    window.localStorage.setItem(MARKET_REPORTS_KEY, JSON.stringify(marketReports));
+  }, [marketReports]);
+
+  useEffect(() => {
     window.localStorage.setItem(LOCAL_CLAIMED_MARKETS_KEY, JSON.stringify(locallyClaimedMarkets.slice(-400)));
   }, [locallyClaimedMarkets]);
 
@@ -5222,6 +5262,22 @@ export default function App() {
   }, [account, activeNotificationItems]);
 
   useEffect(() => {
+    let canceled = false;
+    fetchIndexerJson<SocialReportsResponse>("/api/social/reports").then((response) => {
+      if (canceled || !response?.reports) return;
+      const next: Record<string, MarketReport[]> = {};
+      response.reports.forEach((report) => {
+        const key = String(report.marketId);
+        next[key] = [report, ...(next[key] || [])].slice(0, 40);
+      });
+      setMarketReports((current) => ({ ...current, ...next }));
+    });
+    return () => {
+      canceled = true;
+    };
+  }, []);
+
+  useEffect(() => {
     if (selectedMarketId === null) return;
     let canceled = false;
     fetchIndexerJson<SocialMarketResponse>(`/api/social/markets/${selectedMarketId}`).then((response) => {
@@ -5231,6 +5287,9 @@ export default function App() {
       }
       if (response.evidence) {
         setMarketEvidence((current) => ({ ...current, [String(selectedMarketId)]: response.evidence ?? [] }));
+      }
+      if (response.reports) {
+        setMarketReports((current) => ({ ...current, [String(selectedMarketId)]: response.reports ?? [] }));
       }
     });
     fetchIndexerJson<ResolutionReceiptResponse>(`/api/resolutions/${selectedMarketId}`).then((response) => {
@@ -6525,6 +6584,70 @@ export default function App() {
     [account, evidenceDrafts, setNotice]
   );
 
+  const reportMarketIssue = useCallback(
+    async (marketId: number) => {
+      if (!account) {
+        setNotice("Connect wallet to report a market.");
+        return;
+      }
+      const draft = reportDrafts[marketId] || { reason: "", url: "" };
+      const reason = draft.reason.trim().replace(/\s+/g, " ").slice(0, 520);
+      const url = draft.url.trim();
+      if (reason.length < 8) {
+        setNotice("Add a clear reason before reporting this market.");
+        return;
+      }
+      if (url && !/^https?:\/\//i.test(url)) {
+        setNotice("Report URL must start with http:// or https://.");
+        return;
+      }
+      const saveReportNotice = () => {
+        const wallet = account.toLowerCase();
+        const item: NotificationHistoryItem = {
+          key: `${wallet}:report:${marketId}:${Date.now()}`,
+          wallet,
+          type: "report",
+          label: "Market reported",
+          title: shortQuestion(markets.find((market) => market.id === marketId)?.question || "Market report"),
+          detail: reason,
+          marketId,
+          createdAt: Math.floor(Date.now() / 1000)
+        };
+        setNotificationHistory((current) => [item, ...current].slice(0, 500));
+      };
+
+      const response = await postIndexerJson<{ report: MarketReport; reports: MarketReport[] }>(
+        `/api/social/markets/${marketId}/reports`,
+        { reporter: account, reason, url }
+      );
+      if (response?.reports) {
+        setMarketReports((current) => ({ ...current, [String(marketId)]: response.reports }));
+        setReportDrafts((current) => ({ ...current, [marketId]: { reason: "", url: "" } }));
+        saveReportNotice();
+        setNotice("Market report sent to owner review.");
+        return;
+      }
+
+      const report: MarketReport = {
+        id: `${marketId}-${Date.now()}`,
+        marketId,
+        reporter: account,
+        reason,
+        url,
+        status: "open",
+        createdAt: new Date().toISOString()
+      };
+      setMarketReports((current) => ({
+        ...current,
+        [String(marketId)]: [report, ...(current[String(marketId)] || [])].slice(0, 40)
+      }));
+      setReportDrafts((current) => ({ ...current, [marketId]: { reason: "", url: "" } }));
+      saveReportNotice();
+      setNotice("Market report saved locally. Owner will see it after indexer sync is available.");
+    },
+    [account, markets, reportDrafts, setNotice]
+  );
+
   const askAuraForMarketDraft = useCallback(async () => {
     const idea = createForm.question.trim();
     if (idea.length < 4) {
@@ -6622,14 +6745,19 @@ export default function App() {
     const unresolvedSourceNames = rawSources
       .filter((source) => !isValidHttpUrl(normalizeReferenceUrl(source)))
       .slice(0, 3);
+    const draftDeadlineContext = `${aiMarketDraft.question || ""} ${aiMarketDraft.resolutionCriteria || ""}`;
+    const knownTournamentDeadline = isSportsTournamentWinnerQuestion(draftDeadlineContext)
+      ? inferKnownEventDeadlineFromText(draftDeadlineContext)
+      : "";
     const inferredCloseTime =
+      knownTournamentDeadline ||
       parseAuraUtcCloseTimeFromText(aiMarketDraft.question || "") ||
       parseAuraUtcCloseTimeFromText(aiMarketDraft.resolutionCriteria || "") ||
-      inferKnownEventDeadlineFromText(`${aiMarketDraft.question || ""} ${aiMarketDraft.resolutionCriteria || ""}`) ||
+      inferKnownEventDeadlineFromText(draftDeadlineContext) ||
       parseAuraUtcCloseTimeFromText(aiMarketDraft.closeTime || "");
     const contextFallbackSource = defaultSourceByContext(
       aiMarketDraft.category,
-      `${aiMarketDraft.question || ""} ${aiMarketDraft.resolutionCriteria || ""}`
+      draftDeadlineContext
     );
     setCreateForm((current) => ({
       ...current,
@@ -7739,8 +7867,23 @@ export default function App() {
           market.id === marketId ? { ...market, claimed: true, potentialPayout: 0n } : market
         )
       );
+      setNotificationHistory((current) => {
+        const claimedAt = Math.floor(Date.now() / 1000);
+        const next = current.map((item) =>
+          item.wallet === accountKey && item.type === "claim" && item.marketId === marketId
+            ? { ...item, detail: `${item.detail} Claimed.`, claimedAt }
+            : item
+        );
+        if (account) {
+          const walletRows = next.filter((item) => item.wallet === accountKey);
+          void postIndexerJson<SocialNotificationsResponse>(`/api/social/profiles/${account}/notifications`, {
+            notifications: walletRows
+          });
+        }
+        return next;
+      });
     },
-    [accountKey]
+    [account, accountKey]
   );
 
   const refreshClaimEligibility = useCallback(
@@ -9498,6 +9641,8 @@ export default function App() {
     const isFollowingCreator = followedCreators.includes(creatorKey);
     const selectedEvidenceRows = marketEvidence[String(selectedMarket.id)] || [];
     const selectedCommentRows = marketComments[String(selectedMarket.id)] || [];
+    const selectedReportRows = marketReports[String(selectedMarket.id)] || [];
+    const selectedOpenReportRows = selectedReportRows.filter((report) => report.status === "open");
     const hasWalletAccess = Boolean(account);
     const aiResolutionReport = aiResolutionReports[selectedMarket.id];
     const aiResolutionReceipt = aiResolutionReceipts[String(selectedMarket.id)];
@@ -9741,6 +9886,7 @@ export default function App() {
         return searchable.includes(marketWalletQuery);
       });
     const selectedEvidenceDraft = evidenceDrafts[selectedMarket.id] || { title: "", url: "", notes: "" };
+    const selectedReportDraft = reportDrafts[selectedMarket.id] || { reason: "", url: "" };
     const sourceLinks = [selectedRuleSource, selectedRuleFallback]
       .filter((url, index, rows) => url && rows.indexOf(url) === index)
       .slice(0, 3);
@@ -9749,7 +9895,7 @@ export default function App() {
       `This market tracks whether ${selectedMarket.question.replace(/\?+$/g, "")}. The resolution below defines the source, timestamp, and outcome conditions.`;
     const detailTabs: Array<{ key: MarketDetailTab; label: string; count?: number }> = [
       { key: "overview", label: "Overview" },
-      { key: "comments", label: "Comments", count: selectedCommentRows.length + selectedEvidenceRows.length },
+      { key: "comments", label: "Comments", count: selectedCommentRows.length + selectedEvidenceRows.length + selectedReportRows.length },
       { key: "activity", label: "Activity", count: selectedMarketActivities.length },
       { key: "holders", label: "Top Holders", count: topTraderRows.length }
     ];
@@ -10793,6 +10939,65 @@ export default function App() {
                   ))}
                 </div>
               </section>
+
+              <section className="market-discussion-card market-report-card">
+                <div className="panel-heading">
+                  <div>
+                    <span className="section-label">Report market</span>
+                    <h3>Issue queue</h3>
+                  </div>
+                  <span>{selectedOpenReportRows.length} open</span>
+                </div>
+                {selectedOpenReportRows.length > 0 && (
+                  <div className="market-report-warning">
+                    This market has open user reports. Review source, rule, and timing before adding more stake.
+                  </div>
+                )}
+                <div className="evidence-composer">
+                  <textarea
+                    disabled={!hasWalletAccess}
+                    placeholder={hasWalletAccess ? "Explain what is wrong: bad date, wrong source, invalid team, ambiguous rule..." : "Connect wallet to report"}
+                    value={selectedReportDraft.reason}
+                    onChange={(event) =>
+                      setReportDrafts((current) => ({
+                        ...current,
+                        [selectedMarket.id]: { ...(current[selectedMarket.id] || { reason: "", url: "" }), reason: event.target.value }
+                      }))
+                    }
+                  />
+                  <input
+                    disabled={!hasWalletAccess}
+                    placeholder="Optional source link"
+                    value={selectedReportDraft.url}
+                    onChange={(event) =>
+                      setReportDrafts((current) => ({
+                        ...current,
+                        [selectedMarket.id]: { ...(current[selectedMarket.id] || { reason: "", url: "" }), url: event.target.value }
+                      }))
+                    }
+                  />
+                  <button disabled={!hasWalletAccess} onClick={() => reportMarketIssue(selectedMarket.id)} type="button">
+                    Send report
+                  </button>
+                </div>
+                <div className="evidence-list">
+                  {selectedReportRows.length === 0 && <span>No reports for this market.</span>}
+                  {selectedReportRows.map((report) => (
+                    <article key={report.id}>
+                      <div>
+                        <strong>{report.status === "open" ? "Open report" : report.status}</strong>
+                        <small>{displayNameForAddress(report.reporter)} / {isoDateLabel(report.createdAt)}</small>
+                      </div>
+                      <p>{report.reason}</p>
+                      {report.url && (
+                        <a href={report.url} target="_blank" rel="noreferrer">
+                          {urlHostLabel(report.url)}
+                        </a>
+                      )}
+                    </article>
+                  ))}
+                </div>
+              </section>
             </div>
           )}
 
@@ -11670,12 +11875,13 @@ export default function App() {
               {visibleNotificationHistory.map((item) => {
                 const historyMarketId = item.marketId;
                 const market = historyMarketId !== undefined ? markets.find((row) => row.id === historyMarketId) : undefined;
-                const activeClaim = market && claimNotifications.some((row) => row.id === market.id);
+                const activeClaim = !item.claimedAt && market && claimNotifications.some((row) => row.id === market.id);
                 return (
                   <article className="notification-card notification-history-card" key={item.key}>
                     <span>{item.label}</span>
                     <strong>{historyMarketId !== undefined ? `#${historyMarketId} ${item.title}` : item.title}</strong>
                     <small>{item.detail}</small>
+                    {item.claimedAt && <small className="notification-time">Handled {closeDate(item.claimedAt)}</small>}
                     <small className="notification-time">Created {closeDate(item.createdAt)}</small>
                     <div className="notification-actions">
                       {historyMarketId !== undefined && (
@@ -11753,6 +11959,28 @@ export default function App() {
                         <div><span>Public profiles</span><strong>{ownerUsageMetrics.publicProfiles}</strong></div>
                         <div><span>Comments</span><strong>{ownerUsageMetrics.comments}</strong></div>
                         <div><span>Evidence links</span><strong>{ownerUsageMetrics.evidence}</strong></div>
+                        <div><span>Open reports</span><strong>{ownerUsageMetrics.reports}</strong></div>
+                      </div>
+                    </article>
+
+                    <article className="owner-panel owner-panel-wide">
+                      <div className="panel-heading">
+                        <div>
+                          <span className="section-label">Market reports</span>
+                          <h3>{ownerOpenReports.length} open reports</h3>
+                        </div>
+                      </div>
+                      <div className="oracle-reputation-list">
+                        {ownerOpenReports.length === 0 && <span>No open market reports.</span>}
+                        {ownerOpenReports.map((report) => {
+                          const reportedMarket = markets.find((market) => market.id === report.marketId);
+                          return (
+                            <button className="similar-market-row" key={report.id} onClick={() => openMarket(report.marketId)} type="button">
+                              <strong>#{report.marketId} {shortQuestion(reportedMarket?.question || "Market report")}</strong>
+                              <small>{displayNameForAddress(report.reporter)} / {isoDateLabel(report.createdAt)} / {report.reason}</small>
+                            </button>
+                          );
+                        })}
                       </div>
                     </article>
 

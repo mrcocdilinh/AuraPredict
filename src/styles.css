@@ -6216,7 +6216,22 @@ label {
 
 .market-comments-grid {
   align-items: start;
-  grid-template-columns: minmax(320px, 0.95fr) minmax(360px, 1.05fr);
+  grid-template-columns: repeat(3, minmax(260px, 1fr));
+}
+
+.market-report-card {
+  border-color: #ffd0a8;
+}
+
+.market-report-warning {
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  border-radius: 8px;
+  color: #9a3412;
+  font-size: 0.78rem;
+  font-weight: 850;
+  line-height: 1.4;
+  padding: 9px 10px;
 }
 
 .comment-composer,
@@ -8355,6 +8370,16 @@ label {
 [data-theme="dark"] .aura-breakdown-grid div {
   background: #0b1020;
   border-color: #202a3f;
+}
+
+[data-theme="dark"] .market-report-card {
+  border-color: #8a4b1f;
+}
+
+[data-theme="dark"] .market-report-warning {
+  background: rgba(154, 52, 18, 0.16);
+  border-color: #8a4b1f;
+  color: #fdba74;
 }
 
 [data-theme="dark"] .market-detail-tabs {
