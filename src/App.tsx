@@ -2137,6 +2137,25 @@ function combineUtcDateTimeParts(datePart: string, timePart: string) {
   return `${date} ${time}`;
 }
 
+function inferKnownEventDeadlineFromText(value: string) {
+  const text = value.toLowerCase();
+  if (
+    /\b(?:2026\s+)?fifa\s+world\s+cup\b|\bworld\s+cup\s+2026\b/.test(text) &&
+    /\bwin\b|\bwinner\b|\bchampion\b|\bchampionship\b|\bvô địch\b/.test(text)
+  ) {
+    return "2026-07-19 23:59";
+  }
+  return "";
+}
+
+function isSportsTournamentWinnerQuestion(value: string) {
+  const text = value.toLowerCase();
+  return (
+    /\bwin\b|\bwinner\b|\bchampion\b|\bchampionship\b|\bvô địch\b/.test(text) &&
+    /\bworld cup\b|\bfifa\b|\bclub world cup\b|\btournament\b|\bleague\b|\bcup\b|\bchampions league\b|\bnba finals\b|\bsuper bowl\b|\bgrand slam\b/.test(text)
+  );
+}
+
 function parseAuraUtcCloseTimeFromText(value: string) {
   const text = value.trim();
   if (!text) return "";
@@ -2207,6 +2226,9 @@ function parseAuraUtcCloseTimeFromText(value: string) {
     return combineUtcDateTimeParts(datePart, "23:59");
   }
 
+  const knownEventDeadline = inferKnownEventDeadlineFromText(text);
+  if (knownEventDeadline) return knownEventDeadline;
+
   return "";
 }
 
@@ -2238,7 +2260,8 @@ function marketQualitySnapshot(
   form: CreateFormState,
   draft: AiMarketDraft | null,
   hasRuleTimeMismatch: boolean,
-  hasResolutionTime: boolean
+  hasResolutionTime: boolean,
+  needsVerifiedEventDeadline: boolean
 ) {
   let score = 35;
   const signals: Array<{ label: string; detail: string; state: "good" | "warn" | "bad" }> = [];
@@ -2285,6 +2308,15 @@ function marketQualitySnapshot(
   if (hasRuleTimeMismatch) {
     score -= 25;
     signals.push({ label: "Rule time", detail: "Form time and rule time do not match.", state: "bad" });
+  }
+
+  if (needsVerifiedEventDeadline) {
+    score -= 30;
+    signals.push({
+      label: "Event date",
+      detail: "Tournament winner markets need the official final/end date before launch.",
+      state: "bad"
+    });
   }
 
   if (fallbackOk) {
@@ -6507,7 +6539,7 @@ export default function App() {
       const response = await postIndexerJson<{ draft: AiMarketDraft }>("/api/ai/market-draft", {
         idea,
         category: createForm.category,
-        closeTime: createForm.closeTime
+        closeTime: inferKnownEventDeadlineFromText(idea) || createForm.closeTime
       });
       if (!response?.draft) throw new Error("Aura Agent did not return a draft.");
       setAiMarketDraft(response.draft);
@@ -6531,15 +6563,21 @@ export default function App() {
       (isStablecoinContractVersion(contractVersion) ? createForm.resolutionTime : createForm.closeTime) &&
       ruleReferenceCloseTime !== (isStablecoinContractVersion(contractVersion) ? createForm.resolutionTime : createForm.closeTime)
   );
+  const needsVerifiedEventDeadline = Boolean(
+    isSportsTournamentWinnerQuestion(`${createForm.question} ${createForm.resolutionRule}`) &&
+      !parseResolutionReferenceTime(createForm.resolutionRule) &&
+      !inferKnownEventDeadlineFromText(`${createForm.question} ${createForm.resolutionRule}`)
+  );
   const createMarketQuality = useMemo(
     () =>
       marketQualitySnapshot(
         createForm,
         aiMarketDraft,
         hasRuleCloseMismatch,
-        isStablecoinContractVersion(contractVersion) ? Boolean(createForm.resolutionTime.trim()) : Boolean(createForm.closeTime.trim())
+        isStablecoinContractVersion(contractVersion) ? Boolean(createForm.resolutionTime.trim()) : Boolean(createForm.closeTime.trim()),
+        needsVerifiedEventDeadline
       ),
-    [aiMarketDraft, contractVersion, createForm, hasRuleCloseMismatch]
+    [aiMarketDraft, contractVersion, createForm, hasRuleCloseMismatch, needsVerifiedEventDeadline]
   );
   const createAuraStatusLabel =
     auraCreateStatus === "ready"
@@ -6587,6 +6625,7 @@ export default function App() {
     const inferredCloseTime =
       parseAuraUtcCloseTimeFromText(aiMarketDraft.question || "") ||
       parseAuraUtcCloseTimeFromText(aiMarketDraft.resolutionCriteria || "") ||
+      inferKnownEventDeadlineFromText(`${aiMarketDraft.question || ""} ${aiMarketDraft.resolutionCriteria || ""}`) ||
       parseAuraUtcCloseTimeFromText(aiMarketDraft.closeTime || "");
     const contextFallbackSource = defaultSourceByContext(
       aiMarketDraft.category,
@@ -13172,6 +13211,11 @@ export default function App() {
                     Close time does not match rule time: {ruleReferenceCloseTime} UTC.
                   </small>
                 )}
+                {needsVerifiedEventDeadline && !isStablecoinContractVersion(contractVersion) && (
+                  <small className="time-format-hint error-hint">
+                    Tournament winner markets need an official final/end timestamp in the rule before launch.
+                  </small>
+                )}
               </label>
               {isStablecoinContractVersion(contractVersion) && (
                 <label>
@@ -13209,6 +13253,11 @@ export default function App() {
                   {hasRuleCloseMismatch && (
                     <small className="time-format-hint error-hint">
                       Resolution time does not match rule time: {ruleReferenceCloseTime} UTC.
+                    </small>
+                  )}
+                  {needsVerifiedEventDeadline && (
+                    <small className="time-format-hint error-hint">
+                      Tournament winner markets need an official final/end timestamp in the rule before launch.
                     </small>
                   )}
                 </label>
@@ -13333,6 +13382,7 @@ export default function App() {
                   createForm.resolutionRule.trim().length === 0 ||
                   (isStablecoinContractVersion(contractVersion) && createForm.resolutionTime.trim().length === 0) ||
                   hasRuleCloseMismatch ||
+                  needsVerifiedEventDeadline ||
                   !canCreateAfterAura ||
                   (!!aiMarketDraft?.duplicateRisk && aiMarketDraft.duplicateRisk !== "LOW" && !duplicateAcknowledged)
                 }
