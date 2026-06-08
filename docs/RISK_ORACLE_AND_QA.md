@@ -22,6 +22,29 @@ Users should review each market question, source URL, fallback source, resolutio
 
 Before any mainnet or real-value use, AuraPredict needs an independent contract audit, multisig or timelocked owner operations, durable backend storage, production monitoring, and a formally selected oracle/committee process.
 
+## Market Creation Verification Policy
+
+Aura Agent can draft market wording, but new markets should pass deterministic checks before launch:
+
+- Source check: primary source must be a valid `http` or `https` URL. Sports markets should prefer official league/tournament pages or a major fixture source. Stock and crypto markets should use direct market-data or exchange sources.
+- Date check: form close/resolution time must match the timestamp inside the rule. AuraPredict should block date mismatches instead of silently changing the user's date.
+- Stock calendar check: official closing-price stock markets should not use Saturday or Sunday dates. Market holidays still require manual review until a full trading-calendar provider is integrated.
+- Sports fixture check: "next match", group-stage, standings, team participation, qualification, and tournament winner markets need an official fixture, standings, or final/end timestamp. The AI must not infer group membership or schedule from memory.
+- Risk badge check: markets with weak sources, date mismatch, weekend stock close, unknown fixture, open reports, dispute, or authority review should show visible risk badges and appear in the owner queue.
+
+These checks are off-chain controls for V4. They do not pause an already-created market onchain. Emergency cancel, market pause, and onchain reason events are reserved for a future contract version.
+
+## Resolution And Owner Review Policy
+
+AuraPredict settlement should follow the shared market rule, source URLs, onchain timing, and available evidence. AI summaries are decision support only.
+
+- Creator/resolver proposals should include evidence or a public source basis.
+- Users with funded positions can dispute during the dispute window when the proposed result conflicts with the rule or evidence.
+- Owner/authority review is required when a formal dispute exists, the authority flag is set, AI evidence is insufficient, or AI and resolver proposal conflict.
+- The owner should compare the market rule, primary source, fallback source, Aura receipt, oracle proposal, reports, and dispute notes before finalizing.
+- If evidence cannot fairly distinguish YES from NO, Cancel/Refund is preferred over guessing.
+- Review reasons should be visible in the app for owner-only queues and public settlement context where supported by current off-chain state.
+
 ## Oracle Committee And Reputation Policy
 
 The production direction is to move from a single authority toward a committee or adapter-based authority set. Candidate oracle/committee operators should be evaluated by:
@@ -87,6 +110,16 @@ Run:
 ```bash
 npm run test:e2e
 ```
+
+## Production API Smoke Checklist
+
+After each backend deploy or PM2 restart, run:
+
+```bash
+npm run smoke:api
+```
+
+The smoke check verifies `/health`, `/api/stats`, `/api/social/reports`, and `/api/oracle-reputation`. A failed `/api/social/reports` check usually means the production indexer was not restarted after deploying social/report routes.
 
 ## Unified Balance Manual QA Checklist
 

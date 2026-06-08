@@ -4,7 +4,7 @@ import { createServer } from "node:http";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { createPublicClient, createWalletClient, encodeAbiParameters, fallback, formatUnits, http, isAddress, keccak256, stringToHex } from "viem";
+import { createPublicClient, createWalletClient, encodeAbiParameters, fallback, formatUnits, http, isAddress, keccak256, stringToHex, webSocket } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { arcPredictionMarketV2Abi, arcPredictionMarketV3Abi, arcPredictionMarketV4Abi } from "./arcPredictionMarketAbi.mjs";
 
@@ -28,6 +28,17 @@ const RPC_URLS = (
 const PORT = Number(process.env.PORT || process.env.AURA_INDEXER_PORT || 8787);
 const HOST = process.env.AURA_INDEXER_HOST || (process.env.PORT ? "0.0.0.0" : "127.0.0.1");
 const POLL_MS = Number(process.env.AURA_INDEXER_POLL_MS || 12_000);
+const WS_URLS = (
+  process.env.AURA_INDEXER_WS_URLS ||
+  process.env.AURA_INDEXER_WS_URL ||
+  process.env.ARC_WS_URL ||
+  "wss://rpc.testnet.arc.network"
+)
+  .split(",")
+  .map((url) => url.trim())
+  .filter(Boolean);
+const REALTIME_SYNC_ENABLED = String(process.env.AURA_INDEXER_WS_ENABLED || "1").trim() !== "0";
+const REALTIME_SYNC_DEBOUNCE_MS = Math.max(100, Number(process.env.AURA_INDEXER_WS_DEBOUNCE_MS || 750) || 750);
 const START_BLOCK = ACTIVE_V4_DEPLOYMENT_BLOCK;
 const CHUNK_SIZE = BigInt(process.env.AURA_INDEXER_CHUNK_SIZE || 9_000);
 const AI_PROVIDER = String(process.env.AI_PROVIDER || "").trim().toLowerCase();
@@ -146,6 +157,13 @@ const client = createPublicClient({
     retryDelay: 500
   })
 });
+const realtimeClient =
+  REALTIME_SYNC_ENABLED && WS_URLS.length > 0
+    ? createPublicClient({
+        chain: ARC_CHAIN,
+        transport: webSocket(WS_URLS[0], { retryCount: 3, retryDelay: 1_000, timeout: 10_000 })
+      })
+    : null;
 const circleAgentWalletAddress = isAddress(CIRCLE_AGENT_WALLET_ADDRESS) ? CIRCLE_AGENT_WALLET_ADDRESS : "";
 const resolverAccount = RESOLVER_PRIVATE_KEY ? privateKeyToAccount(RESOLVER_PRIVATE_KEY) : null;
 const resolverSignerAddress = resolverUsesCircleWallet() ? circleAgentWalletAddress : resolverAccount?.address || "";
@@ -223,6 +241,17 @@ function emptyState() {
     deploymentBlock: START_BLOCK > 0n ? START_BLOCK.toString() : "0",
     lastIndexedBlock: START_BLOCK > 0n ? (START_BLOCK - 1n).toString() : "0",
     updatedAt: null,
+    indexer: {
+      mode: REALTIME_SYNC_ENABLED && WS_URLS.length > 0 ? "websocket+polling" : "polling",
+      pollMs: POLL_MS,
+      wsEnabled: REALTIME_SYNC_ENABLED && WS_URLS.length > 0,
+      wsUrl: WS_URLS[0] || "",
+      wsStatus: REALTIME_SYNC_ENABLED && WS_URLS.length > 0 ? "starting" : "disabled",
+      wsLastBlock: "0",
+      wsLastEventAt: null,
+      wsLastError: "",
+      lastSyncReason: "startup"
+    },
     owner: ZERO_ADDRESS,
     contractVersion: "unknown",
     resolutionAuthority: ZERO_ADDRESS,
@@ -285,7 +314,27 @@ function emptyState() {
 
 let state = emptyState();
 let syncPromise = null;
+let scheduledSyncTimer = null;
 const blockTimestampCache = new Map();
+
+function indexerRuntimeState() {
+  state.indexer ??= emptyState().indexer;
+  state.indexer.mode = REALTIME_SYNC_ENABLED && WS_URLS.length > 0 ? "websocket+polling" : "polling";
+  state.indexer.pollMs = POLL_MS;
+  state.indexer.wsEnabled = REALTIME_SYNC_ENABLED && WS_URLS.length > 0;
+  state.indexer.wsUrl = WS_URLS[0] || "";
+  return state.indexer;
+}
+
+function scheduleSync(reason, delayMs = 0) {
+  const runtime = indexerRuntimeState();
+  runtime.lastSyncReason = reason;
+  if (scheduledSyncTimer) return;
+  scheduledSyncTimer = setTimeout(() => {
+    scheduledSyncTimer = null;
+    syncOnce().catch((error) => console.error(`[indexer] ${reason} sync failed:`, error));
+  }, Math.max(0, delayMs));
+}
 
 async function loadState() {
   try {
@@ -293,6 +342,7 @@ async function loadState() {
     const saved = JSON.parse(raw);
     if (saved.contractAddress?.toLowerCase() === CONTRACT_ADDRESS.toLowerCase()) {
       state = { ...emptyState(), ...saved };
+      indexerRuntimeState();
     }
   } catch {
     state = emptyState();
@@ -3131,8 +3181,10 @@ function marketDraftPrompt(body) {
       "If the user idea contains an explicit date or deadline, preserve that date in question, closeTime, and resolutionCriteria. Do not replace it with Preferred close time unless the user provided no date.",
       "For sports tournament winner/champion questions, set closeTime to the official final match date or tournament end date, not the short Preferred close time. For the 2026 FIFA World Cup, the final is on 2026-07-19; use that as the resolution date unless the user asks a different World Cup market.",
       "For sports fixtures or 'next match' questions, do not assume a team participates or has a next match in that competition. If the fixture is not known from the user-provided text/source context, rewrite creatorNote and riskFlags to require official fixture verification before launch.",
+      "For sports group-stage, standings, qualification, or team-participation questions, require an official competition page or fixture/standings source. Do not infer group membership or schedule from memory.",
       "If a sports tournament winner/champion question has no explicit deadline and you cannot identify the final/end date from reliable context, set riskFlags to include 'official final date required' and do not use the short Preferred close time as the final deadline.",
-      "For stock market questions, avoid creating an official closing-price rule on a weekend or market holiday. Prefer a 'before 23:59 UTC on DATE' threshold rule when the user used 'before/by', or warn in creatorNote if the requested date is not a trading day.",
+      "For stock market questions, avoid creating an official closing-price rule on a weekend or market holiday. If the requested date is not a trading day, keep the user's date visible and add riskFlags including 'non-trading day'. Do not silently replace the date.",
+      "For source suggestions, prefer direct official or market-data URLs over generic homepages. If only a generic or uncertain source is available, add riskFlags including 'source verification required'.",
       "Only set duplicateRisk MEDIUM or HIGH when a similar market has the same concrete subject/entity and substantially overlapping outcome window.",
       "Do not raise duplicateRisk just because two markets share a metric such as 10K users, active addresses, volume, or the same category.",
       "Broad-scope markets such as 'any Arc dApp' are not duplicates of a named project market unless the named project already satisfies the same exact broad market outcome."
@@ -3515,6 +3567,7 @@ async function resolveStartBlock(latestBlock) {
 async function syncOnce() {
   if (syncPromise) return syncPromise;
   syncPromise = (async () => {
+    const runtime = indexerRuntimeState();
     if (!CONTRACT_ADDRESS || !isAddress(CONTRACT_ADDRESS)) {
       throw new Error("Missing AURA_INDEXER_CONTRACT_ADDRESS or VITE_PREDICTION_MARKET_ADDRESS.");
     }
@@ -3541,6 +3594,7 @@ async function syncOnce() {
     if (RESOLUTION_AUTO_RUN) {
       await runAutoResolutionSweep();
     }
+    runtime.lastSyncedAt = nowIso();
     state.updatedAt = nowIso();
     await saveState();
     return state;
@@ -3606,7 +3660,14 @@ async function route(req, res) {
         chainId: state.chainId,
         updatedAt: state.updatedAt,
         lastIndexedBlock: state.lastIndexedBlock,
-        marketCount: state.marketCount
+        marketCount: state.marketCount,
+        indexer: indexerRuntimeState(),
+        features: {
+          socialReports: true,
+          socialNotifications: true,
+          oracleReceipts: true,
+          realtimeSync: Boolean(realtimeClient)
+        }
       });
       return;
     }
@@ -4044,6 +4105,43 @@ async function route(req, res) {
   }
 }
 
+function startRealtimeSync() {
+  const runtime = indexerRuntimeState();
+  if (!realtimeClient) {
+    runtime.wsStatus = "disabled";
+    return;
+  }
+
+  try {
+    const unwatch = realtimeClient.watchBlockNumber({
+      emitOnBegin: false,
+      onBlockNumber(blockNumber) {
+        const runtimeState = indexerRuntimeState();
+        runtimeState.wsStatus = "connected";
+        runtimeState.wsLastBlock = blockNumber.toString();
+        runtimeState.wsLastEventAt = nowIso();
+        runtimeState.wsLastError = "";
+        if (toBigint(state.lastIndexedBlock) < blockNumber) {
+          scheduleSync("websocket-block", REALTIME_SYNC_DEBOUNCE_MS);
+        }
+      },
+      onError(error) {
+        const runtimeState = indexerRuntimeState();
+        runtimeState.wsStatus = "error";
+        runtimeState.wsLastError = error instanceof Error ? error.message : String(error);
+        console.error("[indexer] websocket block watcher failed:", error);
+      }
+    });
+    runtime.wsStatus = "connected";
+    console.log(`[indexer] websocket sync enabled via ${WS_URLS[0]}`);
+    return unwatch;
+  } catch (error) {
+    runtime.wsStatus = "error";
+    runtime.wsLastError = error instanceof Error ? error.message : String(error);
+    console.error("[indexer] websocket sync could not start:", error);
+  }
+}
+
 async function main() {
   await loadState();
   try {
@@ -4063,8 +4161,10 @@ async function main() {
     console.log(`[indexer] AuraPredict indexer listening on http://${HOST}:${PORT}`);
   });
 
+  startRealtimeSync();
+
   setInterval(() => {
-    syncOnce().catch((error) => console.error("[indexer] sync failed:", error));
+    scheduleSync("polling");
   }, POLL_MS);
 }
 

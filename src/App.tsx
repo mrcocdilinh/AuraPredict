@@ -499,6 +499,13 @@ type AiMarketDraft = {
   creatorNote?: string;
 };
 
+type MarketRiskSeverity = "info" | "warn" | "bad";
+type MarketRiskFlag = {
+  label: string;
+  detail: string;
+  severity: MarketRiskSeverity;
+};
+
 type AiResolutionReport = {
   suggestedOutcome?: string;
   confidence?: number;
@@ -711,6 +718,7 @@ type IndexedSnapshot = {
   activities: ActivityItem[];
   stats: ProjectStats | null;
   total: number;
+  health?: LandingHealth | null;
 };
 
 type LandingHealth = {
@@ -718,6 +726,18 @@ type LandingHealth = {
   updatedAt?: string | null;
   lastIndexedBlock?: string;
   marketCount?: number;
+  indexer?: {
+    mode?: string;
+    pollMs?: number;
+    wsEnabled?: boolean;
+    wsStatus?: string;
+    wsLastBlock?: string;
+    wsLastEventAt?: string | null;
+    wsLastError?: string;
+    lastSyncReason?: string;
+    lastSyncedAt?: string;
+  };
+  features?: Record<string, boolean>;
 };
 
 type ContractEventRow = {
@@ -1256,10 +1276,11 @@ function normalizeProfileUsername(value: string) {
 }
 
 async function loadIndexedSnapshot(): Promise<IndexedSnapshot | null> {
-  const [marketsResponse, activityResponse, statsResponse] = await Promise.all([
+  const [marketsResponse, activityResponse, statsResponse, healthResponse] = await Promise.all([
     fetchIndexerJson<{ markets: IndexedMarket[]; total: number }>("/api/markets"),
     fetchIndexerJson<{ activities: IndexedActivity[] }>("/api/activity?limit=2000"),
-    fetchIndexerJson<{ stats: IndexedProjectStats }>("/api/stats")
+    fetchIndexerJson<{ stats: IndexedProjectStats }>("/api/stats"),
+    fetchIndexerJson<LandingHealth>("/health")
   ]);
 
   if (!marketsResponse?.markets?.length) return null;
@@ -1274,7 +1295,8 @@ async function loadIndexedSnapshot(): Promise<IndexedSnapshot | null> {
     markets,
     activities,
     stats: statsResponse?.stats ? indexedStatsToProjectStats(statsResponse.stats) : null,
-    total: marketsResponse.total || markets.length
+    total: marketsResponse.total || markets.length,
+    health: healthResponse?.ok ? healthResponse : null
   };
 }
 
@@ -1725,9 +1747,18 @@ function normalizeReferenceUrl(value: string) {
   if (lower.includes("coingecko")) return "https://www.coingecko.com";
   if (lower.includes("coinmarketcap")) return "https://coinmarketcap.com";
   if (lower.includes("tradingview")) return "https://www.tradingview.com";
+  if (lower.includes("yahoo finance")) return "https://finance.yahoo.com";
+  if (lower.includes("nasdaq")) return "https://www.nasdaq.com";
+  if (lower.includes("nyse")) return "https://www.nyse.com";
   if (lower.includes("binance")) return "https://www.binance.com";
   if (lower.includes("coinbase")) return "https://www.coinbase.com";
   if (lower.includes("kraken")) return "https://www.kraken.com";
+  if (lower.includes("fifa")) return "https://www.fifa.com";
+  if (lower.includes("uefa")) return "https://www.uefa.com";
+  if (lower.includes("espn")) return "https://www.espn.com";
+  if (lower.includes("nba")) return "https://www.nba.com";
+  if (lower.includes("mlb")) return "https://www.mlb.com";
+  if (lower.includes("nfl")) return "https://www.nfl.com";
   if (lower.includes("reuters")) return "https://www.reuters.com";
   if (lower.includes("associated press") || lower === "ap" || lower.includes(" ap ")) return "https://apnews.com";
   if (lower.includes("bbc")) return "https://www.bbc.com/news";
@@ -2271,6 +2302,186 @@ function parseResolutionReferenceTime(value: string) {
   return parseAuraUtcCloseTimeFromText(value);
 }
 
+function utcInputFromUnixSeconds(value?: number) {
+  if (!value || !Number.isFinite(value)) return "";
+  return utcDateTimeInputValue(new Date(value * 1000));
+}
+
+function utcInputIsWeekend(value: string) {
+  const parts = parseUtcDateTimeParts(value);
+  if (!parts) return false;
+  const [year, month, day] = parts.date.split("-").map(Number);
+  const weekday = new Date(Date.UTC(year, month - 1, day)).getUTCDay();
+  return weekday === 0 || weekday === 6;
+}
+
+function hostFromSource(value: string) {
+  const normalized = normalizeReferenceUrl(value);
+  if (!isValidHttpUrl(normalized)) return "";
+  try {
+    return new URL(normalized).hostname.toLowerCase().replace(/^www\./, "");
+  } catch {
+    return "";
+  }
+}
+
+function isStockMarketContext(value: string) {
+  return /\b(?:stock|shares?|equity|nasdaq|nyse|official closing price|market close|yahoo finance|finance\.yahoo|tsla|tesla|nvda|aapl|msft|googl?|amzn|meta)\b/i.test(value);
+}
+
+function isSportsMarketContext(category: string | undefined, value: string) {
+  return (category || "").toLowerCase() === "sports" || /\b(?:sports?|match|fixture|group stage|fifa|uefa|nba|nfl|mlb|nhl|world cup|club world cup|premier league|champions league)\b/i.test(value);
+}
+
+function sourceConfidenceFlag(category: string | undefined, source: string, text: string): MarketRiskFlag | null {
+  const normalizedSource = normalizeReferenceUrl(source);
+  if (!isValidHttpUrl(normalizedSource)) {
+    return {
+      label: "Source weak",
+      detail: "Primary source must be a valid http or https URL.",
+      severity: "bad"
+    };
+  }
+
+  const host = hostFromSource(normalizedSource);
+  const sportsHosts = ["fifa.com", "uefa.com", "espn.com", "nba.com", "nfl.com", "mlb.com", "nhl.com", "olympics.com"];
+  const marketHosts = ["finance.yahoo.com", "nasdaq.com", "nyse.com", "sec.gov", "marketwatch.com", "bloomberg.com", "reuters.com"];
+  const cryptoHosts = ["coingecko.com", "coinmarketcap.com", "binance.com", "coinbase.com", "kraken.com"];
+  const textValue = text.toLowerCase();
+
+  if (isSportsMarketContext(category, text) && !sportsHosts.some((allowed) => host === allowed || host.endsWith(`.${allowed}`))) {
+    return {
+      label: "Source weak",
+      detail: "Sports markets should use an official league/tournament source or a major fixture source.",
+      severity: "warn"
+    };
+  }
+
+  if (isStockMarketContext(text) && !marketHosts.some((allowed) => host === allowed || host.endsWith(`.${allowed}`))) {
+    return {
+      label: "Source weak",
+      detail: "Stock markets should use a market-data or exchange source with the exact quote/rule.",
+      severity: "warn"
+    };
+  }
+
+  if (/\b(?:btc|eth|crypto|token|price)\b/.test(textValue) && !cryptoHosts.some((allowed) => host === allowed || host.endsWith(`.${allowed}`))) {
+    return {
+      label: "Source weak",
+      detail: "Crypto price markets should use a direct market-data source.",
+      severity: "warn"
+    };
+  }
+
+  return null;
+}
+
+function dedupeRiskFlags(flags: MarketRiskFlag[]) {
+  const seen = new Set<string>();
+  return flags.filter((flag) => {
+    const key = `${flag.label}:${flag.detail}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function marketRiskFlagsForInput(input: {
+  question: string;
+  category?: string;
+  resolutionSource?: string;
+  resolutionRule?: string;
+  closeTime?: string;
+  resolutionTime?: string;
+  openReports?: number;
+  authorityReviewRequired?: boolean;
+  disputed?: boolean;
+  proposedAt?: number;
+  outcome?: Outcome;
+  nowSeconds?: number;
+}) {
+  const question = input.question || "";
+  const rule = input.resolutionRule || "";
+  const source = input.resolutionSource || "";
+  const text = `${question} ${rule} ${source}`;
+  const effectiveTime = input.resolutionTime || input.closeTime || "";
+  const ruleTime = parseResolutionReferenceTime(rule);
+  const flags: MarketRiskFlag[] = [];
+
+  const sourceFlag = sourceConfidenceFlag(input.category, source, text);
+  if (sourceFlag) flags.push(sourceFlag);
+
+  if (ruleTime && effectiveTime && ruleTime !== effectiveTime) {
+    flags.push({
+      label: "Date mismatch",
+      detail: `Rule timestamp ${ruleTime} UTC does not match form timestamp ${effectiveTime} UTC.`,
+      severity: "bad"
+    });
+  }
+
+  const referenceTime = ruleTime || effectiveTime;
+  if (isStockMarketContext(text) && referenceTime && utcInputIsWeekend(referenceTime)) {
+    flags.push({
+      label: "Weekend stock close",
+      detail: "Official stock closing-price markets should not resolve on Saturday or Sunday.",
+      severity: "bad"
+    });
+  }
+
+  if (isSportsMarketContext(input.category, text)) {
+    const hasNextMatchLanguage = /\bnext\s+(?:match|game|fixture)\b/i.test(text);
+    const hasFixtureTimestamp = Boolean(ruleTime || parseAuraUtcCloseTimeFromText(question));
+    if (hasNextMatchLanguage && !hasFixtureTimestamp) {
+      flags.push({
+        label: "Unknown fixture",
+        detail: "Next-match markets need the official fixture and kickoff timestamp before launch.",
+        severity: "bad"
+      });
+    }
+
+    if (isSportsTournamentWinnerQuestion(text) && !ruleTime && !inferKnownEventDeadlineFromText(text)) {
+      flags.push({
+        label: "Unknown fixture",
+        detail: "Tournament markets need the official final/end timestamp before launch.",
+        severity: "bad"
+      });
+    }
+  }
+
+  if ((input.openReports || 0) > 0) {
+    flags.push({
+      label: "Needs owner review",
+      detail: `${input.openReports} open user report${input.openReports === 1 ? "" : "s"} for this market.`,
+      severity: "warn"
+    });
+  }
+
+  if (input.disputed || input.authorityReviewRequired) {
+    flags.push({
+      label: "Needs owner review",
+      detail: input.disputed ? "A formal dispute is open." : "Authority review is required before final settlement.",
+      severity: "bad"
+    });
+  }
+
+  if (
+    input.outcome === Outcome.Unresolved &&
+    Number(input.proposedAt || 0) === 0 &&
+    input.resolutionTime &&
+    input.nowSeconds &&
+    parseUtcInputToUnixSeconds(input.resolutionTime) !== null &&
+    Number(parseUtcInputToUnixSeconds(input.resolutionTime)) <= input.nowSeconds
+  ) {
+    flags.push({
+      label: "Needs owner review",
+      detail: "Resolution time has passed and no result has been proposed.",
+      severity: "info"
+    });
+  }
+
+  return dedupeRiskFlags(flags);
+}
+
 function parseUtcInputToUnixSeconds(value: string) {
   if (!value) return null;
   try {
@@ -2285,7 +2496,8 @@ function marketQualitySnapshot(
   draft: AiMarketDraft | null,
   hasRuleTimeMismatch: boolean,
   hasResolutionTime: boolean,
-  needsVerifiedEventDeadline: boolean
+  needsVerifiedEventDeadline: boolean,
+  validationFlags: MarketRiskFlag[] = []
 ) {
   let score = 35;
   const signals: Array<{ label: string; detail: string; state: "good" | "warn" | "bad" }> = [];
@@ -2342,6 +2554,11 @@ function marketQualitySnapshot(
       state: "bad"
     });
   }
+
+  validationFlags.forEach((flag) => {
+    if (flag.severity === "bad") score -= 18;
+    if (flag.severity === "warn") score -= 8;
+  });
 
   if (fallbackOk) {
     score += form.fallbackSource.trim() ? 6 : 0;
@@ -3895,6 +4112,7 @@ export default function App() {
   const [marketDetailTab, setMarketDetailTab] = useState<MarketDetailTab>("overview");
   const [chartHoverRatio, setChartHoverRatio] = useState<number | null>(null);
   const [projectStats, setProjectStats] = useState<ProjectStats | null>(null);
+  const [indexerHealth, setIndexerHealth] = useState<LandingHealth | null>(null);
   const [view, setView] = useState<AppView>("markets");
   const [leaderboardMetric, setLeaderboardMetric] = useState<LeaderboardMetric>("volume");
   const [leaderboardPeriod, setLeaderboardPeriod] = useState<LeaderboardPeriod>("all");
@@ -4047,6 +4265,24 @@ export default function App() {
   );
   const pendingResolutionMarkets = markets.filter(
     (market) => market.outcome === Outcome.Unresolved && resolutionUnlockTime(market) <= nowSeconds
+  );
+  const marketRiskFlagsFor = useCallback(
+    (market: MarketView) =>
+      marketRiskFlagsForInput({
+        question: market.question,
+        category: market.category,
+        resolutionSource: market.metadataURI,
+        resolutionRule: stripRuleMetadata(market.resolutionRule || ""),
+        closeTime: utcInputFromUnixSeconds(market.closeTime),
+        resolutionTime: utcInputFromUnixSeconds(resolutionUnlockTime(market)),
+        openReports: (marketReports[String(market.id)] || []).filter((report) => report.status === "open").length,
+        authorityReviewRequired: Boolean(market.authorityReviewRequired),
+        disputed: market.disputed,
+        proposedAt: market.proposedAt,
+        outcome: market.outcome,
+        nowSeconds
+      }),
+    [marketReports, nowSeconds, resolutionUnlockTime]
   );
   const endedMarkets = markets.filter((market) => market.outcome !== Outcome.Unresolved);
   const liveMarkets = activeMarkets.length;
@@ -4897,6 +5133,40 @@ export default function App() {
     .filter((report) => report.status === "open")
     .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))
     .slice(0, 12);
+  const ownerPendingProposalQueue = pendingResolutionMarkets
+    .filter((market) => market.outcome === Outcome.Unresolved && market.proposedAt === 0)
+    .sort((a, b) => resolutionUnlockTime(a) - resolutionUnlockTime(b))
+    .slice(0, 8);
+  const ownerFinalizationQueue = pendingResolutionMarkets
+    .filter(
+      (market) =>
+        market.outcome === Outcome.Unresolved &&
+        market.proposedAt > 0 &&
+        !market.disputed &&
+        !market.authorityReviewRequired &&
+        market.disputeDeadline > 0 &&
+        market.disputeDeadline <= nowSeconds
+    )
+    .sort((a, b) => a.disputeDeadline - b.disputeDeadline)
+    .slice(0, 8);
+  const ownerEscalatedReviewQueue = pendingResolutionMarkets
+    .filter((market) => market.outcome === Outcome.Unresolved && (market.disputed || Boolean(market.authorityReviewRequired)))
+    .sort((a, b) => (a.disputeDeadline || 0) - (b.disputeDeadline || 0))
+    .slice(0, 8);
+  const ownerFlaggedRiskMarkets = markets
+    .map((market) => ({ market, flags: marketRiskFlagsFor(market).filter((flag) => flag.severity !== "info") }))
+    .filter((row) => row.flags.length > 0 && row.market.outcome === Outcome.Unresolved)
+    .sort((a, b) => {
+      const badDelta = Number(b.flags.some((flag) => flag.severity === "bad")) - Number(a.flags.some((flag) => flag.severity === "bad"));
+      if (badDelta !== 0) return badDelta;
+      return b.market.traderCount - a.market.traderCount || b.market.id - a.market.id;
+    })
+    .slice(0, 8);
+  const ownerQueueCount =
+    ownerPendingProposalQueue.length +
+    ownerFinalizationQueue.length +
+    ownerEscalatedReviewQueue.length +
+    ownerFlaggedRiskMarkets.length;
   const ownerFeeRows = knownSettlementTokens.map((asset) => ({
     ...asset,
     amount:
@@ -4944,6 +5214,9 @@ export default function App() {
     ? `${lastDataRefresh.toLocaleTimeString("en-US", { timeZone: "UTC", hour12: false })} UTC`
     : "Not loaded";
   const indexerSyncText = lastDataRefresh ? timeAgo(Math.floor(lastDataRefresh.getTime() / 1000), currentTime) : "Waiting";
+  const indexerModeText = indexerHealth?.indexer?.wsEnabled
+    ? `WS ${indexerHealth.indexer.wsStatus || "starting"}`
+    : indexerHealth?.indexer?.mode || dataSource;
   const boardTitle =
     view === "ended"
       ? "Ended markets"
@@ -6691,6 +6964,19 @@ export default function App() {
       !parseResolutionReferenceTime(createForm.resolutionRule) &&
       !inferKnownEventDeadlineFromText(`${createForm.question} ${createForm.resolutionRule}`)
   );
+  const createRiskFlags = useMemo(
+    () =>
+      marketRiskFlagsForInput({
+        question: createForm.question,
+        category: createForm.category,
+        resolutionSource: createForm.resolutionSource,
+        resolutionRule: createForm.resolutionRule,
+        closeTime: createForm.closeTime,
+        resolutionTime: isStablecoinContractVersion(contractVersion) ? createForm.resolutionTime : createForm.closeTime
+      }),
+    [contractVersion, createForm]
+  );
+  const hasBlockingMarketRisk = createRiskFlags.some((flag) => flag.severity === "bad");
   const createMarketQuality = useMemo(
     () =>
       marketQualitySnapshot(
@@ -6698,9 +6984,10 @@ export default function App() {
         aiMarketDraft,
         hasRuleCloseMismatch,
         isStablecoinContractVersion(contractVersion) ? Boolean(createForm.resolutionTime.trim()) : Boolean(createForm.closeTime.trim()),
-        needsVerifiedEventDeadline
+        needsVerifiedEventDeadline,
+        createRiskFlags
       ),
-    [aiMarketDraft, contractVersion, createForm, hasRuleCloseMismatch, needsVerifiedEventDeadline]
+    [aiMarketDraft, contractVersion, createForm, createRiskFlags, hasRuleCloseMismatch, needsVerifiedEventDeadline]
   );
   const createAuraStatusLabel =
     auraCreateStatus === "ready"
@@ -7202,6 +7489,7 @@ export default function App() {
         const mergedIndexedRows = mergeMarketRows(indexedRows, markets, indexedTotalCount);
         setMarkets((current) => mergeMarketRows(indexedRows, current, indexedTotalCount));
         setActivities(indexedSnapshot.activities);
+        if (indexedSnapshot.health) setIndexerHealth(indexedSnapshot.health);
         if (indexedSnapshot.stats) {
           setProjectStats({
             ...indexedSnapshot.stats,
@@ -7940,6 +8228,16 @@ export default function App() {
       if (!isValidHttpUrl(resolutionSource)) throw new Error("Resolution source must be a valid http(s) link.");
       if (fallbackSource && !isValidHttpUrl(fallbackSource)) throw new Error("Fallback source must be a valid http(s) link.");
       if (!createForm.closeTime) throw new Error("Close time is required.");
+      const validationFlags = marketRiskFlagsForInput({
+        question,
+        category,
+        resolutionSource,
+        resolutionRule,
+        closeTime: createForm.closeTime,
+        resolutionTime: isStablecoinContractVersion(contractVersion) ? createForm.resolutionTime : createForm.closeTime
+      });
+      const blockingFlag = validationFlags.find((flag) => flag.severity === "bad");
+      if (blockingFlag) throw new Error(`${blockingFlag.label}: ${blockingFlag.detail}`);
       const ruleReferenceTime = parseResolutionReferenceTime(resolutionRule);
       const declaredResolutionInput = isStablecoinContractVersion(contractVersion) ? createForm.resolutionTime : createForm.closeTime;
       if (isStablecoinContractVersion(contractVersion) && !declaredResolutionInput) throw new Error("Resolution time is required.");
@@ -9354,6 +9652,7 @@ export default function App() {
           .join(" ");
         const marketSymbolLabel = marketSymbol(market);
         const statusLabel = marketStatus(market);
+        const marketRiskFlags = marketRiskFlagsFor(market);
         const cardFocusResolution = Boolean(profileResolutionAction || showProfileBondReturn);
         const actionHintTitle = profileResolutionAction
           ? profileResolutionTitle
@@ -9414,6 +9713,15 @@ export default function App() {
               <span>{countdownText(market.closeTime, currentTime)}</span>
               <span>{market.traderCount} traders</span>
             </div>
+            {marketRiskFlags.length > 0 && (
+              <div className="compact-risk-row">
+                {marketRiskFlags.slice(0, 2).map((flag) => (
+                  <span className={`market-risk-pill risk-${flag.severity}`} key={`${market.id}-${flag.label}-${flag.detail}`}>
+                    {flag.label}
+                  </span>
+                ))}
+              </div>
+            )}
             {account && (
               <div className="compact-position-line">
                 Your position: YES {formatMarketAmount(market.yesPosition, market)} / NO {formatMarketAmount(market.noPosition, market)} {marketSymbolLabel}
@@ -9568,6 +9876,7 @@ export default function App() {
     const noEstimate = betEstimate(selectedMarket, Outcome.No, tradeAmount, selectedMarketFeeBps);
     const selectedTradeSide = selectedTradeSides[selectedMarket.id];
     const selectedEstimate = selectedTradeSide === Outcome.No ? noEstimate : yesEstimate;
+    const selectedMarketRiskFlags = marketRiskFlagsFor(selectedMarket);
     const selectedSideLabel = selectedTradeSide === Outcome.No ? "NO" : "YES";
     const balancePercent =
       selectedMarketBalance > 0n ? Math.min(100, Number((tradeAmount * 10000n) / selectedMarketBalance) / 100) : 0;
@@ -9977,6 +10286,23 @@ export default function App() {
             </div>
           </aside>
         </section>
+
+        {selectedMarketRiskFlags.length > 0 && (
+          <section className="market-risk-panel">
+            <div>
+              <span className="section-label">Market risk checks</span>
+              <strong>{selectedMarketRiskFlags.some((flag) => flag.severity === "bad") ? "Review before action" : "Checks available"}</strong>
+            </div>
+            <div className="market-risk-strip">
+              {selectedMarketRiskFlags.map((flag) => (
+                <span className={`market-risk-pill risk-${flag.severity}`} key={`${flag.label}-${flag.detail}`}>
+                  <strong>{flag.label}</strong>
+                  {flag.detail}
+                </span>
+              ))}
+            </div>
+          </section>
+        )}
 
         <section className="detail-body-grid">
           <div className="detail-primary-column">
@@ -11984,6 +12310,58 @@ export default function App() {
                       </div>
                     </article>
 
+                    <article className="owner-panel owner-panel-wide">
+                      <div className="panel-heading">
+                        <div>
+                          <span className="section-label">Owner action queue</span>
+                          <h3>{ownerQueueCount} active checks</h3>
+                        </div>
+                        <span className="agent-confidence">Realtime after indexer sync</span>
+                      </div>
+                      <div className="owner-action-grid">
+                        <div className="owner-action-column">
+                          <span>Needs proposal</span>
+                          {ownerPendingProposalQueue.length === 0 && <small>No pending proposal items.</small>}
+                          {ownerPendingProposalQueue.map((market) => (
+                            <button className="similar-market-row" key={`owner-proposal-${market.id}`} onClick={() => openMarket(market.id, true)} type="button">
+                              <strong>#{market.id} {shortQuestion(market.question)}</strong>
+                              <small>Resolution time {closeDate(resolutionUnlockTime(market))}</small>
+                            </button>
+                          ))}
+                        </div>
+                        <div className="owner-action-column">
+                          <span>Ready to finalize</span>
+                          {ownerFinalizationQueue.length === 0 && <small>No finalization items.</small>}
+                          {ownerFinalizationQueue.map((market) => (
+                            <button className="similar-market-row" key={`owner-finalize-${market.id}`} onClick={() => openMarket(market.id, true)} type="button">
+                              <strong>#{market.id} {shortQuestion(market.question)}</strong>
+                              <small>Proposed {outcomeLabel(market.proposedOutcome)} / deadline {closeDate(market.disputeDeadline)}</small>
+                            </button>
+                          ))}
+                        </div>
+                        <div className="owner-action-column">
+                          <span>Escalated review</span>
+                          {ownerEscalatedReviewQueue.length === 0 && <small>No dispute or authority review items.</small>}
+                          {ownerEscalatedReviewQueue.map((market) => (
+                            <button className="similar-market-row" key={`owner-escalated-${market.id}`} onClick={() => openMarket(market.id, true)} type="button">
+                              <strong>#{market.id} {shortQuestion(market.question)}</strong>
+                              <small>{ownerReviewReasonFor(market)}</small>
+                            </button>
+                          ))}
+                        </div>
+                        <div className="owner-action-column">
+                          <span>Flagged risk</span>
+                          {ownerFlaggedRiskMarkets.length === 0 && <small>No market risk badges.</small>}
+                          {ownerFlaggedRiskMarkets.map(({ market, flags }) => (
+                            <button className="similar-market-row" key={`owner-risk-${market.id}`} onClick={() => openMarket(market.id)} type="button">
+                              <strong>#{market.id} {shortQuestion(market.question)}</strong>
+                              <small>{flags.slice(0, 2).map((flag) => flag.label).join(" / ")}</small>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </article>
+
                     <article className="owner-panel">
                       <span className="section-label">Protocol fees</span>
                       <div className="owner-fee-list">
@@ -13175,12 +13553,12 @@ export default function App() {
               </div>
               <div className="market-stat-row status">
                 <span className="stat-glyph stat-sync" aria-hidden="true" />
-                <div>
-                  <span>Indexer status</span>
-                  <strong>Live & Syncing</strong>
-                </div>
-                <em>{indexerSyncText}</em>
+              <div>
+                <span>Indexer status</span>
+                <strong>{indexerModeText}</strong>
               </div>
+              <em>{indexerSyncText}</em>
+            </div>
             </div>
           </section>
           <section className="protocol-card">
@@ -13313,6 +13691,16 @@ export default function App() {
                   </span>
                 ))}
               </div>
+              {createRiskFlags.length > 0 && (
+                <div className="market-risk-strip">
+                  {createRiskFlags.slice(0, 5).map((flag) => (
+                    <span className={`market-risk-pill risk-${flag.severity}`} key={`${flag.label}-${flag.detail}`}>
+                      <strong>{flag.label}</strong>
+                      {flag.detail}
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
             {aiMarketDraft && (
               <div className="aura-draft-card">
@@ -13611,6 +13999,7 @@ export default function App() {
                   (isStablecoinContractVersion(contractVersion) && createForm.resolutionTime.trim().length === 0) ||
                   hasRuleCloseMismatch ||
                   needsVerifiedEventDeadline ||
+                  hasBlockingMarketRisk ||
                   !canCreateAfterAura ||
                   (!!aiMarketDraft?.duplicateRisk && aiMarketDraft.duplicateRisk !== "LOW" && !duplicateAcknowledged)
                 }
@@ -13618,6 +14007,8 @@ export default function App() {
               >
                 {transactionPending
                   ? "Waiting Wallet..."
+                  : hasBlockingMarketRisk
+                    ? "Fix market risks"
                   : aiMarketDraft?.duplicateRisk && aiMarketDraft.duplicateRisk !== "LOW"
                     ? "Create anyway"
                     : !canCreateAfterAura

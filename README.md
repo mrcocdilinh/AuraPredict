@@ -23,11 +23,13 @@ The project is a testnet MVP and a public builder project for the Arc ecosystem.
 - Activity ticker showing recent YES/NO stakes.
 - Market detail pages with odds history, staking, evidence, comments, holders, activity, dispute, finalize, and claim surfaces.
 - Aura Agent market drafting and result-review support.
+- Deterministic market creation checks for source quality, UTC date mismatch, weekend stock close, and sports fixture/final-date risk.
 - Oracle proposal flow for objective markets such as crypto prices, macro chart values, public health/status checks, and simple liquidity edge cases.
 - Circle Agent Wallet support for authority/oracle proposal signing.
 - Circle Gateway-based USDC funding utility for moving testnet USDC from supported source chains to Arc Testnet.
 - In-app USDC/EURC swap helper using Circle App Kit first, with LI.FI fallback when available.
 - Off-chain social data for profiles, comments, notifications, evidence links, and username reservations through the AuraPredict indexer.
+- Owner dashboard queues for reports, pending proposals, finalization, dispute/authority review, and flagged market-risk badges.
 - Public docs, risk disclosures, oracle policy, backtest sample, and frontend E2E coverage for core market flows.
 
 ## Active Testnet Deployment
@@ -53,6 +55,7 @@ npm run compile
 npm test
 npm run test:e2e
 npm run oracle:backtest
+npm run smoke:api
 npm run indexer
 npm run dev
 ```

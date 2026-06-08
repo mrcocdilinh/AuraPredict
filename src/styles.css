@@ -4372,6 +4372,35 @@ textarea {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.owner-action-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.owner-action-column {
+  align-content: start;
+  background: #f8fafc;
+  border: 1px solid #e5ebf4;
+  border-radius: 8px;
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 12px;
+}
+
+.owner-action-column > span {
+  color: #3959d7;
+  font-size: 0.78rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.owner-action-column > small {
+  color: #667085;
+  font-weight: 780;
+}
+
 .owner-token-card,
 .owner-report-grid div,
 .owner-fee-row {
@@ -6713,6 +6742,68 @@ label {
   color: #9a3412;
 }
 
+.market-risk-panel {
+  align-items: start;
+  background: #ffffff;
+  border: 1px solid #dfe6f1;
+  border-radius: 8px;
+  display: grid;
+  gap: 12px;
+  margin-top: 14px;
+  padding: 14px;
+}
+
+.market-risk-panel > div:first-child {
+  display: grid;
+  gap: 4px;
+}
+
+.market-risk-strip,
+.compact-risk-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.market-risk-pill {
+  align-items: center;
+  border-radius: 999px;
+  display: inline-flex;
+  font-size: 0.72rem;
+  font-weight: 880;
+  gap: 5px;
+  line-height: 1.25;
+  max-width: 100%;
+  padding: 5px 8px;
+}
+
+.market-risk-pill strong {
+  color: inherit;
+  font-size: inherit;
+}
+
+.market-risk-pill.risk-info {
+  background: #ecfeff;
+  border: 1px solid #a5f3fc;
+  color: #0e7490;
+}
+
+.market-risk-pill.risk-warn {
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  color: #9a3412;
+}
+
+.market-risk-pill.risk-bad {
+  background: #fff1f2;
+  border: 1px solid #fecdd3;
+  color: #be123c;
+}
+
+.compact-risk-row {
+  min-height: 24px;
+}
+
 .top-trader-list {
   display: grid;
   gap: 8px;
@@ -7845,6 +7936,7 @@ label {
 [data-theme="dark"] .owner-token-card,
 [data-theme="dark"] .owner-report-grid div,
 [data-theme="dark"] .owner-fee-row,
+[data-theme="dark"] .owner-action-column,
 [data-theme="dark"] .odds-row div,
 [data-theme="dark"] .market-meta div,
 [data-theme="dark"] .position-chip,
@@ -7853,9 +7945,36 @@ label {
 [data-theme="dark"] .notification-empty,
 [data-theme="dark"] .search-result,
 [data-theme="dark"] .arc-facts span,
-[data-theme="dark"] .notifications-page-head {
+[data-theme="dark"] .notifications-page-head,
+[data-theme="dark"] .market-risk-panel {
   background: #0b1020;
   border-color: #202a3f;
+}
+
+[data-theme="dark"] .owner-action-column > span {
+  color: #8ea6ff;
+}
+
+[data-theme="dark"] .owner-action-column > small {
+  color: #9aa7bd;
+}
+
+[data-theme="dark"] .market-risk-pill.risk-info {
+  background: rgba(6, 182, 212, 0.14);
+  border-color: rgba(103, 232, 249, 0.35);
+  color: #67e8f9;
+}
+
+[data-theme="dark"] .market-risk-pill.risk-warn {
+  background: rgba(245, 158, 11, 0.16);
+  border-color: rgba(251, 191, 36, 0.4);
+  color: #facc15;
+}
+
+[data-theme="dark"] .market-risk-pill.risk-bad {
+  background: rgba(244, 63, 94, 0.16);
+  border-color: rgba(251, 113, 133, 0.42);
+  color: #fb7185;
 }
 
 [data-theme="dark"] .notification-filter-row button {
@@ -9550,6 +9669,7 @@ label {
   .market-grid-list .compact-odds-grid,
   .market-grid-list .compact-card-footer,
   .market-grid-list .compact-market-meta,
+  .market-grid-list .compact-risk-row,
   .market-grid-list .compact-position-line,
   .market-grid-list .compact-personal-result,
   .market-grid-list .compact-action-hint {
@@ -9581,7 +9701,8 @@ label {
 
   .owner-dashboard-grid,
   .owner-token-grid,
-  .owner-report-grid {
+  .owner-report-grid,
+  .owner-action-grid {
     grid-template-columns: 1fr;
   }
 

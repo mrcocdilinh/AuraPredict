@@ -239,6 +239,8 @@ VITE_PREDICTION_MARKET_ADDRESS=0x3c853AE2eC705B453c9657569b6335e762631536
 AURA_INDEXER_START_BLOCK=44083985
 AURA_INDEXER_CHUNK_SIZE=9000
 AURA_INDEXER_POLL_MS=12000
+AURA_INDEXER_WS_URL=wss://rpc.testnet.arc.network
+AURA_INDEXER_WS_ENABLED=1
 ```
 
 The VPS stores server-only configuration at `/opt/aurapredict/.env` because `npm run indexer` is started from `/opt/aurapredict`. The process is managed by PM2 and listens internally on `127.0.0.1:8787`; Nginx exposes the HTTPS API domain.
@@ -247,7 +249,10 @@ The VPS stores server-only configuration at `/opt/aurapredict/.env` because `npm
 cd /opt/aurapredict
 pm2 restart aurapredict-indexer
 curl https://api.aurapredict.xyz/health
+npm run smoke:api
 ```
+
+The indexer runs in hybrid mode when `AURA_INDEXER_WS_ENABLED=1`: WebSocket block notifications trigger fast syncs, while `AURA_INDEXER_POLL_MS` remains a fallback. `/health` exposes `indexer.mode`, `indexer.wsStatus`, `indexer.wsLastBlock`, and feature flags such as `features.socialReports`.
 
 Set this on the frontend deployment:
 
