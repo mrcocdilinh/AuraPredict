@@ -4447,6 +4447,7 @@ textarea {
   display: flex;
   inset: 0;
   justify-content: center;
+  overscroll-behavior: contain;
   padding: 20px;
   position: fixed;
   z-index: 100;
@@ -4459,6 +4460,7 @@ textarea {
   box-shadow: 0 30px 90px rgba(17, 24, 39, 0.32);
   color: #172033;
   max-height: min(760px, calc(100vh - 40px));
+  overscroll-behavior: contain;
   overflow: auto;
 }
 

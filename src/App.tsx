@@ -4189,6 +4189,7 @@ export default function App() {
   const [oracleBusyByMarket, setOracleBusyByMarket] = useState<Record<number, boolean>>({});
   const [auraResolutionStatusByMarket, setAuraResolutionStatusByMarket] = useState<Record<number, "idle" | "ready" | "failed">>({});
   const [mismatchConfirm, setMismatchConfirm] = useState<MismatchConfirmState | null>(null);
+  const modalOpen = createModalOpen || unifiedBalanceModalOpen || walletModalOpen || Boolean(mismatchConfirm);
   const [focusResolutionMarketId, setFocusResolutionMarketId] = useState<number | null>(null);
   const [onboardingDismissed, setOnboardingDismissed] = useState(() => {
     try {
@@ -5187,6 +5188,42 @@ export default function App() {
   const showMobileWalletLinks = true;
   const recommendedWallets = ["Zerion", "MetaMask", "Rabby Wallet", "OKX Wallet", "Rainbow"];
   const walletConnectReady = Boolean(WALLETCONNECT_PROJECT_ID);
+
+  useEffect(() => {
+    if (!modalOpen) return;
+
+    const { body, documentElement } = document;
+    const scrollY = window.scrollY;
+    const scrollbarWidth = window.innerWidth - documentElement.clientWidth;
+    const previousBodyStyle = {
+      overflow: body.style.overflow,
+      paddingRight: body.style.paddingRight,
+      position: body.style.position,
+      top: body.style.top,
+      width: body.style.width
+    };
+    const previousHtmlOverflow = documentElement.style.overflow;
+
+    body.style.overflow = "hidden";
+    body.style.position = "fixed";
+    body.style.top = `-${scrollY}px`;
+    body.style.width = "100%";
+    if (scrollbarWidth > 0) {
+      body.style.paddingRight = `${scrollbarWidth}px`;
+    }
+    documentElement.style.overflow = "hidden";
+
+    return () => {
+      body.style.overflow = previousBodyStyle.overflow;
+      body.style.paddingRight = previousBodyStyle.paddingRight;
+      body.style.position = previousBodyStyle.position;
+      body.style.top = previousBodyStyle.top;
+      body.style.width = previousBodyStyle.width;
+      documentElement.style.overflow = previousHtmlOverflow;
+      window.scrollTo(0, scrollY);
+    };
+  }, [modalOpen]);
+
   useEffect(() => {
     const handleOutsidePointer = (event: PointerEvent) => {
       const target = event.target as Node | null;
