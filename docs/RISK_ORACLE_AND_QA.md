@@ -18,6 +18,7 @@ Users should review each market question, source URL, fallback source, resolutio
 - Authority: the active resolution authority can be operated by a Circle Agent Wallet.
 - AI: Aura Agent is decision support, not a trustless oracle.
 - Oracle: objective adapters can propose outcomes for supported market types, but auto-propose does not auto-finalize funded markets.
+- Sports schedule counts: supported MLB schedule-count markets use deterministic schedule data before AI review; generic HTML/source-router no-match is not enough to resolve NO.
 - Dispute: the 12-hour dispute window remains visible after a proposal.
 
 Before any mainnet or real-value use, AuraPredict needs an independent contract audit, multisig or timelocked owner operations, durable backend storage, production monitoring, and a formally selected oracle/committee process.

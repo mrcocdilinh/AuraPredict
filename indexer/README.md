@@ -97,6 +97,7 @@ Supported adapters:
 - Crypto price: BTC, ETH, SOL, BNB, XRP, ADA, DOGE, AVAX, LINK through Binance 1-minute klines, with a near-time CoinGecko fallback only when exact minute data is unavailable.
 - Macro chart: gold and DXY through Yahoo chart data near the market's `resolutionTime`.
 - Health/status API: HTTP 200, JSON `ok: true`, and public status summary endpoints for supported services.
+- Sports schedule count: MLB schedule-count markets such as "at least 10 scheduled MLB regular season games on June 7, 2026" are checked through MLB's public Stats API schedule endpoint instead of generic HTML scraping.
 
 The proposal is stored under `state.oracleProposals` and exposed at:
 

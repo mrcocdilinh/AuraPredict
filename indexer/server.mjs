@@ -3477,6 +3477,8 @@ function resolutionPrompt(body) {
     '  "resolverAction": "what the creator/admin should do next"',
     "}",
     "Do not invent facts.",
+    "If evidence includes a structured sports schedule count from an official league API, compare the observed count against the market threshold and use that result.",
+    "For sports schedules, fixtures, scores, or dynamic app pages, a generic no-match HTML/link scan is inconclusive. Do not infer NO from that row; use structured count evidence or return INSUFFICIENT_EVIDENCE.",
     "For deadline questions phrased like 'Will X ... by time T?', if current time is already past T and there is no credible evidence that X happened, lean NO (low/medium confidence) instead of INSUFFICIENT_EVIDENCE.",
     "Use INSUFFICIENT_EVIDENCE only when rules are ambiguous, time has not passed, or evidence quality is too weak/conflicting."
   ].join("\n");
