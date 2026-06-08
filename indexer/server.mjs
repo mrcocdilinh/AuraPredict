@@ -2150,6 +2150,24 @@ function isContentDeadlineMarket(market) {
   return /\b(blog|post|article|news|publish|announcement|announce|fixtures?|schedule|match)\b/.test(text);
 }
 
+function isSportsScheduleMarket(market) {
+  const text = oracleTextForMarket(market);
+  return (
+    /\b(mlb|major league baseball|nba|nfl|nhl|espn|soccer|football|sports?)\b/.test(text) &&
+    /\b(schedule|scheduled|fixtures?|games?|matches?|scores?|final)\b/.test(text)
+  );
+}
+
+function sourceRouterNoMatchCanSupportNo(market, sourceUrl) {
+  if (isSportsScheduleMarket(market)) return false;
+  const text = oracleTextForMarket(market);
+  const sourceText = `${sourceUrl || ""} ${hostnameFor(sourceUrl)}`.toLowerCase();
+  if (/\b(mlb|nba|nfl|nhl|espn)\b/.test(sourceText) && /\b(schedule|games|fixtures?|scores?)\b/.test(`${sourceText} ${text}`)) {
+    return false;
+  }
+  return /\b(blog|post|article|news|publish|announcement|announce)\b/.test(text);
+}
+
 function itemMatchesMarketEvidence(item, market, sourceUrl) {
   const marketText = oracleTextForMarket(market);
   const host = hostnameFor(sourceUrl);
@@ -2258,13 +2276,51 @@ async function scanSourceForEvidence(market, sourceUrl) {
   const noMatchFinding = items.length > 0
     ? `No matching item was parsed among ${items.length} source item(s).`
     : "The source was reachable but did not expose parseable feed, sitemap, JSON-LD, or link items.";
+  if (!sourceRouterNoMatchCanSupportNo(market, sourceUrl)) {
+    return autoEvidenceRow(
+      market,
+      sourceUrl,
+      "Objective source scan: inconclusive source scan",
+      `Aura Source Router scanned ${sourceUrl} before AI review. ${noMatchFinding} This source type can be dynamic or API-backed, so this is not proof of a negative result. Use a structured adapter, official API, or manual evidence before proposing YES/NO.`,
+      "HTML/link scan was inconclusive; do not infer NO from this row."
+    );
+  }
   return autoEvidenceRow(
     market,
     sourceUrl,
     "Objective source scan: no matching item found",
-    `Aura Source Router scanned ${sourceUrl} before AI review. ${noMatchFinding} The resolution deadline is ${deadlineIso}. For by-deadline publish/announce/schedule markets, this supports NO unless a user provides a qualifying source item.`,
+    `Aura Source Router scanned ${sourceUrl} before AI review. ${noMatchFinding} The resolution deadline is ${deadlineIso}. For by-deadline publish/announce/blog/news markets on static source pages, this supports NO unless a user provides a qualifying source item.`,
     noMatchFinding
   );
+}
+
+async function gatherStructuredScheduleEvidenceRows(market) {
+  const mlbConfig = detectMlbScheduleOracleMarket(market);
+  if (!mlbConfig) return [];
+  try {
+    const summary = await fetchMlbScheduleSummary(mlbConfig);
+    const outcome = summary.count >= mlbConfig.threshold ? "YES" : "NO";
+    const sample = summary.sample.length > 0 ? ` Sample games: ${summary.sample.join(" / ")}.` : "";
+    return [
+      autoEvidenceRow(
+        market,
+        summary.apiUrl,
+        "Objective source scan: structured MLB schedule count",
+        `MLB Stats API reported ${summary.count} ${mlbConfig.regularOnly ? "regular season " : ""}game(s) for ${mlbConfig.date}. The market threshold is at least ${mlbConfig.threshold}. This supports ${outcome}.${sample}`,
+        `${summary.count} game(s) counted; threshold ${mlbConfig.threshold}; ${outcome}.`
+      )
+    ];
+  } catch (error) {
+    return [
+      autoEvidenceRow(
+        market,
+        mlbConfig.sourceUrl,
+        "Objective source scan: MLB schedule API needs review",
+        `Aura could not complete the structured MLB schedule check for ${mlbConfig.date}: ${error instanceof Error ? error.message : String(error)}. Do not infer YES or NO from a generic page scrape.`,
+        "Structured schedule check failed; manual review required."
+      )
+    ];
+  }
 }
 
 async function gatherAutomaticEvidenceRows(market) {
@@ -2272,6 +2328,9 @@ async function gatherAutomaticEvidenceRows(market) {
   const now = Math.floor(Date.now() / 1000);
   const resolutionTime = marketResolutionTime(market);
   if (!resolutionTime || now < resolutionTime) return [];
+
+  const structuredScheduleRows = await gatherStructuredScheduleEvidenceRows(market);
+  if (structuredScheduleRows.length > 0) return structuredScheduleRows;
 
   const urls = evidenceSourceUrlsForMarket(market);
   if (urls.length === 0) {
@@ -2476,6 +2535,148 @@ function hasByDeadlineLanguage(text) {
   return /\b(by|before|no later than|within)\b/i.test(String(text || ""));
 }
 
+const MONTH_NUMBER_BY_NAME = new Map([
+  ["jan", 1],
+  ["january", 1],
+  ["feb", 2],
+  ["february", 2],
+  ["mar", 3],
+  ["march", 3],
+  ["apr", 4],
+  ["april", 4],
+  ["may", 5],
+  ["jun", 6],
+  ["june", 6],
+  ["jul", 7],
+  ["july", 7],
+  ["aug", 8],
+  ["august", 8],
+  ["sep", 9],
+  ["sept", 9],
+  ["september", 9],
+  ["oct", 10],
+  ["october", 10],
+  ["nov", 11],
+  ["november", 11],
+  ["dec", 12],
+  ["december", 12]
+]);
+
+function padDatePart(value) {
+  return String(value).padStart(2, "0");
+}
+
+function isoDateFromParts(year, month, day) {
+  const y = Number(year);
+  const m = Number(month);
+  const d = Number(day);
+  if (!Number.isInteger(y) || !Number.isInteger(m) || !Number.isInteger(d)) return "";
+  if (y < 2000 || y > 2100 || m < 1 || m > 12 || d < 1 || d > 31) return "";
+  return `${y}-${padDatePart(m)}-${padDatePart(d)}`;
+}
+
+function isoDateFromUtcSeconds(seconds) {
+  const value = Number(seconds || 0);
+  if (!Number.isFinite(value) || value <= 0) return "";
+  const date = new Date(value * 1000);
+  return isoDateFromParts(date.getUTCFullYear(), date.getUTCMonth() + 1, date.getUTCDate());
+}
+
+function extractScheduleDate(text, fallbackSeconds = 0) {
+  const raw = String(text || "");
+  const iso = /\b(20\d{2})[-/](0?[1-9]|1[0-2])[-/](0?[1-9]|[12]\d|3[01])\b/.exec(raw);
+  if (iso) return isoDateFromParts(iso[1], iso[2], iso[3]);
+
+  const monthDate = /\b(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t|tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\.?\s+([0-3]?\d)(?:st|nd|rd|th)?(?:,\s*|\s+)(20\d{2})\b/i.exec(raw);
+  if (monthDate) {
+    const month = MONTH_NUMBER_BY_NAME.get(monthDate[1].toLowerCase().replace(/\.$/, ""));
+    return isoDateFromParts(monthDate[3], month, monthDate[2]);
+  }
+
+  const fallbackDate = isoDateFromUtcSeconds(fallbackSeconds);
+  if (!fallbackDate) return "";
+  const fallbackYear = Number(fallbackDate.slice(0, 4));
+  const monthDay = /\b(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t|tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\.?\s+([0-3]?\d)(?:st|nd|rd|th)?\b/i.exec(raw);
+  if (monthDay) {
+    const month = MONTH_NUMBER_BY_NAME.get(monthDay[1].toLowerCase().replace(/\.$/, ""));
+    return isoDateFromParts(fallbackYear, month, monthDay[2]);
+  }
+  return fallbackDate;
+}
+
+function parseSmallNumberWord(value) {
+  const normalized = String(value || "").toLowerCase();
+  const words = {
+    one: 1,
+    two: 2,
+    three: 3,
+    four: 4,
+    five: 5,
+    six: 6,
+    seven: 7,
+    eight: 8,
+    nine: 9,
+    ten: 10,
+    eleven: 11,
+    twelve: 12,
+    thirteen: 13,
+    fourteen: 14,
+    fifteen: 15,
+    sixteen: 16,
+    seventeen: 17,
+    eighteen: 18,
+    nineteen: 19,
+    twenty: 20
+  };
+  return words[normalized] || null;
+}
+
+function extractGameThreshold(text) {
+  const value = String(text || "").toLowerCase().replace(/\s+/g, " ");
+  const numericPatterns = [
+    /\bat least\s+(\d+)\s+(?:scheduled\s+)?(?:mlb\s+)?(?:regular season\s+)?games?\b/i,
+    /\b(\d+)\s+or\s+more\s+(?:scheduled\s+)?(?:mlb\s+)?(?:regular season\s+)?games?\b/i,
+    /\blist(?:s|ed)?\s+(?:at\s+least\s+)?(\d+)\s+(?:scheduled\s+)?(?:mlb\s+)?(?:regular season\s+)?games?\b/i,
+    /\b>=\s*(\d+)\s+games?\b/i
+  ];
+  for (const pattern of numericPatterns) {
+    const match = value.match(pattern);
+    const parsed = Number(match?.[1]);
+    if (Number.isInteger(parsed) && parsed > 0) return parsed;
+  }
+
+  const wordPatterns = [
+    /\bat least\s+(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty)\s+(?:scheduled\s+)?(?:mlb\s+)?(?:regular season\s+)?games?\b/i,
+    /\b(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty)\s+or\s+more\s+(?:scheduled\s+)?(?:mlb\s+)?(?:regular season\s+)?games?\b/i
+  ];
+  for (const pattern of wordPatterns) {
+    const match = value.match(pattern);
+    const parsed = parseSmallNumberWord(match?.[1]);
+    if (parsed) return parsed;
+  }
+
+  if (/\bat least one\s+(?:scheduled\s+)?(?:mlb\s+)?(?:regular season\s+)?game\b/i.test(value)) return 1;
+  return null;
+}
+
+function detectMlbScheduleOracleMarket(market) {
+  const text = oracleTextForMarket(market);
+  if (!/\b(mlb|major league baseball)\b/.test(text)) return null;
+  if (!/\b(schedule|scheduled|games?|list|regular season)\b/.test(text)) return null;
+  const threshold = extractGameThreshold(text);
+  if (!threshold) return null;
+  const resolutionTime = marketResolutionTime(market);
+  const date = extractScheduleDate(text, resolutionTime);
+  if (!date) return null;
+  return {
+    league: "MLB",
+    date,
+    threshold,
+    regularOnly: /\bregular season\b/.test(text),
+    sourceUrl: "https://www.mlb.com/schedule"
+  };
+}
+
 async function fetchJsonWithTimeout(url, options = {}) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), ORACLE_HTTP_TIMEOUT_MS);
@@ -2497,6 +2698,33 @@ async function fetchJsonWithTimeout(url, options = {}) {
   } finally {
     clearTimeout(timeout);
   }
+}
+
+async function fetchMlbScheduleSummary(config) {
+  const apiUrl = `https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=${encodeURIComponent(config.date)}`;
+  const { response, body } = await fetchJsonWithTimeout(apiUrl);
+  if (!response.ok || typeof body !== "object" || body === null) {
+    throw new Error(`MLB schedule API returned HTTP ${response.status}.`);
+  }
+
+  const dates = Array.isArray(body.dates) ? body.dates : [];
+  const games = dates.flatMap((row) => (Array.isArray(row?.games) ? row.games : []));
+  const filteredGames = config.regularOnly
+    ? games.filter((game) => !game?.gameType || String(game.gameType).toUpperCase() === "R")
+    : games;
+  const sample = filteredGames.slice(0, 5).map((game) => {
+    const away = cleanText(game?.teams?.away?.team?.name || "Away", 80);
+    const home = cleanText(game?.teams?.home?.team?.name || "Home", 80);
+    const status = cleanText(game?.status?.detailedState || game?.status?.abstractGameState || "", 40);
+    return `${away} @ ${home}${status ? ` (${status})` : ""}`;
+  });
+
+  return {
+    apiUrl,
+    count: filteredGames.length,
+    totalGames: Number(body.totalGames || filteredGames.length),
+    sample
+  };
 }
 
 function baseOracleProposal(market, adapter) {
@@ -2720,6 +2948,34 @@ async function buildStatusPageOracleProposal(market, config) {
   }
 }
 
+async function buildMlbScheduleOracleProposal(market, config) {
+  const proposal = baseOracleProposal(market, "mlb-schedule");
+  proposal.sourceUrls = [config.sourceUrl, `https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=${encodeURIComponent(config.date)}`];
+  proposal.comparator = "gte";
+  proposal.targetValue = String(config.threshold);
+
+  try {
+    const summary = await fetchMlbScheduleSummary(config);
+    const matched = summary.count >= config.threshold;
+    proposal.outcome = matched ? "YES" : "NO";
+    proposal.confidence = 96;
+    proposal.observedValue = `${summary.count} ${config.regularOnly ? "regular season " : ""}MLB game(s) listed for ${config.date}`;
+    proposal.observedAt = nowIso();
+    proposal.summary = `MLB Stats API listed ${summary.count} ${config.regularOnly ? "regular season " : ""}game(s) for ${config.date}. Rule target is at least ${config.threshold}.`;
+    proposal.checks = [
+      "Used MLB Stats API instead of a generic HTML page scrape.",
+      summary.sample.length > 0 ? `Sample games: ${summary.sample.join(" / ")}` : "No game rows were returned for this date."
+    ];
+    return finalizeOracleProposal(proposal);
+  } catch (error) {
+    proposal.status = "needs_review";
+    proposal.confidence = 0;
+    proposal.summary = `MLB schedule adapter could not verify ${config.date}: ${error instanceof Error ? error.message : String(error)}. Use official source evidence and authority review.`;
+    proposal.checks = ["Do not infer NO from a dynamic schedule page that did not expose parseable HTML items."];
+    return finalizeOracleProposal(proposal);
+  }
+}
+
 async function buildUnsupportedOracleProposal(market, adapter, summary) {
   const proposal = baseOracleProposal(market, adapter);
   proposal.status = "unsupported";
@@ -2786,6 +3042,9 @@ async function buildOracleProposal(marketId, options = {}) {
 
   const statusConfig = detectStatusOracleMarket(market);
   if (statusConfig) return buildStatusPageOracleProposal(market, statusConfig);
+
+  const mlbScheduleConfig = detectMlbScheduleOracleMarket(market);
+  if (mlbScheduleConfig) return buildMlbScheduleOracleProposal(market, mlbScheduleConfig);
 
   if (String(market.category || "").toLowerCase() === "sports") {
     return buildUnsupportedOracleProposal(
@@ -3254,7 +3513,10 @@ function resolutionReviewerPrompt(market, evidenceRows, role) {
     "}",
     "Use only the supplied evidence, structured resolution rule, and public facts that can be verified from URLs in the evidence list.",
     "If the evidence contains an Objective Oracle proposal with YES, NO, or CANCEL, treat it as a deterministic source check unless it conflicts with the market's primary source, timestamp, or rule.",
-    "If the evidence contains an Objective source scan row, treat it as Aura's source router result. A qualifying item found supports YES; a no matching item found row supports NO for by-deadline publish, announce, blog, news, fixture, or schedule markets unless stronger contrary evidence is supplied.",
+    "If the evidence contains a structured schedule count from an official league API, compare the count against the market threshold and use that result.",
+    "If the evidence contains an Objective source scan row, treat it as Aura's source router result. A qualifying item found supports YES. A no matching item found row supports NO only for static by-deadline publish, announce, blog, or news pages when the row explicitly says it supports NO.",
+    "For sports schedule, fixture, scores, or dynamic app pages, a generic no-match HTML/link scan is inconclusive. Never infer NO from that row; return INSUFFICIENT_EVIDENCE unless a structured adapter/API or user evidence proves the count/result.",
+    "If an Objective source scan says inconclusive source scan, schedule API needs review, or structured schedule check failed, return INSUFFICIENT_EVIDENCE unless another evidence row proves YES or NO.",
     "If an Objective source scan says matching items need timestamp review, do not invent a timestamp. Prefer INSUFFICIENT_EVIDENCE unless another evidence row proves the required time window.",
     "If an Objective source scan says no source URL is configured, return INSUFFICIENT_EVIDENCE and ask for an official source link.",
     "For numeric threshold markets, compare the observed value against the structured comparator and target. If the observed value is clearly above or below the target, return YES or NO; do not return INSUFFICIENT_EVIDENCE just because the result is unfavorable to YES.",
