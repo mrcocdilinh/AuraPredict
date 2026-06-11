@@ -7419,6 +7419,47 @@ export default function App() {
     if (!isSilentLoad) setLoading(true);
     try {
       const publicClient = getPublicClient();
+      let prefetchedIndexedSnapshot: IndexedSnapshot | null = null;
+      const applyIndexedSnapshot = (snapshot: IndexedSnapshot, totalFloor = snapshot.total) => {
+        const indexedRows = snapshot.markets;
+        const indexedTotalCount = Math.max(totalFloor, snapshot.total, indexedRows.length);
+        setKnownMarketCount(indexedTotalCount);
+        setMarketLoadLimit((current) => Math.max(current, indexedTotalCount));
+        const mergedIndexedRows = mergeMarketRows(indexedRows, markets, indexedTotalCount);
+        setMarkets((current) => mergeMarketRows(indexedRows, current, indexedTotalCount));
+        setActivities(snapshot.activities);
+        if (snapshot.health) setIndexerHealth(snapshot.health);
+        if (snapshot.stats) {
+          setProjectStats({
+            ...snapshot.stats,
+            totalMarkets: Math.max(snapshot.stats.totalMarkets, indexedTotalCount),
+            indexedMarkets: Math.max(snapshot.stats.indexedMarkets, mergedIndexedRows.length),
+            liveMarkets: Math.max(
+              snapshot.stats.liveMarkets,
+              mergedIndexedRows.filter((market) => market.outcome === Outcome.Unresolved && market.closeTime > nowSeconds).length
+            ),
+            pendingMarkets: Math.max(
+              snapshot.stats.pendingMarkets,
+              mergedIndexedRows.filter((market) => market.outcome === Outcome.Unresolved && market.closeTime <= nowSeconds).length
+            )
+          });
+        }
+        writeCachedMarkets(mergedIndexedRows);
+        setDataSource("indexer");
+        setLastDataRefresh(new Date());
+        return mergedIndexedRows;
+      };
+
+      try {
+        prefetchedIndexedSnapshot = await loadIndexedSnapshot();
+        if (prefetchedIndexedSnapshot) {
+          applyIndexedSnapshot(prefetchedIndexedSnapshot);
+          if (!isSilentLoad) setLoading(false);
+        }
+      } catch {
+        prefetchedIndexedSnapshot = null;
+      }
+
       let detectedContractVersion: MarketContractVersion = contractVersion;
       let detectedSettlementSymbol = defaultSettlementSymbol;
       let detectedSettlementDecimals = defaultSettlementDecimals;
@@ -7569,33 +7610,10 @@ export default function App() {
         setAccumulatedProtocolFees(0n);
       }
 
-      const indexedSnapshot = await loadIndexedSnapshot();
+      const indexedSnapshot = prefetchedIndexedSnapshot ?? await loadIndexedSnapshot();
       if (indexedSnapshot) {
         const indexedRows = indexedSnapshot.markets;
-        const indexedTotalCount = Math.max(totalMarketCount, indexedSnapshot.total, indexedRows.length);
-        setKnownMarketCount(indexedTotalCount);
-        setMarketLoadLimit((current) => Math.max(current, indexedTotalCount));
-        const mergedIndexedRows = mergeMarketRows(indexedRows, markets, indexedTotalCount);
-        setMarkets((current) => mergeMarketRows(indexedRows, current, indexedTotalCount));
-        setActivities(indexedSnapshot.activities);
-        if (indexedSnapshot.health) setIndexerHealth(indexedSnapshot.health);
-        if (indexedSnapshot.stats) {
-          setProjectStats({
-            ...indexedSnapshot.stats,
-            totalMarkets: Math.max(indexedSnapshot.stats.totalMarkets, indexedTotalCount),
-            indexedMarkets: Math.max(indexedSnapshot.stats.indexedMarkets, mergedIndexedRows.length),
-            liveMarkets: Math.max(
-              indexedSnapshot.stats.liveMarkets,
-              mergedIndexedRows.filter((market) => market.outcome === Outcome.Unresolved && market.closeTime > nowSeconds).length
-            ),
-            pendingMarkets: Math.max(
-              indexedSnapshot.stats.pendingMarkets,
-              mergedIndexedRows.filter((market) => market.outcome === Outcome.Unresolved && market.closeTime <= nowSeconds).length
-            )
-          });
-        }
-        writeCachedMarkets(mergedIndexedRows);
-        setDataSource("indexer");
+        const mergedIndexedRows = applyIndexedSnapshot(indexedSnapshot, totalMarketCount);
 
         if (!isSilentLoad && account && isAddress(account) && indexedRows.length > 0) {
           const accountForPositions = account as Address;
@@ -7647,7 +7665,6 @@ export default function App() {
           })();
         }
 
-        setLastDataRefresh(new Date());
         if (!isSilentLoad) setLoading(false);
         return;
       }
