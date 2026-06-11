@@ -157,6 +157,11 @@ const client = createPublicClient({
     retryDelay: 500
   })
 });
+const eventRpcUrl = String(process.env.AURA_INDEXER_EVENT_RPC_URL || RPC_URLS[0] || "").trim();
+const eventClient = createPublicClient({
+  chain: ARC_CHAIN,
+  transport: http(eventRpcUrl, { retryCount: 1, retryDelay: 250, timeout: 15_000 })
+});
 const realtimeClient =
   REALTIME_SYNC_ENABLED && WS_URLS.length > 0
     ? createPublicClient({
@@ -250,7 +255,11 @@ function emptyState() {
       wsLastBlock: "0",
       wsLastEventAt: null,
       wsLastError: "",
-      lastSyncReason: "startup"
+      lastSyncReason: "startup",
+      lastSyncStartedAt: null,
+      lastSyncTargetBlock: "0",
+      lastSyncError: "",
+      lastSyncErrorAt: null
     },
     owner: ZERO_ADDRESS,
     contractVersion: "unknown",
@@ -336,6 +345,14 @@ function scheduleSync(reason, delayMs = 0) {
   }, Math.max(0, delayMs));
 }
 
+function syncErrorMessage(error) {
+  if (!error) return "Unknown sync error.";
+  const message = error instanceof Error ? error.message : String(error);
+  const details = typeof error === "object" && error && "details" in error ? String(error.details || "") : "";
+  const url = typeof error === "object" && error && "url" in error ? String(error.url || "") : "";
+  return [message, details, url].filter(Boolean).join(" | ").slice(0, 1000);
+}
+
 async function loadState() {
   try {
     const raw = await readFile(DATA_FILE, "utf8");
@@ -358,7 +375,7 @@ async function getBlockTimestamp(blockNumber) {
   if (!blockNumber) return 0;
   const key = blockNumber.toString();
   if (!blockTimestampCache.has(key)) {
-    const block = await client.getBlock({ blockNumber });
+    const block = await eventClient.getBlock({ blockNumber });
     blockTimestampCache.set(key, Number(block.timestamp));
   }
   return blockTimestampCache.get(key) ?? 0;
@@ -3782,7 +3799,7 @@ async function syncRange(fromBlock, toBlock) {
   const abi = currentContractAbi();
   const eventNames = isV4Contract() ? V4_EVENT_NAMES : isV3Contract() ? V3_EVENT_NAMES : V2_EVENT_NAMES;
   for (const eventName of eventNames) {
-    const eventLogs = await client.getContractEvents({
+    const eventLogs = await eventClient.getContractEvents({
       address: CONTRACT_ADDRESS,
       abi,
       eventName,
@@ -3804,7 +3821,7 @@ async function syncRange(fromBlock, toBlock) {
 }
 
 async function hasContractCode(blockNumber) {
-  const code = await client.getCode({ address: CONTRACT_ADDRESS, blockNumber });
+  const code = await eventClient.getCode({ address: CONTRACT_ADDRESS, blockNumber });
   return Boolean(code && code !== "0x");
 }
 
@@ -3832,36 +3849,48 @@ async function syncOnce() {
   if (syncPromise) return syncPromise;
   syncPromise = (async () => {
     const runtime = indexerRuntimeState();
+    runtime.lastSyncStartedAt = nowIso();
+    runtime.lastSyncError = "";
     if (!CONTRACT_ADDRESS || !isAddress(CONTRACT_ADDRESS)) {
       throw new Error("Missing AURA_INDEXER_CONTRACT_ADDRESS or VITE_PREDICTION_MARKET_ADDRESS.");
     }
 
-    const latestBlock = await client.getBlockNumber();
-    const startBlock = await resolveStartBlock(latestBlock);
-    await detectContractVersion();
-    let fromBlock = toBigint(state.lastIndexedBlock) > 0n ? toBigint(state.lastIndexedBlock) + 1n : startBlock;
+    try {
+      const latestBlock = await eventClient.getBlockNumber();
+      runtime.lastSyncTargetBlock = latestBlock.toString();
+      const startBlock = await resolveStartBlock(latestBlock);
+      await detectContractVersion();
+      let fromBlock = toBigint(state.lastIndexedBlock) > 0n ? toBigint(state.lastIndexedBlock) + 1n : startBlock;
 
-    if (fromBlock <= latestBlock) {
-      while (fromBlock <= latestBlock) {
-        const toBlock = fromBlock + CHUNK_SIZE - 1n > latestBlock ? latestBlock : fromBlock + CHUNK_SIZE - 1n;
-        await syncRange(fromBlock, toBlock);
-        state.lastIndexedBlock = toBlock.toString();
-        fromBlock = toBlock + 1n;
+      if (fromBlock <= latestBlock) {
+        while (fromBlock <= latestBlock) {
+          const toBlock = fromBlock + CHUNK_SIZE - 1n > latestBlock ? latestBlock : fromBlock + CHUNK_SIZE - 1n;
+          await syncRange(fromBlock, toBlock);
+          state.lastIndexedBlock = toBlock.toString();
+          fromBlock = toBlock + 1n;
+        }
       }
-    }
 
-    await refreshContractState();
-    computeStats();
-    if (ORACLE_AUTO_RUN) {
-      await runAutoOracleSweep();
+      await refreshContractState();
+      computeStats();
+      if (ORACLE_AUTO_RUN) {
+        await runAutoOracleSweep();
+      }
+      if (RESOLUTION_AUTO_RUN) {
+        await runAutoResolutionSweep();
+      }
+      runtime.lastSyncedAt = nowIso();
+      runtime.lastSyncError = "";
+      runtime.lastSyncErrorAt = null;
+      state.updatedAt = nowIso();
+      await saveState();
+      return state;
+    } catch (error) {
+      runtime.lastSyncError = syncErrorMessage(error);
+      runtime.lastSyncErrorAt = nowIso();
+      await saveState().catch(() => {});
+      throw error;
     }
-    if (RESOLUTION_AUTO_RUN) {
-      await runAutoResolutionSweep();
-    }
-    runtime.lastSyncedAt = nowIso();
-    state.updatedAt = nowIso();
-    await saveState();
-    return state;
   })().finally(() => {
     syncPromise = null;
   });
@@ -4413,14 +4442,9 @@ function startRealtimeSync() {
 
 async function main() {
   await loadState();
-  try {
-    await syncOnce();
-  } catch (error) {
-    if (process.argv.includes("--once")) throw error;
-    console.error("[indexer] initial sync failed:", error);
-  }
 
   if (process.argv.includes("--once")) {
+    await syncOnce();
     console.log(`[indexer] synced ${state.marketCount} markets at block ${state.lastIndexedBlock}`);
     return;
   }
@@ -4431,6 +4455,7 @@ async function main() {
   });
 
   startRealtimeSync();
+  scheduleSync("startup");
 
   setInterval(() => {
     scheduleSync("polling");

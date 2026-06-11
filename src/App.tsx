@@ -1206,7 +1206,7 @@ async function fetchIndexerJson<T>(path: string): Promise<T | null> {
     `${INDEXER_URL}${route}.json${query ? `?${query}` : ""}`
   ];
   const controller = new AbortController();
-  const timeout = window.setTimeout(() => controller.abort(), 3500);
+  const timeout = window.setTimeout(() => controller.abort(), 7000);
   try {
     for (const url of urls) {
       const response = await fetch(url, {
@@ -1276,9 +1276,10 @@ function normalizeProfileUsername(value: string) {
 }
 
 async function loadIndexedSnapshot(account?: string): Promise<IndexedSnapshot | null> {
-  const activityLimit = 10_000;
+  const activityLimit = 2_000;
+  const walletActivityLimit = 20_000;
   const accountActivityPath =
-    account && isAddress(account) ? `/api/activity?limit=${activityLimit}&user=${account}` : "";
+    account && isAddress(account) ? `/api/activity?limit=${walletActivityLimit}&user=${account}` : "";
   const [marketsResponse, activityResponse, accountActivityResponse, statsResponse, healthResponse] = await Promise.all([
     fetchIndexerJson<{ markets: IndexedMarket[]; total: number }>("/api/markets"),
     fetchIndexerJson<{ activities: IndexedActivity[] }>(`/api/activity?limit=${activityLimit}`),

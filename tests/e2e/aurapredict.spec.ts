@@ -364,7 +364,8 @@ test("create market form defaults to authority/oracle review", async ({ page }) 
 
 test("market detail exposes stake, resolution, dispute, finalize and claim surfaces", async ({ page }) => {
   await page.goto("/?market=1");
-  await expect(page.getByText(/stake YES or NO/i)).toBeVisible();
+  await expect(page.getByRole("heading", { name: /Will AuraPredict let users stake YES or NO/i })).toBeVisible();
+  await expect(page.getByText(/Public preview/i)).toBeVisible();
   await expect(page.getByRole("img", { name: /Market odds chart/i })).toBeVisible();
   await expect(page.getByRole("tab", { name: /Overview/i })).toBeVisible();
   await expect(page.getByRole("tab", { name: /Comments/i })).toBeVisible();
