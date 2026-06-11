@@ -1275,10 +1275,16 @@ function normalizeProfileUsername(value: string) {
     .slice(0, 20);
 }
 
-async function loadIndexedSnapshot(): Promise<IndexedSnapshot | null> {
-  const [marketsResponse, activityResponse, statsResponse, healthResponse] = await Promise.all([
+async function loadIndexedSnapshot(account?: string): Promise<IndexedSnapshot | null> {
+  const activityLimit = 10_000;
+  const accountActivityPath =
+    account && isAddress(account) ? `/api/activity?limit=${activityLimit}&user=${account}` : "";
+  const [marketsResponse, activityResponse, accountActivityResponse, statsResponse, healthResponse] = await Promise.all([
     fetchIndexerJson<{ markets: IndexedMarket[]; total: number }>("/api/markets"),
-    fetchIndexerJson<{ activities: IndexedActivity[] }>("/api/activity?limit=2000"),
+    fetchIndexerJson<{ activities: IndexedActivity[] }>(`/api/activity?limit=${activityLimit}`),
+    accountActivityPath
+      ? fetchIndexerJson<{ activities: IndexedActivity[] }>(accountActivityPath)
+      : Promise.resolve(null),
     fetchIndexerJson<{ stats: IndexedProjectStats }>("/api/stats"),
     fetchIndexerJson<LandingHealth>("/health")
   ]);
@@ -1287,7 +1293,11 @@ async function loadIndexedSnapshot(): Promise<IndexedSnapshot | null> {
 
   const markets = marketsResponse.markets.map(indexedMarketToView).sort((a, b) => b.id - a.id);
   const marketsById = new Map(markets.map((market) => [market.id, market]));
-  const activities = (activityResponse?.activities ?? [])
+  const activityRowsById = new Map<string, IndexedActivity>();
+  for (const activity of [...(activityResponse?.activities ?? []), ...(accountActivityResponse?.activities ?? [])]) {
+    if (activity?.id) activityRowsById.set(activity.id, activity);
+  }
+  const activities = [...activityRowsById.values()]
     .map((activity) => indexedActivityToItem(activity, marketsById))
     .sort((a, b) => b.timestamp - a.timestamp);
 
@@ -7451,7 +7461,7 @@ export default function App() {
       };
 
       try {
-        prefetchedIndexedSnapshot = await loadIndexedSnapshot();
+        prefetchedIndexedSnapshot = await loadIndexedSnapshot(account);
         if (prefetchedIndexedSnapshot) {
           applyIndexedSnapshot(prefetchedIndexedSnapshot);
           if (!isSilentLoad) setLoading(false);
@@ -7610,7 +7620,7 @@ export default function App() {
         setAccumulatedProtocolFees(0n);
       }
 
-      const indexedSnapshot = prefetchedIndexedSnapshot ?? await loadIndexedSnapshot();
+      const indexedSnapshot = prefetchedIndexedSnapshot ?? await loadIndexedSnapshot(account);
       if (indexedSnapshot) {
         const indexedRows = indexedSnapshot.markets;
         const mergedIndexedRows = applyIndexedSnapshot(indexedSnapshot, totalMarketCount);

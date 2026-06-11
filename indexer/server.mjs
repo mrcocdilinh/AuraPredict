@@ -3966,8 +3966,13 @@ async function route(req, res) {
     }
 
     if (url.pathname === "/api/activity") {
-      const limit = Number(url.searchParams.get("limit") || 50);
-      json(res, 200, { activities: state.trades.slice().sort((a, b) => b.timestamp - a.timestamp).slice(0, limit) });
+      const limit = Math.max(1, Math.min(50_000, Number(url.searchParams.get("limit") || 50)));
+      const user = String(url.searchParams.get("user") || "").trim().toLowerCase();
+      const rows =
+        user && isAddress(user)
+          ? state.trades.filter((activity) => String(activity.user || "").toLowerCase() === user)
+          : state.trades;
+      json(res, 200, { activities: rows.slice().sort((a, b) => b.timestamp - a.timestamp).slice(0, limit) });
       return;
     }
 
