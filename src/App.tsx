@@ -4041,6 +4041,7 @@ export default function App() {
   const transactionLockRef = useRef(false);
   const silentLoadRef = useRef(false);
   const loadMarketsInFlightRef = useRef(false);
+  const lastPositionAccountKeyRef = useRef("");
   const notificationMenuRef = useRef<HTMLDivElement | null>(null);
   const walletMenuRef = useRef<HTMLDivElement | null>(null);
   const themeMenuRef = useRef<HTMLDivElement | null>(null);
@@ -4350,17 +4351,28 @@ export default function App() {
   }, [defaultSettlementDecimals, defaultSettlementSymbol, defaultSettlementToken, markets, statsAssetBreakdown]);
   const knownSettlementTokenKey = knownSettlementTokens.map((asset) => asset.token.toLowerCase()).join("|");
   const accountKey = account ? account.toLowerCase() : "";
+  useEffect(() => {
+    if (lastPositionAccountKeyRef.current === accountKey) return;
+    lastPositionAccountKeyRef.current = accountKey;
+    setMarkets((current) =>
+      current.map((market) =>
+        market.yesPosition === 0n && market.noPosition === 0n && !market.claimed && market.potentialPayout === 0n
+          ? market
+          : { ...market, yesPosition: 0n, noPosition: 0n, claimed: false, potentialPayout: 0n }
+      )
+    );
+  }, [accountKey]);
   const viewedProfileAddress =
     selectedProfileAddress && isAddress(selectedProfileAddress) ? selectedProfileAddress : account;
   const viewedProfileKey = viewedProfileAddress ? viewedProfileAddress.toLowerCase() : "";
   const isOwnProfile = !!account && !!viewedProfileAddress && sameAddress(account, viewedProfileAddress);
   const isProfilePublic = viewedProfileKey ? profilePublicByAddress[viewedProfileKey] !== false : true;
-  const profileActivityPositions = useMemo(() => {
+  const buildActivityPositionsForWallet = useCallback((walletKey: string) => {
     const positions = new Map<number, { yes: bigint; no: bigint }>();
-    if (!viewedProfileKey) return positions;
+    if (!walletKey) return positions;
 
     for (const activity of activities) {
-      if (!sameAddress(activity.user, viewedProfileKey)) continue;
+      if (!sameAddress(activity.user, walletKey)) continue;
       const current = positions.get(activity.marketId) ?? { yes: 0n, no: 0n };
       if (activity.side === Outcome.Yes) current.yes += activity.amount;
       if (activity.side === Outcome.No) current.no += activity.amount;
@@ -4368,33 +4380,56 @@ export default function App() {
     }
 
     return positions;
-  }, [activities, viewedProfileKey]);
+  }, [activities]);
+  const profileActivityPositions = useMemo(
+    () => buildActivityPositionsForWallet(viewedProfileKey),
+    [buildActivityPositionsForWallet, viewedProfileKey]
+  );
+  const accountActivityPositions = useMemo(
+    () => buildActivityPositionsForWallet(accountKey),
+    [accountKey, buildActivityPositionsForWallet]
+  );
+  const marketWithWalletPosition = useCallback(
+    (
+      market: MarketView,
+      activityPositions: Map<number, { yes: bigint; no: bigint }>,
+      walletKey: string,
+      useHydratedWalletState: boolean
+    ) => {
+      const activityPosition = activityPositions.get(market.id) ?? { yes: 0n, no: 0n };
+      const hasHydratedPosition = market.yesPosition > 0n || market.noPosition > 0n || market.claimed;
+      const locallyClaimed = walletKey ? locallyClaimedMarkets.includes(claimedMarketKey(walletKey, market.id)) : false;
+      const effectiveClaimed = useHydratedWalletState ? market.claimed || locallyClaimed : locallyClaimed;
+      const yesPosition = useHydratedWalletState && hasHydratedPosition ? market.yesPosition : activityPosition.yes;
+      const noPosition = useHydratedWalletState && hasHydratedPosition ? market.noPosition : activityPosition.no;
+      const hasPosition = yesPosition > 0n || noPosition > 0n;
+      const settlement = settlementForPosition(market, protocolFeeBps, yesPosition, noPosition);
+      const potentialPayout =
+        effectiveClaimed || market.outcome === Outcome.Unresolved || !hasPosition
+          ? 0n
+          : useHydratedWalletState && market.potentialPayout > 0n
+            ? market.potentialPayout
+            : settlement.payout;
+
+      return {
+        ...market,
+        yesPosition,
+        noPosition,
+        claimed: effectiveClaimed,
+        potentialPayout
+      };
+    },
+    [locallyClaimedMarkets, protocolFeeBps]
+  );
   const profileMarkets = viewedProfileAddress
     ? markets
-        .map((market) => {
-          const activityPosition = profileActivityPositions.get(market.id) ?? { yes: 0n, no: 0n };
-          const hasHydratedPosition = market.yesPosition > 0n || market.noPosition > 0n || market.claimed;
-          const locallyClaimed = accountKey ? locallyClaimedMarkets.includes(claimedMarketKey(accountKey, market.id)) : false;
-          const effectiveClaimed = isOwnProfile ? market.claimed || locallyClaimed : false;
-          const yesPosition = isOwnProfile && hasHydratedPosition ? market.yesPosition : activityPosition.yes;
-          const noPosition = isOwnProfile && hasHydratedPosition ? market.noPosition : activityPosition.no;
-          const settlement = settlementForPosition(market, protocolFeeBps, yesPosition, noPosition);
-          const localPotentialPayout =
-            isOwnProfile && effectiveClaimed
-              ? 0n
-              : isOwnProfile && market.outcome !== Outcome.Unresolved
-              ? market.potentialPayout > 0n ? market.potentialPayout : settlement.payout
-              : market.potentialPayout;
-
-          return {
-            ...market,
-            yesPosition,
-            noPosition,
-            claimed: effectiveClaimed,
-            potentialPayout: isOwnProfile ? localPotentialPayout : settlement.payout
-          };
-        })
+        .map((market) => marketWithWalletPosition(market, profileActivityPositions, viewedProfileKey, isOwnProfile))
         .filter((market) => hasUserPosition(market) || sameAddress(market.creator, viewedProfileAddress))
+    : [];
+  const accountPositionMarkets = account
+    ? markets
+        .map((market) => marketWithWalletPosition(market, accountActivityPositions, accountKey, true))
+        .filter(hasUserPosition)
     : [];
   const participatedProfileMarkets = profileMarkets.filter(hasUserPosition);
   const createdProfileMarkets = viewedProfileAddress
@@ -4868,15 +4903,32 @@ export default function App() {
           market.disputeDeadline + (market.termsDisputeGracePeriod ?? disputeGracePeriod) <= nowSeconds
       )
     : [];
-  const claimNotifications = account && isOwnProfile
-    ? profileMarkets.filter(
+  const claimNotifications = account
+    ? accountPositionMarkets.filter(
         (market) => market.outcome !== Outcome.Unresolved && !market.claimed && market.potentialPayout > 0n
       )
     : [];
-  const claimableTotal = claimNotifications.reduce((sum, market) => sum + market.potentialPayout, 0n);
-  const proposedResultNotifications = account && isOwnProfile
-    ? profileMarkets.filter((market) => {
-        const key = `${account.toLowerCase()}:proposal:${market.id}:${market.proposedAt}:${market.proposedOutcome}`;
+  const claimableAssetSummary = useMemo(() => {
+    const byAsset = new Map<string, { symbol: string; decimals: number; amount: bigint }>();
+    for (const market of claimNotifications) {
+      const symbol = marketSymbol(market);
+      const decimals = marketDecimals(market);
+      const key = (market.settlementToken && isAddress(market.settlementToken)
+        ? market.settlementToken
+        : `${symbol}:${decimals}`).toLowerCase();
+      const current = byAsset.get(key) ?? { symbol, decimals, amount: 0n };
+      current.amount += market.potentialPayout;
+      byAsset.set(key, current);
+    }
+    return [...byAsset.values()].sort((a, b) => a.symbol.localeCompare(b.symbol));
+  }, [claimNotifications]);
+  const claimableTotalLabel =
+    claimableAssetSummary.length > 0
+      ? claimableAssetSummary.map((asset) => `${formatUsdc(asset.amount, asset.decimals)} ${asset.symbol}`).join(" + ")
+      : `0.00 ${defaultSettlementSymbol}`;
+  const proposedResultNotifications = account
+    ? accountPositionMarkets.filter((market) => {
+        const key = `${accountKey}:proposal:${market.id}:${market.proposedAt}:${market.proposedOutcome}`;
         return (
           hasUserPosition(market) &&
           market.outcome === Outcome.Unresolved &&
@@ -4885,9 +4937,9 @@ export default function App() {
         );
       })
     : [];
-  const disputeResolvedNotifications = account && isOwnProfile
-    ? profileMarkets.filter((market) => {
-        const key = `${account.toLowerCase()}:dispute-resolved:${market.id}:${market.outcome}`;
+  const disputeResolvedNotifications = account
+    ? accountPositionMarkets.filter((market) => {
+        const key = `${accountKey}:dispute-resolved:${market.id}:${market.outcome}`;
         return (
           hasUserPosition(market) &&
           market.disputed &&
@@ -4896,9 +4948,9 @@ export default function App() {
         );
       })
     : [];
-  const resultNotifications = account && isOwnProfile
-    ? profileMarkets.filter((market) => {
-        const key = `${account.toLowerCase()}:result:${market.id}:${market.outcome}`;
+  const resultNotifications = account
+    ? accountPositionMarkets.filter((market) => {
+        const key = `${accountKey}:result:${market.id}:${market.outcome}`;
         return (
           hasUserPosition(market) &&
           market.outcome !== Outcome.Unresolved &&
@@ -11727,7 +11779,7 @@ export default function App() {
                     {claimNotifications.length > 1 && (
                       <div className="notification-bulk-actions">
                         <button onClick={claimAll} disabled={transactionPending} type="button">
-                          Claim all {formatUsdc(claimableTotal, defaultSettlementDecimals)} {aggregateAssetLabel}
+                          Claim all {claimableTotalLabel}
                         </button>
                       </div>
                     )}
@@ -12207,7 +12259,7 @@ export default function App() {
                 </div>
                 {claimNotifications.length > 1 && (
                   <button onClick={claimAll} disabled={transactionPending} type="button">
-                    Claim all {formatUsdc(claimableTotal, defaultSettlementDecimals)} {aggregateAssetLabel}
+                    Claim all {claimableTotalLabel}
                   </button>
                 )}
               </div>
@@ -12934,7 +12986,7 @@ export default function App() {
                   </div>
                   {isOwnProfile && claimNotifications.length > 1 && (
                     <button onClick={claimAll} disabled={transactionPending} type="button">
-                      Claim all {formatUsdc(claimableTotal, defaultSettlementDecimals)} {aggregateAssetLabel}
+                      Claim all {claimableTotalLabel}
                     </button>
                   )}
                 </div>
