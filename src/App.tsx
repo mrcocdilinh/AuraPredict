@@ -4052,6 +4052,7 @@ export default function App() {
   const transactionLockRef = useRef(false);
   const silentLoadRef = useRef(false);
   const loadMarketsInFlightRef = useRef(false);
+  const loadMarketsQueuedRef = useRef(false);
   const lastPositionAccountKeyRef = useRef("");
   const notificationMenuRef = useRef<HTMLDivElement | null>(null);
   const walletMenuRef = useRef<HTMLDivElement | null>(null);
@@ -4092,6 +4093,7 @@ export default function App() {
   const [walletModalOpen, setWalletModalOpen] = useState(false);
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
+  const [marketReloadToken, setMarketReloadToken] = useState(0);
   const [lastDataRefresh, setLastDataRefresh] = useState<Date | null>(null);
   const [notice, setNoticeText] = useState("");
   const [noticeTxHash, setNoticeTxHash] = useState<Hash | "">("");
@@ -7425,7 +7427,10 @@ export default function App() {
 
     const isSilentLoad = silentLoadRef.current;
     silentLoadRef.current = false;
-    if (loadMarketsInFlightRef.current) return;
+    if (loadMarketsInFlightRef.current) {
+      loadMarketsQueuedRef.current = true;
+      return;
+    }
     loadMarketsInFlightRef.current = true;
     if (!isSilentLoad) setLoading(true);
     try {
@@ -8180,6 +8185,11 @@ export default function App() {
     } finally {
       loadMarketsInFlightRef.current = false;
       if (!isSilentLoad) setLoading(false);
+      if (loadMarketsQueuedRef.current) {
+        loadMarketsQueuedRef.current = false;
+        silentLoadRef.current = false;
+        setMarketReloadToken((current) => current + 1);
+      }
     }
   }, [account, contractAddress, hasContract, marketLoadLimit, selectedMarketId]);
 
@@ -9366,37 +9376,59 @@ export default function App() {
   const claimAll = async () => {
     try {
       if (!account || !isAddress(account)) throw new Error("Connect wallet first.");
-      const claimTargets = [...claimNotifications];
-      if (claimTargets.length === 0) {
+
+      const candidateMap = new Map<number, MarketView>();
+      for (const market of [...accountPositionMarkets, ...claimNotifications]) {
+        if (market.outcome !== Outcome.Unresolved && !market.claimed && hasUserPosition(market)) {
+          candidateMap.set(market.id, market);
+        }
+      }
+      const claimCandidates = [...candidateMap.values()].sort((a, b) => a.id - b.id);
+      if (claimCandidates.length === 0) {
         setNotice("No claimable payouts right now.");
         return;
       }
 
       await switchToArc();
       const walletClient = getActiveWalletClient();
-      let claimedCount = 0;
-      let skippedCount = 0;
-      for (const [index, market] of claimTargets.entries()) {
-        let eligibility: { claimed: boolean; payout: bigint };
-        try {
-          eligibility = await refreshClaimEligibility(market.id);
-        } catch (error) {
-          skippedCount += 1;
-          setNotice(`Skipped Market #${market.id}: ${compactErrorMessage(error)}`);
-          continue;
+      setNotice(`Checking ${claimCandidates.length} ended markets for claimable payouts...`);
+      const eligibilityRows = await mapWithConcurrency(
+        claimCandidates,
+        Math.min(4, MARKET_LOAD_CONCURRENCY),
+        async (market) => {
+          try {
+            return { market, eligibility: await refreshClaimEligibility(market.id), error: null };
+          } catch (error) {
+            return { market, eligibility: null, error };
+          }
         }
-        if (eligibility.claimed) {
-          skippedCount += 1;
-          markClaimedLocally(market.id);
-          continue;
-        }
-        if (eligibility.payout <= 0n) {
-          skippedCount += 1;
+      );
+      const claimTargets = eligibilityRows
+        .filter((row) => row.eligibility && !row.eligibility.claimed && row.eligibility.payout > 0n)
+        .map((row) => row.market);
+      let skippedCount = eligibilityRows.length - claimTargets.length;
+      for (const row of eligibilityRows) {
+        if (row.eligibility?.claimed) {
+          markClaimedLocally(row.market.id);
+        } else if (row.eligibility && row.eligibility.payout <= 0n) {
           setMarkets((current) =>
-            current.map((item) => (item.id === market.id ? { ...item, potentialPayout: 0n } : item))
+            current.map((item) => (item.id === row.market.id ? { ...item, potentialPayout: 0n } : item))
           );
-          continue;
         }
+      }
+      const firstEligibilityError = eligibilityRows.find((row) => row.error)?.error;
+      if (claimTargets.length === 0) {
+        setNotice(
+          firstEligibilityError
+            ? `No claimable payouts found. Last check error: ${compactErrorMessage(firstEligibilityError)}`
+            : "No claimable payouts found after checking your ended markets."
+        );
+        void loadMarkets();
+        return;
+      }
+
+      let claimedCount = 0;
+      for (const [index, market] of claimTargets.entries()) {
         const completed = await runTransaction(
           () =>
             walletClient.writeContract({
@@ -9588,7 +9620,7 @@ export default function App() {
 
   useEffect(() => {
     loadMarkets();
-  }, [loadMarkets]);
+  }, [loadMarkets, marketReloadToken]);
 
   useEffect(() => {
     if (!hasMoreMarkets || loading || view === "market") return;

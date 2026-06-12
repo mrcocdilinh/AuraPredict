@@ -325,6 +325,49 @@ let state = emptyState();
 let syncPromise = null;
 let scheduledSyncTimer = null;
 const blockTimestampCache = new Map();
+let tradeIndexCache = {
+  version: "",
+  sorted: [],
+  byUser: new Map(),
+  byMarket: new Map()
+};
+
+function tradeIndexVersion() {
+  const last = state.trades[state.trades.length - 1];
+  return `${state.trades.length}:${last?.id || ""}:${last?.timestamp || 0}`;
+}
+
+function tradeIndexes() {
+  const version = tradeIndexVersion();
+  if (tradeIndexCache.version === version) return tradeIndexCache;
+
+  const sorted = state.trades.slice().sort((a, b) => b.timestamp - a.timestamp);
+  const byUser = new Map();
+  const byMarket = new Map();
+  for (const trade of sorted) {
+    const userKey = String(trade.user || "").toLowerCase();
+    if (userKey) {
+      const rows = byUser.get(userKey) ?? [];
+      rows.push(trade);
+      byUser.set(userKey, rows);
+    }
+    const marketRows = byMarket.get(trade.marketId) ?? [];
+    marketRows.push(trade);
+    byMarket.set(trade.marketId, marketRows);
+  }
+
+  tradeIndexCache = { version, sorted, byUser, byMarket };
+  return tradeIndexCache;
+}
+
+function tradesForUser(address) {
+  if (!address || !isAddress(address)) return [];
+  return tradeIndexes().byUser.get(address.toLowerCase()) ?? [];
+}
+
+function tradesForMarket(marketId) {
+  return tradeIndexes().byMarket.get(marketId) ?? [];
+}
 
 function indexerRuntimeState() {
   state.indexer ??= emptyState().indexer;
@@ -3997,11 +4040,8 @@ async function route(req, res) {
     if (url.pathname === "/api/activity") {
       const limit = Math.max(1, Math.min(50_000, Number(url.searchParams.get("limit") || 50)));
       const user = String(url.searchParams.get("user") || "").trim().toLowerCase();
-      const rows =
-        user && isAddress(user)
-          ? state.trades.filter((activity) => String(activity.user || "").toLowerCase() === user)
-          : state.trades;
-      json(res, 200, { activities: rows.slice().sort((a, b) => b.timestamp - a.timestamp).slice(0, limit) });
+      const rows = user && isAddress(user) ? tradesForUser(user) : tradeIndexes().sorted;
+      json(res, 200, { activities: rows.slice(0, limit) });
       return;
     }
 
@@ -4381,9 +4421,7 @@ async function route(req, res) {
       const snapshots = state.snapshots
         .filter((snapshot) => snapshot.marketId === marketId)
         .sort((a, b) => a.timestamp - b.timestamp);
-      const trades = state.trades
-        .filter((trade) => trade.marketId === marketId)
-        .sort((a, b) => b.timestamp - a.timestamp);
+      const trades = tradesForMarket(marketId);
       json(res, 200, { market, snapshots, trades, updatedAt: state.updatedAt });
       return;
     }
@@ -4391,7 +4429,7 @@ async function route(req, res) {
     if (segments[0] === "api" && segments[1] === "users" && segments[2]) {
       const address = segments[2].toLowerCase();
       const row = buildLeaderboard(0).find((item) => item.address.toLowerCase() === address);
-      const trades = state.trades.filter((trade) => trade.user.toLowerCase() === address).sort((a, b) => b.timestamp - a.timestamp);
+      const trades = tradesForUser(address);
       const createdMarkets = Object.values(state.markets).filter((market) => market.creator.toLowerCase() === address);
       json(res, 200, { user: row ?? null, trades, createdMarkets, updatedAt: state.updatedAt });
       return;
