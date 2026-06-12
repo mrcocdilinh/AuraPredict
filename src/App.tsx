@@ -382,31 +382,14 @@ type NotificationType =
   | "claim"
   | "result";
 
-type NotificationHistoryItem = {
+type ActiveNotificationItem = {
   key: string;
-  wallet: string;
   type: NotificationType;
   label: string;
   title: string;
   detail: string;
   marketId?: number;
-  createdAt: number;
-  claimedAt?: number;
 };
-
-const NOTIFICATION_TYPE_VALUES: NotificationType[] = [
-  "resolve",
-  "finalize",
-  "owner-review",
-  "dispute-review",
-  "stale-review",
-  "proposal",
-  "dispute-resolved",
-  "report",
-  "flag",
-  "claim",
-  "result"
-];
 
 type EvidenceDraft = {
   title: string;
@@ -465,11 +448,6 @@ type SocialProfileSaveResponse = SocialProfileResponse & {
   code?: string;
   error?: string;
   username?: string;
-};
-
-type SocialNotificationsResponse = {
-  notifications?: NotificationHistoryItem[];
-  updatedAt?: string;
 };
 
 type SocialReportsResponse = {
@@ -809,7 +787,6 @@ const MARKET_COMMENTS_KEY = "aurapredict.marketComments";
 const MARKET_EVIDENCE_KEY = "aurapredict.marketEvidence";
 const MARKET_REPORTS_KEY = "aurapredict.marketReports";
 const LOCAL_CLAIMED_MARKETS_KEY = "aurapredict.localClaimedMarkets";
-const NOTIFICATION_HISTORY_KEY = "aurapredict.notificationHistory";
 const ONBOARDING_DISMISSED_KEY = "aurapredict.onboardingDismissed";
 const MARKET_QUERY_KEY = "market";
 const PROFILE_QUERY_KEY = "profile";
@@ -995,48 +972,6 @@ function readJsonStorage<T>(key: string, fallback: T) {
   } catch {
     return fallback;
   }
-}
-
-function normalizeNotificationHistoryItem(item: unknown, walletOverride?: string): NotificationHistoryItem | null {
-  if (!item || typeof item !== "object") return null;
-  const row = item as Partial<NotificationHistoryItem>;
-  const type = typeof row.type === "string" && NOTIFICATION_TYPE_VALUES.includes(row.type as NotificationType)
-    ? (row.type as NotificationType)
-    : null;
-  const key = typeof row.key === "string" ? row.key.trim().slice(0, 180) : "";
-  const wallet = (walletOverride || (typeof row.wallet === "string" ? row.wallet : "")).toLowerCase();
-  if (!type || !key || !wallet) return null;
-  const createdAt = Number(row.createdAt);
-  const claimedAt = Number(row.claimedAt);
-  const marketId = Number(row.marketId);
-  const normalized: NotificationHistoryItem = {
-    key,
-    wallet,
-    type,
-    label: typeof row.label === "string" && row.label.trim() ? row.label.trim().slice(0, 48) : "Notification",
-    title: typeof row.title === "string" && row.title.trim() ? row.title.trim().slice(0, 180) : "Market update",
-    detail: typeof row.detail === "string" ? row.detail.trim().slice(0, 320) : "",
-    createdAt: Number.isFinite(createdAt) && createdAt > 0 ? Math.floor(createdAt) : Math.floor(Date.now() / 1000)
-  };
-  if (Number.isInteger(marketId) && marketId >= 0) normalized.marketId = marketId;
-  if (Number.isFinite(claimedAt) && claimedAt > 0) normalized.claimedAt = Math.floor(claimedAt);
-  return normalized;
-}
-
-function mergeNotificationHistoryItems(rows: unknown[], walletOverride?: string) {
-  const normalizedRows = rows
-    .map((row) => normalizeNotificationHistoryItem(row, walletOverride))
-    .filter(Boolean) as NotificationHistoryItem[];
-  normalizedRows.sort((a, b) => b.createdAt - a.createdAt);
-  const seen = new Set<string>();
-  const merged: NotificationHistoryItem[] = [];
-  for (const row of normalizedRows) {
-    if (seen.has(row.key)) continue;
-    seen.add(row.key);
-    merged.push(row);
-    if (merged.length >= 500) break;
-  }
-  return merged;
 }
 
 function claimedMarketKey(account: string, marketId: number) {
@@ -4184,9 +4119,6 @@ export default function App() {
   const [locallyClaimedMarkets, setLocallyClaimedMarkets] = useState<string[]>(() =>
     readJsonStorage(LOCAL_CLAIMED_MARKETS_KEY, [])
   );
-  const [notificationHistory, setNotificationHistory] = useState<NotificationHistoryItem[]>(() =>
-    mergeNotificationHistoryItems(readJsonStorage<unknown[]>(NOTIFICATION_HISTORY_KEY, []))
-  );
   const [commentInputs, setCommentInputs] = useState<Record<number, string>>({});
   const [evidenceDrafts, setEvidenceDrafts] = useState<Record<number, EvidenceDraft>>({});
   const [reportDrafts, setReportDrafts] = useState<Record<number, { reason: string; url: string }>>({});
@@ -5032,68 +4964,58 @@ export default function App() {
     disputeResolvedNotifications.length +
     claimNotifications.length +
     resultNotifications.length;
-  const activeNotificationItems = useMemo<NotificationHistoryItem[]>(() => {
+  const activeNotificationItems = useMemo<ActiveNotificationItem[]>(() => {
     if (!account) return [];
     const wallet = account.toLowerCase();
-    const rows: NotificationHistoryItem[] = [];
+    const rows: ActiveNotificationItem[] = [];
     resolveNotifications.forEach((market) => {
       rows.push({
         key: `${wallet}:resolve:${market.id}:${market.closeTime}`,
-        wallet,
         type: "resolve",
         label: "Result needed",
         title: shortQuestion(market.question),
         detail: `Closed ${closeDate(market.closeTime)}. Resolution proposal is needed.`,
-        marketId: market.id,
-        createdAt: 0
+        marketId: market.id
       });
     });
     finalizeNotifications.forEach((market) => {
       rows.push({
         key: `${wallet}:finalize:${market.id}:${market.proposedAt}`,
-        wallet,
         type: "finalize",
         label: "Ready to finalize",
         title: shortQuestion(market.question),
         detail: `Proposed ${outcomeLabel(market.proposedOutcome)}. No dispute was opened.`,
-        marketId: market.id,
-        createdAt: 0
+        marketId: market.id
       });
     });
     ownerAiMismatchNotifications.forEach((market) => {
       rows.push({
         key: `${wallet}:owner-ai-mismatch:${market.id}:${market.proposedAt}:${market.proposedOutcome}`,
-        wallet,
         type: "owner-review",
         label: "Owner review",
         title: shortQuestion(market.question),
         detail: ownerReviewReasonFor(market),
-        marketId: market.id,
-        createdAt: 0
+        marketId: market.id
       });
     });
     disputeReviewNotifications.forEach((market) => {
       rows.push({
         key: `${wallet}:review:${market.id}:${market.proposedAt}:${market.disputed ? "dispute" : "authority"}`,
-        wallet,
         type: market.disputed ? "dispute-review" : "owner-review",
         label: market.disputed ? "Dispute review" : "Authority review",
         title: shortQuestion(market.question),
         detail: ownerReviewReasonFor(market),
-        marketId: market.id,
-        createdAt: 0
+        marketId: market.id
       });
     });
     staleDisputeNotifications.forEach((market) => {
       rows.push({
         key: `${wallet}:stale-review:${market.id}:${market.proposedAt}`,
-        wallet,
         type: "stale-review",
         label: "Stale review",
         title: shortQuestion(market.question),
         detail: "Authority did not finalize after the grace period. Cancel refunds positions.",
-        marketId: market.id,
-        createdAt: 0
+        marketId: market.id
       });
     });
     proposedResultNotifications.forEach((market) => {
@@ -5101,51 +5023,43 @@ export default function App() {
       const aiSuggestedOutcome = aiOutcomeFromReceipt(aiReceipt);
       rows.push({
         key: `${wallet}:proposal:${market.id}:${market.proposedAt}:${market.proposedOutcome}`,
-        wallet,
         type: "proposal",
         label: "Result proposed",
         title: shortQuestion(market.question),
         detail: `Resolver proposed ${outcomeLabel(market.proposedOutcome)}${
           aiSuggestedOutcome !== Outcome.Unresolved ? `. AI suggested ${outcomeLabel(aiSuggestedOutcome)}.` : "."
         }`,
-        marketId: market.id,
-        createdAt: 0
+        marketId: market.id
       });
     });
     disputeResolvedNotifications.forEach((market) => {
       rows.push({
         key: `${wallet}:dispute-resolved:${market.id}:${market.outcome}`,
-        wallet,
         type: "dispute-resolved",
         label: "Dispute resolved",
         title: shortQuestion(market.question),
         detail: `Final outcome is ${outcomeLabel(market.outcome)} after dispute review by owner/authority.`,
-        marketId: market.id,
-        createdAt: 0
+        marketId: market.id
       });
     });
     claimNotifications.forEach((market) => {
       rows.push({
         key: `${wallet}:claim:${market.id}:${market.outcome}:${market.potentialPayout.toString()}`,
-        wallet,
         type: "claim",
         label: "Claim available",
         title: shortQuestion(market.question),
         detail: `${formatMarketAmount(market.potentialPayout, market)} ${marketSymbol(market)} ready.`,
-        marketId: market.id,
-        createdAt: 0
+        marketId: market.id
       });
     });
     resultNotifications.forEach((market) => {
       rows.push({
         key: `${wallet}:result:${market.id}:${market.outcome}`,
-        wallet,
         type: "result",
         label: "Result posted",
         title: shortQuestion(market.question),
         detail: `${outcomeLabel(market.outcome)}. No payout is available for this position.`,
-        marketId: market.id,
-        createdAt: 0
+        marketId: market.id
       });
     });
     return rows;
@@ -5163,15 +5077,10 @@ export default function App() {
     resultNotifications,
     staleDisputeNotifications
   ]);
-  const walletNotificationHistory = account
-    ? notificationHistory
-        .filter((item) => item.wallet === account.toLowerCase())
-        .sort((a, b) => b.createdAt - a.createdAt)
-    : [];
-  const visibleNotificationHistory =
+  const visibleNotificationItems =
     notificationFilter === "all"
-      ? walletNotificationHistory
-      : walletNotificationHistory.filter((item) => item.type === notificationFilter);
+      ? activeNotificationItems
+      : activeNotificationItems.filter((item) => item.type === notificationFilter);
   const notificationFilterOptions: { value: NotificationFilter; label: string }[] = [
     { value: "all", label: "All" },
     { value: "claim", label: "Claims" },
@@ -5583,58 +5492,6 @@ export default function App() {
   useEffect(() => {
     window.localStorage.setItem(LOCAL_CLAIMED_MARKETS_KEY, JSON.stringify(locallyClaimedMarkets.slice(-400)));
   }, [locallyClaimedMarkets]);
-
-  useEffect(() => {
-    window.localStorage.setItem(NOTIFICATION_HISTORY_KEY, JSON.stringify(notificationHistory.slice(0, 1_000)));
-  }, [notificationHistory]);
-
-  useEffect(() => {
-    if (!account) return;
-    const wallet = account.toLowerCase();
-    let canceled = false;
-
-    fetchIndexerJson<SocialNotificationsResponse>(`/api/social/profiles/${account}/notifications`).then((response) => {
-      if (canceled) return;
-      const serverRows = mergeNotificationHistoryItems(response?.notifications ?? [], wallet);
-      setNotificationHistory((current) => {
-        const localWalletRows = current.filter((item) => item.wallet === wallet);
-        const mergedWalletRows = mergeNotificationHistoryItems([...serverRows, ...localWalletRows], wallet);
-        const otherRows = current.filter((item) => item.wallet !== wallet);
-        const next = [...mergedWalletRows, ...otherRows].slice(0, 1_000);
-        if (mergedWalletRows.length > serverRows.length) {
-          void postIndexerJson<SocialNotificationsResponse>(`/api/social/profiles/${account}/notifications`, {
-            notifications: mergedWalletRows
-          });
-        }
-        return next;
-      });
-    });
-
-    return () => {
-      canceled = true;
-    };
-  }, [account]);
-
-  useEffect(() => {
-    if (!account || activeNotificationItems.length === 0) return;
-    const wallet = account.toLowerCase();
-    setNotificationHistory((current) => {
-      const seen = new Set(current.map((item) => item.key));
-      const timestamp = Math.floor(Date.now() / 1000);
-      const additions = activeNotificationItems
-        .filter((item) => !seen.has(item.key))
-        .map((item) => ({ ...item, createdAt: timestamp }));
-      if (additions.length === 0) return current;
-      const next = [...additions, ...current]
-        .sort((a, b) => b.createdAt - a.createdAt)
-        .slice(0, 500);
-      const walletRows = next.filter((item) => item.wallet === wallet);
-      void postIndexerJson<SocialNotificationsResponse>(`/api/social/profiles/${account}/notifications`, {
-        notifications: walletRows
-      });
-      return next;
-    });
-  }, [account, activeNotificationItems]);
 
   useEffect(() => {
     let canceled = false;
@@ -6976,21 +6833,6 @@ export default function App() {
         setNotice("Report URL must start with http:// or https://.");
         return;
       }
-      const saveReportNotice = () => {
-        const wallet = account.toLowerCase();
-        const item: NotificationHistoryItem = {
-          key: `${wallet}:report:${marketId}:${Date.now()}`,
-          wallet,
-          type: "report",
-          label: "Market reported",
-          title: shortQuestion(markets.find((market) => market.id === marketId)?.question || "Market report"),
-          detail: reason,
-          marketId,
-          createdAt: Math.floor(Date.now() / 1000)
-        };
-        setNotificationHistory((current) => [item, ...current].slice(0, 500));
-      };
-
       const response = await postIndexerJson<{ report: MarketReport; reports: MarketReport[] }>(
         `/api/social/markets/${marketId}/reports`,
         { reporter: account, reason, url }
@@ -6998,7 +6840,6 @@ export default function App() {
       if (response?.reports) {
         setMarketReports((current) => ({ ...current, [String(marketId)]: response.reports }));
         setReportDrafts((current) => ({ ...current, [marketId]: { reason: "", url: "" } }));
-        saveReportNotice();
         setNotice("Market report sent to owner review.");
         return;
       }
@@ -7017,10 +6858,9 @@ export default function App() {
         [String(marketId)]: [report, ...(current[String(marketId)] || [])].slice(0, 40)
       }));
       setReportDrafts((current) => ({ ...current, [marketId]: { reason: "", url: "" } }));
-      saveReportNotice();
       setNotice("Market report saved locally. Owner will see it after indexer sync is available.");
     },
-    [account, markets, reportDrafts, setNotice]
+    [account, reportDrafts, setNotice]
   );
 
   const askAuraForMarketDraft = useCallback(async () => {
@@ -8282,23 +8122,8 @@ export default function App() {
           market.id === marketId ? { ...market, claimed: true, potentialPayout: 0n } : market
         )
       );
-      setNotificationHistory((current) => {
-        const claimedAt = Math.floor(Date.now() / 1000);
-        const next = current.map((item) =>
-          item.wallet === accountKey && item.type === "claim" && item.marketId === marketId
-            ? { ...item, detail: `${item.detail} Claimed.`, claimedAt }
-            : item
-        );
-        if (account) {
-          const walletRows = next.filter((item) => item.wallet === accountKey);
-          void postIndexerJson<SocialNotificationsResponse>(`/api/social/profiles/${account}/notifications`, {
-            notifications: walletRows
-          });
-        }
-        return next;
-      });
     },
-    [account, accountKey]
+    [accountKey]
   );
 
   const refreshClaimEligibility = useCallback(
@@ -12314,8 +12139,8 @@ export default function App() {
               <div className="notifications-page-head">
                 <div>
                   <span className="section-label">Wallet actions</span>
-                  <h3>{walletNotificationHistory.length} saved notifications</h3>
-                  <p>{notificationCount} pending now. Newest notifications are shown first.</p>
+                  <h3>{notificationCount} current notifications</h3>
+                  <p>Only active wallet actions are shown. Dismissed or handled notices stay hidden on this device.</p>
                 </div>
                 {claimNotifications.length > 1 && (
                   <button onClick={claimAll} disabled={transactionPending} type="button">
@@ -12335,29 +12160,33 @@ export default function App() {
                   </button>
                 ))}
               </div>
-              {walletNotificationHistory.length === 0 && (
+              {activeNotificationItems.length === 0 && (
                 <div className="empty-state">
-                  <strong>No saved notifications</strong>
-                  <span>Claim, resolve, dispute, and result notices will be saved here when they appear.</span>
+                  <strong>No active notifications</strong>
+                  <span>Claim, result, dispute, and owner review actions will appear here while they still need attention.</span>
                 </div>
               )}
-              {visibleNotificationHistory.length === 0 && walletNotificationHistory.length > 0 && (
+              {visibleNotificationItems.length === 0 && activeNotificationItems.length > 0 && (
                 <div className="empty-state">
                   <strong>No notifications in this filter</strong>
-                  <span>Choose another type to view saved wallet notification history.</span>
+                  <span>Choose another type to view current wallet actions.</span>
                 </div>
               )}
-              {visibleNotificationHistory.map((item) => {
+              {visibleNotificationItems.map((item) => {
                 const historyMarketId = item.marketId;
                 const market = historyMarketId !== undefined ? markets.find((row) => row.id === historyMarketId) : undefined;
-                const activeClaim = !item.claimedAt && market && claimNotifications.some((row) => row.id === market.id);
+                const activeClaim = item.type === "claim" && market && claimNotifications.some((row) => row.id === market.id);
+                const canDismiss =
+                  item.type === "proposal" ||
+                  item.type === "result" ||
+                  item.type === "dispute-resolved" ||
+                  item.type === "report" ||
+                  item.type === "flag";
                 return (
-                  <article className="notification-card notification-history-card" key={item.key}>
+                  <article className="notification-card notification-active-card" key={item.key}>
                     <span>{item.label}</span>
                     <strong>{historyMarketId !== undefined ? `#${historyMarketId} ${item.title}` : item.title}</strong>
                     <small>{item.detail}</small>
-                    {item.claimedAt && <small className="notification-time">Handled {closeDate(item.claimedAt)}</small>}
-                    <small className="notification-time">Created {closeDate(item.createdAt)}</small>
                     <div className="notification-actions">
                       {historyMarketId !== undefined && (
                         <button className="secondary" onClick={() => openMarket(historyMarketId, item.type.includes("review") || item.type === "resolve" || item.type === "finalize")} type="button">
@@ -12367,6 +12196,11 @@ export default function App() {
                       {market && activeClaim && (
                         <button onClick={() => claim(market.id)} disabled={transactionPending} type="button">
                           Claim payout
+                        </button>
+                      )}
+                      {canDismiss && (
+                        <button className="secondary" onClick={() => dismissNotificationByKey(item.key)} type="button">
+                          Dismiss
                         </button>
                       )}
                     </div>
@@ -13180,6 +13014,26 @@ export default function App() {
                   const settlement = userSettlement(market, market.termsProtocolFeeBps ?? protocolFeeBps);
                   const claimStatus = claimStatusFor(market, settlement, isOwnProfile);
                   const claimableValue = isOwnProfile ? market.potentialPayout : settlement.payout;
+                  const totalPosition = market.yesPosition + market.noPosition;
+                  const selectedSideLabel =
+                    market.yesPosition > 0n && market.noPosition > 0n
+                      ? "YES + NO"
+                      : market.yesPosition > 0n
+                        ? "YES"
+                        : market.noPosition > 0n
+                          ? "NO"
+                          : "No position";
+                  const selectedSideClass =
+                    market.yesPosition > 0n && market.noPosition === 0n
+                      ? "yes"
+                      : market.noPosition > 0n && market.yesPosition === 0n
+                        ? "no"
+                        : "mixed";
+                  const finalOutcomeLabel =
+                    market.outcome === Outcome.Unresolved ? marketStatus(market) : outcomeLabel(market.outcome);
+                  const profilePayoutValue = settlement.settled ? settlement.payout : 0n;
+                  const pnlClassName =
+                    settlement.pnl > 0n ? "profile-positive" : settlement.pnl < 0n ? "profile-negative" : "profile-neutral";
                   const profileResolutionAction =
                     Boolean(canPropose) ||
                     Boolean(canLegacyResolve) ||
@@ -13209,13 +13063,46 @@ export default function App() {
                     pendingTokenWithdrawal > 0n;
 
                   return (
-                    <article className="history-card" key={market.id}>
-                      <div>
-                        <span className={`category ${meta.className}`}>
-                          <CategoryIcon category={market.category || "Other"} />
-                          {market.category || "Other"}
-                        </span>
-                        <h3>{market.question}</h3>
+                    <article className={`history-card history-card-${result.className}`} key={market.id}>
+                      <div className="history-card-head">
+                        <div className="history-card-title">
+                          <span className={`category ${meta.className}`}>
+                            <CategoryIcon category={market.category || "Other"} />
+                            {market.category || "Other"}
+                          </span>
+                          <h3>{market.question}</h3>
+                        </div>
+                        <div className={`history-result-badge ${result.className}`}>
+                          <span>{isOwnProfile ? "Your result" : "Profile result"}</span>
+                          <strong>{result.label}</strong>
+                          <small>{settlement.settled ? `${formatSignedUsdc(settlement.pnl, marketDecimals(market))} ${marketSymbol(market)} PnL` : selectedSideLabel}</small>
+                        </div>
+                      </div>
+                      <div className="history-outcome-strip">
+                        <div>
+                          <span>Side</span>
+                          <strong className={`history-side-pill ${selectedSideClass}`}>{selectedSideLabel}</strong>
+                        </div>
+                        <div>
+                          <span>Stake</span>
+                          <strong>{formatMarketAmount(totalPosition, market)} {marketSymbol(market)}</strong>
+                        </div>
+                        <div>
+                          <span>Outcome</span>
+                          <strong>{finalOutcomeLabel}</strong>
+                        </div>
+                        <div>
+                          <span>Payout</span>
+                          <strong>{formatMarketAmount(profilePayoutValue, market)} {marketSymbol(market)}</strong>
+                        </div>
+                        <div>
+                          <span>PNL</span>
+                          <strong className={pnlClassName}>{formatSignedUsdc(settlement.pnl, marketDecimals(market))} {marketSymbol(market)}</strong>
+                        </div>
+                        <div>
+                          <span>Claim</span>
+                          <strong>{claimStatus}</strong>
+                        </div>
                       </div>
                       <div className="history-metrics">
                         <div>
@@ -13228,7 +13115,7 @@ export default function App() {
                         </div>
                         <div>
                           <span>Market result</span>
-                          <strong>{marketStatus(market)}</strong>
+                          <strong>{finalOutcomeLabel}</strong>
                         </div>
                         <div>
                           <span>{isOwnProfile ? "Your result" : "Profile result"}</span>
@@ -13240,7 +13127,7 @@ export default function App() {
                         </div>
                         <div>
                           <span>Est. payout</span>
-                          <strong>{formatMarketAmount(settlement.payout, market)} {marketSymbol(market)}</strong>
+                          <strong>{formatMarketAmount(profilePayoutValue, market)} {marketSymbol(market)}</strong>
                         </div>
                         <div>
                           <span>{isOwnProfile ? "Claimable" : "Est. claim"}</span>

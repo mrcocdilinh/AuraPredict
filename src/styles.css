@@ -1743,7 +1743,7 @@ h3 {
   color: #ffffff;
 }
 
-.notification-history-card {
+.notification-active-card {
   border-left: 3px solid #18d7ff;
 }
 
@@ -7447,6 +7447,10 @@ label {
   color: #e5485d !important;
 }
 
+.profile-neutral {
+  color: #667085 !important;
+}
+
 .profile-edge-card {
   display: grid;
   gap: 12px;
@@ -7608,6 +7612,132 @@ label {
   display: grid;
   gap: 13px;
   padding: 15px;
+}
+
+.history-card-won {
+  border-color: #a7f0cf;
+  box-shadow: inset 4px 0 0 #12b981;
+}
+
+.history-card-lost {
+  border-color: #ffc4cc;
+  box-shadow: inset 4px 0 0 #ef4444;
+}
+
+.history-card-refund {
+  border-color: #d2d8e4;
+  box-shadow: inset 4px 0 0 #667085;
+}
+
+.history-card-live {
+  border-color: #aeefff;
+  box-shadow: inset 4px 0 0 #18d7ff;
+}
+
+.history-card-head {
+  align-items: start;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) minmax(150px, 210px);
+}
+
+.history-card-title {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+}
+
+.history-card-title h3 {
+  margin: 0;
+}
+
+.history-result-badge {
+  border: 1px solid #e5ebf4;
+  border-radius: 8px;
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 10px;
+}
+
+.history-result-badge span,
+.history-outcome-strip span {
+  color: #667085;
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.history-result-badge strong {
+  font-size: 1rem;
+  line-height: 1.1;
+}
+
+.history-result-badge small {
+  color: #667085;
+  font-size: 0.74rem;
+  font-weight: 820;
+}
+
+.history-result-badge.won {
+  background: #e9fff8;
+  border-color: #baf3df;
+}
+
+.history-result-badge.lost {
+  background: #fff0f2;
+  border-color: #ffd0d6;
+}
+
+.history-result-badge.live {
+  background: #ecfbff;
+  border-color: #aeefff;
+}
+
+.history-result-badge.refund,
+.history-result-badge.neutral {
+  background: #f8fafc;
+  border-color: #e5ebf4;
+}
+
+.history-outcome-strip {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
+.history-outcome-strip div {
+  background: #f8fafc;
+  border: 1px solid #e5ebf4;
+  border-radius: 8px;
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  padding: 10px;
+}
+
+.history-outcome-strip strong {
+  color: #101827;
+  font-size: 0.88rem;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+
+.history-side-pill {
+  justify-self: start;
+}
+
+.history-side-pill.yes {
+  color: #087f5b;
+}
+
+.history-side-pill.no {
+  color: #c92a3b;
+}
+
+.history-side-pill.mixed {
+  color: #4568e8;
 }
 
 .history-metrics {
@@ -7943,6 +8073,7 @@ label {
 [data-theme="dark"] .market-meta div,
 [data-theme="dark"] .position-chip,
 [data-theme="dark"] .history-metrics div,
+[data-theme="dark"] .history-outcome-strip div,
 [data-theme="dark"] .notification-card,
 [data-theme="dark"] .notification-empty,
 [data-theme="dark"] .search-result,
@@ -7951,6 +8082,37 @@ label {
 [data-theme="dark"] .market-risk-panel {
   background: #0b1020;
   border-color: #202a3f;
+}
+
+[data-theme="dark"] .history-result-badge.won {
+  background: rgba(18, 185, 129, 0.14);
+  border-color: rgba(52, 211, 153, 0.32);
+}
+
+[data-theme="dark"] .history-result-badge.lost {
+  background: rgba(239, 68, 68, 0.14);
+  border-color: rgba(251, 113, 133, 0.32);
+}
+
+[data-theme="dark"] .history-result-badge.live {
+  background: rgba(6, 182, 212, 0.14);
+  border-color: rgba(103, 232, 249, 0.32);
+}
+
+[data-theme="dark"] .history-result-badge.refund,
+[data-theme="dark"] .history-result-badge.neutral {
+  background: #0b1020;
+  border-color: #202a3f;
+}
+
+[data-theme="dark"] .history-result-badge span,
+[data-theme="dark"] .history-result-badge small,
+[data-theme="dark"] .history-outcome-strip span {
+  color: #9aa7bd;
+}
+
+[data-theme="dark"] .history-outcome-strip strong {
+  color: #f7f9ff;
 }
 
 [data-theme="dark"] .owner-action-column > span {
@@ -9697,6 +9859,10 @@ label {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .history-outcome-strip {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
   .command-grid {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -9882,6 +10048,8 @@ label {
   .profile-summary,
   .profile-stat-grid,
   .profile-rank-grid,
+  .history-card-head,
+  .history-outcome-strip,
   .history-metrics,
   .market-grid,
   .market-meta,
@@ -10352,6 +10520,8 @@ label {
   .profile-stat-grid,
   .profile-rank-grid,
   .aura-breakdown-grid,
+  .history-card-head,
+  .history-outcome-strip,
   .history-metrics,
   .leaderboard-row {
     grid-template-columns: 1fr;
@@ -10798,6 +10968,8 @@ label {
   .market-card-stat-grid,
   .profile-stat-grid,
   .profile-rank-grid,
+  .history-card-head,
+  .history-outcome-strip,
   .profile-name-form {
     grid-template-columns: 1fr;
   }
