@@ -70,6 +70,20 @@ const AUTO_EVIDENCE_ENABLED = String(process.env.AURA_AUTO_EVIDENCE_ENABLED || "
 const AUTO_EVIDENCE_TIMEOUT_MS = Number(process.env.AURA_AUTO_EVIDENCE_TIMEOUT_MS || 6_000);
 const AUTO_EVIDENCE_MAX_SOURCES = Number(process.env.AURA_AUTO_EVIDENCE_MAX_SOURCES || 3);
 const AUTO_EVIDENCE_MAX_ITEMS = Number(process.env.AURA_AUTO_EVIDENCE_MAX_ITEMS || 80);
+const AUTO_EVIDENCE_MAX_ROWS = Math.max(10, Number(process.env.AURA_AUTO_EVIDENCE_MAX_ROWS || 16) || 16);
+const AUTO_EVIDENCE_SEARCH_ENABLED = String(process.env.AURA_AUTO_EVIDENCE_SEARCH_ENABLED || "1").trim() !== "0";
+const AUTO_EVIDENCE_SEARCH_PROVIDER = String(process.env.AURA_AUTO_EVIDENCE_SEARCH_PROVIDER || "").trim().toLowerCase();
+const AUTO_EVIDENCE_SEARCH_MAX_RESULTS = Math.max(
+  0,
+  Math.min(8, Number(process.env.AURA_AUTO_EVIDENCE_SEARCH_MAX_RESULTS || 4) || 4)
+);
+const AUTO_EVIDENCE_SEARCH_TIMEOUT_MS = Math.max(
+  1_000,
+  Number(process.env.AURA_AUTO_EVIDENCE_SEARCH_TIMEOUT_MS || 7_000) || 7_000
+);
+const BRAVE_SEARCH_API_KEY = String(process.env.BRAVE_SEARCH_API_KEY || "").trim();
+const TAVILY_API_KEY = String(process.env.TAVILY_API_KEY || "").trim();
+const SERPAPI_API_KEY = String(process.env.SERPAPI_API_KEY || "").trim();
 const ORACLE_AUTO_PROPOSE = String(process.env.AURA_ORACLE_AUTO_PROPOSE || "").trim() === "1";
 const ORACLE_AUTO_PROPOSE_MIN_CONFIDENCE = Number(process.env.AURA_ORACLE_AUTO_PROPOSE_MIN_CONFIDENCE || 78);
 const ORACLE_AUTO_PROPOSE_ADAPTERS = new Set(
@@ -2354,6 +2368,195 @@ async function scanSourceForEvidence(market, sourceUrl) {
   );
 }
 
+function isSportsLikeMarket(market) {
+  const text = oracleTextForMarket(market);
+  return (
+    String(market?.category || "").toLowerCase() === "sports" ||
+    /\b(fifa|world cup|uefa|soccer|football|nba|nfl|mlb|nhl|match|fixture|score|standings?|group stage|winner)\b/.test(text)
+  );
+}
+
+function evidenceSearchProviderConfig() {
+  const providers = [
+    { id: "brave", label: "Brave Search", key: BRAVE_SEARCH_API_KEY },
+    { id: "tavily", label: "Tavily", key: TAVILY_API_KEY },
+    { id: "serpapi", label: "SerpAPI", key: SERPAPI_API_KEY }
+  ];
+  if (AUTO_EVIDENCE_SEARCH_PROVIDER) {
+    return providers.find((provider) => provider.id === AUTO_EVIDENCE_SEARCH_PROVIDER && provider.key) || null;
+  }
+  return providers.find((provider) => provider.key) || null;
+}
+
+function addEvidenceSearchQuery(rows, value) {
+  const query = cleanText(value, 260);
+  if (query && !rows.includes(query)) rows.push(query);
+}
+
+function evidenceSearchQueriesForMarket(market) {
+  const question = cleanText(market?.question, 220);
+  const rule = cleanText(stripRuleMetadata(market?.resolutionRule || market?.resolutionCriteria || ""), 360);
+  const hosts = evidenceSourceUrlsForMarket(market)
+    .map((url) => hostnameFor(url))
+    .filter(Boolean);
+  const rows = [];
+  const base = question || rule;
+  if (!base) return rows;
+
+  addEvidenceSearchQuery(rows, `${base} official result`);
+  if (rule && rule !== question) addEvidenceSearchQuery(rows, `${question} ${rule} official source`);
+
+  if (isSportsLikeMarket(market)) {
+    addEvidenceSearchQuery(rows, `${question} final score official result`);
+    addEvidenceSearchQuery(rows, `${question} FIFA ESPN Olympics result`);
+  }
+  if (/\b(cpi|ppi|inflation|jobs report|nonfarm|fomc|fed|bls|bea|treasury|gdp)\b/.test(oracleTextForMarket(market))) {
+    addEvidenceSearchQuery(rows, `${question} official economic release`);
+  }
+  if (/\b(bitcoin|btc|ethereum|eth|solana|sol|crypto|token|price|binance|coingecko|coinmarketcap)\b/.test(oracleTextForMarket(market))) {
+    addEvidenceSearchQuery(rows, `${question} official market data source`);
+  }
+
+  for (const host of hosts.slice(0, 4)) {
+    addEvidenceSearchQuery(rows, `site:${host} ${base} result`);
+  }
+
+  return rows.slice(0, 6);
+}
+
+function normalizeEvidenceSearchResult(provider, query, value) {
+  const title = cleanText(value?.title || value?.name || "", 180);
+  const url = cleanUrl(value?.url || value?.link || value?.href || "");
+  const snippet = cleanText(value?.snippet || value?.description || value?.content || value?.body || "", 700);
+  if (!url && !snippet) return null;
+  return {
+    provider,
+    query,
+    title: title || hostnameFor(url) || "Search result",
+    url,
+    snippet
+  };
+}
+
+async function searchBraveEvidence(query, count) {
+  const params = new URLSearchParams({
+    q: query,
+    count: String(Math.min(10, Math.max(1, count))),
+    search_lang: "en",
+    country: "US",
+    safesearch: "moderate",
+    text_decorations: "false"
+  });
+  const { response, body } = await fetchJsonWithTimeout(`https://api.search.brave.com/res/v1/web/search?${params}`, {
+    timeoutMs: AUTO_EVIDENCE_SEARCH_TIMEOUT_MS,
+    headers: {
+      "x-subscription-token": BRAVE_SEARCH_API_KEY
+    }
+  });
+  if (!response.ok || typeof body !== "object" || body === null) {
+    throw new Error(`Brave Search returned HTTP ${response.status}.`);
+  }
+  return (Array.isArray(body?.web?.results) ? body.web.results : [])
+    .map((row) => normalizeEvidenceSearchResult("Brave Search", query, row))
+    .filter(Boolean);
+}
+
+async function searchTavilyEvidence(query, count) {
+  const { response, body } = await fetchJsonWithTimeout("https://api.tavily.com/search", {
+    method: "POST",
+    timeoutMs: AUTO_EVIDENCE_SEARCH_TIMEOUT_MS,
+    headers: {
+      "content-type": "application/json",
+      authorization: `Bearer ${TAVILY_API_KEY}`
+    },
+    body: JSON.stringify({
+      api_key: TAVILY_API_KEY,
+      query,
+      search_depth: "basic",
+      include_answer: false,
+      max_results: Math.min(10, Math.max(1, count))
+    })
+  });
+  if (!response.ok || typeof body !== "object" || body === null) {
+    throw new Error(`Tavily returned HTTP ${response.status}.`);
+  }
+  return (Array.isArray(body?.results) ? body.results : [])
+    .map((row) => normalizeEvidenceSearchResult("Tavily", query, row))
+    .filter(Boolean);
+}
+
+async function searchSerpApiEvidence(query, count) {
+  const params = new URLSearchParams({
+    engine: "google",
+    q: query,
+    api_key: SERPAPI_API_KEY,
+    num: String(Math.min(10, Math.max(1, count)))
+  });
+  const { response, body } = await fetchJsonWithTimeout(`https://serpapi.com/search.json?${params}`, {
+    timeoutMs: AUTO_EVIDENCE_SEARCH_TIMEOUT_MS
+  });
+  if (!response.ok || typeof body !== "object" || body === null) {
+    throw new Error(`SerpAPI returned HTTP ${response.status}.`);
+  }
+  return (Array.isArray(body?.organic_results) ? body.organic_results : [])
+    .map((row) => normalizeEvidenceSearchResult("SerpAPI", query, row))
+    .filter(Boolean);
+}
+
+async function runEvidenceSearch(provider, query, count) {
+  if (provider.id === "brave") return searchBraveEvidence(query, count);
+  if (provider.id === "tavily") return searchTavilyEvidence(query, count);
+  if (provider.id === "serpapi") return searchSerpApiEvidence(query, count);
+  return [];
+}
+
+async function gatherSearchEvidenceRows(market) {
+  if (!AUTO_EVIDENCE_SEARCH_ENABLED || AUTO_EVIDENCE_SEARCH_MAX_RESULTS <= 0) return [];
+  const provider = evidenceSearchProviderConfig();
+  if (!provider) return [];
+
+  const rows = [];
+  const seen = new Set();
+  let lastError = null;
+  for (const query of evidenceSearchQueriesForMarket(market)) {
+    try {
+      const results = await runEvidenceSearch(provider, query, AUTO_EVIDENCE_SEARCH_MAX_RESULTS);
+      for (const result of results) {
+        const key = `${result.url || ""}|${normalizeMarketText(result.title || result.snippet || "")}`;
+        if (!key.trim() || seen.has(key)) continue;
+        seen.add(key);
+        rows.push(result);
+        if (rows.length >= AUTO_EVIDENCE_SEARCH_MAX_RESULTS) break;
+      }
+    } catch (error) {
+      lastError = error;
+    }
+    if (rows.length >= AUTO_EVIDENCE_SEARCH_MAX_RESULTS) break;
+  }
+
+  if (rows.length === 0 && lastError) {
+    return [
+      autoEvidenceRow(
+        market,
+        "",
+        "Objective web search: unavailable",
+        `${provider.label} was configured for Aura evidence search, but the request failed: ${lastError instanceof Error ? lastError.message : String(lastError)}.`,
+        "Web evidence search failed; use source scans or manual evidence."
+      )
+    ];
+  }
+
+  return rows.map((result) =>
+    autoEvidenceRow(
+      market,
+      result.url,
+      `Objective web search: candidate evidence from ${result.provider}`,
+      `${result.provider} query "${result.query}" returned "${result.title}"${result.url ? ` at ${result.url}` : ""}. Snippet: ${result.snippet || "No snippet returned."} Treat this as candidate evidence: it must directly match the market rule, timestamp, and official-source policy before supporting YES or NO.`,
+      result.snippet || result.title
+    )
+  );
+}
+
 async function gatherStructuredScheduleEvidenceRows(market) {
   const mlbConfig = detectMlbScheduleOracleMarket(market);
   if (!mlbConfig) return [];
@@ -2393,8 +2596,9 @@ async function gatherAutomaticEvidenceRows(market) {
   if (structuredScheduleRows.length > 0) return structuredScheduleRows;
 
   const urls = evidenceSourceUrlsForMarket(market);
+  const rows = [];
   if (urls.length === 0) {
-    return [
+    rows.push(
       autoEvidenceRow(
         market,
         "",
@@ -2402,16 +2606,18 @@ async function gatherAutomaticEvidenceRows(market) {
         "Aura Source Router could not find a primary, fallback, or inferred source URL. Add an official source link before relying on Aura for this market.",
         "No source URL was available for automatic evidence collection."
       )
-    ];
+    );
+    return [...rows, ...(await gatherSearchEvidenceRows(market))].slice(0, AUTO_EVIDENCE_MAX_ROWS);
   }
 
-  const rows = [];
   for (const sourceUrl of urls) {
     const row = await scanSourceForEvidence(market, sourceUrl);
     rows.push(row);
     if (/qualifying item found/i.test(row.title || "")) break;
   }
-  return rows.slice(0, AUTO_EVIDENCE_MAX_SOURCES);
+  const hasQualifyingSource = rows.some((row) => /qualifying item found/i.test(row.title || ""));
+  const searchRows = hasQualifyingSource ? [] : await gatherSearchEvidenceRows(market);
+  return [...rows, ...searchRows].slice(0, AUTO_EVIDENCE_MAX_ROWS);
 }
 
 function stripRuleMetadata(value) {
@@ -2739,14 +2945,15 @@ function detectMlbScheduleOracleMarket(market) {
 
 async function fetchJsonWithTimeout(url, options = {}) {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), ORACLE_HTTP_TIMEOUT_MS);
+  const { timeoutMs = ORACLE_HTTP_TIMEOUT_MS, ...fetchOptions } = options;
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const response = await fetch(url, {
-      ...options,
+      ...fetchOptions,
       headers: {
         accept: "application/json,text/plain,*/*",
         "user-agent": "AuraPredictOracle/1.0",
-        ...(options.headers || {})
+        ...(fetchOptions.headers || {})
       },
       signal: controller.signal
     });
@@ -3514,7 +3721,7 @@ function marketDraftPrompt(body) {
 function resolutionPrompt(body) {
   const marketId = Number(body.marketId);
   const market = Number.isInteger(marketId) ? state.markets[String(marketId)] : null;
-  const evidence = Array.isArray(body.evidence) ? body.evidence.slice(0, 8) : [];
+  const evidence = Array.isArray(body.evidence) ? body.evidence.slice(0, 12) : [];
   const criteria = cleanText(body.resolutionCriteria, 1000);
   const question = cleanText(body.question || market?.question, 260);
   return [
@@ -3538,7 +3745,9 @@ function resolutionPrompt(body) {
     "}",
     "Do not invent facts.",
     "If evidence includes a structured sports schedule count from an official league API, compare the observed count against the market threshold and use that result.",
+    "If evidence includes Objective web search rows, treat them as candidate sources. Use them only when the snippet/URL directly match the rule, event, timestamp, and official-source policy.",
     "For sports schedules, fixtures, scores, or dynamic app pages, a generic no-match HTML/link scan is inconclusive. Do not infer NO from that row; use structured count evidence or return INSUFFICIENT_EVIDENCE.",
+    "Never say a sports match, event, or release has not occurred solely because Aura's source scanner failed to parse a dynamic page. Say the automated evidence could not verify it unless another evidence row proves YES or NO.",
     "For deadline questions phrased like 'Will X ... by time T?', if current time is already past T and there is no credible evidence that X happened, lean NO (low/medium confidence) instead of INSUFFICIENT_EVIDENCE.",
     "Use INSUFFICIENT_EVIDENCE only when rules are ambiguous, time has not passed, or evidence quality is too weak/conflicting."
   ].join("\n");
@@ -3576,11 +3785,13 @@ function resolutionReviewerPrompt(market, evidenceRows, role) {
     "Use only the supplied evidence, structured resolution rule, and public facts that can be verified from URLs in the evidence list.",
     "If the evidence contains an Objective Oracle proposal with YES, NO, or CANCEL, treat it as a deterministic source check unless it conflicts with the market's primary source, timestamp, or rule.",
     "If the evidence contains a structured schedule count from an official league API, compare the count against the market threshold and use that result.",
+    "If the evidence contains Objective web search candidate rows, use them only when the URL/snippet directly matches the market rule, event, timestamp, and official-source policy. Prefer official league, government, exchange, or primary publisher sources over generic snippets.",
     "If the evidence contains an Objective source scan row, treat it as Aura's source router result. A qualifying item found supports YES. A no matching item found row supports NO only for static by-deadline publish, announce, blog, or news pages when the row explicitly says it supports NO.",
     "For sports schedule, fixture, scores, or dynamic app pages, a generic no-match HTML/link scan is inconclusive. Never infer NO from that row; return INSUFFICIENT_EVIDENCE unless a structured adapter/API or user evidence proves the count/result.",
     "If an Objective source scan says inconclusive source scan, schedule API needs review, or structured schedule check failed, return INSUFFICIENT_EVIDENCE unless another evidence row proves YES or NO.",
     "If an Objective source scan says matching items need timestamp review, do not invent a timestamp. Prefer INSUFFICIENT_EVIDENCE unless another evidence row proves the required time window.",
     "If an Objective source scan says no source URL is configured, return INSUFFICIENT_EVIDENCE and ask for an official source link.",
+    "Never claim an event has not happened solely because a dynamic page scan was inconclusive. If the scanner cannot verify it and no other evidence proves the outcome, say the automated evidence could not verify the result.",
     "For numeric threshold markets, compare the observed value against the structured comparator and target. If the observed value is clearly above or below the target, return YES or NO; do not return INSUFFICIENT_EVIDENCE just because the result is unfavorable to YES.",
     "For health/status endpoint markets, an observed ok/major-incident value from the configured URL is enough to return YES or NO according to the rule.",
     "For deadline questions phrased like 'Will X ... by time T?', if T has passed and there is no credible evidence that X happened, prefer NO (with lower confidence) over INSUFFICIENT_EVIDENCE.",
@@ -3702,7 +3913,7 @@ async function buildResolutionReceipt(marketId, options = {}) {
     ? options.evidence.slice(0, 10)
     : (social.evidence[String(marketId)] || []).slice(0, 10);
   const automaticEvidenceRows = await gatherAutomaticEvidenceRows(market);
-  const evidenceRows = [...oracleEvidenceRowsForMarket(marketId), ...automaticEvidenceRows, ...suppliedEvidenceRows].slice(0, 10);
+  const evidenceRows = [...oracleEvidenceRowsForMarket(marketId), ...automaticEvidenceRows, ...suppliedEvidenceRows].slice(0, AUTO_EVIDENCE_MAX_ROWS);
   const roles = [
     "strict fact checker",
     "skeptical dispute reviewer",
@@ -3990,6 +4201,7 @@ async function route(req, res) {
 
   try {
     if (url.pathname === "/" || url.pathname === "/health") {
+      const evidenceSearchProvider = evidenceSearchProviderConfig();
       json(res, 200, {
         ok: Boolean(CONTRACT_ADDRESS && isAddress(CONTRACT_ADDRESS)),
         contractAddress: CONTRACT_ADDRESS,
@@ -4002,6 +4214,11 @@ async function route(req, res) {
           socialReports: true,
           socialNotifications: true,
           oracleReceipts: true,
+          evidenceSearch: {
+            enabled: AUTO_EVIDENCE_SEARCH_ENABLED,
+            configured: Boolean(evidenceSearchProvider),
+            provider: evidenceSearchProvider?.id || ""
+          },
           realtimeSync: Boolean(realtimeClient)
         }
       });

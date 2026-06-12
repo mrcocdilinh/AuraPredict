@@ -191,9 +191,24 @@ AURA_AUTO_EVIDENCE_ENABLED=1
 AURA_AUTO_EVIDENCE_TIMEOUT_MS=6000
 AURA_AUTO_EVIDENCE_MAX_SOURCES=3
 AURA_AUTO_EVIDENCE_MAX_ITEMS=80
+AURA_AUTO_EVIDENCE_MAX_ROWS=16
 ```
 
 The source router reads RSS/Atom feeds, sitemaps, JSON-LD, and visible page links. It currently helps by-deadline publish/announce/news/blog markets such as Circle/Arc/OpenAI blog checks, public status pages, and selected official government sources. If it finds a qualifying item before the resolution timestamp, Aura receives evidence that supports YES. For static publish/news/blog sources, a reachable no-match scan can support NO. For sports schedules, fixtures, scores, or other dynamic app pages, a generic no-match HTML scan is treated as inconclusive unless a structured adapter/API confirms the count or result. If matching items exist but no timestamp can be parsed, Aura is instructed to ask for manual review instead of inventing a result.
+
+Optional evidence search can make Aura much better on dynamic sports/news pages where the primary URL is not parseable by simple HTML scanning. Set one search provider key; Aura will add search-result snippets and URLs as candidate evidence before asking the reviewer models. Candidate search rows are not treated as automatic truth: reviewers still have to match the URL/snippet to the market rule, timestamp, and source policy.
+
+```bash
+AURA_AUTO_EVIDENCE_SEARCH_ENABLED=1
+AURA_AUTO_EVIDENCE_SEARCH_PROVIDER=brave
+AURA_AUTO_EVIDENCE_SEARCH_MAX_RESULTS=4
+AURA_AUTO_EVIDENCE_SEARCH_TIMEOUT_MS=7000
+BRAVE_SEARCH_API_KEY=your_brave_search_key
+
+# Or use one of these instead:
+TAVILY_API_KEY=your_tavily_key
+SERPAPI_API_KEY=your_serpapi_key
+```
 
 Optional provider fallback:
 
