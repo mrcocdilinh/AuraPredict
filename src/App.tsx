@@ -14027,7 +14027,13 @@ export default function App() {
                     <option value="1">Creator + required authority review</option>
                     <option value="2">Authority / oracle only</option>
                   </select>
-                  <small className="time-format-hint">The selected control path is fixed for this market.</small>
+                  <small className="time-format-hint">
+                    {createForm.resolutionMode === "0"
+                      ? "Creator can propose. A matching signed Aura result can finalize after the dispute window; otherwise authority review is required."
+                      : createForm.resolutionMode === "1"
+                        ? "Creator can propose, but owner/authority must approve the final result before settlement."
+                        : "Only owner/authority/oracle can propose. Best for objective data markets and oracle-led settlement."}
+                  </small>
                 </label>
               )}
               <label>
