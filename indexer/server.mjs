@@ -82,7 +82,10 @@ const AUTO_EVIDENCE_SEARCH_TIMEOUT_MS = Math.max(
   Number(process.env.AURA_AUTO_EVIDENCE_SEARCH_TIMEOUT_MS || 7_000) || 7_000
 );
 const BRAVE_SEARCH_API_KEY = String(process.env.BRAVE_SEARCH_API_KEY || "").trim();
-const TAVILY_API_KEY = String(process.env.TAVILY_API_KEY || "").trim();
+const TAVILY_API_KEYS = String(process.env.TAVILY_API_KEYS || process.env.TAVILY_API_KEY || "")
+  .split(",")
+  .map((key) => key.trim())
+  .filter(Boolean);
 const SERPAPI_API_KEY = String(process.env.SERPAPI_API_KEY || "").trim();
 const ORACLE_AUTO_PROPOSE = String(process.env.AURA_ORACLE_AUTO_PROPOSE || "").trim() === "1";
 const ORACLE_AUTO_PROPOSE_MIN_CONFIDENCE = Number(process.env.AURA_ORACLE_AUTO_PROPOSE_MIN_CONFIDENCE || 78);
@@ -198,6 +201,9 @@ const GEMINI_RATE_LIMIT_COOLDOWN_MS = Number(process.env.GEMINI_RATE_LIMIT_COOLD
 const geminiKeyState = {
   cursor: 0,
   cooldownUntilByKey: new Map()
+};
+const tavilyKeyState = {
+  cursor: 0
 };
 
 function nowIso() {
@@ -2378,14 +2384,25 @@ function isSportsLikeMarket(market) {
 
 function evidenceSearchProviderConfig() {
   const providers = [
-    { id: "brave", label: "Brave Search", key: BRAVE_SEARCH_API_KEY },
-    { id: "tavily", label: "Tavily", key: TAVILY_API_KEY },
-    { id: "serpapi", label: "SerpAPI", key: SERPAPI_API_KEY }
+    { id: "brave", label: "Brave Search", key: BRAVE_SEARCH_API_KEY, keyCount: BRAVE_SEARCH_API_KEY ? 1 : 0 },
+    { id: "tavily", label: "Tavily", key: TAVILY_API_KEYS[0] || "", keyCount: TAVILY_API_KEYS.length },
+    { id: "serpapi", label: "SerpAPI", key: SERPAPI_API_KEY, keyCount: SERPAPI_API_KEY ? 1 : 0 }
   ];
   if (AUTO_EVIDENCE_SEARCH_PROVIDER) {
     return providers.find((provider) => provider.id === AUTO_EVIDENCE_SEARCH_PROVIDER && provider.key) || null;
   }
   return providers.find((provider) => provider.key) || null;
+}
+
+function tavilyApiKeyForAttempt(attempt) {
+  if (TAVILY_API_KEYS.length === 0) return { key: "", index: -1 };
+  const index = (tavilyKeyState.cursor + attempt) % TAVILY_API_KEYS.length;
+  return { key: TAVILY_API_KEYS[index], index };
+}
+
+function advanceTavilyCursor(index) {
+  if (TAVILY_API_KEYS.length === 0 || index < 0) return;
+  tavilyKeyState.cursor = (index + 1) % TAVILY_API_KEYS.length;
 }
 
 function addEvidenceSearchQuery(rows, value) {
@@ -2462,27 +2479,45 @@ async function searchBraveEvidence(query, count) {
 }
 
 async function searchTavilyEvidence(query, count) {
-  const { response, body } = await fetchJsonWithTimeout("https://api.tavily.com/search", {
-    method: "POST",
-    timeoutMs: AUTO_EVIDENCE_SEARCH_TIMEOUT_MS,
-    headers: {
-      "content-type": "application/json",
-      authorization: `Bearer ${TAVILY_API_KEY}`
-    },
-    body: JSON.stringify({
-      api_key: TAVILY_API_KEY,
-      query,
-      search_depth: "basic",
-      include_answer: false,
-      max_results: Math.min(10, Math.max(1, count))
-    })
-  });
-  if (!response.ok || typeof body !== "object" || body === null) {
-    throw new Error(`Tavily returned HTTP ${response.status}.`);
+  if (TAVILY_API_KEYS.length === 0) throw new Error("Tavily is not configured. Set TAVILY_API_KEY or TAVILY_API_KEYS.");
+
+  let lastError = null;
+  for (let attempt = 0; attempt < TAVILY_API_KEYS.length; attempt += 1) {
+    const { key, index } = tavilyApiKeyForAttempt(attempt);
+    if (!key) continue;
+
+    const { response, body } = await fetchJsonWithTimeout("https://api.tavily.com/search", {
+      method: "POST",
+      timeoutMs: AUTO_EVIDENCE_SEARCH_TIMEOUT_MS,
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${key}`
+      },
+      body: JSON.stringify({
+        api_key: key,
+        query,
+        search_depth: "basic",
+        include_answer: false,
+        max_results: Math.min(10, Math.max(1, count))
+      })
+    });
+
+    if (response.ok && typeof body === "object" && body !== null) {
+      advanceTavilyCursor(index);
+      return (Array.isArray(body?.results) ? body.results : [])
+        .map((row) => normalizeEvidenceSearchResult("Tavily", query, row))
+        .filter(Boolean);
+    }
+
+    const message = typeof body === "object" && body !== null
+      ? cleanText(body?.error || body?.detail || body?.message || JSON.stringify(body), 200)
+      : cleanText(body, 200);
+    lastError = new Error(`Tavily key ${index + 1}/${TAVILY_API_KEYS.length} returned HTTP ${response.status}${message ? `: ${message}` : ""}.`);
+
+    if (![401, 403, 408, 409, 425, 429, 500, 502, 503, 504].includes(response.status)) break;
   }
-  return (Array.isArray(body?.results) ? body.results : [])
-    .map((row) => normalizeEvidenceSearchResult("Tavily", query, row))
-    .filter(Boolean);
+
+  throw lastError || new Error("Tavily search failed.");
 }
 
 async function searchSerpApiEvidence(query, count) {
@@ -4217,7 +4252,8 @@ async function route(req, res) {
           evidenceSearch: {
             enabled: AUTO_EVIDENCE_SEARCH_ENABLED,
             configured: Boolean(evidenceSearchProvider),
-            provider: evidenceSearchProvider?.id || ""
+            provider: evidenceSearchProvider?.id || "",
+            keyCount: evidenceSearchProvider?.keyCount || 0
           },
           realtimeSync: Boolean(realtimeClient)
         }
