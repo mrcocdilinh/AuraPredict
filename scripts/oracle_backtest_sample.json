@@ -54,5 +54,117 @@
     "oracleOutcome": "NEEDS_REVIEW",
     "actualOutcome": "NO",
     "confidence": 52
+  },
+  {
+    "id": "sports-mexico-opening-match",
+    "adapter": "sports-search",
+    "oracleOutcome": "YES",
+    "actualOutcome": "YES",
+    "confidence": 95
+  },
+  {
+    "id": "sports-official-source-unparseable-with-espn-match",
+    "adapter": "sports-search",
+    "oracleOutcome": "YES",
+    "actualOutcome": "YES",
+    "confidence": 88
+  },
+  {
+    "id": "sports-social-video-only",
+    "adapter": "sports-search",
+    "oracleOutcome": "NEEDS_REVIEW",
+    "actualOutcome": "YES",
+    "confidence": 58
+  },
+  {
+    "id": "sports-postponed-beyond-resolution",
+    "adapter": "sports-search",
+    "oracleOutcome": "CANCEL",
+    "actualOutcome": "CANCEL",
+    "confidence": 90
+  },
+  {
+    "id": "sports-match-not-yet-played",
+    "adapter": "sports-search",
+    "oracleOutcome": "NEEDS_REVIEW",
+    "actualOutcome": "NEEDS_REVIEW",
+    "confidence": 45
+  },
+  {
+    "id": "mlb-schedule-10-games",
+    "adapter": "structured-sports",
+    "oracleOutcome": "YES",
+    "actualOutcome": "YES",
+    "confidence": 94
+  },
+  {
+    "id": "mlb-schedule-source-timeout",
+    "adapter": "structured-sports",
+    "oracleOutcome": "NEEDS_REVIEW",
+    "actualOutcome": "YES",
+    "confidence": 50
+  },
+  {
+    "id": "fifa-group-winner-before-final-table",
+    "adapter": "sports-search",
+    "oracleOutcome": "NEEDS_REVIEW",
+    "actualOutcome": "YES",
+    "confidence": 64
+  },
+  {
+    "id": "stock-official-close-above-threshold",
+    "adapter": "macro-yahoo-chart",
+    "oracleOutcome": "YES",
+    "actualOutcome": "YES",
+    "confidence": 84
+  },
+  {
+    "id": "stock-official-close-below-threshold",
+    "adapter": "macro-yahoo-chart",
+    "oracleOutcome": "NO",
+    "actualOutcome": "NO",
+    "confidence": 83
+  },
+  {
+    "id": "crypto-source-weak-social-price",
+    "adapter": "crypto-price",
+    "oracleOutcome": "NEEDS_REVIEW",
+    "actualOutcome": "YES",
+    "confidence": 55
+  },
+  {
+    "id": "crypto-binance-one-minute-close",
+    "adapter": "crypto-price",
+    "oracleOutcome": "YES",
+    "actualOutcome": "YES",
+    "confidence": 93
+  },
+  {
+    "id": "cpi-release-official-value",
+    "adapter": "macro-official",
+    "oracleOutcome": "NO",
+    "actualOutcome": "NO",
+    "confidence": 89
+  },
+  {
+    "id": "fed-announcement-source-conflict",
+    "adapter": "macro-official",
+    "oracleOutcome": "NEEDS_REVIEW",
+    "actualOutcome": "NO",
+    "confidence": 67
+  },
+  {
+    "id": "official-blog-published-before-deadline",
+    "adapter": "source-router",
+    "oracleOutcome": "YES",
+    "actualOutcome": "YES",
+    "confidence": 86
+  },
+  {
+    "id": "official-blog-no-match-before-deadline",
+    "adapter": "source-router",
+    "oracleOutcome": "NO",
+    "actualOutcome": "NO",
+    "confidence": 81
   }
 ]

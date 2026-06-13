@@ -1518,6 +1518,7 @@ h3 {
   border: 1px solid #aeefff;
   border-radius: 8px;
   display: grid;
+  gap: 8px;
   padding: 8px;
 }
 
@@ -1715,6 +1716,14 @@ h3 {
   font-size: 0.82rem;
   font-weight: 760;
   margin: 4px 0 0;
+}
+
+.notification-head-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
 }
 
 .notification-filter-row {
@@ -10699,6 +10708,7 @@ label {
   }
 
   .notifications-page-head,
+  .notification-head-actions,
   .history-tx-row {
     align-items: stretch;
     display: grid;
@@ -10706,6 +10716,7 @@ label {
   }
 
   .notifications-page-head button,
+  .notification-head-actions button,
   .history-tx-row button,
   .history-tx-row .tx-link-button {
     width: 100%;

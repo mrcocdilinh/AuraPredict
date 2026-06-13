@@ -30,7 +30,11 @@ The production indexer is pinned to AuraPredict V4 at `0x3c853AE2eC705B453c96575
 VITE_AURA_INDEXER_URL=http://127.0.0.1:8787
 AURA_INDEXER_PORT=8787
 AURA_INDEXER_HOST=127.0.0.1
-AURA_INDEXER_CHUNK_SIZE=9000
+AURA_INDEXER_RPC_URLS=https://rpc.testnet.arc.network
+AURA_INDEXER_WS_URL=wss://rpc.testnet.arc.network
+AURA_INDEXER_WS_ENABLED=1
+AURA_INDEXER_POLL_MS=60000
+AURA_INDEXER_CHUNK_SIZE=100
 AURA_ORACLE_AUTO_RUN=1
 AURA_ORACLE_HTTP_TIMEOUT_MS=8000
 AURA_ORACLE_AUTO_PROPOSE=0
@@ -38,7 +42,7 @@ AURA_ORACLE_AUTO_PROPOSE_MIN_CONFIDENCE=78
 AURA_ORACLE_AUTO_PROPOSE_ADAPTERS=crypto-price,macro-yahoo-chart,status-health,status-page,liquidity-rule
 ```
 
-The active production contract and its initial block are pinned in `indexer/server.mjs` for the V4 cutover. Arc RPC currently limits `eth_getLogs` ranges, so the default chunk size stays below that limit.
+The active production contract and its initial block are pinned in `indexer/server.mjs` for the V4 cutover. Arc RPC currently limits `eth_getLogs` ranges and some public endpoints enforce daily quotas, so production should use one stable RPC plus WebSocket sync, a 60-second poll fallback, and a small `eth_getLogs` chunk.
 
 ## API
 
@@ -98,6 +102,7 @@ Supported adapters:
 - Macro chart: gold and DXY through Yahoo chart data near the market's `resolutionTime`.
 - Health/status API: HTTP 200, JSON `ok: true`, and public status summary endpoints for supported services.
 - Sports schedule count: MLB schedule-count markets such as "at least 10 scheduled MLB regular season games on June 7, 2026" are checked through MLB's public Stats API schedule endpoint instead of generic HTML scraping.
+- Sports scoreboard evidence: ESPN structured scoreboards for MLB, NBA, NFL, NHL, FIFA World Cup, FIFA Club World Cup, and UEFA Champions League add candidate match/result rows before the AI reviewers run. These rows are evidence, not automatic onchain finalization.
 
 The proposal is stored under `state.oracleProposals` and exposed at:
 
@@ -214,6 +219,16 @@ SERPAPI_API_KEY=your_serpapi_key
 ```
 
 When `TAVILY_API_KEYS` is set, the indexer rotates across the comma-separated keys and tries the next key on quota/rate-limit or temporary search failures. `TAVILY_API_KEY` remains supported for simple one-key deployments.
+
+After changing evidence search keys on the VPS, smoke-test one closed market without proposing onchain:
+
+```bash
+export AURA_SMOKE_MARKET_ID=89
+export AURA_RESOLUTION_ADMIN_TOKEN=your_admin_token
+npm run smoke:resolution
+```
+
+The smoke command calls `/api/resolutions/:marketId/run` with `force: true` and `propose: false`, so it refreshes the AI receipt only.
 
 Optional provider fallback:
 

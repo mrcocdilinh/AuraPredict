@@ -13,6 +13,7 @@
     "test:e2e": "playwright test",
     "oracle:backtest": "node scripts/oracle_backtest.mjs",
     "smoke:api": "node scripts/check_production_api.mjs",
+    "smoke:resolution": "node scripts/check_resolution_run_api.mjs",
     "deploy:arc": "hardhat run scripts/deploy.js --network arcTestnet",
     "seed:markets": "hardhat run scripts/seed_markets.js --network arcTestnet",
     "seed:markets:dry": "set DRY_RUN=1&& hardhat run scripts/seed_markets.js --network arcTestnet"
@@ -33,7 +34,7 @@
   },
   "devDependencies": {
     "@nomicfoundation/hardhat-ethers": "^3.0.8",
-    "@playwright/test": "^1.45.0",
+    "@playwright/test": "^1.60.0",
     "@types/node": "^22.10.2",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",

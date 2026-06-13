@@ -7,6 +7,8 @@ import { fileURLToPath } from "node:url";
 import { createPublicClient, createWalletClient, encodeAbiParameters, fallback, formatUnits, http, isAddress, keccak256, stringToHex, webSocket } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { arcPredictionMarketV2Abi, arcPredictionMarketV3Abi, arcPredictionMarketV4Abi } from "./arcPredictionMarketAbi.mjs";
+import { scoreEvidenceSearchResult } from "./evidenceSearchPolicy.mjs";
+import { gatherEspnScoreboardEvidence } from "./sportsAdapters.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = path.join(__dirname, "data");
@@ -20,14 +22,14 @@ const CONTRACT_ADDRESS = ACTIVE_V4_CONTRACT_ADDRESS;
 const RPC_URLS = (
   process.env.AURA_INDEXER_RPC_URLS ||
   process.env.ARC_RPC_URL ||
-  "https://rpc.testnet.arc.network,https://rpc.drpc.testnet.arc.network,https://rpc.quicknode.testnet.arc.network"
+  "https://rpc.testnet.arc.network"
 )
   .split(",")
   .map((url) => url.trim())
   .filter(Boolean);
 const PORT = Number(process.env.PORT || process.env.AURA_INDEXER_PORT || 8787);
 const HOST = process.env.AURA_INDEXER_HOST || (process.env.PORT ? "0.0.0.0" : "127.0.0.1");
-const POLL_MS = Number(process.env.AURA_INDEXER_POLL_MS || 12_000);
+const POLL_MS = Number(process.env.AURA_INDEXER_POLL_MS || 60_000);
 const WS_URLS = (
   process.env.AURA_INDEXER_WS_URLS ||
   process.env.AURA_INDEXER_WS_URL ||
@@ -40,7 +42,7 @@ const WS_URLS = (
 const REALTIME_SYNC_ENABLED = String(process.env.AURA_INDEXER_WS_ENABLED || "1").trim() !== "0";
 const REALTIME_SYNC_DEBOUNCE_MS = Math.max(100, Number(process.env.AURA_INDEXER_WS_DEBOUNCE_MS || 750) || 750);
 const START_BLOCK = ACTIVE_V4_DEPLOYMENT_BLOCK;
-const CHUNK_SIZE = BigInt(process.env.AURA_INDEXER_CHUNK_SIZE || 9_000);
+const CHUNK_SIZE = BigInt(process.env.AURA_INDEXER_CHUNK_SIZE || 100);
 const AI_PROVIDER = String(process.env.AI_PROVIDER || "").trim().toLowerCase();
 const AI_FALLBACK_PROVIDER = String(process.env.AI_FALLBACK_PROVIDER || "").trim().toLowerCase();
 const GEMINI_API_KEY = String(process.env.GEMINI_API_KEY || "").trim();
@@ -2553,6 +2555,10 @@ async function gatherSearchEvidenceRows(market) {
   const rows = [];
   const seen = new Set();
   let lastError = null;
+  const sourceHosts = evidenceSourceUrlsForMarket(market)
+    .map((url) => hostnameFor(url))
+    .filter(Boolean);
+  const candidateLimit = Math.max(AUTO_EVIDENCE_SEARCH_MAX_RESULTS, AUTO_EVIDENCE_SEARCH_MAX_RESULTS * 3);
   for (const query of evidenceSearchQueriesForMarket(market)) {
     try {
       const results = await runEvidenceSearch(provider, query, AUTO_EVIDENCE_SEARCH_MAX_RESULTS);
@@ -2560,13 +2566,16 @@ async function gatherSearchEvidenceRows(market) {
         const key = `${result.url || ""}|${normalizeMarketText(result.title || result.snippet || "")}`;
         if (!key.trim() || seen.has(key)) continue;
         seen.add(key);
-        rows.push(result);
-        if (rows.length >= AUTO_EVIDENCE_SEARCH_MAX_RESULTS) break;
+        rows.push({
+          ...result,
+          score: scoreEvidenceSearchResult(market, result, sourceHosts)
+        });
+        if (rows.length >= candidateLimit) break;
       }
     } catch (error) {
       lastError = error;
     }
-    if (rows.length >= AUTO_EVIDENCE_SEARCH_MAX_RESULTS) break;
+    if (rows.length >= candidateLimit) break;
   }
 
   if (rows.length === 0 && lastError) {
@@ -2581,44 +2590,58 @@ async function gatherSearchEvidenceRows(market) {
     ];
   }
 
-  return rows.map((result) =>
+  return rows
+    .sort((a, b) => b.score - a.score)
+    .slice(0, AUTO_EVIDENCE_SEARCH_MAX_RESULTS)
+    .map((result) =>
     autoEvidenceRow(
       market,
       result.url,
       `Objective web search: candidate evidence from ${result.provider}`,
-      `${result.provider} query "${result.query}" returned "${result.title}"${result.url ? ` at ${result.url}` : ""}. Snippet: ${result.snippet || "No snippet returned."} Treat this as candidate evidence: it must directly match the market rule, timestamp, and official-source policy before supporting YES or NO.`,
+      `${result.provider} query "${result.query}" returned "${result.title}"${result.url ? ` at ${result.url}` : ""}. Evidence rank ${result.score}. Snippet: ${result.snippet || "No snippet returned."} Treat this as candidate evidence: it must directly match the market rule, timestamp, and official-source policy before supporting YES or NO.`,
       result.snippet || result.title
     )
   );
 }
 
 async function gatherStructuredScheduleEvidenceRows(market) {
+  const rows = [];
   const mlbConfig = detectMlbScheduleOracleMarket(market);
-  if (!mlbConfig) return [];
-  try {
-    const summary = await fetchMlbScheduleSummary(mlbConfig);
-    const outcome = summary.count >= mlbConfig.threshold ? "YES" : "NO";
-    const sample = summary.sample.length > 0 ? ` Sample games: ${summary.sample.join(" / ")}.` : "";
-    return [
-      autoEvidenceRow(
-        market,
-        summary.apiUrl,
-        "Objective source scan: structured MLB schedule count",
-        `MLB Stats API reported ${summary.count} ${mlbConfig.regularOnly ? "regular season " : ""}game(s) for ${mlbConfig.date}. The market threshold is at least ${mlbConfig.threshold}. This supports ${outcome}.${sample}`,
-        `${summary.count} game(s) counted; threshold ${mlbConfig.threshold}; ${outcome}.`
-      )
-    ];
-  } catch (error) {
-    return [
-      autoEvidenceRow(
-        market,
-        mlbConfig.sourceUrl,
-        "Objective source scan: MLB schedule API needs review",
-        `Aura could not complete the structured MLB schedule check for ${mlbConfig.date}: ${error instanceof Error ? error.message : String(error)}. Do not infer YES or NO from a generic page scrape.`,
-        "Structured schedule check failed; manual review required."
-      )
-    ];
+  if (mlbConfig) {
+    try {
+      const summary = await fetchMlbScheduleSummary(mlbConfig);
+      const outcome = summary.count >= mlbConfig.threshold ? "YES" : "NO";
+      const sample = summary.sample.length > 0 ? ` Sample games: ${summary.sample.join(" / ")}.` : "";
+      rows.push(
+        autoEvidenceRow(
+          market,
+          summary.apiUrl,
+          "Objective source scan: structured MLB schedule count",
+          `MLB Stats API reported ${summary.count} ${mlbConfig.regularOnly ? "regular season " : ""}game(s) for ${mlbConfig.date}. The market threshold is at least ${mlbConfig.threshold}. This supports ${outcome}.${sample}`,
+          `${summary.count} game(s) counted; threshold ${mlbConfig.threshold}; ${outcome}.`
+        )
+      );
+    } catch (error) {
+      rows.push(
+        autoEvidenceRow(
+          market,
+          mlbConfig.sourceUrl,
+          "Objective source scan: MLB schedule API needs review",
+          `Aura could not complete the structured MLB schedule check for ${mlbConfig.date}: ${error instanceof Error ? error.message : String(error)}. Do not infer YES or NO from a generic page scrape.`,
+          "Structured schedule check failed; manual review required."
+        )
+      );
+    }
   }
+
+  const espnRows = await gatherEspnScoreboardEvidence(market, {
+    timeoutMs: AUTO_EVIDENCE_SEARCH_TIMEOUT_MS || ORACLE_HTTP_TIMEOUT_MS,
+    maxEvents: 8
+  });
+  for (const row of espnRows) {
+    rows.push(autoEvidenceRow(market, row.url, row.title, row.notes, row.finding));
+  }
+  return rows;
 }
 
 async function gatherAutomaticEvidenceRows(market) {
@@ -3278,6 +3301,34 @@ async function buildMlbScheduleOracleProposal(market, config) {
   }
 }
 
+async function buildSportsScoreboardOracleProposal(market) {
+  const evidenceRows = await gatherEspnScoreboardEvidence(market, {
+    timeoutMs: AUTO_EVIDENCE_SEARCH_TIMEOUT_MS || ORACLE_HTTP_TIMEOUT_MS,
+    maxEvents: 8
+  });
+  if (evidenceRows.length === 0) {
+    return buildUnsupportedOracleProposal(
+      market,
+      "sports-manual",
+      "No structured sports adapter matched this market. Use the official league/source link and authority review."
+    );
+  }
+
+  const proposal = baseOracleProposal(market, "sports-scoreboard");
+  proposal.status = "needs_review";
+  proposal.confidence = 45;
+  proposal.sourceUrls = [...new Set(evidenceRows.map((row) => row.url).filter(Boolean))];
+  proposal.summary = "Structured sports scoreboard evidence was found, but this market still needs AI/authority review to compare the rows against the exact rule, timestamp, and official-source policy.";
+  proposal.checks = evidenceRows
+    .map((row) => cleanText(row.finding || row.notes, 220))
+    .filter(Boolean)
+    .slice(0, 6);
+  if (proposal.checks.length === 0) {
+    proposal.checks = ["Structured scoreboard adapter returned rows, but no concise finding could be extracted."];
+  }
+  return finalizeOracleProposal(proposal);
+}
+
 async function buildUnsupportedOracleProposal(market, adapter, summary) {
   const proposal = baseOracleProposal(market, adapter);
   proposal.status = "unsupported";
@@ -3349,11 +3400,7 @@ async function buildOracleProposal(marketId, options = {}) {
   if (mlbScheduleConfig) return buildMlbScheduleOracleProposal(market, mlbScheduleConfig);
 
   if (String(market.category || "").toLowerCase() === "sports") {
-    return buildUnsupportedOracleProposal(
-      market,
-      "sports-manual",
-      "Sports adapter is not enabled yet. Use the official league/source link and authority review."
-    );
+    return buildSportsScoreboardOracleProposal(market);
   }
 
   return buildUnsupportedOracleProposal(

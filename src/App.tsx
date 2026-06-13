@@ -28,6 +28,7 @@ import {
 } from "./arc";
 import { arcPredictionMarketV3Abi, arcPredictionMarketV4Abi, settlementTokenAbi } from "./contracts/arcPredictionMarketAbi";
 import { arcPredictionMarketV2Abi as arcPredictionMarketAbi } from "./contracts/arcPredictionMarketV2Abi";
+import { claimAllResultNotice, type ClaimAllFailure } from "./lib/claims";
 
 const browserGlobal = globalThis as typeof globalThis & { Buffer?: typeof Buffer };
 if (!browserGlobal.Buffer) {
@@ -4079,6 +4080,7 @@ export default function App() {
     notParticipated: false
   });
   const [notificationFilter, setNotificationFilter] = useState<NotificationFilter>("all");
+  const [claimRetryMarketIds, setClaimRetryMarketIds] = useState<number[]>([]);
   const [collectionPage, setCollectionPage] = useState(1);
   const [selectedMarketId, setSelectedMarketId] = useState<number | null>(null);
   const [selectedProfileAddress, setSelectedProfileAddress] = useState("");
@@ -4299,6 +4301,7 @@ export default function App() {
   useEffect(() => {
     if (lastPositionAccountKeyRef.current === accountKey) return;
     lastPositionAccountKeyRef.current = accountKey;
+    setClaimRetryMarketIds([]);
     setMarkets((current) =>
       current.map((market) =>
         market.yesPosition === 0n && market.noPosition === 0n && !market.claimed && market.potentialPayout === 0n
@@ -4871,6 +4874,10 @@ export default function App() {
     claimableAssetSummary.length > 0
       ? claimableAssetSummary.map((asset) => `${formatUsdc(asset.amount, asset.decimals)} ${asset.symbol}`).join(" + ")
       : `0.00 ${defaultSettlementSymbol}`;
+  const claimRetryLabel =
+    claimRetryMarketIds.length === 1
+      ? "Retry failed claim"
+      : `Retry ${claimRetryMarketIds.length} failed claims`;
   const proposedResultNotifications = account
     ? accountPositionMarkets.filter((market) => {
         const key = `${accountKey}:proposal:${market.id}:${market.proposedAt}:${market.proposedOutcome}`;
@@ -8078,7 +8085,8 @@ export default function App() {
     action: () => Promise<Hash>,
     message: string,
     refreshAfterConfirm = true,
-    onConfirmed?: (receipt: TransactionReceipt) => void
+    onConfirmed?: (receipt: TransactionReceipt) => void,
+    onFailed?: (message: string) => void
   ) => {
     if (transactionLockRef.current) {
       setNotice("A wallet confirmation is already open. Confirm or reject it before sending another transaction.");
@@ -8104,7 +8112,9 @@ export default function App() {
       if (refreshAfterConfirm) void loadMarkets();
       return true;
     } catch (error) {
-      setNotice(compactErrorMessage(error), submittedHash);
+      const compactMessage = compactErrorMessage(error);
+      setNotice(compactMessage, submittedHash);
+      onFailed?.(compactMessage);
       return false;
     } finally {
       transactionLockRef.current = false;
@@ -9198,19 +9208,22 @@ export default function App() {
     }
   };
 
-  const claimAll = async () => {
+  const claimAll = async (targetMarketIds?: number[]) => {
     try {
       if (!account || !isAddress(account)) throw new Error("Connect wallet first.");
+      const retryTargetSet = targetMarketIds && targetMarketIds.length > 0 ? new Set(targetMarketIds) : null;
 
       const candidateMap = new Map<number, MarketView>();
       for (const market of [...accountPositionMarkets, ...claimNotifications]) {
+        if (retryTargetSet && !retryTargetSet.has(market.id)) continue;
         if (market.outcome !== Outcome.Unresolved && !market.claimed && hasUserPosition(market)) {
           candidateMap.set(market.id, market);
         }
       }
       const claimCandidates = [...candidateMap.values()].sort((a, b) => a.id - b.id);
       if (claimCandidates.length === 0) {
-        setNotice("No claimable payouts right now.");
+        setClaimRetryMarketIds([]);
+        setNotice(retryTargetSet ? "No failed claim targets are still claimable." : "No claimable payouts right now.");
         return;
       }
 
@@ -9243,6 +9256,7 @@ export default function App() {
       }
       const firstEligibilityError = eligibilityRows.find((row) => row.error)?.error;
       if (claimTargets.length === 0) {
+        setClaimRetryMarketIds([]);
         setNotice(
           firstEligibilityError
             ? `No claimable payouts found. Last check error: ${compactErrorMessage(firstEligibilityError)}`
@@ -9253,7 +9267,9 @@ export default function App() {
       }
 
       let claimedCount = 0;
+      const failedClaims: ClaimAllFailure[] = [];
       for (const [index, market] of claimTargets.entries()) {
+        let failureMessage = "";
         const completed = await runTransaction(
           () =>
             walletClient.writeContract({
@@ -9266,16 +9282,26 @@ export default function App() {
             }),
           `Claiming payout ${index + 1}/${claimTargets.length} from Market #${market.id}...`,
           false,
-          () => markClaimedLocally(market.id)
+          () => markClaimedLocally(market.id),
+          (message) => {
+            failureMessage = message;
+          }
         );
         if (completed) claimedCount += 1;
-        if (!completed) break;
+        if (!completed) {
+          failedClaims.push({ marketId: market.id, message: failureMessage || "Claim transaction failed." });
+          if ((failureMessage || "").toLowerCase().includes("transaction rejected")) {
+            skippedCount += claimTargets.length - index - 1;
+            break;
+          }
+        }
       }
+      setClaimRetryMarketIds(failedClaims.map((failure) => failure.marketId));
       void refreshWalletBalance();
       void loadMarkets();
-      if (claimedCount > 0 || skippedCount > 0) {
+      if (claimedCount > 0 || skippedCount > 0 || failedClaims.length > 0) {
         setNotificationMenuOpen(false);
-        setNotice(`Claim all finished: ${claimedCount} claimed, ${skippedCount} already updated/skipped.`);
+        setNotice(claimAllResultNotice(claimedCount, skippedCount, failedClaims));
       }
     } catch (error) {
       setNotice(compactErrorMessage(error));
@@ -11661,11 +11687,23 @@ export default function App() {
                     {notificationCount === 0 && (
                       <div className="notification-empty">No pending resolution or claim actions.</div>
                     )}
-                    {claimNotifications.length > 1 && (
+                    {(claimNotifications.length > 1 || claimRetryMarketIds.length > 0) && (
                       <div className="notification-bulk-actions">
-                        <button onClick={claimAll} disabled={transactionPending} type="button">
-                          Claim all {claimableTotalLabel}
-                        </button>
+                        {claimNotifications.length > 1 && (
+                          <button onClick={() => claimAll()} disabled={transactionPending} type="button">
+                            Claim all {claimableTotalLabel}
+                          </button>
+                        )}
+                        {claimRetryMarketIds.length > 0 && (
+                          <button
+                            className="secondary"
+                            onClick={() => claimAll(claimRetryMarketIds)}
+                            disabled={transactionPending}
+                            type="button"
+                          >
+                            {claimRetryLabel}
+                          </button>
+                        )}
                       </div>
                     )}
                     {resolveNotifications.map((market) => {
@@ -12142,11 +12180,23 @@ export default function App() {
                   <h3>{notificationCount} current notifications</h3>
                   <p>Only active wallet actions are shown. Dismissed or handled notices stay hidden on this device.</p>
                 </div>
-                {claimNotifications.length > 1 && (
-                  <button onClick={claimAll} disabled={transactionPending} type="button">
-                    Claim all {claimableTotalLabel}
-                  </button>
-                )}
+                <div className="notification-head-actions">
+                  {claimNotifications.length > 1 && (
+                    <button onClick={() => claimAll()} disabled={transactionPending} type="button">
+                      Claim all {claimableTotalLabel}
+                    </button>
+                  )}
+                  {claimRetryMarketIds.length > 0 && (
+                    <button
+                      className="secondary"
+                      onClick={() => claimAll(claimRetryMarketIds)}
+                      disabled={transactionPending}
+                      type="button"
+                    >
+                      {claimRetryLabel}
+                    </button>
+                  )}
+                </div>
               </div>
               <div className="notification-filter-row" aria-label="Notification filters">
                 {notificationFilterOptions.map((option) => (
@@ -12878,10 +12928,24 @@ export default function App() {
                       Realized PNL from settled markets. Current payout available: {formatUsdc(claimable, defaultSettlementDecimals)} {aggregateAssetLabel}.
                     </span>
                   </div>
-                  {isOwnProfile && claimNotifications.length > 1 && (
-                    <button onClick={claimAll} disabled={transactionPending} type="button">
-                      Claim all {claimableTotalLabel}
-                    </button>
+                  {isOwnProfile && (claimNotifications.length > 1 || claimRetryMarketIds.length > 0) && (
+                    <div className="notification-head-actions">
+                      {claimNotifications.length > 1 && (
+                        <button onClick={() => claimAll()} disabled={transactionPending} type="button">
+                          Claim all {claimableTotalLabel}
+                        </button>
+                      )}
+                      {claimRetryMarketIds.length > 0 && (
+                        <button
+                          className="secondary"
+                          onClick={() => claimAll(claimRetryMarketIds)}
+                          disabled={transactionPending}
+                          type="button"
+                        >
+                          {claimRetryLabel}
+                        </button>
+                      )}
+                    </div>
                   )}
                 </div>
                 <div className="edge-chart-wrap">

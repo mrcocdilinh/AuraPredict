@@ -19,7 +19,9 @@ const selectors = {
   protocolFeeBps: toFunctionSelector("protocolFeeBps()"),
   accumulatedProtocolFees: toFunctionSelector("accumulatedProtocolFees()"),
   defaultSettlementToken: toFunctionSelector("defaultSettlementToken()"),
-  assetConfigs: toFunctionSelector("assetConfigs(address)")
+  assetConfigs: toFunctionSelector("assetConfigs(address)"),
+  positionOf: toFunctionSelector("positionOf(uint256,address)"),
+  potentialPayout: toFunctionSelector("potentialPayout(uint256,address)")
 };
 
 function uint256(value: bigint | number) {
@@ -46,6 +48,13 @@ function assetConfig() {
       { type: "uint256" }
     ],
     [true, "USDC", 6, 100_000n, 1_000_000n, 1_000_000n, 0n]
+  );
+}
+
+function positionValue(yes: bigint, no: bigint, claimed: boolean) {
+  return encodeAbiParameters(
+    [{ type: "uint256" }, { type: "uint256" }, { type: "bool" }],
+    [yes, no, claimed]
   );
 }
 
@@ -134,6 +143,21 @@ const markets = [
     outcome: 1,
     resolvedAt: seconds(-35_000),
     traderCount: 5
+  }),
+  market({
+    id: 4,
+    question: "Will AuraPredict include a second finalized claimable market?",
+    closeTime: seconds(-90_000),
+    resolutionTime: seconds(-90_000),
+    proposedOutcome: 1,
+    proposedAt: seconds(-84_000),
+    disputeDeadline: seconds(-40_000),
+    proposedBy: AUTHORITY,
+    outcome: 1,
+    resolvedAt: seconds(-39_000),
+    traderCount: 3,
+    yesPool: "5000000",
+    noPool: "1000000"
   })
 ];
 
@@ -289,6 +313,7 @@ async function mockConnectedWallet(page: Page) {
         if (method === "eth_accounts" || method === "eth_requestAccounts") return [walletAddress];
         if (method === "eth_chainId") return "0x4cef52";
         if (method === "wallet_switchEthereumChain" || method === "wallet_addEthereumChain") return null;
+        if (method === "eth_sendTransaction") return "0x" + "c".repeat(64);
         return "0x0";
       },
       on: (event: string, handler: (...args: unknown[]) => void) => {
@@ -317,6 +342,28 @@ async function mockRpc(route: Route) {
     if (call.method === "eth_chainId") result = "0x4cef52";
     if (call.method === "eth_blockNumber") result = "0x2b4f120";
     if (call.method === "eth_getLogs") result = [];
+    if (call.method === "eth_getTransactionReceipt") {
+      return {
+        jsonrpc: "2.0",
+        id: call.id ?? 1,
+        result: {
+          transactionHash: "0x" + "c".repeat(64),
+          transactionIndex: "0x0",
+          blockHash: "0x" + "d".repeat(64),
+          blockNumber: "0x2b4f121",
+          from: OWNER,
+          to: "0x3c853AE2eC705B453c9657569b6335e762631536",
+          cumulativeGasUsed: "0x5208",
+          gasUsed: "0x5208",
+          effectiveGasPrice: "0x1",
+          contractAddress: null,
+          logs: [],
+          logsBloom: "0x" + "0".repeat(512),
+          status: "0x1",
+          type: "0x2"
+        }
+      };
+    }
     if (call.method === "eth_call") {
       const data = String(call.params?.[0]?.data || "").slice(0, 10);
       const responses: Record<string, string> = {
@@ -333,7 +380,9 @@ async function mockRpc(route: Route) {
         [selectors.protocolFeeBps]: uint256(200),
         [selectors.accumulatedProtocolFees]: uint256(0),
         [selectors.defaultSettlementToken]: address(USDC),
-        [selectors.assetConfigs]: assetConfig()
+        [selectors.assetConfigs]: assetConfig(),
+        [selectors.positionOf]: positionValue(1_000_000n, 0n, false),
+        [selectors.potentialPayout]: uint256(1_000_000)
       };
       result = responses[data] || "0x" + "0".repeat(64);
     }
@@ -360,6 +409,26 @@ test("create market form defaults to authority/oracle review", async ({ page }) 
   await expect(page.getByLabel(/Resolution source URL/i)).toBeVisible();
   await expect(page.getByText(/New markets default to authority\/oracle review/i)).toBeVisible();
   await expect(page.getByText(/AI market quality/i)).toBeVisible();
+});
+
+test("create market explains all resolution modes and UTC timing", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: /Create Market/i }).first().click();
+
+  const mode = page.getByLabel(/Resolution mode/i);
+  await expect(mode).toHaveValue("2");
+  await expect(page.getByText(/Only owner\/authority\/oracle can propose/i)).toBeVisible();
+  await expect(page.getByText(/UTC only\. Betting stops at this time/i)).toBeVisible();
+  await expect(page.getByText(/Resolution time is enforced onchain/i)).toBeVisible();
+
+  await mode.selectOption("0");
+  await expect(page.getByText(/Creator can propose\. A matching signed Aura result/i)).toBeVisible();
+
+  await mode.selectOption("1");
+  await expect(page.getByText(/Creator can propose, but owner\/authority must approve/i)).toBeVisible();
+
+  await mode.selectOption("2");
+  await expect(page.getByText(/Best for objective data markets and oracle-led settlement/i)).toBeVisible();
 });
 
 test("market detail exposes stake, resolution, dispute, finalize and claim surfaces", async ({ page }) => {
@@ -407,4 +476,21 @@ test("Unified Balance funding modal documents pending and retry states", async (
   await page.getByText(/Advanced recovery/i).click();
   await expect(page.getByRole("button", { name: /Deposit only/i })).toBeVisible();
   await expect(page.getByRole("button", { name: /Retry spend to Arc/i })).toBeVisible();
+});
+
+test("wallet notifications expose claim all and claim filters", async ({ page }) => {
+  await mockConnectedWallet(page);
+  await page.goto("/");
+
+  await expect(page.getByLabel(/Notifications/i)).toBeVisible();
+  await page.getByLabel(/Notifications/i).click();
+  await expect(page.getByText(/Claim all 2\.00 USDC/i)).toBeVisible();
+  await page.getByRole("button", { name: /View all notifications/i }).click();
+
+  await expect(page.getByRole("heading", { name: /\d+ current notifications/i })).toBeVisible();
+  await page.getByRole("button", { name: /^Claims$/i }).click();
+  await expect(page.getByText(/Claim available/i).first()).toBeVisible();
+
+  await page.getByRole("button", { name: /Claim all 2\.00 USDC/i }).click();
+  await expect(page.getByText(/Claim all finished: 2 claimed/i)).toBeVisible({ timeout: 10_000 });
 });
