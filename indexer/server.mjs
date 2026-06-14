@@ -587,6 +587,7 @@ async function processEvent(eventName, log) {
         noPool: market.noPool,
         timestamp,
         txHash,
+        blockNumber: String(log.blockNumber ?? ""),
         logIndex
       });
     }
@@ -691,6 +692,7 @@ async function processEvent(eventName, log) {
         payout: toAmount(args.payout),
         timestamp,
         txHash,
+        blockNumber: String(log.blockNumber ?? ""),
         logIndex
       });
     }
@@ -4636,6 +4638,45 @@ async function syncRange(fromBlock, toBlock) {
   }
 }
 
+async function reconcileActivityFromEvents(options = {}) {
+  await detectContractVersion();
+  const latestBlock = await eventClient.getBlockNumber();
+  const deploymentStart = await resolveStartBlock(latestBlock);
+  const requestedFrom = toBigint(options.fromBlock);
+  const requestedTo = toBigint(options.toBlock);
+  const fromBlock = requestedFrom > 0n ? requestedFrom : deploymentStart;
+  const toBlock = requestedTo > 0n && requestedTo < latestBlock ? requestedTo : latestBlock;
+
+  if (fromBlock > toBlock) {
+    throw new Error(`Invalid reconcile range: fromBlock ${fromBlock} is after toBlock ${toBlock}.`);
+  }
+
+  const before = activityReconciliationSummary();
+  let scannedRanges = 0;
+  let current = fromBlock;
+  while (current <= toBlock) {
+    const end = current + CHUNK_SIZE - 1n > toBlock ? toBlock : current + CHUNK_SIZE - 1n;
+    await syncRange(current, end);
+    current = end + 1n;
+    scannedRanges += 1;
+  }
+
+  if (toBigint(state.lastIndexedBlock) < toBlock) {
+    state.lastIndexedBlock = toBlock.toString();
+  }
+  await refreshContractState();
+  computeStats();
+  state.updatedAt = nowIso();
+  await saveState();
+  return {
+    fromBlock: fromBlock.toString(),
+    toBlock: toBlock.toString(),
+    scannedRanges,
+    before,
+    after: state.stats.activityReconciliation
+  };
+}
+
 async function hasContractCode(blockNumber) {
   const code = await eventClient.getCode({ address: CONTRACT_ADDRESS, blockNumber });
   return Boolean(code && code !== "0x");
@@ -4791,6 +4832,18 @@ async function route(req, res) {
     if (url.pathname === "/api/sync") {
       void syncOnce();
       json(res, 202, { ok: true, status: "sync started" });
+      return;
+    }
+
+    if (url.pathname === "/api/admin/reconcile") {
+      if (req.method !== "POST") return notFound(res);
+      if (!adminAuthorized(req)) return json(res, 401, { error: "Unauthorized." });
+      const body = await readRequestBody(req);
+      const result = await reconcileActivityFromEvents({
+        fromBlock: body.fromBlock || url.searchParams.get("fromBlock"),
+        toBlock: body.toBlock || url.searchParams.get("toBlock")
+      });
+      json(res, 200, { ok: true, ...result, updatedAt: state.updatedAt });
       return;
     }
 

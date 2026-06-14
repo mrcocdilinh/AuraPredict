@@ -447,6 +447,16 @@ type MismatchConfirmState = {
   aiSuggestedOutcome: Outcome.Yes | Outcome.No;
 };
 
+type SettlementAuditStatus = "safe" | "review" | "conflict";
+
+type SettlementAudit = {
+  status: SettlementAuditStatus;
+  label: string;
+  detail: string;
+  severity: MarketRiskSeverity;
+  blocksFinalize: boolean;
+};
+
 type SocialMarketResponse = {
   comments?: MarketComment[];
   evidence?: MarketEvidence[];
@@ -5258,6 +5268,131 @@ export default function App() {
     publicProfiles: Object.values(profilePublicByAddress).filter((value) => value !== false).length,
     namedProfiles: Object.values(profileNames).filter((name) => name.trim()).length
   };
+  const settlementAuditFor = useCallback(
+    (market: MarketView): SettlementAudit => {
+      if (market.outcome !== Outcome.Unresolved) {
+        return {
+          status: "safe",
+          label: "Finalized",
+          detail: `Final result is ${outcomeLabel(market.outcome)}.`,
+          severity: "info",
+          blocksFinalize: false
+        };
+      }
+
+      const proposedOutcome = market.proposedOutcome;
+      const oracleProposal = oracleProposals[String(market.id)];
+      const oracleOutcome = oracleOutcomeFromProposal(oracleProposal);
+      const oracleIssue = oracleSafetyIssueFor(oracleProposal, market);
+      const aiReceiptOutcome = aiOutcomeFromReceipt(aiResolutionReceipts[String(market.id)]);
+      const aiReportOutcome = aiOutcomeFromText(aiResolutionReports[market.id]?.suggestedOutcome);
+      const aiOutcome =
+        aiReceiptOutcome === Outcome.Yes || aiReceiptOutcome === Outcome.No
+          ? aiReceiptOutcome
+          : aiReportOutcome === Outcome.Yes || aiReportOutcome === Outcome.No
+            ? aiReportOutcome
+            : Outcome.Unresolved;
+
+      if (requiresCancelForLiquidity(market) && proposedOutcome !== Outcome.Unresolved && proposedOutcome !== Outcome.Canceled) {
+        return {
+          status: "conflict",
+          label: "Conflict detected",
+          detail: "YES/NO finalization is unsafe because one side has no funded positions. Use Cancel / Refund.",
+          severity: "bad",
+          blocksFinalize: true
+        };
+      }
+
+      if (oracleIssue) {
+        const unsafeProposalIsActive =
+          proposedOutcome === Outcome.Unresolved ||
+          (oracleOutcome !== Outcome.Unresolved && proposedOutcome === oracleOutcome);
+        return {
+          status: unsafeProposalIsActive ? "conflict" : "review",
+          label: unsafeProposalIsActive ? "Conflict detected" : "Needs review",
+          detail: oracleIssue,
+          severity: unsafeProposalIsActive ? "bad" : "warn",
+          blocksFinalize: unsafeProposalIsActive
+        };
+      }
+
+      if (market.disputed || market.authorityReviewRequired) {
+        return {
+          status: "review",
+          label: "Needs review",
+          detail: ownerReviewReasonFor(market),
+          severity: "warn",
+          blocksFinalize: false
+        };
+      }
+
+      if (
+        market.proposedAt > 0 &&
+        aiOutcome !== Outcome.Unresolved &&
+        proposedOutcome !== Outcome.Unresolved &&
+        proposedOutcome !== Outcome.Canceled &&
+        proposedOutcome !== aiOutcome
+      ) {
+        return {
+          status: "review",
+          label: "Needs review",
+          detail: `Aura suggested ${outcomeLabel(aiOutcome)}, but resolver proposed ${outcomeLabel(proposedOutcome)}.`,
+          severity: "warn",
+          blocksFinalize: false
+        };
+      }
+
+      const blockingRisk = marketRiskFlagsFor(market).find((flag) => flag.severity === "bad");
+      if (blockingRisk) {
+        return {
+          status: "review",
+          label: "Needs review",
+          detail: `${blockingRisk.label}: ${blockingRisk.detail}`,
+          severity: "warn",
+          blocksFinalize: false
+        };
+      }
+
+      if (market.proposedAt > 0 && market.disputeDeadline > nowSeconds) {
+        return {
+          status: "review",
+          label: "Needs review",
+          detail: `Dispute window is still open until ${closeDate(market.disputeDeadline)}.`,
+          severity: "warn",
+          blocksFinalize: false
+        };
+      }
+
+      if (market.proposedAt > 0) {
+        return {
+          status: "safe",
+          label: "Safe to finalize",
+          detail: `No conflict detected for proposed ${outcomeLabel(proposedOutcome)}.`,
+          severity: "info",
+          blocksFinalize: false
+        };
+      }
+
+      if (resolutionUnlockTime(market) <= nowSeconds) {
+        return {
+          status: "review",
+          label: "Needs review",
+          detail: "Resolution time has passed and no result has been proposed yet.",
+          severity: "warn",
+          blocksFinalize: false
+        };
+      }
+
+      return {
+        status: "safe",
+        label: "Safe to monitor",
+        detail: "Market is still before resolution time.",
+        severity: "info",
+        blocksFinalize: false
+      };
+    },
+    [aiResolutionReceipts, aiResolutionReports, marketRiskFlagsFor, nowSeconds, oracleProposals, ownerReviewReasonFor, resolutionUnlockTime]
+  );
   const ownerOpenReports = Object.values(marketReports)
     .flat()
     .filter((report) => report.status === "open")
@@ -8857,6 +8992,19 @@ export default function App() {
       return;
     }
     const source = options?.source ?? "manual";
+    if (market && (outcome === Outcome.Yes || outcome === Outcome.No)) {
+      const oracleProposal = oracleProposals[String(marketId)];
+      const oracleIssue = oracleSafetyIssueFor(oracleProposal, market);
+      const oracleOutcome = oracleOutcomeFromProposal(oracleProposal);
+      if (source === "oracle" && oracleIssue) {
+        setNotice(`Oracle preflight blocked this proposal: ${oracleIssue}`);
+        return;
+      }
+      if (oracleIssue && oracleOutcome === outcome) {
+        setNotice(`Preflight blocked ${outcomeLabel(outcome)} because it matches an unsafe oracle proposal: ${oracleIssue}`);
+        return;
+      }
+    }
     const auraStatus = auraResolutionStatusByMarket[marketId] || "idle";
     const aiReceipt = aiResolutionReceipts[String(marketId)];
     const aiSuggestedOutcome = aiOutcomeFromReceipt(aiReceipt);
@@ -9036,11 +9184,17 @@ export default function App() {
   const finalizeMarket = async (marketId: number) => {
     if (!account || !isAddress(account)) throw new Error("Connect wallet first.");
     if (isMarketActionPending("finalize", marketId)) return;
+    const market = markets.find((item) => item.id === marketId);
+    const audit = market ? settlementAuditFor(market) : null;
+    if (audit?.blocksFinalize) {
+      setNotice(`Finalize preflight blocked: ${audit.detail}`);
+      return;
+    }
     await switchToArc();
     const walletClient = getActiveWalletClient();
     setMarketActionPending("finalize", marketId, true);
     try {
-      const fallbackOutcome = markets.find((market) => market.id === marketId)?.proposedOutcome ?? Outcome.Unresolved;
+      const fallbackOutcome = market?.proposedOutcome ?? Outcome.Unresolved;
       await runTransaction(
         () =>
           walletClient.writeContract({
@@ -9083,6 +9237,15 @@ export default function App() {
     if (market && requiresCancelForLiquidity(market) && outcome !== Outcome.Canceled) {
       setNotice("This market is cancel-only because both YES and NO were not funded. Use Final Cancel to refund positions.");
       return;
+    }
+    if (market && (outcome === Outcome.Yes || outcome === Outcome.No)) {
+      const oracleProposal = oracleProposals[String(marketId)];
+      const oracleIssue = oracleSafetyIssueFor(oracleProposal, market);
+      const oracleOutcome = oracleOutcomeFromProposal(oracleProposal);
+      if (oracleIssue && oracleOutcome === outcome) {
+        setNotice(`Final review preflight blocked ${outcomeLabel(outcome)}: ${oracleIssue}`);
+        return;
+      }
     }
     await switchToArc();
     const walletClient = getActiveWalletClient();
@@ -10136,6 +10299,10 @@ export default function App() {
           }
         ]
       : selectedMarketRiskFlags;
+    const selectedSettlementAudit = settlementAuditFor(selectedMarket);
+    const selectedFinalizeBlocked = selectedSettlementAudit.blocksFinalize;
+    const finalYesBlockedByIntegrity = Boolean(selectedOracleSafetyIssue && oracleSuggestedOutcome === Outcome.Yes);
+    const finalNoBlockedByIntegrity = Boolean(selectedOracleSafetyIssue && oracleSuggestedOutcome === Outcome.No);
     const selectedAiSuggestedOutcome =
       reportAiSuggestedOutcome === Outcome.Yes || reportAiSuggestedOutcome === Outcome.No
         ? reportAiSuggestedOutcome
@@ -10292,6 +10459,8 @@ export default function App() {
     const finalDecisionDetail =
       selectedMarket.outcome !== Outcome.Unresolved
         ? "The market is settled and winners/refunds can be claimed from the contract."
+        : selectedFinalizeBlocked
+        ? `Finalize is blocked by preflight: ${selectedSettlementAudit.detail}`
         : requiresCancelForLiquidity(selectedMarket)
         ? "YES/NO finalization is blocked because one side has no funded position."
         : selectedMarket.disputed || selectedMarket.authorityReviewRequired
@@ -10821,7 +10990,7 @@ export default function App() {
                       </button>
                     )}
                     {canFinalize && (
-                      <button className="secondary action-use-ai" disabled={resolutionActionBusy} onClick={() => finalizeMarket(selectedMarket.id)}>
+                      <button className="secondary action-use-ai" disabled={resolutionActionBusy || selectedFinalizeBlocked} onClick={() => finalizeMarket(selectedMarket.id)}>
                         Finalize result
                       </button>
                     )}
@@ -10834,10 +11003,10 @@ export default function App() {
                       <>
                         {!cancelOnlyResolution && (
                           <>
-                            <button className="secondary action-propose-yes" disabled={resolutionActionBusy} onClick={() => finalizeDispute(selectedMarket.id, Outcome.Yes)}>
+                            <button className="secondary action-propose-yes" disabled={resolutionActionBusy || finalYesBlockedByIntegrity} onClick={() => finalizeDispute(selectedMarket.id, Outcome.Yes)}>
                               Final YES
                             </button>
-                            <button className="secondary action-propose-no" disabled={resolutionActionBusy} onClick={() => finalizeDispute(selectedMarket.id, Outcome.No)}>
+                            <button className="secondary action-propose-no" disabled={resolutionActionBusy || finalNoBlockedByIntegrity} onClick={() => finalizeDispute(selectedMarket.id, Outcome.No)}>
                               Final NO
                             </button>
                           </>
@@ -10895,6 +11064,7 @@ export default function App() {
                       </small>
                     )}
                     {finalizeHint && <small>{finalizeHint}</small>}
+                    {selectedFinalizeBlocked && <small>Preflight blocked finalize: {selectedSettlementAudit.detail}</small>}
                     {selectedMarket.authorityReviewRequired && <small>This proposal is held for authority review before final settlement. Funded users can still dispute while the dispute window is open.</small>}
                   </div>
                 </div>
@@ -12529,22 +12699,31 @@ export default function App() {
                         <div className="owner-action-column">
                           <span>Ready to finalize</span>
                           {ownerFinalizationQueue.length === 0 && <small>No finalization items.</small>}
-                          {ownerFinalizationQueue.map((market) => (
-                            <button className="similar-market-row" key={`owner-finalize-${market.id}`} onClick={() => openMarket(market.id, true)} type="button">
-                              <strong>#{market.id} {shortQuestion(market.question)}</strong>
-                              <small>Proposed {outcomeLabel(market.proposedOutcome)} / deadline {closeDate(market.disputeDeadline)}</small>
-                            </button>
-                          ))}
+                          {ownerFinalizationQueue.map((market) => {
+                            const audit = settlementAuditFor(market);
+                            return (
+                              <button className="similar-market-row" key={`owner-finalize-${market.id}`} onClick={() => openMarket(market.id, true)} type="button">
+                                <strong>#{market.id} {shortQuestion(market.question)}</strong>
+                                <span className={`settlement-audit-badge audit-${audit.status}`}>{audit.label}</span>
+                                <small>{audit.detail}</small>
+                                <small>Proposed {outcomeLabel(market.proposedOutcome)} / deadline {closeDate(market.disputeDeadline)}</small>
+                              </button>
+                            );
+                          })}
                         </div>
                         <div className="owner-action-column">
                           <span>Escalated review</span>
                           {ownerEscalatedReviewQueue.length === 0 && <small>No dispute or authority review items.</small>}
-                          {ownerEscalatedReviewQueue.map((market) => (
-                            <button className="similar-market-row" key={`owner-escalated-${market.id}`} onClick={() => openMarket(market.id, true)} type="button">
-                              <strong>#{market.id} {shortQuestion(market.question)}</strong>
-                              <small>{ownerReviewReasonFor(market)}</small>
-                            </button>
-                          ))}
+                          {ownerEscalatedReviewQueue.map((market) => {
+                            const audit = settlementAuditFor(market);
+                            return (
+                              <button className="similar-market-row" key={`owner-escalated-${market.id}`} onClick={() => openMarket(market.id, true)} type="button">
+                                <strong>#{market.id} {shortQuestion(market.question)}</strong>
+                                <span className={`settlement-audit-badge audit-${audit.status}`}>{audit.label}</span>
+                                <small>{audit.detail || ownerReviewReasonFor(market)}</small>
+                              </button>
+                            );
+                          })}
                         </div>
                         <div className="owner-action-column">
                           <span>Flagged risk</span>

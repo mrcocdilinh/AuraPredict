@@ -6725,6 +6725,33 @@ label {
   font-weight: 780;
 }
 
+.settlement-audit-badge {
+  border-radius: 999px;
+  display: inline-flex;
+  font-size: 0.68rem;
+  font-weight: 900;
+  line-height: 1.2;
+  padding: 4px 7px;
+}
+
+.settlement-audit-badge.audit-safe {
+  background: #ecfdf3;
+  border: 1px solid #86efac;
+  color: #047857;
+}
+
+.settlement-audit-badge.audit-review {
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  color: #9a3412;
+}
+
+.settlement-audit-badge.audit-conflict {
+  background: #fff1f2;
+  border: 1px solid #fecdd3;
+  color: #be123c;
+}
+
 .duplicate-acknowledge {
   align-items: start;
   background: #fff7ed;
@@ -8828,6 +8855,24 @@ label {
 
 [data-theme="dark"] .similar-market-row small {
   color: #9aa7bd;
+}
+
+[data-theme="dark"] .settlement-audit-badge.audit-safe {
+  background: rgba(16, 185, 129, 0.12);
+  border-color: rgba(16, 185, 129, 0.34);
+  color: #7de8bc;
+}
+
+[data-theme="dark"] .settlement-audit-badge.audit-review {
+  background: rgba(245, 158, 11, 0.12);
+  border-color: rgba(245, 158, 11, 0.34);
+  color: #f7c56b;
+}
+
+[data-theme="dark"] .settlement-audit-badge.audit-conflict {
+  background: rgba(244, 63, 94, 0.13);
+  border-color: rgba(244, 63, 94, 0.36);
+  color: #ff9bac;
 }
 
 [data-theme="dark"] .quality-signal.good {
