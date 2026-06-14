@@ -4618,7 +4618,13 @@ async function route(req, res) {
       if (!Number.isInteger(marketId) || marketId < 0) return json(res, 400, { error: "Invalid market id." });
 
       if (req.method === "GET" && segments.length === 3) {
-        const proposal = oracleState()[String(marketId)] ?? null;
+        let proposal = oracleState()[String(marketId)] ?? null;
+        const market = state.markets[String(marketId)];
+        if (proposal && market && oracleProposalNeedsRuleRefresh(proposal, market)) {
+          delete oracleState()[String(marketId)];
+          await saveState();
+          proposal = null;
+        }
         json(res, 200, { proposal, updatedAt: state.updatedAt });
         return;
       }
