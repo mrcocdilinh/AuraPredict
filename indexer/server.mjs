@@ -107,7 +107,7 @@ const ORACLE_AUTO_PROPOSE_MIN_CONFIDENCE = Number(process.env.AURA_ORACLE_AUTO_P
 const ORACLE_AUTO_PROPOSE_ADAPTERS = new Set(
   String(
     process.env.AURA_ORACLE_AUTO_PROPOSE_ADAPTERS ||
-      "crypto-price,macro-yahoo-chart,status-health,status-page,liquidity-rule"
+      "crypto-price,stock-yahoo-chart,macro-yahoo-chart,status-health,status-page,liquidity-rule"
   )
     .split(",")
     .map((adapter) => adapter.trim())
@@ -338,6 +338,12 @@ function emptyState() {
       knownPlayers: 0,
       settlementSymbols: ["USDC"],
       hasMixedSettlementAssets: false,
+      activityReconciliation: {
+        ok: true,
+        mismatchCount: 0,
+        checkedMarkets: 0,
+        sample: []
+      },
       assetBreakdown: [
         {
           symbol: "USDC",
@@ -1139,6 +1145,57 @@ async function refreshContractState() {
   }
 }
 
+function activityReconciliationSummary(markets = Object.values(state.markets)) {
+  const byMarket = new Map();
+  for (const trade of state.trades || []) {
+    const id = String(Number(trade.marketId || 0));
+    const row = byMarket.get(id) || { yes: 0n, no: 0n, tradeCount: 0 };
+    const amount = toBigint(trade.amount);
+    if (Number(trade.side) === Outcome.Yes) row.yes += amount;
+    if (Number(trade.side) === Outcome.No) row.no += amount;
+    row.tradeCount += 1;
+    byMarket.set(id, row);
+  }
+
+  const mismatches = [];
+  for (const market of markets) {
+    const id = String(Number(market.id || 0));
+    const expectedYes = toBigint(market.yesPool);
+    const expectedNo = toBigint(market.noPool);
+    const observed = byMarket.get(id) || { yes: 0n, no: 0n, tradeCount: 0 };
+    const yesDelta = expectedYes - observed.yes;
+    const noDelta = expectedNo - observed.no;
+    if (yesDelta !== 0n || noDelta !== 0n) {
+      mismatches.push({
+        marketId: Number(market.id),
+        question: market.question || `Market #${market.id}`,
+        expectedYes: expectedYes.toString(),
+        indexedYes: observed.yes.toString(),
+        yesDelta: yesDelta.toString(),
+        expectedNo: expectedNo.toString(),
+        indexedNo: observed.no.toString(),
+        noDelta: noDelta.toString(),
+        tradeCount: observed.tradeCount,
+        settlementSymbol: market.settlementSymbol || "USDC",
+        settlementDecimals: marketAssetDecimals(market)
+      });
+    }
+  }
+
+  return {
+    ok: mismatches.length === 0,
+    mismatchCount: mismatches.length,
+    checkedMarkets: markets.length,
+    sample: mismatches
+      .sort((a, b) => {
+        const aMagnitude = toBigint(a.yesDelta) ** 2n + toBigint(a.noDelta) ** 2n;
+        const bMagnitude = toBigint(b.yesDelta) ** 2n + toBigint(b.noDelta) ** 2n;
+        return bMagnitude > aMagnitude ? 1 : bMagnitude < aMagnitude ? -1 : 0;
+      })
+      .slice(0, 12)
+  };
+}
+
 function computeStats() {
   const markets = Object.values(state.markets);
   const now = Math.floor(Date.now() / 1000);
@@ -1205,6 +1262,7 @@ function computeStats() {
     knownPlayers: users.size,
     settlementSymbols,
     hasMixedSettlementAssets: settlementSymbols.length > 1,
+    activityReconciliation: activityReconciliationSummary(markets),
     assetBreakdown: [...assetRows.values()]
       .sort((a, b) => a.symbol.localeCompare(b.symbol))
       .map((row) => ({
@@ -2911,6 +2969,111 @@ function detectMacroOracleMarket(market) {
   return { ...asset, comparator: condition.comparator, target: condition.target };
 }
 
+const STOCK_ORACLE_ASSETS = [
+  { symbol: "TSLA", names: ["tsla", "tesla"], yahoo: "TSLA", label: "Tesla (TSLA)" },
+  { symbol: "NVDA", names: ["nvda", "nvidia"], yahoo: "NVDA", label: "NVIDIA (NVDA)" },
+  { symbol: "AAPL", names: ["aapl", "apple"], yahoo: "AAPL", label: "Apple (AAPL)" },
+  { symbol: "MSFT", names: ["msft", "microsoft"], yahoo: "MSFT", label: "Microsoft (MSFT)" },
+  { symbol: "GOOGL", names: ["googl", "google", "alphabet"], yahoo: "GOOGL", label: "Alphabet (GOOGL)" },
+  { symbol: "AMZN", names: ["amzn", "amazon"], yahoo: "AMZN", label: "Amazon (AMZN)" },
+  { symbol: "META", names: ["meta", "facebook"], yahoo: "META", label: "Meta (META)" },
+  { symbol: "MSTR", names: ["mstr", "microstrategy", "strategy"], yahoo: "MSTR", label: "MicroStrategy (MSTR)" },
+  { symbol: "AMD", names: ["amd", "advanced micro devices"], yahoo: "AMD", label: "AMD (AMD)" },
+  { symbol: "COIN", names: ["coin", "coinbase"], yahoo: "COIN", label: "Coinbase (COIN)" },
+  { symbol: "PLTR", names: ["pltr", "palantir"], yahoo: "PLTR", label: "Palantir (PLTR)" },
+  { symbol: "NFLX", names: ["nflx", "netflix"], yahoo: "NFLX", label: "Netflix (NFLX)" },
+  { symbol: "HOOD", names: ["hood", "robinhood"], yahoo: "HOOD", label: "Robinhood (HOOD)" }
+];
+
+const STOCK_TICKER_BLOCKLIST = new Set([
+  "AI",
+  "API",
+  "CPI",
+  "ETF",
+  "NO",
+  "USD",
+  "USDC",
+  "UTC",
+  "YES"
+]);
+
+function normalizeStockTicker(value) {
+  const ticker = String(value || "").trim().toUpperCase().replace(/[^A-Z0-9.-]/g, "");
+  if (!ticker || ticker.length > 8 || STOCK_TICKER_BLOCKLIST.has(ticker)) return "";
+  return ticker;
+}
+
+function stockTickerFromYahooUrl(url) {
+  try {
+    const parsed = new URL(url);
+    const host = parsed.hostname.toLowerCase();
+    const parts = parsed.pathname.split("/").map((part) => decodeURIComponent(part)).filter(Boolean);
+    if (host.includes("finance.yahoo.com")) {
+      const quoteIndex = parts.findIndex((part) => part.toLowerCase() === "quote");
+      if (quoteIndex >= 0) return normalizeStockTicker(parts[quoteIndex + 1]);
+    }
+    if (host.includes("query1.finance.yahoo.com") || host.includes("query2.finance.yahoo.com")) {
+      const chartIndex = parts.findIndex((part) => part.toLowerCase() === "chart");
+      if (chartIndex >= 0) return normalizeStockTicker(parts[chartIndex + 1]);
+    }
+  } catch {
+    return "";
+  }
+  return "";
+}
+
+function stockAssetFromTicker(ticker) {
+  const symbol = normalizeStockTicker(ticker);
+  if (!symbol) return null;
+  const known = STOCK_ORACLE_ASSETS.find((asset) => asset.symbol === symbol || asset.yahoo.toUpperCase() === symbol);
+  return known || { symbol, names: [symbol.toLowerCase()], yahoo: symbol, label: `${symbol} stock` };
+}
+
+function stockAssetFromText(rawText) {
+  const text = String(rawText || "");
+  const known = STOCK_ORACLE_ASSETS.find((asset) => asset.names.some((name) => hasExactMarketTerm(text.toLowerCase(), name)));
+  if (known) return known;
+
+  const parenthetical = text.match(/\(([A-Z][A-Z0-9.-]{0,7})\)/);
+  if (parenthetical) return stockAssetFromTicker(parenthetical[1]);
+
+  const explicitTicker =
+    text.match(/\b([A-Z][A-Z0-9.-]{0,7})\s+(?:stock|shares?|equity)\b/) ||
+    text.match(/\b(?:ticker|symbol)\s*[:=]?\s*([A-Z][A-Z0-9.-]{0,7})\b/);
+  if (explicitTicker) return stockAssetFromTicker(explicitTicker[1]);
+  return null;
+}
+
+function isStockOracleText(text) {
+  return /\b(?:stock|shares?|equity|official closing price|market close|yahoo finance|finance\.yahoo|nasdaq|nyse|tesla|apple|nvidia|microsoft|microstrategy|coinbase|palantir)\b/i.test(
+    String(text || "")
+  );
+}
+
+function detectStockOracleMarket(market) {
+  const structuredRule = structuredRuleForMarket(market);
+  const sourceUrls = marketSourceUrls(market);
+  const sourceTicker = sourceUrls.map(stockTickerFromYahooUrl).find(Boolean);
+  const text = [
+    market?.question,
+    market?.category,
+    market?.metadataURI,
+    market?.fallbackSourceURI,
+    stripRuleMetadata(market?.resolutionRule)
+  ]
+    .map((value) => String(value || ""))
+    .join(" ");
+  const structuredAsset =
+    structuredRule?.kind === "stock-price" || structuredRule?.kind === "equity-price"
+      ? stockAssetFromTicker(structuredRule.asset)
+      : null;
+  const asset = structuredAsset || stockAssetFromTicker(sourceTicker) || (isStockOracleText(text) ? stockAssetFromText(text) : null);
+  const condition = priceConditionForMarket(market, structuredRule);
+  if (!asset || !condition) return null;
+  const date = extractScheduleDate(`${stripRuleMetadata(market?.resolutionRule)} ${market?.question || ""}`, marketResolutionTime(market));
+  return { ...asset, comparator: condition.comparator, target: condition.target, date, structuredRule };
+}
+
 function detectHealthOracleMarket(market) {
   const structuredRule = structuredRuleForMarket(market);
   if (structuredRule?.kind === "status-health" && cleanUrl(structuredRule.primarySource)) {
@@ -3265,7 +3428,7 @@ function oracleProposalIntegrityIssue(proposal, market) {
   if (!["YES", "NO"].includes(proposalOutcome(proposal))) return "";
 
   const adapter = String(proposal.adapter || "");
-  if (adapter === "crypto-price" || adapter === "macro-yahoo-chart") {
+  if (adapter === "crypto-price" || adapter === "stock-yahoo-chart" || adapter === "macro-yahoo-chart") {
     return numericOracleIntegrityIssue(proposal, market);
   }
   if (adapter === "mlb-schedule") return scheduleCountOracleIntegrityIssue(proposal);
@@ -3363,6 +3526,100 @@ async function buildCryptoOracleProposal(market, config) {
 
   proposal.status = "needs_review";
   proposal.summary = "Oracle could not retrieve an exact price for the requested timestamp. Send this market to manual review.";
+  return finalizeOracleProposal(proposal);
+}
+
+function utcStartSecondsForIsoDate(isoDate) {
+  const match = String(isoDate || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return 0;
+  const seconds = Math.floor(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]), 0, 0, 0) / 1000);
+  return Number.isFinite(seconds) ? seconds : 0;
+}
+
+function weekdayForIsoDate(isoDate) {
+  const start = utcStartSecondsForIsoDate(isoDate);
+  if (!start) return -1;
+  return new Date(start * 1000).getUTCDay();
+}
+
+async function buildStockYahooProposal(market, config) {
+  const proposal = baseOracleProposal(market, "stock-yahoo-chart");
+  proposal.comparator = config.comparator;
+  proposal.targetValue = String(config.target);
+  proposal.sourceUrls = [
+    `https://finance.yahoo.com/quote/${encodeURIComponent(config.yahoo)}`,
+    `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(config.yahoo)}`
+  ];
+
+  const resolutionTime = marketResolutionTime(market);
+  const now = Math.floor(Date.now() / 1000);
+  if (now < resolutionTime) {
+    proposal.status = "not_ready";
+    proposal.summary = "Oracle cannot evaluate this stock market before the resolution timestamp.";
+    return finalizeOracleProposal(proposal);
+  }
+
+  const date = config.date || isoDateFromUtcSeconds(resolutionTime);
+  const dayStart = utcStartSecondsForIsoDate(date);
+  if (!date || !dayStart) {
+    proposal.status = "needs_review";
+    proposal.confidence = 0;
+    proposal.summary = "Stock oracle could not determine the exact trading date from the market rule.";
+    proposal.checks = ["Add an explicit YYYY-MM-DD or Month Day, Year date to stock close markets."];
+    return finalizeOracleProposal(proposal);
+  }
+
+  const weekday = weekdayForIsoDate(date);
+  if (weekday === 0 || weekday === 6) {
+    proposal.status = "needs_review";
+    proposal.confidence = 0;
+    proposal.summary = `${config.label} market resolves on ${date}, which is a weekend. Manual review or Cancel is required according to the rule.`;
+    proposal.checks = ["Yahoo daily bars are expected only for exchange trading days.", "Do not infer NO from a missing weekend trading bar."];
+    return finalizeOracleProposal(proposal);
+  }
+
+  const yahooUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(config.yahoo)}?period1=${dayStart}&period2=${dayStart + 3 * 24 * 60 * 60}&interval=1d`;
+  proposal.sourceUrls = [...proposal.sourceUrls, yahooUrl];
+  try {
+    const { response, body } = await fetchJsonWithTimeout(yahooUrl);
+    const result = body?.chart?.result?.[0];
+    const timestamps = result?.timestamp || [];
+    const closes = result?.indicators?.quote?.[0]?.close || [];
+    let matchedIndex = -1;
+    timestamps.forEach((timestamp, index) => {
+      const close = Number(closes[index]);
+      const timestampDate = isoDateFromUtcSeconds(Number(timestamp));
+      if (timestampDate === date && Number.isFinite(close)) matchedIndex = index;
+    });
+
+    if (response.ok && matchedIndex >= 0) {
+      const observed = Number(closes[matchedIndex]);
+      const matched = compareObservedValue(observed, config.comparator, config.target);
+      proposal.outcome = matched ? "YES" : "NO";
+      proposal.confidence = 94;
+      proposal.observedValue = `${config.symbol} close ${observed}`;
+      proposal.observedAt = new Date(Number(timestamps[matchedIndex]) * 1000).toISOString();
+      proposal.summary = `${config.label} Yahoo daily close for ${date} was ${observed}. Rule target is ${config.comparator.toUpperCase()} ${config.target}.`;
+      proposal.checks = [
+        "Yahoo daily chart returned a bar matching the exact rule date.",
+        "The observed close is compared only against the YES branch comparator and target."
+      ];
+      return finalizeOracleProposal(proposal);
+    }
+
+    proposal.checks.push(`Yahoo chart returned no daily close row for ${config.symbol} on ${date}.`);
+  } catch (error) {
+    proposal.checks.push(`Yahoo stock chart lookup failed: ${error instanceof Error ? error.message : String(error)}`);
+  }
+
+  proposal.status = "needs_review";
+  proposal.confidence = 0;
+  proposal.summary = `${config.label} daily close for ${date} was not available from Yahoo with an exact matching trading-day bar. Manual review is required.`;
+  proposal.checks = [
+    ...proposal.checks,
+    "Do not auto-resolve YES/NO from a missing or shifted stock market bar.",
+    "If the date was a market holiday or the source has no official close, follow the market's Cancel/manual rule."
+  ].slice(0, 8);
   return finalizeOracleProposal(proposal);
 }
 
@@ -3542,7 +3799,7 @@ async function buildUnsupportedOracleProposal(market, adapter, summary) {
 
 function oracleProposalNeedsRuleRefresh(proposal, market) {
   if (!proposal || !market) return false;
-  if (!["crypto-price", "macro-yahoo-chart"].includes(String(proposal.adapter || ""))) return false;
+  if (!["crypto-price", "stock-yahoo-chart", "macro-yahoo-chart"].includes(String(proposal.adapter || ""))) return false;
   const condition = priceConditionForMarket(market, structuredRuleForMarket(market));
   if (!condition) return false;
   const proposalComparator = String(proposal.comparator || "");
@@ -3602,6 +3859,9 @@ async function buildOracleProposal(marketId, options = {}) {
 
   const cryptoConfig = detectCryptoOracleMarket(market);
   if (cryptoConfig) return buildCryptoOracleProposal(market, cryptoConfig);
+
+  const stockConfig = detectStockOracleMarket(market);
+  if (stockConfig) return buildStockYahooProposal(market, stockConfig);
 
   const macroConfig = detectMacroOracleMarket(market);
   if (macroConfig) return buildMacroOracleProposal(market, macroConfig);
@@ -3665,6 +3925,9 @@ function oracleAutoProposeDecision(proposal, market) {
   if (!Number.isFinite(confidence) || confidence < ORACLE_AUTO_PROPOSE_MIN_CONFIDENCE) {
     return { ok: false, reason: `Oracle confidence ${confidence}% is below ${ORACLE_AUTO_PROPOSE_MIN_CONFIDENCE}%.` };
   }
+
+  const integrityIssue = oracleProposalIntegrityIssue(proposal, market);
+  if (integrityIssue) return { ok: false, reason: `Oracle safety guard blocked auto-propose: ${integrityIssue}` };
 
   const yesPool = toBigint(market.yesPool);
   const noPool = toBigint(market.noPool);

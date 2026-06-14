@@ -42,7 +42,7 @@ AURA_ORACLE_AUTO_RUN=1
 AURA_ORACLE_HTTP_TIMEOUT_MS=8000
 AURA_ORACLE_AUTO_PROPOSE=0
 AURA_ORACLE_AUTO_PROPOSE_MIN_CONFIDENCE=78
-AURA_ORACLE_AUTO_PROPOSE_ADAPTERS=crypto-price,macro-yahoo-chart,status-health,status-page,liquidity-rule
+AURA_ORACLE_AUTO_PROPOSE_ADAPTERS=crypto-price,stock-yahoo-chart,macro-yahoo-chart,status-health,status-page,liquidity-rule
 ```
 
 The active production contract and its initial block are pinned in `indexer/server.mjs` for the V4 cutover. Arc RPC currently limits `eth_getLogs` ranges and some public endpoints enforce daily quotas, so production should use one stable RPC plus WebSocket sync, a 60-second poll fallback, and a small `eth_getLogs` chunk. `AURA_INDEXER_READ_RETRIES` and `AURA_INDEXER_MARKET_READ_CONCURRENCY` protect static exports from temporary RPC failures. With `AURA_INDEXER_MARKET_READ_FAIL_SOFT=1`, a failed market read keeps the restored cached row when one exists instead of failing the whole export.
@@ -102,6 +102,7 @@ Supported adapters:
 
 - Liquidity rule: if YES pool or NO pool is empty, suggest `CANCEL` so the funded side can be refunded instead of awarding a one-sided market.
 - Crypto price: BTC, ETH, SOL, BNB, XRP, ADA, DOGE, AVAX, LINK through Binance 1-minute klines, with a near-time CoinGecko fallback only when exact minute data is unavailable.
+- Stock close: common US equity tickers through Yahoo daily chart data, using only a daily bar that matches the exact rule date. Missing weekend/holiday bars become `needs_review` instead of inferred NO.
 - Macro chart: gold and DXY through Yahoo chart data near the market's `resolutionTime`.
 - Health/status API: HTTP 200, JSON `ok: true`, and public status summary endpoints for supported services.
 - Sports schedule count: MLB schedule-count markets such as "at least 10 scheduled MLB regular season games on June 7, 2026" are checked through MLB's public Stats API schedule endpoint instead of generic HTML scraping.
@@ -121,12 +122,12 @@ Optional phase 2 auto-propose:
 ```bash
 AURA_ORACLE_AUTO_PROPOSE=1
 AURA_ORACLE_AUTO_PROPOSE_MIN_CONFIDENCE=78
-AURA_ORACLE_AUTO_PROPOSE_ADAPTERS=crypto-price,macro-yahoo-chart,status-health,status-page,liquidity-rule
+AURA_ORACLE_AUTO_PROPOSE_ADAPTERS=crypto-price,stock-yahoo-chart,macro-yahoo-chart,status-health,status-page,liquidity-rule
 AURA_RESOLVER_SIGNER_MODE=private-key
 AURA_RESOLVER_PRIVATE_KEY=0x...
 ```
 
-Auto-propose only runs after `resolutionTime`, only when no result has already been proposed, and only when the configured signer is allowed by that market's resolution mode. YES/NO auto-propose requires both YES and NO pools to be funded. One-sided markets can only auto-propose Cancel through the liquidity rule. The normal dispute window, owner review, and finalization buttons remain the source of final settlement.
+Auto-propose only runs after `resolutionTime`, only when no result has already been proposed, and only when the configured signer is allowed by that market's resolution mode. Numeric adapters must pass the rule safety guard: the adapter comparator/target and observed value must produce the same YES/NO outcome as the visible rule. YES/NO auto-propose requires both YES and NO pools to be funded. One-sided markets can only auto-propose Cancel through the liquidity rule. The normal dispute window, owner review, and finalization buttons remain the source of final settlement.
 
 Circle Agent Wallet signer mode:
 

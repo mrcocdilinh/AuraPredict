@@ -325,6 +325,24 @@ type ProjectStats = {
   knownPlayers: number;
   settlementSymbols?: string[];
   hasMixedSettlementAssets?: boolean;
+  activityReconciliation?: {
+    ok: boolean;
+    mismatchCount: number;
+    checkedMarkets: number;
+    sample?: Array<{
+      marketId: number;
+      question: string;
+      expectedYes: string;
+      indexedYes: string;
+      yesDelta: string;
+      expectedNo: string;
+      indexedNo: string;
+      noDelta: string;
+      tradeCount: number;
+      settlementSymbol: string;
+      settlementDecimals: number;
+    }>;
+  };
   assetBreakdown?: AssetStats[];
 };
 
@@ -412,7 +430,7 @@ type CreateFormState = {
 
 type StructuredResolutionRule = {
   version: 1;
-  kind: "crypto-price" | "macro-price" | "status-health" | "status-page" | "sports-fixture" | "manual-review";
+  kind: "crypto-price" | "stock-price" | "macro-price" | "status-health" | "status-page" | "sports-fixture" | "manual-review";
   asset?: string;
   metric?: string;
   comparator?: "gt" | "gte" | "lt" | "lte" | "eq";
@@ -1865,6 +1883,31 @@ function inferRuleKindAndAsset(category: string, text: string): Pick<StructuredR
   for (const [asset, regex] of cryptoAssets) {
     if (regex.test(value)) return { kind: "crypto-price", asset, metric: `${asset}/USD spot` };
   }
+  const stockAssets = [
+    ["TSLA", /\btsla\b|\btesla\b/],
+    ["NVDA", /\bnvda\b|\bnvidia\b/],
+    ["AAPL", /\baapl\b|\bapple\b/],
+    ["MSFT", /\bmsft\b|\bmicrosoft\b/],
+    ["GOOGL", /\bgoogl\b|\bgoogle\b|\balphabet\b/],
+    ["AMZN", /\bamzn\b|\bamazon\b/],
+    ["META", /\bmeta\b|\bfacebook\b/],
+    ["MSTR", /\bmstr\b|\bmicrostrategy\b|\bstrategy\b/],
+    ["AMD", /\bamd\b|\badvanced micro devices\b/],
+    ["COIN", /\bcoin\b|\bcoinbase\b/],
+    ["PLTR", /\bpltr\b|\bpalantir\b/],
+    ["NFLX", /\bnflx\b|\bnetflix\b/],
+    ["HOOD", /\bhood\b|\brobinhood\b/]
+  ] as const;
+  if (isStockMarketContext(value)) {
+    for (const [asset, regex] of stockAssets) {
+      if (regex.test(value)) return { kind: "stock-price", asset, metric: `${asset} official close` };
+    }
+    const tickerMatch = text.match(/\(([A-Z][A-Z0-9.-]{0,7})\)/) || text.match(/\b([A-Z][A-Z0-9.-]{0,7})\s+(?:stock|shares?|equity)\b/);
+    const ticker = tickerMatch?.[1]?.toUpperCase();
+    if (ticker && !["YES", "NO", "USD", "USDC", "UTC", "API", "CPI"].includes(ticker)) {
+      return { kind: "stock-price", asset: ticker, metric: `${ticker} official close` };
+    }
+  }
   if (/\bxau\b|\bgold\b|\bgc=f\b/.test(value)) return { kind: "macro-price", asset: "GOLD", metric: "XAU/USD spot" };
   if (/\bdxy\b|\bdollar index\b|\bus dollar index\b/.test(value)) return { kind: "macro-price", asset: "DXY", metric: "US Dollar Index" };
   return { kind: "manual-review" };
@@ -2410,6 +2453,24 @@ function marketRiskFlagsForInput(input: {
     });
   }
 
+  const structuredRule = structuredRuleFromText(rule);
+  const visibleCondition = parseComparatorTarget(`${yesConditionText(stripRuleMetadata(rule))} ${question}`);
+  const structuredTarget = parseNumericText(structuredRule?.target);
+  if (
+    structuredRule?.comparator &&
+    structuredTarget !== null &&
+    visibleCondition.comparator &&
+    visibleCondition.target &&
+    (structuredRule.comparator !== visibleCondition.comparator ||
+      Math.abs(structuredTarget - Number(visibleCondition.target)) > Math.max(0.000001, Math.abs(Number(visibleCondition.target)) * 0.000001))
+  ) {
+    flags.push({
+      label: "Rule metadata mismatch",
+      detail: `Saved metadata ${structuredRule.comparator.toUpperCase()} ${structuredTarget} does not match visible rule ${visibleCondition.comparator.toUpperCase()} ${visibleCondition.target}.`,
+      severity: "bad"
+    });
+  }
+
   const referenceTime = ruleTime || effectiveTime;
   if (isStockMarketContext(text) && referenceTime && utcInputIsWeekend(referenceTime)) {
     flags.push({
@@ -2904,6 +2965,49 @@ function oracleOutcomeFromProposal(proposal?: OracleProposal | null) {
     if (proposal.outcomeValue === Outcome.Canceled) return Outcome.Canceled;
   }
   return aiOutcomeFromText(proposal.outcome);
+}
+
+const NUMERIC_ORACLE_ADAPTERS = new Set(["crypto-price", "stock-yahoo-chart", "macro-yahoo-chart"]);
+
+function parseNumericText(value?: string | number | null) {
+  const match = String(value ?? "").replace(/,/g, "").match(/-?\d+(?:\.\d+)?/);
+  if (!match) return null;
+  const parsed = Number(match[0]);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function compareNumericValue(observed: number, comparator: string, target: number) {
+  if (comparator === "gt") return observed > target;
+  if (comparator === "gte") return observed >= target;
+  if (comparator === "lt") return observed < target;
+  if (comparator === "lte") return observed <= target;
+  if (comparator === "eq") return Math.abs(observed - target) < 0.000001;
+  return false;
+}
+
+function oracleSafetyIssueFor(proposal: OracleProposal | null | undefined, market: MarketView) {
+  if (!proposal) return "";
+  const safetyCheck = (proposal.checks || []).find((check) => /safety guard/i.test(check));
+  if (safetyCheck) return safetyCheck;
+  if (!["ready", "proposed"].includes(String(proposal.status || ""))) return "";
+  if (!NUMERIC_ORACLE_ADAPTERS.has(String(proposal.adapter || ""))) return "";
+  const actual = oracleOutcomeFromProposal(proposal);
+  if (actual !== Outcome.Yes && actual !== Outcome.No) return "";
+
+  const rule = stripRuleMetadata(market.resolutionRule || "");
+  const condition = parseComparatorTarget(`${yesConditionText(rule)} ${market.question} ${market.category}`);
+  if (!condition.comparator || !condition.target) return "Oracle safety check could not parse the numeric YES condition.";
+  const proposalTarget = parseNumericText(proposal.targetValue);
+  const observed = parseNumericText(proposal.observedValue);
+  if (proposalTarget === null || observed === null) return "Oracle proposal is missing a parseable target or observed value.";
+  if (proposal.comparator !== condition.comparator || Math.abs(proposalTarget - Number(condition.target)) > Math.max(0.000001, Math.abs(Number(condition.target)) * 0.000001)) {
+    return `Oracle target ${String(proposal.comparator || "").toUpperCase()} ${proposalTarget} does not match rule ${condition.comparator.toUpperCase()} ${condition.target}.`;
+  }
+  const expected = compareNumericValue(observed, condition.comparator, Number(condition.target)) ? Outcome.Yes : Outcome.No;
+  if (actual !== expected) {
+    return `Oracle outcome ${outcomeLabel(actual)} conflicts with observed ${observed}; expected ${outcomeLabel(expected)}.`;
+  }
+  return "";
 }
 
 function urlHostLabel(url: string) {
@@ -10017,9 +10121,21 @@ export default function App() {
     const oracleCanPropose = oracleSuggestedOutcome === Outcome.Yes || oracleSuggestedOutcome === Outcome.No;
     const oracleCanCancel = oracleSuggestedOutcome === Outcome.Canceled;
     const oracleBusy = Boolean(oracleBusyByMarket[selectedMarket.id]);
+    const selectedOracleSafetyIssue = oracleSafetyIssueFor(oracleProposal, selectedMarket);
     const oracleSuggestionBlockedByPool =
       (oracleSuggestedOutcome === Outcome.Yes && !canProposeYes) ||
       (oracleSuggestedOutcome === Outcome.No && !canProposeNo);
+    const oracleSuggestionBlockedByIntegrity = Boolean(selectedOracleSafetyIssue);
+    const selectedMarketAuditFlags = selectedOracleSafetyIssue
+      ? [
+          ...selectedMarketRiskFlags,
+          {
+            label: "Oracle safety",
+            detail: selectedOracleSafetyIssue,
+            severity: "bad" as const
+          }
+        ]
+      : selectedMarketRiskFlags;
     const selectedAiSuggestedOutcome =
       reportAiSuggestedOutcome === Outcome.Yes || reportAiSuggestedOutcome === Outcome.No
         ? reportAiSuggestedOutcome
@@ -10127,6 +10243,7 @@ export default function App() {
             oracleProposal.summary || "Oracle returned a saved proposal.",
             oracleProposal.observedValue ? `Observed: ${oracleProposal.observedValue}.` : "",
             typeof oracleProposal.confidence === "number" ? `${oracleProposal.confidence}% confidence.` : "",
+            selectedOracleSafetyIssue ? `Safety guard: ${selectedOracleSafetyIssue}` : "",
             oracleProposal.txHash ? "Oracle auto-proposed this result onchain; dispute/review still stays open." : "",
             oracleProposal.autoProposeError ? `Auto-propose failed: ${oracleProposal.autoProposeError}` : "",
             oracleProposal.autoProposeSkipped ? `Auto-propose skipped: ${oracleProposal.autoProposeSkipped}` : ""
@@ -10331,14 +10448,14 @@ export default function App() {
           </aside>
         </section>
 
-        {selectedMarketRiskFlags.length > 0 && (
+        {selectedMarketAuditFlags.length > 0 && (
           <section className="market-risk-panel">
             <div>
               <span className="section-label">Market risk checks</span>
-              <strong>{selectedMarketRiskFlags.some((flag) => flag.severity === "bad") ? "Review before action" : "Checks available"}</strong>
+              <strong>{selectedMarketAuditFlags.some((flag) => flag.severity === "bad") ? "Review before action" : "Checks available"}</strong>
             </div>
             <div className="market-risk-strip">
-              {selectedMarketRiskFlags.map((flag) => (
+              {selectedMarketAuditFlags.map((flag) => (
                 <span className={`market-risk-pill risk-${flag.severity}`} key={`${flag.label}-${flag.detail}`}>
                   <strong>{flag.label}</strong>
                   {flag.detail}
@@ -10671,7 +10788,7 @@ export default function App() {
                             onClick={() =>
                               resolveMarket(selectedMarket.id, oracleSuggestedOutcome as Outcome.Yes | Outcome.No, false, { source: "oracle" })
                             }
-                            disabled={resolutionActionBusy || oracleSuggestionBlockedByPool}
+                            disabled={resolutionActionBusy || oracleSuggestionBlockedByPool || oracleSuggestionBlockedByIntegrity}
                             type="button"
                           >
                             Use Oracle: {outcomeLabel(oracleSuggestedOutcome)}
@@ -10771,7 +10888,10 @@ export default function App() {
                     )}
                     {canPropose && oracleProposal && (
                       <small>
-                        Oracle suggests {oracleDecisionLabel}. {oracleProposal.summary || "Use Oracle only when the adapter matches the market rule."}
+                        Oracle suggests {oracleDecisionLabel}.{" "}
+                        {selectedOracleSafetyIssue
+                          ? `Safety guard blocked this proposal: ${selectedOracleSafetyIssue}`
+                          : oracleProposal.summary || "Use Oracle only when the adapter matches the market rule."}
                       </small>
                     )}
                     {finalizeHint && <small>{finalizeHint}</small>}

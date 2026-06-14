@@ -78,6 +78,23 @@ assert(!/NO:/i.test(yesBranch), "YES condition extraction must stop before the N
 assertEqual(outcomeFor(yesNoRule, 199.99), "NO", "YES branch comparator should drive the outcome");
 assertEqual(outcomeFor(yesNoRule, 200.01), "YES", "YES branch greater-than threshold should pass above target");
 
+const mstrRule =
+  "Resolve YES if the official closing price of MSTR stock on June 12, 2026 is strictly above 120. Resolve NO if it closes at or below 120.";
+assertEqual(outcomeFor(mstrRule, 123.97000122070312, { kind: "stock-price", asset: "MSTR", comparator: "gte", target: "0" }), "YES", "MSTR close above 120 must resolve YES even with stale metadata");
+assertEqual(outcomeFor(mstrRule, 119.99, { kind: "stock-price", asset: "MSTR", comparator: "gte", target: "0" }), "NO", "MSTR close below or equal rule threshold must resolve NO");
+assert(
+  numericOracleIntegrityIssueFromParts({
+    rule: mstrRule,
+    category: "Other",
+    structuredRule: { kind: "stock-price", asset: "MSTR", comparator: "gte", target: "0" },
+    proposalComparator: "gte",
+    proposalTargetValue: "0",
+    observedValue: "MSTR close 123.97000122070312",
+    actualOutcome: "YES"
+  }).includes("does not match rule GT 120"),
+  "a stock proposal using stale GTE 0 metadata must be blocked"
+);
+
 const scheduleRule =
   "Resolve YES if MLB.com lists at least 10 scheduled MLB regular season games for June 7, 2026. Resolve NO if it lists fewer than 10.";
 assertEqual(outcomeFor(scheduleRule, 15), "YES", "at least threshold should pass when observed is higher");
