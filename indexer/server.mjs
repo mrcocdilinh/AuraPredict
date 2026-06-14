@@ -8,6 +8,15 @@ import { createPublicClient, createWalletClient, encodeAbiParameters, fallback, 
 import { privateKeyToAccount } from "viem/accounts";
 import { arcPredictionMarketV2Abi, arcPredictionMarketV3Abi, arcPredictionMarketV4Abi } from "./arcPredictionMarketAbi.mjs";
 import { scoreEvidenceSearchResult } from "./evidenceSearchPolicy.mjs";
+import {
+  NUMERIC_COMPARATORS,
+  compareObservedValue,
+  numericOracleIntegrityIssueFromParts,
+  parseNumericValue,
+  priceConditionFromParts,
+  significantTargetMismatch,
+  yesConditionTextFromRule
+} from "./oracleRuleUtils.mjs";
 import { gatherEspnScoreboardEvidence } from "./sportsAdapters.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -2803,125 +2812,29 @@ function oracleTextForMarket(market) {
     .toLowerCase();
 }
 
-function parseNumericValue(value) {
-  const match = String(value ?? "").replace(/,/g, "").match(/-?\d+(?:\.\d+)?/);
-  if (!match) return null;
-  const parsed = Number(match[0]);
-  return Number.isFinite(parsed) ? parsed : null;
-}
-
-const NUMERIC_COMPARATORS = new Set(["gt", "gte", "lt", "lte", "eq"]);
-
-function detectComparatorTarget(text) {
-  const value = String(text || "").toLowerCase().replace(/\s+/g, " ");
-  const patterns = [
-    { comparator: "gte", regex: /(?:at\s+or\s+above|at\s+least|greater than or equal(?:s)?(?: to)?|no less than|>=)\s*\$?\s*([0-9][0-9,]*(?:\.[0-9]+)?)/i },
-    { comparator: "gte", regex: /\$?\s*([0-9][0-9,]*(?:\.[0-9]+)?)\s*(?:usd|usdc|points?|index|per ounce)?\s*(?:or higher|or above|or more|or greater)/i },
-    { comparator: "lte", regex: /(?:at\s+or\s+below|at\s+most|less than or equal(?:s)?(?: to)?|no more than|<=)\s*\$?\s*([0-9][0-9,]*(?:\.[0-9]+)?)/i },
-    { comparator: "lte", regex: /\$?\s*([0-9][0-9,]*(?:\.[0-9]+)?)\s*(?:usd|usdc|points?|index|per ounce)?\s*(?:or lower|or below|or less)/i },
-    { comparator: "gt", regex: /(?:strictly\s+above|above|higher than|greater than|exceeds?|over|>)\s*\$?\s*([0-9][0-9,]*(?:\.[0-9]+)?)/i },
-    { comparator: "lt", regex: /(?:strictly\s+below|below|lower than|less than|under|<)\s*\$?\s*([0-9][0-9,]*(?:\.[0-9]+)?)/i },
-    { comparator: "eq", regex: /(?:exactly|equal(?:s)?|=)\s*\$?\s*([0-9][0-9,]*(?:\.[0-9]+)?)/i }
-  ];
-
-  let best = null;
-  patterns.forEach((pattern, priority) => {
-    const match = value.match(pattern.regex);
-    const target = parseNumericValue(match?.[1]);
-    if (target === null) return;
-    const index = match?.index ?? value.length;
-    if (!best || index < best.index || (index === best.index && priority < best.priority)) {
-      best = { comparator: pattern.comparator, target, index, priority };
-    }
-  });
-
-  return best ? { comparator: best.comparator, target: best.target } : null;
-}
-
-function compareObservedValue(observed, comparator, target) {
-  if (comparator === "gt") return observed > target;
-  if (comparator === "gte") return observed >= target;
-  if (comparator === "lt") return observed < target;
-  if (comparator === "lte") return observed <= target;
-  if (comparator === "eq") return Math.abs(observed - target) < 0.000001;
-  return false;
-}
-
-function conditionTextForMarket(market) {
+function oracleYesTextForMarket(market) {
+  const structuredRule = structuredRuleForMarket(market);
+  const rule = stripRuleMetadata(market?.resolutionRule);
   return [
-    stripRuleMetadata(market?.resolutionRule),
     market?.question,
-    market?.category
+    market?.category,
+    market?.metadataURI,
+    market?.fallbackSourceURI,
+    yesConditionTextFromRule(rule, rule),
+    structuredRule ? JSON.stringify(structuredRule) : ""
   ]
     .map((value) => String(value || ""))
     .join(" ")
     .toLowerCase();
 }
 
-function yesConditionTextForMarket(market) {
-  const rule = String(stripRuleMetadata(market?.resolutionRule) || "").replace(/\s+/g, " ").trim();
-  if (!rule) return conditionTextForMarket(market);
-
-  const startPatterns = [
-    /\bresolve\s+yes\s+if\b/i,
-    /\bwill\s+resolve\s+yes\s+if\b/i,
-    /\byes\s*:\s*(?:if\s+)?/i,
-    /\byes\s+if\b/i
-  ];
-  const starts = startPatterns
-    .map((regex) => {
-      const match = rule.match(regex);
-      return match ? { index: match.index ?? 0, end: (match.index ?? 0) + match[0].length } : null;
-    })
-    .filter(Boolean)
-    .sort((a, b) => a.index - b.index);
-  if (!starts.length) return rule;
-
-  const tail = rule.slice(starts[0].end);
-  const endPatterns = [
-    /\bresolve\s+no\s+if\b/i,
-    /\bno\s*:\s*(?:if\s+)?/i,
-    /\bno\s+if\b/i,
-    /\bresolve\s+cancel\b/i,
-    /\bcancel\s*:/i,
-    /\bcancel\s+if\b/i
-  ];
-  const endIndex = endPatterns.reduce((best, regex) => {
-    const match = tail.match(regex);
-    if (!match) return best;
-    const index = match.index ?? tail.length;
-    return best === -1 || index < best ? index : best;
-  }, -1);
-  return (endIndex >= 0 ? tail.slice(0, endIndex) : tail).trim() || rule;
-}
-
-function significantTargetMismatch(left, right) {
-  return Math.abs(left - right) > Math.max(0.000001, Math.abs(right) * 0.000001);
-}
-
 function priceConditionForMarket(market, structuredRule) {
-  const textCondition =
-    detectComparatorTarget(yesConditionTextForMarket(market)) ||
-    detectComparatorTarget(conditionTextForMarket(market));
-  const structuredComparator = String(structuredRule?.comparator || "");
-  const structuredTarget = parseNumericValue(structuredRule?.target);
-  const hasStructuredCondition =
-    NUMERIC_COMPARATORS.has(structuredComparator) &&
-    structuredTarget !== null &&
-    structuredTarget > 0;
-
-  if (textCondition) {
-    if (!hasStructuredCondition) return { ...textCondition, source: "text" };
-    if (
-      structuredComparator !== textCondition.comparator ||
-      significantTargetMismatch(structuredTarget, textCondition.target)
-    ) {
-      return { ...textCondition, source: "text" };
-    }
-    return { comparator: structuredComparator, target: structuredTarget, source: "structured" };
-  }
-
-  return hasStructuredCondition ? { comparator: structuredComparator, target: structuredTarget, source: "structured" } : null;
+  return priceConditionFromParts({
+    rule: stripRuleMetadata(market?.resolutionRule),
+    question: market?.question,
+    category: market?.category,
+    structuredRule
+  });
 }
 
 function sourceHostLabel(url) {
@@ -3251,11 +3164,123 @@ function baseOracleProposal(market, adapter) {
   };
 }
 
+function markOracleProposalNeedsReview(proposal, reason) {
+  const safetyReason = cleanText(reason || "Oracle proposal did not pass deterministic safety checks.", 260);
+  proposal.status = "needs_review";
+  proposal.outcome = "NEEDS_REVIEW";
+  proposal.outcomeValue = Outcome.Unresolved;
+  proposal.confidence = Math.min(Number(proposal.confidence || 0), 20);
+  proposal.checks = [
+    `Safety guard: ${safetyReason}`,
+    ...(Array.isArray(proposal.checks) ? proposal.checks : [])
+  ].slice(0, 8);
+  proposal.summary = cleanText(
+    [proposal.summary, `Safety guard: ${safetyReason}`].filter(Boolean).join(" "),
+    700
+  );
+  return proposal;
+}
+
+function proposalOutcome(proposal) {
+  return outcomeName(proposal?.outcome || proposal?.outcomeValue);
+}
+
+function numericOracleIntegrityIssue(proposal, market) {
+  return numericOracleIntegrityIssueFromParts({
+    rule: stripRuleMetadata(market?.resolutionRule),
+    question: market?.question,
+    category: market?.category,
+    structuredRule: structuredRuleForMarket(market),
+    proposalComparator: proposal.comparator,
+    proposalTargetValue: proposal.targetValue,
+    observedValue: proposal.observedValue,
+    actualOutcome: proposalOutcome(proposal)
+  });
+}
+
+function scheduleCountOracleIntegrityIssue(proposal) {
+  const observed = parseNumericValue(proposal.observedValue);
+  const target = parseNumericValue(proposal.targetValue);
+  if (observed === null || target === null) {
+    return "Schedule oracle proposal is missing a parseable observed count or threshold.";
+  }
+  const expected = observed >= target ? "YES" : "NO";
+  const actual = proposalOutcome(proposal);
+  if (actual !== expected) {
+    return `Schedule oracle outcome ${actual} conflicts with observed count ${observed} >= ${target}; expected ${expected}.`;
+  }
+  return "";
+}
+
+function healthOracleIntegrityIssue(proposal, market) {
+  const text = oracleYesTextForMarket(market);
+  const hasPositiveHealthIntent = /\b(ok\s*[:=]?\s*true|return\s+ok|http\s+ok|status\s+ok|2xx|200|available|reachable|online|operational)\b/i.test(text);
+  const hasNegativeHealthIntent = /\b(down|offline|unreachable|unavailable|fail(?:ed|ing)?|error response|not reachable|not return|cannot be reached|outage)\b/i.test(text);
+  if (hasNegativeHealthIntent && !hasPositiveHealthIntent) {
+    return "Negative health-status wording requires manual review because the health adapter only proves positive availability.";
+  }
+  if (!hasPositiveHealthIntent) {
+    return "Health adapter requires an explicit positive status condition such as ok=true, HTTP 200, online, or reachable.";
+  }
+
+  const statusMatch = String(proposal.observedValue || "").match(/http\s+(\d+)/i);
+  const status = parseNumericValue(statusMatch?.[1]);
+  const okMatch = String(proposal.observedValue || "").match(/\bok=(true|false)\b/i);
+  const jsonOk = okMatch ? okMatch[1].toLowerCase() === "true" : null;
+  const httpOk = status !== null && status >= 200 && status < 300;
+  const wantsOkTrue = /ok["'\s:=]*true|ok\s+true|return\s+ok/i.test(text);
+  const expected = wantsOkTrue ? httpOk && jsonOk === true : httpOk;
+  const actual = proposalOutcome(proposal);
+  if ((expected ? "YES" : "NO") !== actual) {
+    return `Health oracle outcome ${actual} conflicts with observed ${proposal.observedValue || "status"}; expected ${expected ? "YES" : "NO"}.`;
+  }
+  return "";
+}
+
+function statusPageOracleIntegrityIssue(proposal, market) {
+  const text = oracleYesTextForMarket(market);
+  const hasNegatedStatusIntent =
+    /\b(no|without|avoid|avoids|free of|resolved|none|normal|stable|operational)\b.{0,60}\b(incident|outage|downtime|degraded|down)\b/i.test(text) ||
+    /\b(incident|outage|downtime|degraded|down)\b.{0,60}\b(no|without|resolved|none|normal|stable|operational)\b/i.test(text);
+  const hasActiveIncidentIntent =
+    /\b(active|ongoing|unresolved|major|current)\b.{0,70}\b(incident|outage|downtime|degraded|down)\b/i.test(text) ||
+    /\b(incident|outage|downtime|degraded|down)\b.{0,70}\b(active|ongoing|unresolved|major|current)\b/i.test(text);
+  if (hasNegatedStatusIntent || !hasActiveIncidentIntent) {
+    return "Status-page adapter only auto-resolves active incident markets; negated or historical uptime wording needs manual review.";
+  }
+
+  const observed = parseNumericValue(proposal.observedValue);
+  if (observed === null) return "Status-page oracle proposal has no parseable incident count.";
+  const expected = observed > 0 ? "YES" : "NO";
+  const actual = proposalOutcome(proposal);
+  if (actual !== expected) {
+    return `Status-page oracle outcome ${actual} conflicts with observed active incident count ${observed}; expected ${expected}.`;
+  }
+  return "";
+}
+
+function oracleProposalIntegrityIssue(proposal, market) {
+  if (!proposal || !market) return "Market or proposal is missing.";
+  if (!["ready", "proposed"].includes(String(proposal.status || ""))) return "";
+  if (!["YES", "NO"].includes(proposalOutcome(proposal))) return "";
+
+  const adapter = String(proposal.adapter || "");
+  if (adapter === "crypto-price" || adapter === "macro-yahoo-chart") {
+    return numericOracleIntegrityIssue(proposal, market);
+  }
+  if (adapter === "mlb-schedule") return scheduleCountOracleIntegrityIssue(proposal);
+  if (adapter === "status-health") return healthOracleIntegrityIssue(proposal, market);
+  if (adapter === "status-page") return statusPageOracleIntegrityIssue(proposal, market);
+  return "";
+}
+
 function finalizeOracleProposal(proposal) {
   const outcome = outcomeName(proposal.outcome);
   proposal.outcome = outcome === "INSUFFICIENT_EVIDENCE" ? "NEEDS_REVIEW" : outcome;
   proposal.outcomeValue = outcomeValue(proposal.outcome);
   proposal.status = proposal.outcomeValue === Outcome.Unresolved ? proposal.status || "needs_review" : "ready";
+  const safetyIssue = oracleProposalIntegrityIssue(proposal, state.markets[String(proposal.marketId)]);
+  if (safetyIssue) markOracleProposalNeedsReview(proposal, safetyIssue);
   proposal.dataHash = receiptHashFor(proposal);
   oracleState()[String(proposal.marketId)] = proposal;
   return proposal;
@@ -3522,7 +3547,7 @@ function oracleProposalNeedsRuleRefresh(proposal, market) {
   if (!condition) return false;
   const proposalComparator = String(proposal.comparator || "");
   const proposalTarget = parseNumericValue(proposal.targetValue);
-  if (!NUMERIC_COMPARATORS.has(proposalComparator) || proposalTarget === null || proposalTarget <= 0) return true;
+  if (!NUMERIC_COMPARATORS.has(proposalComparator) || proposalTarget === null) return true;
   return proposalComparator !== condition.comparator || significantTargetMismatch(proposalTarget, condition.target);
 }
 

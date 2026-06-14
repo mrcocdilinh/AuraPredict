@@ -14,6 +14,7 @@
     "oracle:backtest": "node scripts/oracle_backtest.mjs",
     "smoke:api": "node scripts/check_production_api.mjs",
     "smoke:resolution": "node scripts/check_resolution_run_api.mjs",
+    "oracle:regression": "node scripts/oracle_regression_check.mjs",
     "deploy:arc": "hardhat run scripts/deploy.js --network arcTestnet",
     "seed:markets": "hardhat run scripts/seed_markets.js --network arcTestnet",
     "seed:markets:dry": "set DRY_RUN=1&& hardhat run scripts/seed_markets.js --network arcTestnet"
