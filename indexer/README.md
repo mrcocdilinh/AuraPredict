@@ -35,6 +35,9 @@ AURA_INDEXER_WS_URL=wss://rpc.testnet.arc.network
 AURA_INDEXER_WS_ENABLED=1
 AURA_INDEXER_POLL_MS=60000
 AURA_INDEXER_CHUNK_SIZE=100
+AURA_INDEXER_READ_RETRIES=3
+AURA_INDEXER_MARKET_READ_CONCURRENCY=8
+AURA_INDEXER_MARKET_READ_FAIL_SOFT=1
 AURA_ORACLE_AUTO_RUN=1
 AURA_ORACLE_HTTP_TIMEOUT_MS=8000
 AURA_ORACLE_AUTO_PROPOSE=0
@@ -42,7 +45,7 @@ AURA_ORACLE_AUTO_PROPOSE_MIN_CONFIDENCE=78
 AURA_ORACLE_AUTO_PROPOSE_ADAPTERS=crypto-price,macro-yahoo-chart,status-health,status-page,liquidity-rule
 ```
 
-The active production contract and its initial block are pinned in `indexer/server.mjs` for the V4 cutover. Arc RPC currently limits `eth_getLogs` ranges and some public endpoints enforce daily quotas, so production should use one stable RPC plus WebSocket sync, a 60-second poll fallback, and a small `eth_getLogs` chunk.
+The active production contract and its initial block are pinned in `indexer/server.mjs` for the V4 cutover. Arc RPC currently limits `eth_getLogs` ranges and some public endpoints enforce daily quotas, so production should use one stable RPC plus WebSocket sync, a 60-second poll fallback, and a small `eth_getLogs` chunk. `AURA_INDEXER_READ_RETRIES` and `AURA_INDEXER_MARKET_READ_CONCURRENCY` protect static exports from temporary RPC failures. With `AURA_INDEXER_MARKET_READ_FAIL_SOFT=1`, a failed market read keeps the restored cached row when one exists instead of failing the whole export.
 
 ## API
 

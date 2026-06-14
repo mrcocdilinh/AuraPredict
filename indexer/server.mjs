@@ -43,6 +43,10 @@ const REALTIME_SYNC_ENABLED = String(process.env.AURA_INDEXER_WS_ENABLED || "1")
 const REALTIME_SYNC_DEBOUNCE_MS = Math.max(100, Number(process.env.AURA_INDEXER_WS_DEBOUNCE_MS || 750) || 750);
 const START_BLOCK = ACTIVE_V4_DEPLOYMENT_BLOCK;
 const CHUNK_SIZE = BigInt(process.env.AURA_INDEXER_CHUNK_SIZE || 100);
+const READ_RETRY_COUNT = Math.max(0, Number(process.env.AURA_INDEXER_READ_RETRIES || 3) || 3);
+const READ_RETRY_BASE_MS = Math.max(100, Number(process.env.AURA_INDEXER_READ_RETRY_BASE_MS || 350) || 350);
+const MARKET_READ_CONCURRENCY = Math.max(1, Number(process.env.AURA_INDEXER_MARKET_READ_CONCURRENCY || 8) || 8);
+const MARKET_READ_FAIL_SOFT = String(process.env.AURA_INDEXER_MARKET_READ_FAIL_SOFT || "1").trim() !== "0";
 const AI_PROVIDER = String(process.env.AI_PROVIDER || "").trim().toLowerCase();
 const AI_FALLBACK_PROVIDER = String(process.env.AI_FALLBACK_PROVIDER || "").trim().toLowerCase();
 const GEMINI_API_KEY = String(process.env.GEMINI_API_KEY || "").trim();
@@ -834,26 +838,92 @@ async function writeResolverContract(functionName, args) {
   });
 }
 
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function compactErrorMessage(error) {
+  return error instanceof Error ? error.message.split("\n")[0] : String(error);
+}
+
+function isRetryableReadError(error) {
+  const message = (error instanceof Error ? error.message : String(error)).toLowerCase();
+  return [
+    "fetch failed",
+    "timeout",
+    "time-out",
+    "daily request limit",
+    "rate limit",
+    "too many requests",
+    "429",
+    "500",
+    "502",
+    "503",
+    "504",
+    "bad gateway",
+    "socket",
+    "connection",
+    "rpc request failed",
+    "http request failed",
+    "transaction creation failed",
+    "block range extends beyond current head block",
+    "temporarily unavailable"
+  ].some((needle) => message.includes(needle));
+}
+
+async function mapWithConcurrency(items, concurrency, mapper) {
+  const results = new Array(items.length);
+  let nextIndex = 0;
+  const workerCount = Math.min(Math.max(1, concurrency), items.length);
+  const workers = Array.from({ length: workerCount }, async () => {
+    while (nextIndex < items.length) {
+      const index = nextIndex;
+      nextIndex += 1;
+      results[index] = await mapper(items[index], index);
+    }
+  });
+  await Promise.all(workers);
+  return results;
+}
+
 async function detectContractVersion() {
-  try {
-    const contractVersion = await client.readContract({
-      address: CONTRACT_ADDRESS,
-      abi: arcPredictionMarketV2Abi,
-      functionName: "CONTRACT_VERSION"
-    });
-    state.contractVersion = String(contractVersion || "unknown");
-  } catch {
-    state.contractVersion = "legacy";
+  let lastError;
+  for (let attempt = 0; attempt <= READ_RETRY_COUNT; attempt += 1) {
+    try {
+      const contractVersion = await client.readContract({
+        address: CONTRACT_ADDRESS,
+        abi: arcPredictionMarketV2Abi,
+        functionName: "CONTRACT_VERSION"
+      });
+      state.contractVersion = String(contractVersion || "unknown");
+      return;
+    } catch (error) {
+      lastError = error;
+      if (attempt >= READ_RETRY_COUNT || !isRetryableReadError(error)) break;
+      await sleep(READ_RETRY_BASE_MS * (attempt + 1));
+    }
   }
+  if (lastError && isRetryableReadError(lastError)) throw lastError;
+  state.contractVersion = "legacy";
 }
 
 async function readContract(functionName, args = []) {
-  return client.readContract({
-    address: CONTRACT_ADDRESS,
-    abi: currentContractAbi(),
-    functionName,
-    args
-  });
+  let lastError;
+  for (let attempt = 0; attempt <= READ_RETRY_COUNT; attempt += 1) {
+    try {
+      return await client.readContract({
+        address: CONTRACT_ADDRESS,
+        abi: currentContractAbi(),
+        functionName,
+        args
+      });
+    } catch (error) {
+      lastError = error;
+      if (attempt >= READ_RETRY_COUNT || !isRetryableReadError(error)) throw error;
+      await sleep(READ_RETRY_BASE_MS * (attempt + 1));
+    }
+  }
+  throw lastError;
 }
 
 async function readMarketData(id) {
@@ -1008,35 +1078,54 @@ async function refreshContractState() {
     state.marketCreationFee = "0";
   }
 
-  const markets = await Promise.all(
-    Array.from({ length: state.marketCount }, async (_, id) => {
-      const data = await readMarketData(id);
+  const marketIds = Array.from({ length: state.marketCount }, (_, id) => id);
+  const markets = await mapWithConcurrency(
+    marketIds,
+    MARKET_READ_CONCURRENCY,
+    async (id) => {
+      const existing = state.markets[String(id)];
       const current = ensureMarket(id);
-      return {
-        ...current,
-        id,
-        ...data
-      };
-    })
+      try {
+        const data = await readMarketData(id);
+        return {
+          ...current,
+          id,
+          ...data
+        };
+      } catch (error) {
+        if (MARKET_READ_FAIL_SOFT && existing?.question && existing.createdAt) {
+          console.warn(`[indexer] market ${id} read failed; keeping cached row: ${compactErrorMessage(error)}`);
+          return current;
+        }
+        throw error;
+      }
+    }
   );
 
   state.markets = Object.fromEntries(markets.map((market) => [String(market.id), market]));
   if (isStablecoinContract()) {
     const tokens = [...new Set(markets.map((market) => market.settlementToken).filter((token) => token && token !== ZERO_ADDRESS))];
     const assets = new Map();
-    await Promise.all(
-      tokens.map(async (token) => {
-        const config = await readContract("assetConfigs", [token]);
-        assets.set(token.toLowerCase(), {
-          symbol: String(config[1] || "TOKEN"),
-          decimals: Number(config[2] || 6)
-        });
-      })
+    await mapWithConcurrency(
+      tokens,
+      Math.min(MARKET_READ_CONCURRENCY, 4),
+      async (token) => {
+        try {
+          const config = await readContract("assetConfigs", [token]);
+          assets.set(token.toLowerCase(), {
+            symbol: String(config[1] || "TOKEN"),
+            decimals: Number(config[2] || 6)
+          });
+        } catch (error) {
+          if (!MARKET_READ_FAIL_SOFT) throw error;
+          console.warn(`[indexer] asset config ${token} read failed; keeping market asset fallback: ${compactErrorMessage(error)}`);
+        }
+      }
     );
     for (const market of Object.values(state.markets)) {
       const asset = assets.get(String(market.settlementToken).toLowerCase());
-      market.settlementSymbol = asset?.symbol || "TOKEN";
-      market.settlementDecimals = asset?.decimals ?? 6;
+      market.settlementSymbol = asset?.symbol || market.settlementSymbol || "TOKEN";
+      market.settlementDecimals = asset?.decimals ?? market.settlementDecimals ?? 6;
     }
   }
 }
