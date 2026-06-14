@@ -1779,6 +1779,42 @@ function structuredRuleFromText(value?: string): StructuredResolutionRule | null
   }
 }
 
+function yesConditionText(value: string) {
+  const rule = String(value || "").replace(/\s+/g, " ").trim();
+  if (!rule) return "";
+  const startPatterns = [
+    /\bresolve\s+yes\s+if\b/i,
+    /\bwill\s+resolve\s+yes\s+if\b/i,
+    /\byes\s*:\s*(?:if\s+)?/i,
+    /\byes\s+if\b/i
+  ];
+  const starts = startPatterns
+    .map((regex) => {
+      const match = rule.match(regex);
+      return match ? { index: match.index ?? 0, end: (match.index ?? 0) + match[0].length } : null;
+    })
+    .filter((item): item is { index: number; end: number } => Boolean(item))
+    .sort((a, b) => a.index - b.index);
+  if (!starts.length) return rule;
+
+  const tail = rule.slice(starts[0].end);
+  const endPatterns = [
+    /\bresolve\s+no\s+if\b/i,
+    /\bno\s*:\s*(?:if\s+)?/i,
+    /\bno\s+if\b/i,
+    /\bresolve\s+cancel\b/i,
+    /\bcancel\s*:/i,
+    /\bcancel\s+if\b/i
+  ];
+  const endIndex = endPatterns.reduce((best, regex) => {
+    const match = tail.match(regex);
+    if (!match) return best;
+    const index = match.index ?? tail.length;
+    return best === -1 || index < best ? index : best;
+  }, -1);
+  return (endIndex >= 0 ? tail.slice(0, endIndex) : tail).trim() || rule;
+}
+
 function parseComparatorTarget(value: string): Pick<StructuredResolutionRule, "comparator" | "target"> {
   const text = String(value || "").toLowerCase().replace(/\s+/g, " ");
   const patterns: Array<{ comparator: "gt" | "gte" | "lt" | "lte" | "eq"; regex: RegExp }> = [
@@ -1790,12 +1826,18 @@ function parseComparatorTarget(value: string): Pick<StructuredResolutionRule, "c
     { comparator: "lt", regex: /(?:strictly\s+below|below|lower than|less than|under|<)\s*\$?\s*([0-9][0-9,]*(?:\.[0-9]+)?)/i },
     { comparator: "eq", regex: /(?:exactly|equal(?:s)?|=)\s*\$?\s*([0-9][0-9,]*(?:\.[0-9]+)?)/i }
   ];
-  for (const pattern of patterns) {
+  let best: { comparator: "gt" | "gte" | "lt" | "lte" | "eq"; target: string; index: number; priority: number } | null = null;
+  for (let priority = 0; priority < patterns.length; priority += 1) {
+    const pattern = patterns[priority];
     const match = text.match(pattern.regex);
     const target = match?.[1]?.replace(/,/g, "");
-    if (target) return { comparator: pattern.comparator, target };
+    if (!target) continue;
+    const index = match?.index ?? text.length;
+    if (!best || index < best.index || (index === best.index && priority < best.priority)) {
+      best = { comparator: pattern.comparator, target, index, priority };
+    }
   }
-  return {};
+  return best ? { comparator: best.comparator, target: best.target } : {};
 }
 
 function inferRuleKindAndAsset(category: string, text: string): Pick<StructuredResolutionRule, "kind" | "asset" | "metric"> {
@@ -1842,7 +1884,7 @@ function buildStructuredResolutionRule(input: {
   return {
     version: 1,
     ...kind,
-    ...parseComparatorTarget(`${ruleText} ${input.question}`),
+    ...parseComparatorTarget(`${yesConditionText(ruleText)} ${input.question}`),
     closeTimeUtc: input.closeTime,
     resolutionTimeUtc: input.resolutionTime || input.closeTime,
     primarySource: input.resolutionSource,
