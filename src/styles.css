@@ -183,10 +183,14 @@ h3 {
 }
 
 .landing-brand img {
+  background:
+    radial-gradient(circle at 35% 28%, rgba(24, 215, 255, 0.12), transparent 52%),
+    #050b19;
   border: 1px solid rgba(83, 105, 143, 0.46);
   border-radius: 8px;
   height: 40px;
-  object-fit: cover;
+  object-fit: contain;
+  padding: 2px;
   width: 40px;
 }
 
@@ -1058,11 +1062,14 @@ h3 {
 }
 
 .brand img {
-  background: #080b19;
-  border: 1px solid #e3e9f3;
+  background:
+    radial-gradient(circle at 35% 28%, rgba(24, 215, 255, 0.14), transparent 54%),
+    #050b19;
+  border: 1px solid #d9e7f8;
   border-radius: 8px;
   height: 38px;
-  object-fit: cover;
+  object-fit: contain;
+  padding: 2px;
   width: 38px;
 }
 
@@ -4924,10 +4931,14 @@ textarea {
 }
 
 .footer-brand img {
-  background: #080b19;
+  background:
+    radial-gradient(circle at 35% 28%, rgba(24, 215, 255, 0.14), transparent 54%),
+    #050b19;
+  border: 1px solid rgba(83, 105, 143, 0.34);
   border-radius: 8px;
   height: 56px;
-  object-fit: cover;
+  object-fit: contain;
+  padding: 3px;
   width: 56px;
 }
 
