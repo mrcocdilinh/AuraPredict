@@ -415,7 +415,7 @@ type StructuredResolutionRule = {
   kind: "crypto-price" | "macro-price" | "status-health" | "status-page" | "sports-fixture" | "manual-review";
   asset?: string;
   metric?: string;
-  comparator?: "gte" | "lte" | "eq";
+  comparator?: "gt" | "gte" | "lt" | "lte" | "eq";
   target?: string;
   closeTimeUtc?: string;
   resolutionTimeUtc?: string;
@@ -1781,11 +1781,13 @@ function structuredRuleFromText(value?: string): StructuredResolutionRule | null
 
 function parseComparatorTarget(value: string): Pick<StructuredResolutionRule, "comparator" | "target"> {
   const text = String(value || "").toLowerCase().replace(/\s+/g, " ");
-  const patterns: Array<{ comparator: "gte" | "lte" | "eq"; regex: RegExp }> = [
+  const patterns: Array<{ comparator: "gt" | "gte" | "lt" | "lte" | "eq"; regex: RegExp }> = [
+    { comparator: "gte", regex: /(?:at\s+or\s+above|at\s+least|greater than or equal(?:s)?(?: to)?|no less than|>=)\s*\$?\s*([0-9][0-9,]*(?:\.[0-9]+)?)/i },
     { comparator: "gte", regex: /\$?\s*([0-9][0-9,]*(?:\.[0-9]+)?)\s*(?:usd|usdc|points?|index|per ounce)?\s*(?:or higher|or above|or more|or greater)/i },
+    { comparator: "lte", regex: /(?:at\s+or\s+below|at\s+most|less than or equal(?:s)?(?: to)?|no more than|<=)\s*\$?\s*([0-9][0-9,]*(?:\.[0-9]+)?)/i },
     { comparator: "lte", regex: /\$?\s*([0-9][0-9,]*(?:\.[0-9]+)?)\s*(?:usd|usdc|points?|index|per ounce)?\s*(?:or lower|or below|or less)/i },
-    { comparator: "gte", regex: /(?:at\s+or\s+above|at\s+least|above|higher than|greater than|>=)\s*\$?\s*([0-9][0-9,]*(?:\.[0-9]+)?)/i },
-    { comparator: "lte", regex: /(?:at\s+or\s+below|at\s+most|below|lower than|less than|<=)\s*\$?\s*([0-9][0-9,]*(?:\.[0-9]+)?)/i },
+    { comparator: "gt", regex: /(?:strictly\s+above|above|higher than|greater than|exceeds?|over|>)\s*\$?\s*([0-9][0-9,]*(?:\.[0-9]+)?)/i },
+    { comparator: "lt", regex: /(?:strictly\s+below|below|lower than|less than|under|<)\s*\$?\s*([0-9][0-9,]*(?:\.[0-9]+)?)/i },
     { comparator: "eq", regex: /(?:exactly|equal(?:s)?|=)\s*\$?\s*([0-9][0-9,]*(?:\.[0-9]+)?)/i }
   ];
   for (const pattern of patterns) {
@@ -1840,7 +1842,7 @@ function buildStructuredResolutionRule(input: {
   return {
     version: 1,
     ...kind,
-    ...parseComparatorTarget(`${input.question} ${ruleText}`),
+    ...parseComparatorTarget(`${ruleText} ${input.question}`),
     closeTimeUtc: input.closeTime,
     resolutionTimeUtc: input.resolutionTime || input.closeTime,
     primarySource: input.resolutionSource,

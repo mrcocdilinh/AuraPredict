@@ -2808,13 +2808,17 @@ function parseNumericValue(value) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+const NUMERIC_COMPARATORS = new Set(["gt", "gte", "lt", "lte", "eq"]);
+
 function detectComparatorTarget(text) {
   const value = String(text || "").toLowerCase().replace(/\s+/g, " ");
   const patterns = [
+    { comparator: "gte", regex: /(?:at\s+or\s+above|at\s+least|greater than or equal(?:s)?(?: to)?|no less than|>=)\s*\$?\s*([0-9][0-9,]*(?:\.[0-9]+)?)/i },
     { comparator: "gte", regex: /\$?\s*([0-9][0-9,]*(?:\.[0-9]+)?)\s*(?:usd|usdc|points?|index|per ounce)?\s*(?:or higher|or above|or more|or greater)/i },
+    { comparator: "lte", regex: /(?:at\s+or\s+below|at\s+most|less than or equal(?:s)?(?: to)?|no more than|<=)\s*\$?\s*([0-9][0-9,]*(?:\.[0-9]+)?)/i },
     { comparator: "lte", regex: /\$?\s*([0-9][0-9,]*(?:\.[0-9]+)?)\s*(?:usd|usdc|points?|index|per ounce)?\s*(?:or lower|or below|or less)/i },
-    { comparator: "gte", regex: /(?:at\s+or\s+above|at\s+least|above|higher than|greater than|>=)\s*\$?\s*([0-9][0-9,]*(?:\.[0-9]+)?)/i },
-    { comparator: "lte", regex: /(?:at\s+or\s+below|at\s+most|below|lower than|less than|<=)\s*\$?\s*([0-9][0-9,]*(?:\.[0-9]+)?)/i },
+    { comparator: "gt", regex: /(?:strictly\s+above|above|higher than|greater than|exceeds?|over|>)\s*\$?\s*([0-9][0-9,]*(?:\.[0-9]+)?)/i },
+    { comparator: "lt", regex: /(?:strictly\s+below|below|lower than|less than|under|<)\s*\$?\s*([0-9][0-9,]*(?:\.[0-9]+)?)/i },
     { comparator: "eq", regex: /(?:exactly|equal(?:s)?|=)\s*\$?\s*([0-9][0-9,]*(?:\.[0-9]+)?)/i }
   ];
 
@@ -2828,10 +2832,50 @@ function detectComparatorTarget(text) {
 }
 
 function compareObservedValue(observed, comparator, target) {
+  if (comparator === "gt") return observed > target;
   if (comparator === "gte") return observed >= target;
+  if (comparator === "lt") return observed < target;
   if (comparator === "lte") return observed <= target;
   if (comparator === "eq") return Math.abs(observed - target) < 0.000001;
   return false;
+}
+
+function conditionTextForMarket(market) {
+  return [
+    stripRuleMetadata(market?.resolutionRule),
+    market?.question,
+    market?.category
+  ]
+    .map((value) => String(value || ""))
+    .join(" ")
+    .toLowerCase();
+}
+
+function significantTargetMismatch(left, right) {
+  return Math.abs(left - right) > Math.max(0.000001, Math.abs(right) * 0.000001);
+}
+
+function priceConditionForMarket(market, structuredRule) {
+  const textCondition = detectComparatorTarget(conditionTextForMarket(market));
+  const structuredComparator = String(structuredRule?.comparator || "");
+  const structuredTarget = parseNumericValue(structuredRule?.target);
+  const hasStructuredCondition =
+    NUMERIC_COMPARATORS.has(structuredComparator) &&
+    structuredTarget !== null &&
+    structuredTarget > 0;
+
+  if (textCondition) {
+    if (!hasStructuredCondition) return { ...textCondition, source: "text" };
+    if (
+      structuredComparator !== textCondition.comparator ||
+      significantTargetMismatch(structuredTarget, textCondition.target)
+    ) {
+      return { ...textCondition, source: "text" };
+    }
+    return { comparator: structuredComparator, target: structuredTarget, source: "structured" };
+  }
+
+  return hasStructuredCondition ? { comparator: structuredComparator, target: structuredTarget, source: "structured" } : null;
 }
 
 function sourceHostLabel(url) {
@@ -2871,10 +2915,9 @@ function detectCryptoOracleMarket(market) {
   const structuredRule = structuredRuleForMarket(market);
   if (structuredRule?.kind === "crypto-price") {
     const asset = CRYPTO_ORACLE_ASSETS.find((candidate) => candidate.symbol === String(structuredRule.asset || "").toUpperCase());
-    const target = parseNumericValue(structuredRule.target);
-    const comparator = String(structuredRule.comparator || "");
-    if (asset && target !== null && ["gte", "lte", "eq"].includes(comparator)) {
-      return { ...asset, comparator, target, structuredRule };
+    const condition = priceConditionForMarket(market, structuredRule);
+    if (asset && condition) {
+      return { ...asset, comparator: condition.comparator, target: condition.target, structuredRule };
     }
   }
   const text = oracleTextForMarket(market);
@@ -2883,9 +2926,9 @@ function detectCryptoOracleMarket(market) {
     /\/usd[t]?\b/i.test(text);
   if (!hasPriceContext) return null;
   const asset = CRYPTO_ORACLE_ASSETS.find((candidate) => candidate.names.some((name) => hasExactMarketTerm(text, name)));
-  const condition = detectComparatorTarget(text);
+  const condition = priceConditionForMarket(market, null);
   if (!asset || !condition) return null;
-  return { ...asset, ...condition };
+  return { ...asset, comparator: condition.comparator, target: condition.target };
 }
 
 const MACRO_ORACLE_ASSETS = [
@@ -2897,17 +2940,16 @@ function detectMacroOracleMarket(market) {
   const structuredRule = structuredRuleForMarket(market);
   if (structuredRule?.kind === "macro-price") {
     const asset = MACRO_ORACLE_ASSETS.find((candidate) => candidate.symbol === String(structuredRule.asset || "").toUpperCase());
-    const target = parseNumericValue(structuredRule.target);
-    const comparator = String(structuredRule.comparator || "");
-    if (asset && target !== null && ["gte", "lte", "eq"].includes(comparator)) {
-      return { ...asset, comparator, target, structuredRule };
+    const condition = priceConditionForMarket(market, structuredRule);
+    if (asset && condition) {
+      return { ...asset, comparator: condition.comparator, target: condition.target, structuredRule };
     }
   }
   const text = oracleTextForMarket(market);
   const asset = MACRO_ORACLE_ASSETS.find((candidate) => candidate.names.some((name) => hasExactMarketTerm(text, name)));
-  const condition = detectComparatorTarget(text);
+  const condition = priceConditionForMarket(market, null);
   if (!asset || !condition) return null;
-  return { ...asset, ...condition };
+  return { ...asset, comparator: condition.comparator, target: condition.target };
 }
 
 function detectHealthOracleMarket(market) {
@@ -3427,6 +3469,17 @@ async function buildUnsupportedOracleProposal(market, adapter, summary) {
   return finalizeOracleProposal(proposal);
 }
 
+function oracleProposalNeedsRuleRefresh(proposal, market) {
+  if (!proposal || !market) return false;
+  if (!["crypto-price", "macro-yahoo-chart"].includes(String(proposal.adapter || ""))) return false;
+  const condition = priceConditionForMarket(market, structuredRuleForMarket(market));
+  if (!condition) return false;
+  const proposalComparator = String(proposal.comparator || "");
+  const proposalTarget = parseNumericValue(proposal.targetValue);
+  if (!NUMERIC_COMPARATORS.has(proposalComparator) || proposalTarget === null || proposalTarget <= 0) return true;
+  return proposalComparator !== condition.comparator || significantTargetMismatch(proposalTarget, condition.target);
+}
+
 function oracleEvidenceRowsForMarket(marketId) {
   const proposal = oracleState()[String(marketId)];
   if (!proposal || !["ready", "proposed"].includes(String(proposal.status || ""))) return [];
@@ -3630,6 +3683,7 @@ async function runAutoOracleSweep() {
     .filter((market) => {
       const proposal = oracleState()[String(market.id)];
       if (!proposal) return true;
+      if (oracleProposalNeedsRuleRefresh(proposal, market)) return true;
       if (proposal.autoProposeError) return false;
       return ["not_ready", "ready", "error"].includes(String(proposal.status || ""));
     })
@@ -3639,7 +3693,10 @@ async function runAutoOracleSweep() {
     try {
       const existing = oracleState()[String(market.id)];
       const proposal =
-        existing && existing.status === "ready" && outcomeValue(existing.outcome || existing.outcomeValue) !== Outcome.Unresolved
+        existing &&
+        existing.status === "ready" &&
+        outcomeValue(existing.outcome || existing.outcomeValue) !== Outcome.Unresolved &&
+        !oracleProposalNeedsRuleRefresh(existing, market)
           ? existing
           : await buildOracleProposal(market.id);
       await proposeOracleOnchain(proposal);
