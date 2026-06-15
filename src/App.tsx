@@ -383,14 +383,19 @@ type MarketEvidence = {
   createdAt: string;
 };
 
+type MarketReportStatus = "open" | "dismissed" | "flagged" | "resolved";
+
 type MarketReport = {
   id: string;
   marketId: number;
   reporter: string;
   reason: string;
   url: string;
-  status: "open" | "dismissed" | "flagged";
+  status: MarketReportStatus;
   createdAt: string;
+  ownerNote?: string;
+  resolvedBy?: string;
+  resolvedAt?: string;
 };
 
 type NotificationType =
@@ -517,6 +522,7 @@ type MarketRiskFlag = {
   detail: string;
   severity: MarketRiskSeverity;
 };
+type ProfileHistoryFilter = "all" | "live" | "claimable" | "won" | "lost" | "refund";
 
 type AiResolutionReport = {
   suggestedOutcome?: string;
@@ -2400,15 +2406,31 @@ function hostFromSource(value: string) {
   }
 }
 
+function sourcePathLooksGeneric(value: string) {
+  const normalized = normalizeReferenceUrl(value);
+  if (!isValidHttpUrl(normalized)) return true;
+  try {
+    const parsed = new URL(normalized);
+    const path = parsed.pathname.replace(/\/+$/g, "");
+    return !path || path === "/" || path === "/en" || path === "/markets" || path === "/sports";
+  } catch {
+    return true;
+  }
+}
+
 function isStockMarketContext(value: string) {
   return /\b(?:stock|shares?|equity|nasdaq|nyse|official closing price|market close|yahoo finance|finance\.yahoo|tsla|tesla|nvda|aapl|msft|googl?|amzn|meta)\b/i.test(value);
+}
+
+function isCryptoMarketContext(value: string) {
+  return /\b(?:crypto|token|coinmarketcap|coingecko|binance|coinbase|kraken|btc|bitcoin|eth|ethereum|sol|solana|bnb|xrp|ada|doge|avax|link|usdt|usdc)\b/i.test(value);
 }
 
 function isSportsMarketContext(category: string | undefined, value: string) {
   return (category || "").toLowerCase() === "sports" || /\b(?:sports?|match|fixture|group stage|fifa|uefa|nba|nfl|mlb|nhl|world cup|club world cup|premier league|champions league)\b/i.test(value);
 }
 
-function sourceConfidenceFlag(category: string | undefined, source: string, text: string): MarketRiskFlag | null {
+function sourceConfidenceFlag(category: string | undefined, source: string, text: string, strict = false): MarketRiskFlag | null {
   const normalizedSource = normalizeReferenceUrl(source);
   if (!isValidHttpUrl(normalizedSource)) {
     return {
@@ -2423,12 +2445,21 @@ function sourceConfidenceFlag(category: string | undefined, source: string, text
   const marketHosts = ["finance.yahoo.com", "nasdaq.com", "nyse.com", "sec.gov", "marketwatch.com", "bloomberg.com", "reuters.com"];
   const cryptoHosts = ["coingecko.com", "coinmarketcap.com", "binance.com", "coinbase.com", "kraken.com"];
   const textValue = text.toLowerCase();
+  const genericSourcePath = sourcePathLooksGeneric(normalizedSource);
 
   if (isSportsMarketContext(category, text) && !sportsHosts.some((allowed) => host === allowed || host.endsWith(`.${allowed}`))) {
     return {
       label: "Source weak",
       detail: "Sports markets should use an official league/tournament source or a major fixture source.",
-      severity: "warn"
+      severity: strict ? "bad" : "warn"
+    };
+  }
+
+  if (strict && isSportsMarketContext(category, text) && genericSourcePath) {
+    return {
+      label: "Source weak",
+      detail: "Sports markets need a fixture, score, standings, schedule, or article URL, not a generic homepage.",
+      severity: "bad"
     };
   }
 
@@ -2436,15 +2467,31 @@ function sourceConfidenceFlag(category: string | undefined, source: string, text
     return {
       label: "Source weak",
       detail: "Stock markets should use a market-data or exchange source with the exact quote/rule.",
-      severity: "warn"
+      severity: strict ? "bad" : "warn"
     };
   }
 
-  if (/\b(?:btc|eth|crypto|token|price)\b/.test(textValue) && !cryptoHosts.some((allowed) => host === allowed || host.endsWith(`.${allowed}`))) {
+  if (strict && isStockMarketContext(text) && genericSourcePath) {
+    return {
+      label: "Source weak",
+      detail: "Stock markets need an exact quote, release, filing, or calendar URL, not a generic finance homepage.",
+      severity: "bad"
+    };
+  }
+
+  if (isCryptoMarketContext(textValue) && !cryptoHosts.some((allowed) => host === allowed || host.endsWith(`.${allowed}`))) {
     return {
       label: "Source weak",
       detail: "Crypto price markets should use a direct market-data source.",
-      severity: "warn"
+      severity: strict ? "bad" : "warn"
+    };
+  }
+
+  if (strict && isCryptoMarketContext(textValue) && genericSourcePath) {
+    return {
+      label: "Source weak",
+      detail: "Crypto markets need an exact pair, asset, or price page so Oracle can parse the observed value.",
+      severity: "bad"
     };
   }
 
@@ -2474,6 +2521,7 @@ function marketRiskFlagsForInput(input: {
   proposedAt?: number;
   outcome?: Outcome;
   nowSeconds?: number;
+  strictSource?: boolean;
 }) {
   const question = input.question || "";
   const rule = input.resolutionRule || "";
@@ -2483,7 +2531,7 @@ function marketRiskFlagsForInput(input: {
   const ruleTime = parseResolutionReferenceTime(rule);
   const flags: MarketRiskFlag[] = [];
 
-  const sourceFlag = sourceConfidenceFlag(input.category, source, text);
+  const sourceFlag = sourceConfidenceFlag(input.category, source, text, Boolean(input.strictSource));
   if (sourceFlag) flags.push(sourceFlag);
 
   if (ruleTime && effectiveTime && ruleTime !== effectiveTime) {
@@ -4274,6 +4322,7 @@ export default function App() {
   const [selectedMarketId, setSelectedMarketId] = useState<number | null>(null);
   const [selectedProfileAddress, setSelectedProfileAddress] = useState("");
   const [profileHistoryPage, setProfileHistoryPage] = useState(1);
+  const [profileHistoryFilter, setProfileHistoryFilter] = useState<ProfileHistoryFilter>("all");
   const [profileCreatedPage, setProfileCreatedPage] = useState(1);
   const [profileNameInput, setProfileNameInput] = useState("");
   const [profileNames, setProfileNames] = useState<Record<string, string>>(() => {
@@ -4572,9 +4621,18 @@ export default function App() {
   const createdProfileMarkets = viewedProfileAddress
     ? profileMarkets.filter((market) => sameAddress(market.creator, viewedProfileAddress))
     : [];
-  const profileHistoryPageCount = Math.max(1, Math.ceil(participatedProfileMarkets.length / PROFILE_PAGE_SIZE));
+  const filteredParticipatedProfileMarkets = participatedProfileMarkets.filter((market) => {
+    const settlement = userSettlement(market, market.termsProtocolFeeBps ?? protocolFeeBps);
+    if (profileHistoryFilter === "live") return market.outcome === Outcome.Unresolved;
+    if (profileHistoryFilter === "claimable") return isOwnProfile && market.potentialPayout > 0n && !market.claimed;
+    if (profileHistoryFilter === "won") return settlement.settled && settlement.won;
+    if (profileHistoryFilter === "lost") return settlement.settled && settlement.stake > 0n && !settlement.won && market.outcome !== Outcome.Canceled;
+    if (profileHistoryFilter === "refund") return settlement.settled && market.outcome === Outcome.Canceled;
+    return true;
+  });
+  const profileHistoryPageCount = Math.max(1, Math.ceil(filteredParticipatedProfileMarkets.length / PROFILE_PAGE_SIZE));
   const safeProfileHistoryPage = Math.min(profileHistoryPage, profileHistoryPageCount);
-  const paginatedParticipatedProfileMarkets = participatedProfileMarkets.slice(
+  const paginatedParticipatedProfileMarkets = filteredParticipatedProfileMarkets.slice(
     (safeProfileHistoryPage - 1) * PROFILE_PAGE_SIZE,
     safeProfileHistoryPage * PROFILE_PAGE_SIZE
   );
@@ -4590,6 +4648,18 @@ export default function App() {
   );
   const claimable = isOwnProfile ? profileMarkets.reduce((sum, market) => sum + market.potentialPayout, 0n) : 0n;
   const createdMarkets = createdProfileMarkets.length;
+  const creatorResolvedMarkets = createdProfileMarkets.filter((market) => market.outcome !== Outcome.Unresolved);
+  const creatorCanceledMarkets = creatorResolvedMarkets.filter((market) => market.outcome === Outcome.Canceled).length;
+  const creatorSettledVolume = creatorResolvedMarkets.reduce((sum, market) => sum + marketVolume(market), 0n);
+  const resolverProfileMarkets = viewedProfileAddress
+    ? markets.filter(
+        (market) =>
+          sameAddress(market.resolver, viewedProfileAddress) &&
+          (market.proposedAt > 0 || market.outcome !== Outcome.Unresolved)
+      )
+    : [];
+  const resolverFinalizedMarkets = resolverProfileMarkets.filter((market) => market.outcome !== Outcome.Unresolved).length;
+  const resolverDisputedMarkets = resolverProfileMarkets.filter((market) => market.disputed || market.authorityReviewRequired).length;
   const profileDisplayName = viewedProfileAddress
     ? profileNames[viewedProfileKey] || shortAddress(viewedProfileAddress)
     : "Connect wallet";
@@ -6109,7 +6179,7 @@ export default function App() {
   useEffect(() => {
     setProfileHistoryPage(1);
     setProfileCreatedPage(1);
-  }, [viewedProfileKey]);
+  }, [profileHistoryFilter, viewedProfileKey]);
 
   useEffect(() => {
     const providers = new Map<string, Eip6963ProviderDetail>();
@@ -6162,6 +6232,80 @@ export default function App() {
     setNoticeText(message);
     setNoticeTxHash(txHash || "");
   }, []);
+
+  const exportProfileHistoryCsv = useCallback(() => {
+    if (filteredParticipatedProfileMarkets.length === 0) {
+      setNotice("No filtered profile history to export.");
+      return;
+    }
+
+    const csvCell = (value: unknown) => `"${String(value ?? "").replace(/"/g, '""')}"`;
+    const rows = [
+      [
+        "market_id",
+        "question",
+        "category",
+        "side",
+        "stake",
+        "yes_position",
+        "no_position",
+        "outcome",
+        "profile_result",
+        "payout",
+        "pnl",
+        "claim_status",
+        "settlement_symbol"
+      ],
+      ...filteredParticipatedProfileMarkets.map((market) => {
+        const decimals = marketDecimals(market);
+        const symbol = marketSymbol(market);
+        const settlement = userSettlement(market, market.termsProtocolFeeBps ?? protocolFeeBps);
+        const result = personalMarketResult(market, isOwnProfile ? "You" : "Profile");
+        const side =
+          market.yesPosition > 0n && market.noPosition > 0n
+            ? "YES + NO"
+            : market.yesPosition > 0n
+              ? "YES"
+              : market.noPosition > 0n
+                ? "NO"
+                : "None";
+        return [
+          market.id,
+          market.question,
+          market.category || "Other",
+          side,
+          formatUnits(settlement.stake, decimals),
+          formatUnits(market.yesPosition, decimals),
+          formatUnits(market.noPosition, decimals),
+          outcomeLabel(market.outcome),
+          result.label,
+          formatUnits(settlement.settled ? settlement.payout : 0n, decimals),
+          formatUnits(settlement.pnl, decimals),
+          claimStatusFor(market, settlement, isOwnProfile),
+          symbol
+        ];
+      })
+    ];
+    const csv = rows.map((row) => row.map(csvCell).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `aurapredict-profile-${viewedProfileAddress ? shortAddress(viewedProfileAddress) : "wallet"}-${new Date()
+      .toISOString()
+      .slice(0, 10)}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
+    setNotice("Profile history CSV exported.");
+  }, [
+    filteredParticipatedProfileMarkets,
+    isOwnProfile,
+    protocolFeeBps,
+    setNotice,
+    viewedProfileAddress
+  ]);
 
   const addUnifiedBalanceLog = useCallback((message: string) => {
     const timestamp = new Date().toLocaleTimeString("en-US", { hour12: false });
@@ -7268,6 +7412,47 @@ export default function App() {
     [account, reportDrafts, setNotice]
   );
 
+  const reviewMarketReport = useCallback(
+    async (marketId: number, reportId: string, status: Exclude<MarketReportStatus, "open">, ownerNote: string) => {
+      const reviewer = account || owner || "Owner";
+      const updatedAt = new Date().toISOString();
+      const applyLocalReportUpdate = (rows: MarketReport[]) =>
+        rows.map((report) =>
+          report.id === reportId
+            ? {
+                ...report,
+                status,
+                ownerNote,
+                resolvedBy: reviewer,
+                resolvedAt: updatedAt
+              }
+            : report
+        );
+
+      const response = await postIndexerJson<{ report: MarketReport; reports: MarketReport[] }>(
+        `/api/social/markets/${marketId}/reports/${encodeURIComponent(reportId)}`,
+        { status, ownerNote, reviewer }
+      );
+
+      if (response?.reports) {
+        setMarketReports((current) => ({ ...current, [String(marketId)]: response.reports }));
+      } else {
+        setMarketReports((current) => ({
+          ...current,
+          [String(marketId)]: applyLocalReportUpdate(current[String(marketId)] || [])
+        }));
+      }
+      setNotice(
+        status === "resolved"
+          ? "Market report marked resolved."
+          : status === "flagged"
+            ? "Market report kept flagged for owner review."
+            : "Market report dismissed."
+      );
+    },
+    [account, owner, setNotice]
+  );
+
   const askAuraForMarketDraft = useCallback(async () => {
     const idea = createForm.question.trim();
     if (idea.length < 4) {
@@ -7319,7 +7504,8 @@ export default function App() {
         resolutionSource: createForm.resolutionSource,
         resolutionRule: createForm.resolutionRule,
         closeTime: createForm.closeTime,
-        resolutionTime: isStablecoinContractVersion(contractVersion) ? createForm.resolutionTime : createForm.closeTime
+        resolutionTime: isStablecoinContractVersion(contractVersion) ? createForm.resolutionTime : createForm.closeTime,
+        strictSource: true
       }),
     [contractVersion, createForm]
   );
@@ -8667,7 +8853,8 @@ export default function App() {
         resolutionSource,
         resolutionRule,
         closeTime: createForm.closeTime,
-        resolutionTime: isStablecoinContractVersion(contractVersion) ? createForm.resolutionTime : createForm.closeTime
+        resolutionTime: isStablecoinContractVersion(contractVersion) ? createForm.resolutionTime : createForm.closeTime,
+        strictSource: true
       });
       const blockingFlag = validationFlags.find((flag) => flag.severity === "bad");
       if (blockingFlag) throw new Error(`${blockingFlag.label}: ${blockingFlag.detail}`);
@@ -11844,6 +12031,37 @@ export default function App() {
                           {urlHostLabel(report.url)}
                         </a>
                       )}
+                      {report.ownerNote && (
+                        <small>
+                          Owner note: {report.ownerNote}
+                          {report.resolvedAt ? ` / ${isoDateLabel(report.resolvedAt)}` : ""}
+                        </small>
+                      )}
+                      {canReviewAsOwner && report.status === "open" && (
+                        <div className="market-report-actions">
+                          <button
+                            className="secondary"
+                            onClick={() => reviewMarketReport(selectedMarket.id, report.id, "resolved", "Owner reviewed and accepted the follow-up.")}
+                            type="button"
+                          >
+                            Mark resolved
+                          </button>
+                          <button
+                            className="secondary"
+                            onClick={() => reviewMarketReport(selectedMarket.id, report.id, "flagged", "Owner kept this report flagged for settlement review.")}
+                            type="button"
+                          >
+                            Keep flagged
+                          </button>
+                          <button
+                            className="secondary"
+                            onClick={() => reviewMarketReport(selectedMarket.id, report.id, "dismissed", "Owner dismissed this report after review.")}
+                            type="button"
+                          >
+                            Dismiss
+                          </button>
+                        </div>
+                      )}
                     </article>
                   ))}
                 </div>
@@ -12858,10 +13076,42 @@ export default function App() {
                         {ownerOpenReports.map((report) => {
                           const reportedMarket = markets.find((market) => market.id === report.marketId);
                           return (
-                            <button className="similar-market-row" key={report.id} onClick={() => openMarket(report.marketId)} type="button">
-                              <strong>#{report.marketId} {shortQuestion(reportedMarket?.question || "Market report")}</strong>
-                              <small>{displayNameForAddress(report.reporter)} / {isoDateLabel(report.createdAt)} / {report.reason}</small>
-                            </button>
+                            <article className="owner-report-row" key={report.id}>
+                              <button className="similar-market-row" onClick={() => openMarket(report.marketId)} type="button">
+                                <strong>#{report.marketId} {shortQuestion(reportedMarket?.question || "Market report")}</strong>
+                                <small>{displayNameForAddress(report.reporter)} / {isoDateLabel(report.createdAt)} / {report.reason}</small>
+                              </button>
+                              <div className="market-report-actions">
+                                <button
+                                  className="secondary"
+                                  onClick={() => openMarket(report.marketId, true)}
+                                  type="button"
+                                >
+                                  Review market
+                                </button>
+                                <button
+                                  className="secondary"
+                                  onClick={() => reviewMarketReport(report.marketId, report.id, "resolved", "Owner reviewed and accepted the follow-up.")}
+                                  type="button"
+                                >
+                                  Resolve
+                                </button>
+                                <button
+                                  className="secondary"
+                                  onClick={() => reviewMarketReport(report.marketId, report.id, "flagged", "Owner kept this report flagged for settlement review.")}
+                                  type="button"
+                                >
+                                  Flag
+                                </button>
+                                <button
+                                  className="secondary"
+                                  onClick={() => reviewMarketReport(report.marketId, report.id, "dismissed", "Owner dismissed this report after review.")}
+                                  type="button"
+                                >
+                                  Dismiss
+                                </button>
+                              </div>
+                            </article>
                           );
                         })}
                       </div>
@@ -13610,6 +13860,18 @@ export default function App() {
                   </strong>
                   <small>settled markets only</small>
                 </article>
+                <article>
+                  <span>Creator record</span>
+                  <strong>{creatorResolvedMarkets.length}/{createdMarkets}</strong>
+                  <small>
+                    {formatUsdc(creatorSettledVolume, defaultSettlementDecimals)} {aggregateAssetLabel} settled / {creatorCanceledMarkets} canceled
+                  </small>
+                </article>
+                <article>
+                  <span>Resolver record</span>
+                  <strong>{resolverFinalizedMarkets}/{resolverProfileMarkets.length}</strong>
+                  <small>{resolverDisputedMarkets} dispute or authority reviews</small>
+                </article>
               </section>
 
               <div className="history-list">
@@ -13621,10 +13883,40 @@ export default function App() {
                 )}
                 {participatedProfileMarkets.length > 0 && (
                   <div className="profile-section-title">
-                    <h3>Markets participated</h3>
-                    <span>
-                      {participatedProfileMarkets.length} markets / page {safeProfileHistoryPage} of {profileHistoryPageCount}
-                    </span>
+                    <div>
+                      <h3>Markets participated</h3>
+                      <span>
+                        {filteredParticipatedProfileMarkets.length} shown / {participatedProfileMarkets.length} total / page {safeProfileHistoryPage} of {profileHistoryPageCount}
+                      </span>
+                    </div>
+                    <div className="profile-history-toolbar">
+                      {([
+                        ["all", "All"],
+                        ["live", "Live"],
+                        ["claimable", "Claimable"],
+                        ["won", "Won"],
+                        ["lost", "Lost"],
+                        ["refund", "Refund"]
+                      ] as Array<[ProfileHistoryFilter, string]>).map(([key, label]) => (
+                        <button
+                          className={profileHistoryFilter === key ? "active" : ""}
+                          key={key}
+                          onClick={() => setProfileHistoryFilter(key)}
+                          type="button"
+                        >
+                          {label}
+                        </button>
+                      ))}
+                      <button className="secondary" onClick={exportProfileHistoryCsv} type="button">
+                        Export CSV
+                      </button>
+                    </div>
+                  </div>
+                )}
+                {participatedProfileMarkets.length > 0 && filteredParticipatedProfileMarkets.length === 0 && (
+                  <div className="empty-state">
+                    <strong>No markets match this filter</strong>
+                    <span>Try All, Live, Won, Lost, Claimable, or Refund to inspect profile history.</span>
                   </div>
                 )}
                 {paginatedParticipatedProfileMarkets.map((market) => {
@@ -13863,7 +14155,7 @@ export default function App() {
                     </article>
                   );
                 })}
-                {participatedProfileMarkets.length > PROFILE_PAGE_SIZE && (
+                {filteredParticipatedProfileMarkets.length > PROFILE_PAGE_SIZE && (
                   <div className="pagination-row">
                     <button
                       className="secondary"

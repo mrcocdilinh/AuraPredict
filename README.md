@@ -97,7 +97,9 @@ For setup details, see `indexer/README.md`.
 
 ## Agent API
 
-AuraPredict publishes read-only agent endpoints for market discovery, evidence packages, oracle receipts, and oracle reputation. These endpoints are designed for AI agents and partner widgets; they do not propose, finalize, dispute, claim, or move funds.
+AuraPredict publishes read-only agent endpoints for market discovery, evidence packages, oracle receipts, oracle reputation, and next-action previews. These endpoints are designed for AI agents and partner widgets; they do not propose, finalize, dispute, claim, or move funds.
+
+Market reports also have an owner-review lifecycle (`open`, `resolved`, `flagged`, `dismissed`) so bad-source or bad-rule reports can be tracked without leaving stale warnings open forever.
 
 See `docs/AGENT_API_AND_MCP.md`.
 

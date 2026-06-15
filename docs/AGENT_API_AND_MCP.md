@@ -15,6 +15,7 @@ GET /api/agent
 GET /api/agent/mcp
 GET /api/agent/markets?limit=30&status=all&category=Crypto
 GET /api/agent/markets/:marketId
+GET /api/agent/markets/:marketId/action-preview
 GET /api/oracle-reputation
 GET /api/oracle-receipts/:marketId
 GET /api/ai/hot-markets?limit=8
@@ -33,6 +34,7 @@ The `/api/agent/mcp` response publishes MCP-compatible tool metadata:
 
 - `aurapredict.list_markets`
 - `aurapredict.get_market`
+- `aurapredict.preview_market_action`
 - `aurapredict.get_oracle_reputation`
 
 These tools are read-only. They do not propose, finalize, dispute, claim, or move funds.
@@ -51,6 +53,12 @@ Get an evidence package for one market:
 curl "https://api.aurapredict.xyz/api/agent/markets/89"
 ```
 
+Preview the next safe workflow step:
+
+```bash
+curl "https://api.aurapredict.xyz/api/agent/markets/89/action-preview"
+```
+
 Read the Aura Oracle Agent reputation summary:
 
 ```bash
@@ -63,4 +71,3 @@ curl "https://api.aurapredict.xyz/api/oracle-reputation"
 - Any onchain action still requires a connected wallet or an admin-authorized resolver endpoint.
 - Aura Agent and oracle receipts are decision support. Final settlement still follows the contract, source evidence, dispute windows, and authority review.
 - Low-confidence, stale, conflicting, or rule-mismatched evidence should be routed to manual review instead of automatic settlement.
-

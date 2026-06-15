@@ -6810,6 +6810,40 @@ label {
   color: #be123c;
 }
 
+.market-report-actions,
+.profile-history-toolbar {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.market-report-actions button,
+.profile-history-toolbar button {
+  min-height: 34px;
+  padding: 0 12px;
+}
+
+.profile-history-toolbar button.active {
+  background: #101827;
+  border-color: #101827;
+  color: #ffffff;
+}
+
+.owner-report-row {
+  background: #ffffff;
+  border: 1px solid #dfe6f1;
+  border-radius: 8px;
+  display: grid;
+  gap: 8px;
+  padding: 8px;
+}
+
+.owner-report-row .similar-market-row {
+  border: 0;
+  padding: 0;
+}
+
 .similar-market-row {
   align-items: start;
   background: #ffffff;
@@ -8978,6 +9012,21 @@ label {
   background: #0b1020;
   border-color: #202a3f;
   color: #d8e1f0;
+}
+
+[data-theme="dark"] .owner-report-row {
+  background: #0b1020;
+  border-color: #202a3f;
+}
+
+[data-theme="dark"] .owner-report-row .similar-market-row {
+  background: transparent;
+}
+
+[data-theme="dark"] .profile-history-toolbar button.active {
+  background: #18d7ff;
+  border-color: #18d7ff;
+  color: #06111e;
 }
 
 [data-theme="dark"] .similar-market-row strong {

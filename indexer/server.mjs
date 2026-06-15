@@ -1471,6 +1471,13 @@ function appendSocialRow(collection, key, row, limit) {
   collection[key] = [row, ...rows.filter((item) => item.id !== row.id)].slice(0, limit);
 }
 
+const MARKET_REPORT_STATUSES = new Set(["open", "dismissed", "flagged", "resolved"]);
+
+function cleanReportStatus(value) {
+  const status = cleanText(value, 32).toLowerCase();
+  return MARKET_REPORT_STATUSES.has(status) ? status : "";
+}
+
 const SOCIAL_NOTIFICATION_TYPES = new Set([
   "resolve",
   "finalize",
@@ -1945,6 +1952,120 @@ function agentMarketSummary(market) {
   };
 }
 
+function agentActionPreview(marketId) {
+  const market = state.markets[String(marketId)];
+  if (!market) return null;
+  const now = Math.floor(Date.now() / 1000);
+  const resolutionTime = marketResolutionTime(market);
+  const finalOutcome = outcomeValue(market.outcome);
+  const proposedOutcome = outcomeValue(market.proposedOutcome);
+  const proposal = oracleState()[String(marketId)] || null;
+  const receipt = publicOracleReceiptForMarket(marketId);
+  const aiOutcome = outcomeValue(receipt?.ai?.outcome);
+  const oracleOutcome = oracleDecisionValue(proposal);
+  const pools = marketPools(market);
+  const reports = socialState().reports[String(marketId)] ?? [];
+  const openReports = reports.filter((report) => report.status === "open").length;
+  const checks = [];
+  if (openReports > 0) checks.push(`${openReports} open market report${openReports === 1 ? "" : "s"} require owner review.`);
+  if (pools.yesPool === 0n || pools.noPool === 0n) checks.push("One side has no funded pool; YES/NO settlement may need cancel/refund review.");
+  if (aiOutcome !== Outcome.Unresolved && oracleOutcome !== Outcome.Unresolved && aiOutcome !== oracleOutcome) {
+    checks.push(`Aura AI (${outcomeName(aiOutcome)}) conflicts with Oracle (${outcomeName(oracleOutcome)}).`);
+  }
+  if (Number(market.authorityReviewRequired || 0) > 0 || Boolean(market.disputed)) {
+    checks.push("Authority review or formal dispute is active.");
+  }
+
+  let action = "monitor";
+  let label = "Monitor market";
+  let rationale = "Trading or resolution window has not reached the next actionable step.";
+  let risk = "low";
+
+  if (finalOutcome !== Outcome.Unresolved) {
+    action = "no_action";
+    label = "Finalized";
+    rationale = `Market is finalized as ${outcomeName(finalOutcome)}. Users can claim/refund according to contract state.`;
+  } else if (openReports > 0) {
+    action = "owner_review";
+    label = "Needs owner review";
+    rationale = "User reports are open. Review rule/source/timing before proposing or finalizing.";
+    risk = "high";
+  } else if (market.disputed || market.authorityReviewRequired) {
+    action = "authority_review";
+    label = "Authority review";
+    rationale = "A dispute or authority review flag blocks normal finalization.";
+    risk = "high";
+  } else if (Number(market.proposedAt || 0) > 0 && Number(market.disputeDeadline || 0) > 0 && now >= Number(market.disputeDeadline || 0)) {
+    action = "finalize_proposed";
+    label = "Finalize proposed result";
+    rationale = `The dispute window has passed with proposed outcome ${outcomeName(proposedOutcome)}.`;
+    risk = checks.length > 0 ? "medium" : "low";
+  } else if (Number(market.proposedAt || 0) > 0) {
+    action = "wait_dispute_window";
+    label = "Wait dispute window";
+    rationale = `Proposed outcome ${outcomeName(proposedOutcome)} is still inside the dispute window.`;
+    risk = "low";
+  } else if (now >= resolutionTime && (pools.yesPool === 0n || pools.noPool === 0n)) {
+    action = "cancel_or_manual_review";
+    label = "Cancel/refund review";
+    rationale = "Resolution time has passed, but one outcome side has no pool.";
+    risk = "high";
+  } else if (now >= resolutionTime && (oracleOutcome !== Outcome.Unresolved || aiOutcome !== Outcome.Unresolved)) {
+    action = "propose_result";
+    label = "Propose result after evidence review";
+    rationale = `Evidence exists: Oracle ${outcomeName(oracleOutcome)}, Aura AI ${outcomeName(aiOutcome)}.`;
+    risk = checks.length > 0 ? "medium" : "low";
+  } else if (now >= resolutionTime) {
+    action = "run_ai_oracle";
+    label = "Run Aura/Oracle review";
+    rationale = "Resolution time has passed but no usable AI or Oracle decision is saved yet.";
+    risk = "medium";
+  }
+
+  return {
+    marketId,
+    question: market.question,
+    appUrl: `${PUBLIC_APP_BASE_URL}/?market=${encodeURIComponent(String(marketId))}`,
+    action,
+    label,
+    rationale,
+    risk,
+    safety: {
+      mode: "read-only",
+      canWrite: false,
+      note: "This preview never submits onchain transactions. Wallet or admin-authorized flows must perform final actions."
+    },
+    timing: {
+      now,
+      closeTime: Number(market.closeTime || 0),
+      resolutionTime,
+      proposedAt: Number(market.proposedAt || 0),
+      disputeDeadline: Number(market.disputeDeadline || 0)
+    },
+    state: {
+      finalOutcome: outcomeName(finalOutcome),
+      proposedOutcome: outcomeName(proposedOutcome),
+      disputed: Boolean(market.disputed),
+      authorityReviewRequired: Boolean(market.authorityReviewRequired),
+      openReports,
+      pools: {
+        yes: String(market.yesPool || "0"),
+        no: String(market.noPool || "0"),
+        total: pools.total.toString()
+      }
+    },
+    evidence: {
+      aiOutcome: outcomeName(aiOutcome),
+      aiConfidence: Number(receipt?.ai?.confidence || 0),
+      oracleOutcome: outcomeName(oracleOutcome),
+      oracleConfidence: Number(proposal?.confidence || 0),
+      oracleAdapter: proposal?.adapter || ""
+    },
+    checks,
+    updatedAt: state.updatedAt || nowIso()
+  };
+}
+
 function agentManifest() {
   return {
     name: "AuraPredict Agent API",
@@ -1966,6 +2087,7 @@ function agentManifest() {
       health: `${PUBLIC_API_BASE_URL}/health`,
       markets: `${PUBLIC_API_BASE_URL}/api/agent/markets`,
       marketDetail: `${PUBLIC_API_BASE_URL}/api/agent/markets/{marketId}`,
+      actionPreview: `${PUBLIC_API_BASE_URL}/api/agent/markets/{marketId}/action-preview`,
       mcpTools: `${PUBLIC_API_BASE_URL}/api/agent/mcp`,
       oracleReputation: `${PUBLIC_API_BASE_URL}/api/oracle-reputation`,
       oracleReceipt: `${PUBLIC_API_BASE_URL}/api/oracle-receipts/{marketId}`,
@@ -1987,6 +2109,17 @@ function agentManifest() {
       {
         name: "aurapredict.get_market",
         description: "Read a market detail package with snapshots, trades, public oracle receipt, and social evidence.",
+        inputSchema: {
+          type: "object",
+          required: ["marketId"],
+          properties: {
+            marketId: { type: "integer", minimum: 0 }
+          }
+        }
+      },
+      {
+        name: "aurapredict.preview_market_action",
+        description: "Read the next safe offchain/onchain workflow recommendation for a market without executing writes.",
         inputSchema: {
           type: "object",
           required: ["marketId"],
@@ -2027,6 +2160,10 @@ function agentMcpTools() {
       {
         tool: "aurapredict.get_market",
         http: "GET /api/agent/markets/89"
+      },
+      {
+        tool: "aurapredict.preview_market_action",
+        http: "GET /api/agent/markets/89/action-preview"
       },
       {
         tool: "aurapredict.get_oracle_reputation",
@@ -5052,6 +5189,21 @@ async function route(req, res) {
       return;
     }
 
+    if (
+      segments[0] === "api" &&
+      segments[1] === "agent" &&
+      segments[2] === "markets" &&
+      segments[3] &&
+      segments[4] === "action-preview"
+    ) {
+      if (req.method !== "GET") return notFound(res);
+      const marketId = Number(segments[3]);
+      const preview = Number.isInteger(marketId) ? agentActionPreview(marketId) : null;
+      if (!preview) return notFound(res);
+      json(res, 200, { preview, updatedAt: state.updatedAt || nowIso() });
+      return;
+    }
+
     if (segments[0] === "api" && segments[1] === "agent" && segments[2] === "markets" && segments[3]) {
       if (req.method !== "GET") return notFound(res);
       const marketId = Number(segments[3]);
@@ -5345,6 +5497,32 @@ async function route(req, res) {
         return;
       }
 
+      if (req.method === "POST" && segments[2] === "markets" && segments[3] && segments[4] === "reports" && segments[5]) {
+        const marketId = Number(segments[3]);
+        if (!Number.isInteger(marketId) || marketId < 0) return json(res, 400, { error: "Invalid market id." });
+        const reportId = decodeURIComponent(String(segments[5] || ""));
+        const rows = Array.isArray(social.reports[String(marketId)]) ? social.reports[String(marketId)] : [];
+        const index = rows.findIndex((row) => row.id === reportId);
+        if (index < 0) return json(res, 404, { error: "Report not found." });
+        const body = await readRequestBody(req);
+        const status = cleanReportStatus(body.status);
+        if (!status || status === "open") return json(res, 400, { error: "Invalid report status." });
+        const reviewer = cleanAddress(body.reviewer) || cleanText(body.reviewer, 90) || "Owner";
+        const ownerNote = cleanText(body.ownerNote, 280);
+        const updated = {
+          ...rows[index],
+          status,
+          ownerNote,
+          resolvedBy: reviewer,
+          resolvedAt: nowIso()
+        };
+        const nextRows = rows.map((row, rowIndex) => (rowIndex === index ? updated : row));
+        social.reports[String(marketId)] = nextRows;
+        await saveState();
+        json(res, 200, { report: updated, reports: nextRows, updatedAt: state.updatedAt || nowIso() });
+        return;
+      }
+
       if (req.method === "POST" && segments[2] === "markets" && segments[3] && segments[4] === "reports") {
         const marketId = Number(segments[3]);
         if (!Number.isInteger(marketId) || marketId < 0) return json(res, 400, { error: "Invalid market id." });
@@ -5360,7 +5538,10 @@ async function route(req, res) {
           reason,
           url: sourceUrl,
           status: "open",
-          createdAt: nowIso()
+          createdAt: nowIso(),
+          ownerNote: "",
+          resolvedBy: "",
+          resolvedAt: ""
         };
         appendSocialRow(social.reports, String(marketId), report, 40);
         await saveState();

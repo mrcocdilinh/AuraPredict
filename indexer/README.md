@@ -62,10 +62,13 @@ GET /api/agent
 GET /api/agent/mcp
 GET /api/agent/markets
 GET /api/agent/markets/:id
+GET /api/agent/markets/:id/action-preview
 POST /api/admin/reconcile
 GET /api/social/markets/:id
 POST /api/social/markets/:id/comments
 POST /api/social/markets/:id/evidence
+POST /api/social/markets/:id/reports
+POST /api/social/markets/:id/reports/:reportId
 GET /api/social/profiles/:address
 POST /api/social/profiles/:address
 POST /api/social/profiles/:address/follows
@@ -83,6 +86,7 @@ GET /api/embed/market/:marketId
 The frontend uses `VITE_AURA_INDEXER_URL` when available and falls back to direct Arc RPC reads if the indexer is offline.
 When `VITE_AURA_INDEXER_URL` points to a live web service, the frontend also persists comments, evidence, follows, profile metadata, and wallet notification history through these social endpoints. Static GitHub Pages exports remain read-only, so the app falls back to browser-local storage for social actions on that setup.
 Profile usernames are normalized to lowercase `a-z`, `0-9`, and `_`, then reserved in `state.social.usernames` so two wallets cannot claim the same display name through the live indexer.
+Market reports now have an owner-review lifecycle. Reports start as `open`, then the owner/reviewer can mark them `resolved`, `flagged`, or `dismissed` with an owner note so stale reports do not keep markets in review forever.
 V4 settlement assets are restricted to 6-decimal stablecoins. If more than one asset such as USDC and EURC is used, `/api/stats` includes `assetBreakdown` so volume and live liquidity can be reported per token instead of merged into one generic total. The indexer does not perform FX conversion.
 
 Admin reconcile can safely backfill missed trade/claim activity without resetting state. It replays contract events by tx hash and log index, refreshes market reads, and returns the activity integrity summary before and after the scan:
@@ -105,8 +109,9 @@ AuraPredict exposes a small public infrastructure layer for other Arc builders:
 - `/api/oracle-reputation` summarizes Aura Oracle Agent coverage, confidence, final-match accuracy, reversal rate, evidence depth, adapter usage, and auto-propose history.
 - `/api/ai/hot-markets` returns active markets with AI insight summaries for homepage, partner widgets, or bots.
 - `/api/agent` returns the read-only public Agent API manifest for Arc builders and AI clients.
-- `/api/agent/mcp` returns MCP-style tool metadata for listing markets, reading one market, and reading oracle reputation.
+- `/api/agent/mcp` returns MCP-style tool metadata for listing markets, reading one market, previewing the next safe action, and reading oracle reputation.
 - `/api/agent/markets` and `/api/agent/markets/:id` return normalized market/evidence packages for external agents.
+- `/api/agent/markets/:id/action-preview` returns a read-only next-action recommendation such as monitor, run Aura/Oracle review, propose result after evidence review, wait dispute window, finalize proposed result, or owner review.
 - `/api/embed/market/:marketId` returns a compact HTML market card that can be used inside an iframe.
 
 These endpoints are read-only. They do not propose, finalize, dispute, claim funds, or move wallet balances.
