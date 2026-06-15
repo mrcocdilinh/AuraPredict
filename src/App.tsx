@@ -748,6 +748,7 @@ type LandingHealth = {
     wsLastError?: string;
     lastSyncReason?: string;
     lastSyncedAt?: string;
+    lastSyncError?: string;
   };
   features?: Record<string, boolean>;
 };
@@ -5520,9 +5521,30 @@ export default function App() {
     ? `${lastDataRefresh.toLocaleTimeString("en-US", { timeZone: "UTC", hour12: false })} UTC`
     : "Not loaded";
   const indexerSyncText = lastDataRefresh ? timeAgo(Math.floor(lastDataRefresh.getTime() / 1000), currentTime) : "Waiting";
-  const indexerModeText = indexerHealth?.indexer?.wsEnabled
-    ? `WS ${indexerHealth.indexer.wsStatus || "starting"}`
-    : indexerHealth?.indexer?.mode || dataSource;
+  const indexerStatus = indexerHealth?.indexer;
+  const indexerHasSyncError = Boolean(indexerStatus?.lastSyncError);
+  const indexerUsingPollingFallback = Boolean(
+    indexerStatus?.wsEnabled &&
+      indexerStatus?.wsStatus === "error" &&
+      !indexerHasSyncError &&
+      (indexerStatus?.lastSyncReason === "polling" || indexerStatus?.lastSyncReason === "startup")
+  );
+  const indexerStatusTone = indexerHasSyncError
+    ? "danger"
+    : indexerUsingPollingFallback
+      ? "warning"
+      : indexerStatus?.wsEnabled && indexerStatus?.wsStatus === "connected"
+        ? "success"
+        : "neutral";
+  const indexerModeText = indexerHasSyncError
+    ? "Sync error"
+    : indexerUsingPollingFallback
+      ? "Polling fallback"
+      : indexerStatus?.wsEnabled
+        ? indexerStatus.wsStatus === "connected"
+          ? "Realtime WS"
+          : `WS ${indexerStatus.wsStatus || "starting"}`
+        : indexerStatus?.mode || dataSource;
   const boardTitle =
     view === "ended"
       ? "Ended markets"
@@ -14074,7 +14096,7 @@ export default function App() {
                   <strong>{statsSummary.knownPlayers}</strong>
                 </div>
               </div>
-              <div className="market-stat-row status">
+              <div className={`market-stat-row status ${indexerStatusTone}`}>
                 <span className="stat-glyph stat-sync" aria-hidden="true" />
               <div>
                 <span>Indexer status</span>
