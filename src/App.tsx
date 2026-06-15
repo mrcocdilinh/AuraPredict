@@ -272,6 +272,11 @@ type MarketView = {
   potentialPayout: bigint;
 };
 
+type ChainMarketSnapshot = Pick<
+  MarketView,
+  "proposedOutcome" | "proposedAt" | "disputeDeadline" | "authorityReviewRequired" | "disputed" | "outcome"
+>;
+
 type MarketContractVersion = "unknown" | "legacy" | "dispute" | "v2" | "v3" | "v4";
 
 type ActivityItem = {
@@ -8364,6 +8369,79 @@ export default function App() {
     );
   };
 
+  const applyChainMarketSnapshot = (marketId: number, snapshot: ChainMarketSnapshot) => {
+    setMarkets((current) =>
+      current.map((market) =>
+        market.id === marketId
+          ? {
+              ...market,
+              proposedOutcome: snapshot.proposedOutcome,
+              proposedAt: snapshot.proposedAt,
+              disputeDeadline: snapshot.disputeDeadline,
+              authorityReviewRequired: snapshot.authorityReviewRequired,
+              disputed: snapshot.disputed,
+              outcome: snapshot.outcome
+            }
+          : market
+      )
+    );
+  };
+
+  const readChainMarketSnapshot = async (marketId: number): Promise<ChainMarketSnapshot | null> => {
+    if (!isStablecoinContractVersion(contractVersion)) return null;
+    const data = (await withRpcRetry(() =>
+      getPublicClient().readContract({
+        address: contractAddress,
+        abi: contractVersion === "v4" ? arcPredictionMarketV4Abi : arcPredictionMarketV3Abi,
+        functionName: "getMarket",
+        args: [BigInt(marketId)]
+      })
+    )) as readonly unknown[];
+    return {
+      proposedOutcome: Number(data[18] ?? Outcome.Unresolved) as Outcome,
+      proposedAt: Number(data[19] ?? 0),
+      disputeDeadline: Number(data[20] ?? 0),
+      authorityReviewRequired: Boolean(data[21]),
+      disputed: Boolean(data[22]),
+      outcome: Number(data[24] ?? Outcome.Unresolved) as Outcome
+    };
+  };
+
+  const ensureFreshSettlementState = async (marketId: number, action: "finalize" | "final-review") => {
+    const snapshot = await readChainMarketSnapshot(marketId);
+    if (!snapshot) return true;
+
+    applyChainMarketSnapshot(marketId, snapshot);
+
+    if (snapshot.outcome !== Outcome.Unresolved) {
+      setNotice(`Market #${marketId} is already finalized as ${outcomeLabel(snapshot.outcome)}. Refreshed from chain.`);
+      void loadMarkets();
+      return false;
+    }
+
+    if (action === "finalize") {
+      if (snapshot.proposedAt <= 0) {
+        setNotice("Finalize is not available because no result has been proposed on-chain.");
+        return false;
+      }
+      if (snapshot.disputed || snapshot.authorityReviewRequired) {
+        setNotice("Normal finalize is blocked because this market requires owner/authority final review.");
+        return false;
+      }
+      if (snapshot.disputeDeadline > 0 && Math.floor(Date.now() / 1000) < snapshot.disputeDeadline) {
+        setNotice(`Finalize is not available until the dispute window closes at ${closeDate(snapshot.disputeDeadline)}.`);
+        return false;
+      }
+    }
+
+    if (action === "final-review" && !snapshot.disputed && !snapshot.authorityReviewRequired) {
+      setNotice("Final review is not available because this market is not disputed and does not require authority review.");
+      return false;
+    }
+
+    return true;
+  };
+
   const runTransaction = async (
     action: () => Promise<Hash>,
     message: string,
@@ -9190,10 +9268,11 @@ export default function App() {
       setNotice(`Finalize preflight blocked: ${audit.detail}`);
       return;
     }
-    await switchToArc();
-    const walletClient = getActiveWalletClient();
     setMarketActionPending("finalize", marketId, true);
     try {
+      await switchToArc();
+      if (!(await ensureFreshSettlementState(marketId, "finalize"))) return;
+      const walletClient = getActiveWalletClient();
       const fallbackOutcome = market?.proposedOutcome ?? Outcome.Unresolved;
       await runTransaction(
         () =>
@@ -9247,8 +9326,6 @@ export default function App() {
         return;
       }
     }
-    await switchToArc();
-    const walletClient = getActiveWalletClient();
     const aiReceipt = aiResolutionReceipts[String(marketId)];
     const evidenceHash = keccak256(stringToHex(JSON.stringify(marketEvidence[String(marketId)] || [])));
     const receiptHash =
@@ -9257,6 +9334,9 @@ export default function App() {
         : ZERO_HASH as Hash;
     setMarketActionPending("finalize-dispute", marketId, true);
     try {
+      await switchToArc();
+      if (!(await ensureFreshSettlementState(marketId, "final-review"))) return;
+      const walletClient = getActiveWalletClient();
       await runTransaction(
         () =>
           isStablecoinContractVersion(contractVersion)
