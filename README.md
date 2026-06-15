@@ -29,6 +29,7 @@ The project is a testnet MVP and a public builder project for the Arc ecosystem.
 - Circle Gateway-based USDC funding utility for moving testnet USDC from supported source chains to Arc Testnet.
 - In-app USDC/EURC swap helper using Circle App Kit first, with LI.FI fallback when available.
 - Off-chain social data for profiles, comments, notifications, evidence links, and username reservations through the AuraPredict indexer.
+- Read-only Agent API and MCP-style tool metadata for external AI agents and Arc builders.
 - Owner dashboard queues for reports, pending proposals, finalization, dispute/authority review, and flagged market-risk badges.
 - Public docs, risk disclosures, oracle policy, backtest sample, and frontend E2E coverage for core market flows.
 
@@ -73,6 +74,8 @@ Important production references:
 - Frontend indexer URL: `https://api.aurapredict.xyz`
 - Indexer health: `https://api.aurapredict.xyz/health`
 - Indexer stats: `https://api.aurapredict.xyz/api/stats`
+- Agent API manifest: `https://api.aurapredict.xyz/api/agent`
+- MCP-style tool metadata: `https://api.aurapredict.xyz/api/agent/mcp`
 
 Do not commit `.env`, private keys, API keys, Circle credentials, or wallet secrets.
 
@@ -91,6 +94,12 @@ The indexer reads Arc contract events and exposes faster API surfaces for:
 - Oracle review receipts
 
 For setup details, see `indexer/README.md`.
+
+## Agent API
+
+AuraPredict publishes read-only agent endpoints for market discovery, evidence packages, oracle receipts, and oracle reputation. These endpoints are designed for AI agents and partner widgets; they do not propose, finalize, dispute, claim, or move funds.
+
+See `docs/AGENT_API_AND_MCP.md`.
 
 ## Oracle And Resolution Flow
 

@@ -38,6 +38,8 @@ const RPC_URLS = (
   .filter(Boolean);
 const PORT = Number(process.env.PORT || process.env.AURA_INDEXER_PORT || 8787);
 const HOST = process.env.AURA_INDEXER_HOST || (process.env.PORT ? "0.0.0.0" : "127.0.0.1");
+const PUBLIC_API_BASE_URL = String(process.env.AURA_PUBLIC_API_BASE_URL || "https://api.aurapredict.xyz").replace(/\/+$/, "");
+const PUBLIC_APP_BASE_URL = String(process.env.AURA_PUBLIC_APP_BASE_URL || "https://app.aurapredict.xyz").replace(/\/+$/, "");
 const POLL_MS = Number(process.env.AURA_INDEXER_POLL_MS || 60_000);
 const WS_URLS = (
   process.env.AURA_INDEXER_WS_URLS ||
@@ -1810,6 +1812,17 @@ function oracleReputationSummary() {
     });
 
   return {
+    agent: {
+      name: "Aura Oracle Agent",
+      network: "Arc Testnet",
+      chainId: state.chainId || CHAIN_ID,
+      contractAddress: CONTRACT_ADDRESS,
+      apiBaseUrl: PUBLIC_API_BASE_URL,
+      manifestUrl: `${PUBLIC_API_BASE_URL}/api/agent`,
+      mcpToolsUrl: `${PUBLIC_API_BASE_URL}/api/agent/mcp`,
+      signerMode: RESOLVER_SIGNER_MODE,
+      circleAgentWallet: CIRCLE_AGENT_WALLET_ADDRESS || ""
+    },
     reputationScore,
     tier: reputationScore >= 85 ? "Production candidate" : reputationScore >= 65 ? "Operator ready" : reputationScore >= 40 ? "Needs calibration" : "Early testnet",
     coverage,
@@ -1826,6 +1839,12 @@ function oracleReputationSummary() {
     autoProposed: proposalRows.filter((proposal) => proposal.autoProposed).length,
     adapters,
     recent,
+    safeguards: [
+      "Read-only agent endpoints do not move funds.",
+      "Oracle proposals are decision support unless an authorized signer explicitly proposes onchain.",
+      "Funded markets still keep dispute and authority-review paths open.",
+      "Low-confidence, stale, conflicting, or rule-mismatched evidence is routed to manual review."
+    ],
     policy:
       "Experimental testnet reputation. Score combines coverage, confidence, final-match accuracy, reversal rate, and evidence depth. The 78% auto-propose gate still needs backtesting before mainnet.",
     updatedAt: state.updatedAt || nowIso()
@@ -1852,6 +1871,182 @@ function hotAiMarkets(limit = 8) {
       },
       insight
     }));
+}
+
+function agentMarketSummary(market) {
+  const pools = marketPools(market);
+  const resolutionTime = marketResolutionTime(market);
+  const proposal = oracleState()[String(market.id)] || null;
+  const receipt = publicOracleReceiptForMarket(market.id);
+  const sourceUrls = [
+    ...(marketSourceUrls(market) || []),
+    ...(Array.isArray(proposal?.sourceUrls) ? proposal.sourceUrls : []),
+    ...(Array.isArray(receipt?.sourceUrls) ? receipt.sourceUrls : [])
+  ]
+    .map(cleanUrl)
+    .filter(Boolean);
+  const uniqueSourceUrls = [...new Set(sourceUrls)];
+  const oracleOutcome = oracleDecisionValue(proposal);
+  const aiOutcome = outcomeValue(receipt?.ai?.outcome);
+  const status =
+    outcomeValue(market.outcome) !== Outcome.Unresolved
+      ? "finalized"
+      : Number(market.proposedAt || 0) > 0
+        ? "proposed"
+        : Number(market.closeTime || 0) <= Math.floor(Date.now() / 1000)
+          ? "awaiting_resolution"
+          : "live";
+
+  return {
+    id: market.id,
+    appUrl: `${PUBLIC_APP_BASE_URL}/?market=${encodeURIComponent(String(market.id))}`,
+    question: market.question,
+    category: market.category || "Other",
+    status,
+    closeTime: Number(market.closeTime || 0),
+    resolutionTime,
+    settlement: {
+      token: market.settlementToken || "",
+      symbol: market.settlementSymbol || "USDC",
+      decimals: marketAssetDecimals(market)
+    },
+    pools: {
+      yes: String(market.yesPool || "0"),
+      no: String(market.noPool || "0"),
+      total: pools.total.toString()
+    },
+    participants: Number(market.traderCount || 0),
+    outcome: outcomeName(outcomeValue(market.outcome)),
+    proposedOutcome: outcomeName(outcomeValue(market.proposedOutcome)),
+    proposedAt: Number(market.proposedAt || 0),
+    disputeDeadline: Number(market.disputeDeadline || 0),
+    disputed: Boolean(market.disputed),
+    authorityReviewRequired: Boolean(market.authorityReviewRequired),
+    sourceUrls: uniqueSourceUrls.slice(0, 8),
+    oracle: proposal
+      ? {
+          status: proposal.status || "",
+          adapter: proposal.adapter || "",
+          outcome: outcomeName(oracleOutcome),
+          confidence: Number(proposal.confidence || 0),
+          observedValue: proposal.observedValue || "",
+          summary: proposal.summary || "",
+          generatedAt: proposal.generatedAt || ""
+        }
+      : null,
+    ai: receipt
+      ? {
+          status: receipt.status || "",
+          outcome: outcomeName(aiOutcome),
+          confidence: Number(receipt.ai?.confidence || 0),
+          summary: receipt.evidence?.[0]?.notes || ""
+        }
+      : null
+  };
+}
+
+function agentManifest() {
+  return {
+    name: "AuraPredict Agent API",
+    version: "2026-06-15",
+    network: "Arc Testnet",
+    chainId: state.chainId || CHAIN_ID,
+    contractAddress: CONTRACT_ADDRESS,
+    appUrl: PUBLIC_APP_BASE_URL,
+    apiBaseUrl: PUBLIC_API_BASE_URL,
+    description:
+      "Read-only market, evidence, oracle receipt, and reputation API for AI agents building around AuraPredict on Arc.",
+    safety: {
+      mode: "read-only by default",
+      writeActions: "Onchain actions still require a connected wallet or admin-authorized resolver endpoint.",
+      warning:
+        "Agent responses are decision support only. Final settlement follows the market contract, evidence, dispute windows, and authority review."
+    },
+    endpoints: {
+      health: `${PUBLIC_API_BASE_URL}/health`,
+      markets: `${PUBLIC_API_BASE_URL}/api/agent/markets`,
+      marketDetail: `${PUBLIC_API_BASE_URL}/api/agent/markets/{marketId}`,
+      mcpTools: `${PUBLIC_API_BASE_URL}/api/agent/mcp`,
+      oracleReputation: `${PUBLIC_API_BASE_URL}/api/oracle-reputation`,
+      oracleReceipt: `${PUBLIC_API_BASE_URL}/api/oracle-receipts/{marketId}`,
+      hotMarkets: `${PUBLIC_API_BASE_URL}/api/ai/hot-markets`
+    },
+    tools: [
+      {
+        name: "aurapredict.list_markets",
+        description: "List AuraPredict markets with status, pools, source URLs, and current oracle/AI hints.",
+        inputSchema: {
+          type: "object",
+          properties: {
+            limit: { type: "integer", minimum: 1, maximum: 100 },
+            status: { type: "string", enum: ["all", "live", "awaiting_resolution", "proposed", "finalized"] },
+            category: { type: "string" }
+          }
+        }
+      },
+      {
+        name: "aurapredict.get_market",
+        description: "Read a market detail package with snapshots, trades, public oracle receipt, and social evidence.",
+        inputSchema: {
+          type: "object",
+          required: ["marketId"],
+          properties: {
+            marketId: { type: "integer", minimum: 0 }
+          }
+        }
+      },
+      {
+        name: "aurapredict.get_oracle_reputation",
+        description: "Read Aura Oracle Agent coverage, accuracy, confidence, adapter usage, and recent receipts.",
+        inputSchema: { type: "object", properties: {} }
+      }
+    ],
+    updatedAt: state.updatedAt || nowIso()
+  };
+}
+
+function agentMcpTools() {
+  const manifest = agentManifest();
+  return {
+    protocol: "mcp-compatible-http",
+    name: manifest.name,
+    apiBaseUrl: PUBLIC_API_BASE_URL,
+    tools: manifest.tools.map((tool) => ({
+      ...tool,
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        openWorldHint: true
+      }
+    })),
+    examples: [
+      {
+        tool: "aurapredict.list_markets",
+        http: "GET /api/agent/markets?limit=20&status=live"
+      },
+      {
+        tool: "aurapredict.get_market",
+        http: "GET /api/agent/markets/89"
+      },
+      {
+        tool: "aurapredict.get_oracle_reputation",
+        http: "GET /api/oracle-reputation"
+      }
+    ],
+    updatedAt: state.updatedAt || nowIso()
+  };
+}
+
+function filterAgentMarkets(url) {
+  const limit = Math.max(1, Math.min(100, Number(url.searchParams.get("limit") || 30)));
+  const statusFilter = String(url.searchParams.get("status") || "all").trim().toLowerCase();
+  const categoryFilter = String(url.searchParams.get("category") || "").trim().toLowerCase();
+  return Object.values(state.markets)
+    .map(agentMarketSummary)
+    .filter((market) => statusFilter === "all" || market.status === statusFilter)
+    .filter((market) => !categoryFilter || String(market.category || "").toLowerCase() === categoryFilter)
+    .sort((a, b) => b.id - a.id)
+    .slice(0, limit);
 }
 
 function escapeHtml(value) {
@@ -4832,6 +5027,54 @@ async function route(req, res) {
     if (url.pathname === "/api/sync") {
       void syncOnce();
       json(res, 202, { ok: true, status: "sync started" });
+      return;
+    }
+
+    if (url.pathname === "/api/agent" || url.pathname === "/.well-known/aurapredict-agent.json") {
+      if (req.method !== "GET") return notFound(res);
+      json(res, 200, agentManifest());
+      return;
+    }
+
+    if (url.pathname === "/api/agent/mcp" || url.pathname === "/.well-known/aurapredict-mcp.json") {
+      if (req.method !== "GET") return notFound(res);
+      json(res, 200, agentMcpTools());
+      return;
+    }
+
+    if (segments[0] === "api" && segments[1] === "agent" && segments[2] === "markets" && !segments[3]) {
+      if (req.method !== "GET") return notFound(res);
+      json(res, 200, {
+        markets: filterAgentMarkets(url),
+        total: state.marketCount,
+        updatedAt: state.updatedAt || nowIso()
+      });
+      return;
+    }
+
+    if (segments[0] === "api" && segments[1] === "agent" && segments[2] === "markets" && segments[3]) {
+      if (req.method !== "GET") return notFound(res);
+      const marketId = Number(segments[3]);
+      const market = Number.isInteger(marketId) ? state.markets[String(marketId)] : null;
+      if (!market) return notFound(res);
+      const social = socialState();
+      const snapshots = state.snapshots
+        .filter((snapshot) => snapshot.marketId === marketId)
+        .sort((a, b) => a.timestamp - b.timestamp);
+      json(res, 200, {
+        market: agentMarketSummary(market),
+        insight: aiInsightForMarket(market),
+        receipt: publicOracleReceiptForMarket(marketId),
+        oracleProposal: oracleState()[String(marketId)] || null,
+        social: {
+          evidence: social.evidence[String(marketId)] ?? [],
+          comments: (social.comments[String(marketId)] ?? []).slice(-20),
+          reports: social.reports[String(marketId)] ?? []
+        },
+        snapshots,
+        trades: tradesForMarket(marketId).slice(0, 200),
+        updatedAt: state.updatedAt || nowIso()
+      });
       return;
     }
 

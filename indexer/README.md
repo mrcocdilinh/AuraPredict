@@ -58,6 +58,10 @@ GET /api/activity?limit=50
 GET /api/leaderboard?period=all&metric=volume&limit=100
 GET /api/users/:address
 GET /api/sync
+GET /api/agent
+GET /api/agent/mcp
+GET /api/agent/markets
+GET /api/agent/markets/:id
 POST /api/admin/reconcile
 GET /api/social/markets/:id
 POST /api/social/markets/:id/comments
@@ -100,9 +104,12 @@ AuraPredict exposes a small public infrastructure layer for other Arc builders:
 - `/api/oracle-receipts/:marketId` returns the public AI/Oracle receipt: outcome, confidence, evidence rows, source URLs, hashes, dispute status, and tx references.
 - `/api/oracle-reputation` summarizes Aura Oracle Agent coverage, confidence, final-match accuracy, reversal rate, evidence depth, adapter usage, and auto-propose history.
 - `/api/ai/hot-markets` returns active markets with AI insight summaries for homepage, partner widgets, or bots.
+- `/api/agent` returns the read-only public Agent API manifest for Arc builders and AI clients.
+- `/api/agent/mcp` returns MCP-style tool metadata for listing markets, reading one market, and reading oracle reputation.
+- `/api/agent/markets` and `/api/agent/markets/:id` return normalized market/evidence packages for external agents.
 - `/api/embed/market/:marketId` returns a compact HTML market card that can be used inside an iframe.
 
-These endpoints are read-only. They do not propose, finalize, dispute, or claim funds.
+These endpoints are read-only. They do not propose, finalize, dispute, claim funds, or move wallet balances.
 
 ## Objective Oracle Proposals
 

@@ -4351,6 +4351,15 @@ textarea {
   white-space: nowrap;
 }
 
+.market-stat-row small {
+  color: #667085;
+  display: block;
+  font-size: 0.7rem;
+  font-weight: 760;
+  line-height: 1.35;
+  margin-top: 2px;
+}
+
 .owner-console {
   display: grid;
   gap: 16px;
@@ -4465,6 +4474,71 @@ textarea {
 
 .owner-token-card small {
   color: #667085;
+}
+
+.source-quality-panel {
+  align-content: start;
+}
+
+.source-quality-metrics,
+.agent-identity-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.agent-identity-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.agent-identity-grid div {
+  background: #f8fafc;
+  border: 1px solid #e5ebf4;
+  border-radius: 8px;
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  padding: 12px;
+}
+
+.agent-identity-grid span,
+.agent-identity-grid small {
+  color: #667085;
+  font-size: 0.74rem;
+  font-weight: 800;
+}
+
+.agent-identity-grid strong,
+.agent-identity-grid small {
+  overflow-wrap: anywhere;
+}
+
+.agent-safeguard-list,
+.adapter-chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.agent-safeguard-list span,
+.adapter-chip-list span {
+  background: #eefaff;
+  border: 1px solid #b8eefb;
+  border-radius: 999px;
+  color: #0a6e85;
+  font-size: 0.72rem;
+  font-weight: 850;
+  padding: 7px 10px;
+}
+
+.agent-safeguard-list span {
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+  color: #047857;
+}
+
+.source-quality-row {
+  align-items: start;
 }
 
 .owner-fee-list {
@@ -8281,8 +8355,28 @@ label {
 [data-theme="dark"] .owner-token-card small,
 [data-theme="dark"] .owner-token-card span,
 [data-theme="dark"] .owner-report-grid span,
-[data-theme="dark"] .owner-fee-row span {
+[data-theme="dark"] .owner-fee-row span,
+[data-theme="dark"] .market-stat-row small,
+[data-theme="dark"] .agent-identity-grid span,
+[data-theme="dark"] .agent-identity-grid small {
   color: #9aa7bd;
+}
+
+[data-theme="dark"] .agent-identity-grid div {
+  background: #0b1020;
+  border-color: #26334a;
+}
+
+[data-theme="dark"] .agent-safeguard-list span {
+  background: rgba(18, 185, 129, 0.12);
+  border-color: rgba(18, 185, 129, 0.34);
+  color: #30e1b0;
+}
+
+[data-theme="dark"] .adapter-chip-list span {
+  background: rgba(24, 215, 255, 0.12);
+  border-color: rgba(24, 215, 255, 0.28);
+  color: #79dfff;
 }
 
 [data-theme="dark"] .owner-wallet-pill span,
@@ -9961,7 +10055,9 @@ label {
   .owner-dashboard-grid,
   .owner-token-grid,
   .owner-report-grid,
-  .owner-action-grid {
+  .owner-action-grid,
+  .source-quality-metrics,
+  .agent-identity-grid {
     grid-template-columns: 1fr;
   }
 
@@ -10056,6 +10152,8 @@ label {
   .owner-dashboard-grid,
   .owner-token-grid,
   .owner-report-grid,
+  .source-quality-metrics,
+  .agent-identity-grid,
   .landing-market-preview div {
     grid-template-columns: 1fr;
   }

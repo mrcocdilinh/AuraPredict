@@ -648,6 +648,17 @@ type PublicOracleReceipt = {
 };
 
 type OracleReputation = {
+  agent?: {
+    name?: string;
+    network?: string;
+    chainId?: number;
+    contractAddress?: string;
+    apiBaseUrl?: string;
+    manifestUrl?: string;
+    mcpToolsUrl?: string;
+    signerMode?: string;
+    circleAgentWallet?: string;
+  };
   reputationScore: number;
   tier: string;
   coverage: number;
@@ -673,6 +684,7 @@ type OracleReputation = {
     txHash?: string;
     generatedAt?: string;
   }>;
+  safeguards?: string[];
   policy: string;
   updatedAt?: string;
 };
@@ -749,8 +761,21 @@ type LandingHealth = {
     lastSyncReason?: string;
     lastSyncedAt?: string;
     lastSyncError?: string;
+    lastSyncStartedAt?: string;
+    lastSyncTargetBlock?: string;
   };
-  features?: Record<string, boolean>;
+  features?: {
+    socialReports?: boolean;
+    socialNotifications?: boolean;
+    oracleReceipts?: boolean;
+    realtimeSync?: boolean;
+    evidenceSearch?: {
+      enabled?: boolean;
+      configured?: boolean;
+      provider?: string;
+      keyCount?: number;
+    };
+  };
 };
 
 type ContractEventRow = {
@@ -5433,6 +5458,50 @@ export default function App() {
       return b.market.traderCount - a.market.traderCount || b.market.id - a.market.id;
     })
     .slice(0, 8);
+  const ownerSourceQualityRows = markets
+    .filter((market) => market.outcome === Outcome.Unresolved)
+    .map((market) => {
+      const audit = settlementAuditFor(market);
+      const flags = marketRiskFlagsFor(market).filter((flag) => flag.severity !== "info");
+      const proposal = oracleProposals[String(market.id)];
+      const receipt = aiResolutionReceipts[String(market.id)];
+      const receiptEvidenceUrls = Array.isArray(receipt?.evidence)
+        ? receipt.evidence.map((item) => item.url || "").filter(Boolean)
+        : [];
+      const sourceUrls = [
+        market.metadataURI,
+        market.fallbackSourceURI,
+        ...(proposal?.sourceUrls || []),
+        ...receiptEvidenceUrls
+      ].filter(Boolean);
+      const sourceRiskText = flags.map((flag) => `${flag.label} ${flag.detail}`).join(" ").toLowerCase();
+      const missingSource = sourceUrls.length === 0 || sourceRiskText.includes("source weak") || sourceRiskText.includes("source verification");
+      const deterministicOracle =
+        Boolean(proposal) &&
+        !["", "unsupported", "needs_review", "error"].includes(String(proposal?.status || "").toLowerCase()) &&
+        (proposal?.outcome === "YES" || proposal?.outcome === "NO" || proposal?.outcome === "CANCEL" || Number(proposal?.outcomeValue || 0) > 0);
+      const severityRank = audit.status === "conflict" ? 3 : missingSource || audit.status === "review" || flags.length > 0 ? 2 : 1;
+      return {
+        market,
+        audit,
+        flags,
+        sourceCount: new Set(sourceUrls).size,
+        missingSource,
+        deterministicOracle,
+        severityRank
+      };
+    });
+  const ownerSourceQualitySummary = {
+    safe: ownerSourceQualityRows.filter((row) => row.audit.status === "safe" && !row.missingSource && row.flags.length === 0).length,
+    review: ownerSourceQualityRows.filter((row) => row.audit.status === "review" || row.missingSource || row.flags.length > 0).length,
+    conflict: ownerSourceQualityRows.filter((row) => row.audit.status === "conflict").length,
+    missingSource: ownerSourceQualityRows.filter((row) => row.missingSource).length,
+    deterministic: ownerSourceQualityRows.filter((row) => row.deterministicOracle).length
+  };
+  const ownerSourceQualityQueue = ownerSourceQualityRows
+    .filter((row) => row.severityRank > 1 || row.audit.status !== "safe")
+    .sort((a, b) => b.severityRank - a.severityRank || b.market.traderCount - a.market.traderCount || b.market.id - a.market.id)
+    .slice(0, 8);
   const ownerQueueCount =
     ownerPendingProposalQueue.length +
     ownerFinalizationQueue.length +
@@ -5523,28 +5592,47 @@ export default function App() {
   const indexerSyncText = lastDataRefresh ? timeAgo(Math.floor(lastDataRefresh.getTime() / 1000), currentTime) : "Waiting";
   const indexerStatus = indexerHealth?.indexer;
   const indexerHasSyncError = Boolean(indexerStatus?.lastSyncError);
+  const indexerLastSyncedAtMs = indexerStatus?.lastSyncedAt ? Date.parse(indexerStatus.lastSyncedAt) : NaN;
+  const indexerLastSyncedAgeSeconds = Number.isFinite(indexerLastSyncedAtMs)
+    ? Math.max(0, Math.floor(Date.now() / 1000) - Math.floor(indexerLastSyncedAtMs / 1000))
+    : null;
+  const indexerPollingIsFresh = Boolean(
+    !indexerHasSyncError &&
+      indexerLastSyncedAgeSeconds !== null &&
+      indexerLastSyncedAgeSeconds <= Math.max(180, Number(indexerStatus?.pollMs || 60_000) / 1000 + 120)
+  );
   const indexerUsingPollingFallback = Boolean(
     indexerStatus?.wsEnabled &&
       indexerStatus?.wsStatus === "error" &&
       !indexerHasSyncError &&
-      (indexerStatus?.lastSyncReason === "polling" || indexerStatus?.lastSyncReason === "startup")
+      (indexerStatus?.lastSyncReason === "polling" || indexerStatus?.lastSyncReason === "startup") &&
+      indexerPollingIsFresh
   );
   const indexerStatusTone = indexerHasSyncError
     ? "danger"
     : indexerUsingPollingFallback
-      ? "warning"
+      ? "success"
       : indexerStatus?.wsEnabled && indexerStatus?.wsStatus === "connected"
         ? "success"
         : "neutral";
   const indexerModeText = indexerHasSyncError
     ? "Sync error"
     : indexerUsingPollingFallback
-      ? "Polling fallback"
+      ? "Polling healthy"
       : indexerStatus?.wsEnabled
         ? indexerStatus.wsStatus === "connected"
           ? "Realtime WS"
           : `WS ${indexerStatus.wsStatus || "starting"}`
         : indexerStatus?.mode || dataSource;
+  const indexerStatusDetail = indexerHasSyncError
+    ? indexerStatus?.lastSyncError || "Indexer sync failed. Check RPC/indexer logs."
+    : indexerUsingPollingFallback
+      ? "WebSocket is reconnecting; polling sync is active."
+      : indexerStatus?.wsEnabled && indexerStatus.wsStatus === "connected"
+        ? "Realtime WebSocket sync is active."
+        : indexerStatus?.wsLastError
+          ? "WebSocket is not connected yet; polling remains available."
+          : "Waiting for indexer heartbeat.";
   const boardTitle =
     view === "ended"
       ? "Ended markets"
@@ -12840,6 +12928,47 @@ export default function App() {
                       </div>
                     </article>
 
+                    <article className="owner-panel owner-panel-wide source-quality-panel">
+                      <div className="panel-heading">
+                        <div>
+                          <span className="section-label">Source quality dashboard</span>
+                          <h3>{ownerSourceQualitySummary.conflict} conflicts / {ownerSourceQualitySummary.review} reviews</h3>
+                        </div>
+                        <span className="agent-confidence">{ownerSourceQualitySummary.deterministic} deterministic checks</span>
+                      </div>
+                      <div className="source-quality-metrics">
+                        <div className="quality-signal good">
+                          <span>Safe to monitor/finalize</span>
+                          <strong>{ownerSourceQualitySummary.safe}</strong>
+                        </div>
+                        <div className="quality-signal warn">
+                          <span>Needs review</span>
+                          <strong>{ownerSourceQualitySummary.review}</strong>
+                        </div>
+                        <div className="quality-signal bad">
+                          <span>Conflict detected</span>
+                          <strong>{ownerSourceQualitySummary.conflict}</strong>
+                        </div>
+                        <div className={ownerSourceQualitySummary.missingSource > 0 ? "quality-signal warn" : "quality-signal good"}>
+                          <span>Missing / weak source</span>
+                          <strong>{ownerSourceQualitySummary.missingSource}</strong>
+                        </div>
+                      </div>
+                      <div className="oracle-reputation-list">
+                        {ownerSourceQualityQueue.length === 0 && <span>No source-quality issues in unresolved markets.</span>}
+                        {ownerSourceQualityQueue.map((row) => (
+                          <button className="similar-market-row source-quality-row" key={`source-quality-${row.market.id}`} onClick={() => openMarket(row.market.id, true)} type="button">
+                            <strong>#{row.market.id} {shortQuestion(row.market.question)}</strong>
+                            <span className={`settlement-audit-badge audit-${row.audit.status}`}>{row.audit.label}</span>
+                            <small>
+                              {row.deterministicOracle ? "Deterministic oracle available" : "No deterministic oracle yet"} / {row.sourceCount} source rows
+                            </small>
+                            <small>{row.flags[0]?.label || row.audit.detail}</small>
+                          </button>
+                        ))}
+                      </div>
+                    </article>
+
                     <article className="owner-panel">
                       <span className="section-label">Protocol fees</span>
                       <div className="owner-fee-list">
@@ -12882,6 +13011,23 @@ export default function App() {
                         </div>
                         <span className="agent-confidence">{oracleReputation ? `${oracleReputation.reputationScore}% score` : "Syncing"}</span>
                       </div>
+                      <div className="agent-identity-grid">
+                        <div>
+                          <span>Agent</span>
+                          <strong>{oracleReputation?.agent?.name || "Aura Oracle Agent"}</strong>
+                          <small>{oracleReputation?.agent?.network || "Arc Testnet"} / signer {oracleReputation?.agent?.signerMode || "manual"}</small>
+                        </div>
+                        <div>
+                          <span>Public API</span>
+                          <strong>{oracleReputation?.agent?.apiBaseUrl ? "Available" : "Waiting"}</strong>
+                          <small>{oracleReputation?.agent?.manifestUrl || "/api/agent"}</small>
+                        </div>
+                        <div>
+                          <span>MCP tools</span>
+                          <strong>{oracleReputation?.agent?.mcpToolsUrl ? "Published" : "Draft"}</strong>
+                          <small>{oracleReputation?.agent?.mcpToolsUrl || "/api/agent/mcp"}</small>
+                        </div>
+                      </div>
                       <div className="owner-report-grid">
                         <div><span>Coverage</span><strong>{oracleReputation ? `${oracleReputation.coverage}%` : "--"}</strong></div>
                         <div><span>Final-match accuracy</span><strong>{oracleReputation ? `${oracleReputation.accuracy}%` : "--"}</strong></div>
@@ -12895,6 +13041,23 @@ export default function App() {
                         <div><span>Authority review</span><strong>{oracleReputation?.authorityReviewMarkets ?? "--"}</strong></div>
                       </div>
                       {oracleReputation?.policy && <p>{oracleReputation.policy}</p>}
+                      {oracleReputation?.safeguards && oracleReputation.safeguards.length > 0 && (
+                        <div className="agent-safeguard-list">
+                          {oracleReputation.safeguards.slice(0, 4).map((item) => (
+                            <span key={item}>{item}</span>
+                          ))}
+                        </div>
+                      )}
+                      {oracleReputation?.adapters && Object.keys(oracleReputation.adapters).length > 0 && (
+                        <div className="adapter-chip-list">
+                          {Object.entries(oracleReputation.adapters)
+                            .sort((a, b) => b[1] - a[1])
+                            .slice(0, 8)
+                            .map(([adapter, count]) => (
+                              <span key={adapter}>{adapter}: {count}</span>
+                            ))}
+                        </div>
+                      )}
                       {oracleReputation?.recent && oracleReputation.recent.length > 0 && (
                         <div className="oracle-reputation-list">
                           {oracleReputation.recent.slice(0, 4).map((row) => (
@@ -14098,12 +14261,13 @@ export default function App() {
               </div>
               <div className={`market-stat-row status ${indexerStatusTone}`}>
                 <span className="stat-glyph stat-sync" aria-hidden="true" />
-              <div>
-                <span>Indexer status</span>
-                <strong>{indexerModeText}</strong>
+                <div>
+                  <span>Indexer status</span>
+                  <strong>{indexerModeText}</strong>
+                  <small>{indexerStatusDetail}</small>
+                </div>
+                <em>{indexerSyncText}</em>
               </div>
-              <em>{indexerSyncText}</em>
-            </div>
             </div>
           </section>
           <section className="protocol-card">
