@@ -5,6 +5,7 @@ import {
   priceConditionFromParts,
   yesConditionTextFromRule
 } from "../indexer/oracleRuleUtils.mjs";
+import { evaluateSimpleSportsMarket } from "../indexer/sportsAdapters.mjs";
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
@@ -106,5 +107,66 @@ assertEqual(outcomeFor(lowerRule, 99.9), "YES", "below threshold should pass und
 assertEqual(outcomeFor(lowerRule, 100), "NO", "below threshold should fail at target");
 
 assertEqual(conditionFor("No numeric condition here."), null, "rules without numeric thresholds should not invent a condition");
+
+const mexicoSportsMarket = {
+  question: "Will Mexico win its opening match at the 2026 FIFA World Cup?",
+  resolutionRule:
+    "Resolve YES if FIFA's official match result lists Mexico as the winner of Mexico's first match at the 2026 FIFA World Cup after normal time including stoppage time. Resolve NO if Mexico draws or loses.",
+  category: "Sports",
+  primarySource: "https://www.fifa.com/en/tournaments/mens/worldcup/canadamexicousa2026/scores-fixtures"
+};
+const mexicoSnapshot = [
+  {
+    ok: true,
+    matchedEvents: [
+      {
+        completed: true,
+        summary: "Mexico 2 @ South Africa 0 (FT) [final]",
+        competitors: [
+          { names: ["Mexico", "MEX"], score: 2, winner: true },
+          { names: ["South Africa", "RSA"], score: 0, winner: false }
+        ]
+      }
+    ]
+  }
+];
+assertEqual(evaluateSimpleSportsMarket(mexicoSportsMarket, mexicoSnapshot)?.outcome, "YES", "sports winner market should resolve from one completed scoreboard row");
+
+const totalGoalsMarket = {
+  question: "Will Canada vs Bosnia and Herzegovina have at least 2 total goals in their 2026 FIFA World Cup match?",
+  resolutionRule: "Resolve YES if the official final score has at least 2 total goals. Resolve NO otherwise.",
+  category: "Sports"
+};
+const totalGoalsSnapshot = [
+  {
+    ok: true,
+    matchedEvents: [
+      {
+        completed: true,
+        summary: "Canada 1 @ Bosnia and Herzegovina 1 (FT) [final]",
+        competitors: [
+          { names: ["Canada", "CAN"], score: 1 },
+          { names: ["Bosnia and Herzegovina", "BIH"], score: 1 }
+        ]
+      }
+    ]
+  }
+];
+assertEqual(evaluateSimpleSportsMarket(totalGoalsMarket, totalGoalsSnapshot)?.outcome, "YES", "sports total-goals market should compare final total against threshold");
+
+const bttsMarket = {
+  question: "Will both teams score in Mexico vs South Africa at the 2026 FIFA World Cup?",
+  resolutionRule: "Resolve YES if both teams score at least one goal. Resolve NO if either team scores zero.",
+  category: "Sports"
+};
+assertEqual(evaluateSimpleSportsMarket(bttsMarket, mexicoSnapshot)?.outcome, "NO", "BTTS market should resolve NO when one team has zero");
+
+const ambiguousSportsSnapshot = [
+  {
+    ok: true,
+    matchedEvents: [...mexicoSnapshot[0].matchedEvents, ...totalGoalsSnapshot[0].matchedEvents]
+  }
+];
+assertEqual(evaluateSimpleSportsMarket(mexicoSportsMarket, ambiguousSportsSnapshot), null, "sports oracle must not auto-resolve when multiple rows match");
 
 console.log("oracle regression checks passed");

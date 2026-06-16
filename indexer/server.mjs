@@ -17,7 +17,7 @@ import {
   significantTargetMismatch,
   yesConditionTextFromRule
 } from "./oracleRuleUtils.mjs";
-import { gatherEspnScoreboardEvidence } from "./sportsAdapters.mjs";
+import { evaluateSimpleSportsMarket, gatherEspnScoreboardEvidence, gatherEspnScoreboardSnapshot } from "./sportsAdapters.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = path.join(__dirname, "data");
@@ -109,7 +109,7 @@ const ORACLE_AUTO_PROPOSE_MIN_CONFIDENCE = Number(process.env.AURA_ORACLE_AUTO_P
 const ORACLE_AUTO_PROPOSE_ADAPTERS = new Set(
   String(
     process.env.AURA_ORACLE_AUTO_PROPOSE_ADAPTERS ||
-      "crypto-price,stock-yahoo-chart,macro-yahoo-chart,status-health,status-page,liquidity-rule"
+      "crypto-price,stock-yahoo-chart,macro-yahoo-chart,macro-bls-release,status-health,status-page,liquidity-rule"
   )
     .split(",")
     .map((adapter) => adapter.trim())
@@ -222,6 +222,9 @@ const geminiKeyState = {
 const tavilyKeyState = {
   cursor: 0
 };
+let realtimeUnwatch = null;
+let realtimeReconnectTimer = null;
+let realtimeReconnectAttempt = 0;
 
 function nowIso() {
   return new Date().toISOString();
@@ -3303,6 +3306,46 @@ function detectMacroOracleMarket(market) {
   return { ...asset, comparator: condition.comparator, target: condition.target };
 }
 
+const BLS_RELEASE_CONFIGS = [
+  {
+    id: "cpi",
+    label: "BLS CPI release",
+    url: "https://www.bls.gov/news.release/cpi.nr0.htm",
+    sourcePattern: /\/news\.release\/cpi\.nr0\.htm/i,
+    textPattern: /\b(?:cpi|consumer price index|all items)\b/i
+  },
+  {
+    id: "ppi",
+    label: "BLS PPI release",
+    url: "https://www.bls.gov/news.release/ppi.nr0.htm",
+    sourcePattern: /\/news\.release\/ppi\.nr0\.htm/i,
+    textPattern: /\b(?:ppi|producer price index|final demand)\b/i
+  }
+];
+
+function releaseMonthYearFromText(text) {
+  const match = String(text || "").match(/\b(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+(20\d{2})\b/i);
+  if (!match) return null;
+  return { month: match[1].toLowerCase().slice(0, 3), year: match[2] };
+}
+
+function detectBlsReleaseOracleMarket(market) {
+  const text = oracleTextForMarket(market);
+  const sourceUrls = marketSourceUrls(market);
+  const config =
+    BLS_RELEASE_CONFIGS.find((candidate) => sourceUrls.some((url) => candidate.sourcePattern.test(url))) ||
+    BLS_RELEASE_CONFIGS.find((candidate) => candidate.textPattern.test(text));
+  if (!config) return null;
+  const condition = priceConditionForMarket(market, structuredRuleForMarket(market));
+  if (!condition) return null;
+  return {
+    ...config,
+    comparator: condition.comparator,
+    target: condition.target,
+    targetMonthYear: releaseMonthYearFromText(`${stripRuleMetadata(market?.resolutionRule)} ${market?.question || ""}`)
+  };
+}
+
 const STOCK_ORACLE_ASSETS = [
   { symbol: "TSLA", names: ["tsla", "tesla"], yahoo: "TSLA", label: "Tesla (TSLA)" },
   { symbol: "NVDA", names: ["nvda", "nvidia"], yahoo: "NVDA", label: "NVIDIA (NVDA)" },
@@ -3756,16 +3799,28 @@ function statusPageOracleIntegrityIssue(proposal, market) {
   return "";
 }
 
+function sportsScoreboardOracleIntegrityIssue(proposal) {
+  const text = `${proposal.summary || ""} ${proposal.observedValue || ""} ${(proposal.checks || []).join(" ")}`;
+  if (!/\b(matched one completed scoreboard row|completed scoreboard row)\b/i.test(text)) {
+    return "Sports scoreboard oracle must match exactly one completed structured scoreboard row before proposing YES or NO.";
+  }
+  if (!/\b(final|\[final\]|ft|full time|completed)\b/i.test(text)) {
+    return "Sports scoreboard oracle outcome is missing final/completed status evidence.";
+  }
+  return "";
+}
+
 function oracleProposalIntegrityIssue(proposal, market) {
   if (!proposal || !market) return "Market or proposal is missing.";
   if (!["ready", "proposed"].includes(String(proposal.status || ""))) return "";
   if (!["YES", "NO"].includes(proposalOutcome(proposal))) return "";
 
   const adapter = String(proposal.adapter || "");
-  if (adapter === "crypto-price" || adapter === "stock-yahoo-chart" || adapter === "macro-yahoo-chart") {
+  if (adapter === "crypto-price" || adapter === "stock-yahoo-chart" || adapter === "macro-yahoo-chart" || adapter === "macro-bls-release") {
     return numericOracleIntegrityIssue(proposal, market);
   }
   if (adapter === "mlb-schedule") return scheduleCountOracleIntegrityIssue(proposal);
+  if (adapter === "sports-scoreboard") return sportsScoreboardOracleIntegrityIssue(proposal);
   if (adapter === "status-health") return healthOracleIntegrityIssue(proposal, market);
   if (adapter === "status-page") return statusPageOracleIntegrityIssue(proposal, market);
   return "";
@@ -3861,6 +3916,121 @@ async function buildCryptoOracleProposal(market, config) {
   proposal.status = "needs_review";
   proposal.summary = "Oracle could not retrieve an exact price for the requested timestamp. Send this market to manual review.";
   return finalizeOracleProposal(proposal);
+}
+
+function parseBlsReleaseObservedValue(config, htmlText) {
+  const plain = stripHtml(htmlText).replace(/\s+/g, " ").trim();
+  if (!plain) return null;
+
+  if (config.id === "cpi") {
+    const direct =
+      plain.match(/\ball items index (?:rose|increased) (-?\d+(?:\.\d+)?) percent over the 12 months ending (?:in )?([A-Za-z]+)\b/i) ||
+      plain.match(/\bover the 12 months ending (?:in )?([A-Za-z]+),? the all items index (?:rose|increased) (-?\d+(?:\.\d+)?) percent\b/i);
+    if (direct) {
+      const monthFirst = Number.isNaN(Number(direct[1]));
+      return {
+        value: Number(monthFirst ? direct[2] : direct[1]),
+        month: String(monthFirst ? direct[1] : direct[2]).toLowerCase().slice(0, 3),
+        label: "CPI all items 12-month percent change"
+      };
+    }
+  }
+
+  if (config.id === "ppi") {
+    const up = plain.match(/\bfinal demand (?:rose|increased|advanced) (-?\d+(?:\.\d+)?) percent in ([A-Za-z]+)\b/i);
+    if (up) {
+      return {
+        value: Number(up[1]),
+        month: String(up[2]).toLowerCase().slice(0, 3),
+        label: "PPI final demand monthly percent change"
+      };
+    }
+    const down = plain.match(/\bfinal demand (?:fell|declined|decreased) (-?\d+(?:\.\d+)?) percent in ([A-Za-z]+)\b/i);
+    if (down) {
+      return {
+        value: -Number(down[1]),
+        month: String(down[2]).toLowerCase().slice(0, 3),
+        label: "PPI final demand monthly percent change"
+      };
+    }
+    const unchanged = plain.match(/\bfinal demand (?:was )?unchanged in ([A-Za-z]+)\b/i);
+    if (unchanged) {
+      return {
+        value: 0,
+        month: String(unchanged[1]).toLowerCase().slice(0, 3),
+        label: "PPI final demand monthly percent change"
+      };
+    }
+  }
+
+  return null;
+}
+
+async function buildBlsReleaseOracleProposal(market, config) {
+  const proposal = baseOracleProposal(market, "macro-bls-release");
+  proposal.comparator = config.comparator;
+  proposal.targetValue = String(config.target);
+  proposal.sourceUrls = [config.url];
+
+  const resolutionTime = marketResolutionTime(market);
+  const now = Math.floor(Date.now() / 1000);
+  if (now < resolutionTime) {
+    proposal.status = "not_ready";
+    proposal.summary = "Oracle cannot evaluate this BLS release market before the resolution timestamp.";
+    return finalizeOracleProposal(proposal);
+  }
+
+  try {
+    const response = await fetchTextWithTimeout(config.url);
+    if (!response.ok || !response.text) {
+      proposal.status = "needs_review";
+      proposal.confidence = 0;
+      proposal.summary = `${config.label} returned HTTP ${response.status}. Use manual review.`;
+      proposal.checks = ["Do not infer NO from an unavailable official release page."];
+      return finalizeOracleProposal(proposal);
+    }
+
+    const plain = stripHtml(response.text).replace(/\s+/g, " ");
+    const observed = parseBlsReleaseObservedValue(config, response.text);
+    if (!observed || !Number.isFinite(observed.value)) {
+      proposal.status = "needs_review";
+      proposal.confidence = 0;
+      proposal.summary = `${config.label} was reachable but Aura could not parse the required CPI/PPI value from the official release text.`;
+      proposal.checks = ["Use BLS release tables/manual review before proposing YES or NO."];
+      return finalizeOracleProposal(proposal);
+    }
+
+    if (config.targetMonthYear?.month && observed.month && config.targetMonthYear.month !== observed.month) {
+      proposal.status = "needs_review";
+      proposal.confidence = 0;
+      proposal.summary = `${config.label} parsed ${observed.label} for ${observed.month.toUpperCase()}, but the market asks for ${config.targetMonthYear.month.toUpperCase()} ${config.targetMonthYear.year}.`;
+      proposal.checks = ["Do not reuse a different release month for this market."];
+      return finalizeOracleProposal(proposal);
+    }
+
+    if (config.targetMonthYear?.year && !plain.includes(config.targetMonthYear.year)) {
+      proposal.status = "needs_review";
+      proposal.confidence = 0;
+      proposal.summary = `${config.label} did not clearly expose the market year ${config.targetMonthYear.year} in the fetched release text.`;
+      proposal.checks = ["Use the official archived release or BLS table matching the requested year."];
+      return finalizeOracleProposal(proposal);
+    }
+
+    const matched = compareObservedValue(observed.value, config.comparator, config.target);
+    proposal.outcome = matched ? "YES" : "NO";
+    proposal.confidence = 84;
+    proposal.observedValue = `${observed.label}: ${observed.value}%`;
+    proposal.observedAt = nowIso();
+    proposal.summary = `${config.label} reported ${observed.observedLabel || observed.label} at ${observed.value}%. Rule target is ${config.comparator.toUpperCase()} ${config.target}.`;
+    proposal.checks = ["Used BLS official release HTML.", "Parsed the numeric percent from the release text and compared it with the market rule."];
+    return finalizeOracleProposal(proposal);
+  } catch (error) {
+    proposal.status = "needs_review";
+    proposal.confidence = 0;
+    proposal.summary = `${config.label} check failed: ${error instanceof Error ? error.message : String(error)}.`;
+    proposal.checks = ["Use BLS official release/manual review before proposing YES or NO."];
+    return finalizeOracleProposal(proposal);
+  }
 }
 
 function utcStartSecondsForIsoDate(isoDate) {
@@ -4095,10 +4265,16 @@ async function buildMlbScheduleOracleProposal(market, config) {
 }
 
 async function buildSportsScoreboardOracleProposal(market) {
-  const evidenceRows = await gatherEspnScoreboardEvidence(market, {
+  const snapshots = await gatherEspnScoreboardSnapshot(market, {
     timeoutMs: AUTO_EVIDENCE_SEARCH_TIMEOUT_MS || ORACLE_HTTP_TIMEOUT_MS,
     maxEvents: 8
   });
+  const evidenceRows = snapshots.map((row) => ({
+    url: row.apiUrl,
+    title: `Objective source scan: ESPN ${row.profile?.label || "Sports"} scoreboard`,
+    notes: row.notes,
+    finding: row.finding
+  }));
   if (evidenceRows.length === 0) {
     return buildUnsupportedOracleProposal(
       market,
@@ -4108,6 +4284,18 @@ async function buildSportsScoreboardOracleProposal(market) {
   }
 
   const proposal = baseOracleProposal(market, "sports-scoreboard");
+  const simpleEvaluation = evaluateSimpleSportsMarket(market, snapshots);
+  if (simpleEvaluation) {
+    proposal.outcome = simpleEvaluation.outcome;
+    proposal.confidence = simpleEvaluation.confidence;
+    proposal.observedValue = simpleEvaluation.observedValue;
+    proposal.observedAt = nowIso();
+    proposal.sourceUrls = [...new Set(evidenceRows.map((row) => row.url).filter(Boolean))];
+    proposal.summary = simpleEvaluation.summary;
+    proposal.checks = simpleEvaluation.checks;
+    return finalizeOracleProposal(proposal);
+  }
+
   proposal.status = "needs_review";
   proposal.confidence = 45;
   proposal.sourceUrls = [...new Set(evidenceRows.map((row) => row.url).filter(Boolean))];
@@ -4190,6 +4378,9 @@ async function buildOracleProposal(marketId, options = {}) {
 
   const healthConfig = detectHealthOracleMarket(market);
   if (healthConfig) return buildHealthOracleProposal(market, healthConfig);
+
+  const blsReleaseConfig = detectBlsReleaseOracleMarket(market);
+  if (blsReleaseConfig) return buildBlsReleaseOracleProposal(market, blsReleaseConfig);
 
   const cryptoConfig = detectCryptoOracleMarket(market);
   if (cryptoConfig) return buildCryptoOracleProposal(market, cryptoConfig);
@@ -5704,6 +5895,29 @@ async function route(req, res) {
   }
 }
 
+function scheduleRealtimeReconnect(reason) {
+  if (!realtimeClient || realtimeReconnectTimer) return;
+  const runtime = indexerRuntimeState();
+  realtimeReconnectAttempt += 1;
+  const delayMs = Math.min(60_000, 2_000 * realtimeReconnectAttempt);
+  runtime.wsStatus = "reconnecting";
+  runtime.wsLastError = reason || runtime.wsLastError || "WebSocket disconnected.";
+  realtimeReconnectTimer = setTimeout(() => {
+    realtimeReconnectTimer = null;
+    startRealtimeSync();
+  }, delayMs);
+}
+
+function stopRealtimeWatcher() {
+  if (!realtimeUnwatch) return;
+  try {
+    realtimeUnwatch();
+  } catch {
+    // best-effort cleanup; the polling loop remains authoritative
+  }
+  realtimeUnwatch = null;
+}
+
 function startRealtimeSync() {
   const runtime = indexerRuntimeState();
   if (!realtimeClient) {
@@ -5712,10 +5926,13 @@ function startRealtimeSync() {
   }
 
   try {
-    const unwatch = realtimeClient.watchBlockNumber({
+    stopRealtimeWatcher();
+    let unwatch = null;
+    unwatch = realtimeClient.watchBlockNumber({
       emitOnBegin: false,
       onBlockNumber(blockNumber) {
         const runtimeState = indexerRuntimeState();
+        realtimeReconnectAttempt = 0;
         runtimeState.wsStatus = "connected";
         runtimeState.wsLastBlock = blockNumber.toString();
         runtimeState.wsLastEventAt = nowIso();
@@ -5726,18 +5943,29 @@ function startRealtimeSync() {
       },
       onError(error) {
         const runtimeState = indexerRuntimeState();
+        const message = error instanceof Error ? error.message : String(error);
         runtimeState.wsStatus = "error";
-        runtimeState.wsLastError = error instanceof Error ? error.message : String(error);
+        runtimeState.wsLastError = message;
         console.error("[indexer] websocket block watcher failed:", error);
+        try {
+          unwatch?.();
+        } catch {
+          // ignore watcher cleanup errors; reconnect will replace it
+        }
+        if (realtimeUnwatch === unwatch) realtimeUnwatch = null;
+        scheduleRealtimeReconnect(message);
       }
     });
+    realtimeUnwatch = unwatch;
     runtime.wsStatus = "connected";
     console.log(`[indexer] websocket sync enabled via ${WS_URLS[0]}`);
     return unwatch;
   } catch (error) {
+    stopRealtimeWatcher();
     runtime.wsStatus = "error";
     runtime.wsLastError = error instanceof Error ? error.message : String(error);
     console.error("[indexer] websocket sync could not start:", error);
+    scheduleRealtimeReconnect(runtime.wsLastError);
   }
 }
 

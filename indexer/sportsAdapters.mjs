@@ -125,18 +125,62 @@ async function fetchJson(url, timeoutMs) {
 }
 
 function formatEspnEvent(event) {
+  const details = espnEventDetails(event);
+  return details.summary;
+}
+
+function numericScore(value) {
+  if (value === "" || value === null || value === undefined) return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function competitorNameParts(competitor) {
+  return [
+    competitor?.team?.displayName,
+    competitor?.team?.shortDisplayName,
+    competitor?.team?.name,
+    competitor?.team?.location,
+    competitor?.team?.abbreviation,
+    competitor?.team?.nickname
+  ]
+    .map((value) => cleanText(value, 80))
+    .filter(Boolean);
+}
+
+function espnEventDetails(event) {
   const competition = Array.isArray(event?.competitions) ? event.competitions[0] : null;
   const competitors = Array.isArray(competition?.competitors) ? competition.competitors : [];
   const away = competitors.find((item) => item?.homeAway === "away") || competitors[0];
   const home = competitors.find((item) => item?.homeAway === "home") || competitors[1];
-  const awayName = cleanText(away?.team?.displayName || away?.team?.shortDisplayName || away?.team?.name || "Away", 80);
-  const homeName = cleanText(home?.team?.displayName || home?.team?.shortDisplayName || home?.team?.name || "Home", 80);
-  const awayScore = away?.score ?? "";
-  const homeScore = home?.score ?? "";
+  const awayName = competitorNameParts(away)[0] || "Away";
+  const homeName = competitorNameParts(home)[0] || "Home";
+  const awayScore = numericScore(away?.score);
+  const homeScore = numericScore(home?.score);
   const status = cleanText(competition?.status?.type?.shortDetail || competition?.status?.type?.detail || event?.status?.type?.detail || "", 80);
   const completed = Boolean(competition?.status?.type?.completed || event?.status?.type?.completed);
-  const result = `${awayName}${awayScore !== "" ? ` ${awayScore}` : ""} @ ${homeName}${homeScore !== "" ? ` ${homeScore}` : ""}`;
-  return `${result}${status ? ` (${status})` : ""}${completed ? " [final]" : ""}`;
+  const result = `${awayName}${awayScore !== null ? ` ${awayScore}` : ""} @ ${homeName}${homeScore !== null ? ` ${homeScore}` : ""}`;
+  return {
+    id: String(event?.id || competition?.id || ""),
+    date: cleanText(event?.date || competition?.date || "", 40),
+    name: cleanText(event?.name || event?.shortName || result, 140),
+    shortName: cleanText(event?.shortName || "", 100),
+    summary: `${result}${status ? ` (${status})` : ""}${completed ? " [final]" : ""}`,
+    status,
+    completed,
+    competitors: [away, home].filter(Boolean).map((competitor) => ({
+      homeAway: cleanText(competitor?.homeAway || "", 20),
+      names: competitorNameParts(competitor),
+      score: numericScore(competitor?.score),
+      winner: typeof competitor?.winner === "boolean" ? competitor.winner : null
+    })),
+    url: cleanText(
+      event?.links?.find?.((link) => link?.href)?.href ||
+        competition?.links?.find?.((link) => link?.href)?.href ||
+        "",
+      240
+    )
+  };
 }
 
 function teamTermsFromMarket(market) {
@@ -158,7 +202,18 @@ function matchingEventsForMarket(market, eventSummaries) {
   });
 }
 
-export async function gatherEspnScoreboardEvidence(market, options = {}) {
+function matchingEventDetailsForMarket(market, events) {
+  const terms = teamTermsFromMarket(market);
+  if (terms.length === 0) return events.slice(0, 8);
+  return events.filter((event) => {
+    const lower = `${event.summary || ""} ${event.name || ""} ${event.shortName || ""} ${(event.competitors || [])
+      .flatMap((competitor) => competitor.names || [])
+      .join(" ")}`.toLowerCase();
+    return terms.some((term) => lower.includes(term));
+  });
+}
+
+export async function gatherEspnScoreboardSnapshot(market, options = {}) {
   const date = eventDateForMarket(market);
   if (!date) return [];
   const timeoutMs = Math.max(1000, Number(options.timeoutMs || 6500));
@@ -172,33 +227,156 @@ export async function gatherEspnScoreboardEvidence(market, options = {}) {
       const { response, body } = await fetchJson(apiUrl, timeoutMs);
       if (!response.ok || !body || typeof body !== "object") {
         rows.push({
-          url: apiUrl,
-          title: `Objective source scan: ${profile.label} scoreboard unavailable`,
-          notes: `ESPN ${profile.label} scoreboard API returned HTTP ${response.status}. Treat the official/source scan as inconclusive, not as proof of NO.`,
-          finding: `${profile.label} structured scoreboard unavailable for ${date}.`
+          profile,
+          apiUrl,
+          date,
+          ok: false,
+          error: `HTTP ${response.status}`,
+          events: [],
+          matchedEvents: [],
+          finding: `${profile.label} structured scoreboard unavailable for ${date}.`,
+          notes: `ESPN ${profile.label} scoreboard API returned HTTP ${response.status}. Treat the scan as inconclusive, not as proof of NO.`
         });
         continue;
       }
 
-      const events = Array.isArray(body.events) ? body.events : [];
-      const eventSummaries = events.map(formatEspnEvent).filter(Boolean);
-      const matched = matchingEventsForMarket(market, eventSummaries).slice(0, maxEvents);
-      const sample = (matched.length > 0 ? matched : eventSummaries.slice(0, maxEvents)).join(" / ");
+      const events = (Array.isArray(body.events) ? body.events : []).map(espnEventDetails).filter((event) => event.summary);
+      const matchedEvents = matchingEventDetailsForMarket(market, events).slice(0, maxEvents);
+      const sample = (matchedEvents.length > 0 ? matchedEvents : events.slice(0, maxEvents)).map((event) => event.summary).join(" / ");
       rows.push({
-        url: apiUrl,
-        title: `Objective source scan: ESPN ${profile.label} scoreboard`,
-        notes: `ESPN ${profile.label} scoreboard API returned ${events.length} event(s) for ${date}. ${matched.length > 0 ? `${matched.length} row(s) matched terms from the market question/rule.` : "No rows clearly matched the market terms."} Sample: ${sample || "No event rows returned."} Use this structured row together with the official-source rule before proposing YES or NO.`,
-        finding: `${events.length} ${profile.label} event(s) found for ${date}; ${matched.length} market-term match(es).`
+        profile,
+        apiUrl,
+        date,
+        ok: true,
+        events,
+        matchedEvents,
+        finding: `${events.length} ${profile.label} event(s) found for ${date}; ${matchedEvents.length} market-term match(es).`,
+        notes: `ESPN ${profile.label} scoreboard API returned ${events.length} event(s) for ${date}. ${matchedEvents.length > 0 ? `${matchedEvents.length} row(s) matched terms from the market question/rule.` : "No rows clearly matched the market terms."} Sample: ${sample || "No event rows returned."}`
       });
     } catch (error) {
       rows.push({
-        url: apiUrl,
-        title: `Objective source scan: ${profile.label} scoreboard needs review`,
-        notes: `Aura could not read ESPN ${profile.label} scoreboard API for ${date}: ${error instanceof Error ? error.message : String(error)}. Do not infer NO from a dynamic sports page without structured evidence.`,
-        finding: `${profile.label} structured scoreboard check failed for ${date}.`
+        profile,
+        apiUrl,
+        date,
+        ok: false,
+        error: error instanceof Error ? error.message : String(error),
+        events: [],
+        matchedEvents: [],
+        finding: `${profile.label} structured scoreboard check failed for ${date}.`,
+        notes: `Aura could not read ESPN ${profile.label} scoreboard API for ${date}: ${error instanceof Error ? error.message : String(error)}. Do not infer NO from a dynamic sports page without structured evidence.`
       });
     }
   }
 
   return rows;
+}
+
+export async function gatherEspnScoreboardEvidence(market, options = {}) {
+  const snapshots = await gatherEspnScoreboardSnapshot(market, options);
+  const rows = [];
+
+  for (const snapshot of snapshots) {
+    const profile = snapshot.profile || { label: "Sports" };
+    if (snapshot.ok) {
+      rows.push({
+        url: snapshot.apiUrl,
+        title: `Objective source scan: ESPN ${profile.label} scoreboard`,
+        notes: `${snapshot.notes} Use this structured row together with the official-source rule before proposing YES or NO.`,
+        finding: snapshot.finding
+      });
+    } else if (snapshot.error?.startsWith("HTTP")) {
+      rows.push({
+        url: snapshot.apiUrl,
+        title: `Objective source scan: ${profile.label} scoreboard unavailable`,
+        notes: snapshot.notes,
+        finding: snapshot.finding
+      });
+    } else {
+      rows.push({
+        url: snapshot.apiUrl,
+        title: `Objective source scan: ${profile.label} scoreboard needs review`,
+        notes: snapshot.notes,
+        finding: snapshot.finding
+      });
+    }
+  }
+
+  return rows;
+}
+
+export function evaluateSimpleSportsMarket(market, snapshots) {
+  const text = marketText(market);
+  const lower = text.toLowerCase();
+  const matched = (snapshots || [])
+    .filter((row) => row?.ok)
+    .flatMap((row) => row.matchedEvents || [])
+    .filter((event) => event?.completed && (event.competitors || []).length >= 2)
+    .filter((event) => (event.competitors || []).every((competitor) => competitor.score !== null));
+
+  if (matched.length !== 1) {
+    return null;
+  }
+
+  const event = matched[0];
+  const competitors = event.competitors || [];
+  const totalScore = competitors.reduce((sum, competitor) => sum + Number(competitor.score || 0), 0);
+  const sample = event.summary || "final score";
+
+  const totalGoalMatch =
+    lower.match(/\bat\s+least\s+(\d+(?:\.\d+)?)\s+(?:total\s+)?(?:goals?|points?|runs?)\b/) ||
+    lower.match(/\b(?:total\s+)?(?:goals?|points?|runs?)\s+(?:is\s+)?(?:at\s+least|>=)\s+(\d+(?:\.\d+)?)\b/);
+  if (totalGoalMatch) {
+    const target = Number(totalGoalMatch[1]);
+    if (Number.isFinite(target)) {
+      return {
+        outcome: totalScore >= target ? "YES" : "NO",
+        confidence: 88,
+        observedValue: `${sample}; total score ${totalScore}`,
+        summary: `ESPN structured scoreboard final was ${sample}. Total score ${totalScore}; rule target is at least ${target}.`,
+        checks: ["Matched one completed scoreboard row.", "Compared total score against the market threshold."]
+      };
+    }
+  }
+
+  if (/\b(both teams? (?:to )?score|both.*score|btts)\b/i.test(text)) {
+    const bothScored = competitors.every((competitor) => Number(competitor.score || 0) > 0);
+    return {
+      outcome: bothScored ? "YES" : "NO",
+      confidence: 88,
+      observedValue: sample,
+      summary: `ESPN structured scoreboard final was ${sample}. Both teams ${bothScored ? "scored" : "did not score"}.`,
+      checks: ["Matched one completed scoreboard row.", "Checked whether each team had a score above zero."]
+    };
+  }
+
+  if (/\b(win|won|winner|beat|defeat)\b/i.test(text)) {
+    const namedCompetitors = competitors.filter((competitor) =>
+      (competitor.names || []).some((name) => hasTeamNameInText(lower, name))
+    );
+    if (namedCompetitors.length !== 1) return null;
+    const target = namedCompetitors[0];
+    const maxScore = Math.max(...competitors.map((competitor) => Number(competitor.score || 0)));
+    const tiedForHigh = competitors.filter((competitor) => Number(competitor.score || 0) === maxScore).length > 1;
+    const won = !tiedForHigh && Number(target.score || 0) === maxScore;
+    return {
+      outcome: won ? "YES" : "NO",
+      confidence: 90,
+      observedValue: sample,
+      summary: `ESPN structured scoreboard final was ${sample}. ${target.names?.[0] || "The named team"} ${won ? "won" : "did not win"}.`,
+      checks: ["Matched one completed scoreboard row.", "Detected exactly one named team from the market text."]
+    };
+  }
+
+  return null;
+}
+
+function hasTeamNameInText(lowerText, rawName) {
+  const name = cleanText(rawName, 80).toLowerCase();
+  if (!name || name.length < 3) return false;
+  const tokens = name
+    .split(/[^a-z0-9]+/i)
+    .map((token) => token.trim())
+    .filter((token) => token.length >= 3 && !["the", "club", "team", "fc", "cf", "sc", "united", "city"].includes(token));
+  if (lowerText.includes(name)) return true;
+  return tokens.length > 0 && tokens.every((token) => lowerText.includes(token));
 }

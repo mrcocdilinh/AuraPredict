@@ -3056,7 +3056,7 @@ function oracleOutcomeFromProposal(proposal?: OracleProposal | null) {
   return aiOutcomeFromText(proposal.outcome);
 }
 
-const NUMERIC_ORACLE_ADAPTERS = new Set(["crypto-price", "stock-yahoo-chart", "macro-yahoo-chart"]);
+const NUMERIC_ORACLE_ADAPTERS = new Set(["crypto-price", "stock-yahoo-chart", "macro-yahoo-chart", "macro-bls-release"]);
 
 function parseNumericText(value?: string | number | null) {
   const match = String(value ?? "").replace(/,/g, "").match(/-?\d+(?:\.\d+)?/);
@@ -3079,9 +3079,21 @@ function oracleSafetyIssueFor(proposal: OracleProposal | null | undefined, marke
   const safetyCheck = (proposal.checks || []).find((check) => /safety guard/i.test(check));
   if (safetyCheck) return safetyCheck;
   if (!["ready", "proposed"].includes(String(proposal.status || ""))) return "";
-  if (!NUMERIC_ORACLE_ADAPTERS.has(String(proposal.adapter || ""))) return "";
   const actual = oracleOutcomeFromProposal(proposal);
   if (actual !== Outcome.Yes && actual !== Outcome.No) return "";
+
+  if (String(proposal.adapter || "") === "sports-scoreboard") {
+    const sportsText = `${proposal.summary || ""} ${proposal.observedValue || ""} ${(proposal.checks || []).join(" ")}`;
+    if (!/\b(matched one completed scoreboard row|completed scoreboard row)\b/i.test(sportsText)) {
+      return "Sports oracle must match exactly one completed scoreboard row before settlement.";
+    }
+    if (!/\b(final|\[final\]|ft|full time|completed)\b/i.test(sportsText)) {
+      return "Sports oracle outcome is missing final/completed status evidence.";
+    }
+    return "";
+  }
+
+  if (!NUMERIC_ORACLE_ADAPTERS.has(String(proposal.adapter || ""))) return "";
 
   const rule = stripRuleMetadata(market.resolutionRule || "");
   const condition = parseComparatorTarget(`${yesConditionText(rule)} ${market.question} ${market.category}`);
@@ -5671,10 +5683,14 @@ export default function App() {
       indexerLastSyncedAgeSeconds !== null &&
       indexerLastSyncedAgeSeconds <= Math.max(180, Number(indexerStatus?.pollMs || 60_000) / 1000 + 120)
   );
-  const indexerUsingPollingFallback = Boolean(
+  const indexerWsDegraded = Boolean(
     indexerStatus?.wsEnabled &&
-      indexerStatus?.wsStatus === "error" &&
+      ["error", "reconnecting"].includes(String(indexerStatus?.wsStatus || "")) &&
       !indexerHasSyncError &&
+      indexerPollingIsFresh
+  );
+  const indexerUsingPollingFallback = Boolean(
+    indexerWsDegraded &&
       (indexerStatus?.lastSyncReason === "polling" || indexerStatus?.lastSyncReason === "startup") &&
       indexerPollingIsFresh
   );
@@ -5697,7 +5713,7 @@ export default function App() {
   const indexerStatusDetail = indexerHasSyncError
     ? indexerStatus?.lastSyncError || "Indexer sync failed. Check RPC/indexer logs."
     : indexerUsingPollingFallback
-      ? "WebSocket is reconnecting; polling sync is active."
+      ? "Realtime socket is reconnecting; polling sync is active."
       : indexerStatus?.wsEnabled && indexerStatus.wsStatus === "connected"
         ? "Realtime WebSocket sync is active."
         : indexerStatus?.wsLastError

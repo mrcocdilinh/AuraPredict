@@ -11366,7 +11366,93 @@ label {
   .detail-trade-card {
     position: static;
     top: auto;
-    order: -1;
+    order: 2;
+  }
+
+  .market-detail-view {
+    padding-bottom: calc(18px + env(safe-area-inset-bottom));
+  }
+
+  .detail-body-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .detail-primary-column {
+    display: contents;
+  }
+
+  .detail-chart-card {
+    order: 1;
+  }
+
+  .resolution-zone {
+    order: 3;
+  }
+
+  .detail-public-card {
+    order: 2;
+  }
+
+  .detail-summary-card {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .detail-summary-card div,
+  .detail-outcome-row {
+    min-height: 46px;
+  }
+
+  .chart-header-actions {
+    justify-content: stretch;
+    width: 100%;
+  }
+
+  .chart-window-tabs {
+    flex: 1;
+  }
+
+  .chart-window-tabs button {
+    flex: 1 0 auto;
+    min-width: 42px;
+  }
+
+  .detail-trade-card {
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(241, 250, 255, 0.98)),
+      #ffffff;
+    border-radius: 16px;
+    box-shadow:
+      0 -12px 34px rgba(15, 23, 42, 0.14),
+      0 16px 34px rgba(15, 23, 42, 0.12);
+    bottom: calc(8px + env(safe-area-inset-bottom));
+    padding: 12px;
+    position: sticky;
+    z-index: 35;
+  }
+
+  [data-theme="dark"] .detail-trade-card {
+    background:
+      radial-gradient(circle at 15% 0%, rgba(24, 215, 255, 0.13), transparent 28%),
+      linear-gradient(180deg, rgba(10, 20, 38, 0.98), rgba(8, 13, 26, 0.98)),
+      #080d1a;
+    border-color: rgba(38, 201, 255, 0.32);
+    box-shadow:
+      0 -16px 40px rgba(0, 0, 0, 0.4),
+      0 0 0 1px rgba(24, 215, 255, 0.08);
+  }
+
+  .stake-shortcuts {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .trade-side-buttons {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .trade-side-buttons button,
+  .trade-submit-button {
+    min-height: 52px;
   }
 
   .chart-stat-strip,
@@ -11539,7 +11625,40 @@ label {
 
   .detail-question-panel h1,
   .market-detail-hero h1 {
-    font-size: 1.75rem;
+    font-size: 1.32rem;
+    max-width: 100%;
+  }
+
+  .detail-summary-card {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .detail-chart-card {
+    padding: 12px;
+  }
+
+  .detail-chart-header {
+    gap: 10px;
+  }
+
+  .chart-side-toggle {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .detail-trade-card {
+    border-radius: 14px;
+    margin-inline: -2px;
+  }
+
+  .trade-balance-line {
+    align-items: stretch;
+    display: grid;
+    gap: 7px;
+  }
+
+  .trade-balance-line button {
+    width: 100%;
   }
 
   .modal-panel {
