@@ -298,6 +298,7 @@ type ThemeMode = "dark" | "light";
 type MarketViewMode = "grid" | "list";
 type ChartWindowKey = "1h" | "6h" | "1d" | "1w" | "1m" | "all";
 type MarketDetailTab = "overview" | "comments" | "activity" | "holders";
+type MobileMarketTab = "overview" | "trade" | "resolve" | "details";
 type MarketSortKey = "created" | "ending" | "volume" | "participants" | "yes" | "no";
 type SortDirection = "asc" | "desc";
 type NotificationFilter = NotificationType | "all";
@@ -3411,6 +3412,53 @@ function ListViewIcon() {
   );
 }
 
+function MobileNavIcon({ icon }: { icon: "markets" | "hot" | "alerts" | "profile" | "owner" }) {
+  if (icon === "markets") {
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M4 11.5 12 4l8 7.5" />
+        <path d="M6.5 10.5V20h11v-9.5" />
+        <path d="M9.5 20v-5h5v5" />
+      </svg>
+    );
+  }
+
+  if (icon === "hot") {
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M4 18h16" />
+        <path d="m5 15 4-4 3 3 6-7" />
+        <path d="M15 7h3v3" />
+      </svg>
+    );
+  }
+
+  if (icon === "alerts") {
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M18 16v-5a6 6 0 0 0-12 0v5l-2 2h16l-2-2Z" />
+        <path d="M9.5 20a2.5 2.5 0 0 0 5 0" />
+      </svg>
+    );
+  }
+
+  if (icon === "profile") {
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <circle cx="12" cy="8" r="4" />
+        <path d="M5 20a7 7 0 0 1 14 0" />
+      </svg>
+    );
+  }
+
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M12 3 5 6v5c0 4.5 2.8 8 7 10 4.2-2 7-5.5 7-10V6l-7-3Z" />
+      <path d="m9 12 2 2 4-5" />
+    </svg>
+  );
+}
+
 function LandingPage() {
   const [landingTheme, setLandingTheme] = useState<ThemeMode>(() => {
     try {
@@ -4309,6 +4357,7 @@ export default function App() {
   const [marketViewMode, setMarketViewMode] = useState<MarketViewMode>("grid");
   const [detailChartWindow, setDetailChartWindow] = useState<ChartWindowKey>("all");
   const [marketDetailTab, setMarketDetailTab] = useState<MarketDetailTab>("overview");
+  const [mobileMarketTab, setMobileMarketTab] = useState<MobileMarketTab>("overview");
   const [chartHoverRatio, setChartHoverRatio] = useState<number | null>(null);
   const [projectStats, setProjectStats] = useState<ProjectStats | null>(null);
   const [indexerHealth, setIndexerHealth] = useState<LandingHealth | null>(null);
@@ -7809,6 +7858,7 @@ export default function App() {
     if (focusResolution) setFocusResolutionMarketId(marketId);
     setSelectedProfileAddress("");
     setMarketDetailTab("overview");
+    setMobileMarketTab(focusResolution ? "resolve" : "overview");
     updateMarketRoute(marketId);
     setView("market");
     setSearchQuery("");
@@ -10931,6 +10981,36 @@ export default function App() {
       { key: "activity", label: "Activity", count: selectedMarketActivities.length },
       { key: "holders", label: "Top Holders", count: topTraderRows.length }
     ];
+    const activeMobileMarketTab = !hasWalletAccess && mobileMarketTab === "resolve" ? "overview" : mobileMarketTab;
+    const mobileDetailTabs: Array<{ key: MobileMarketTab; label: string; detail: string; count?: number }> = [
+      {
+        key: "overview",
+        label: "Market",
+        detail: `${selectedMarketYesPercent >= selectedMarketNoPercent ? "YES" : "NO"} ${Math.max(selectedMarketYesPercent, selectedMarketNoPercent).toFixed(0)}%`
+      },
+      {
+        key: "trade",
+        label: hasWalletAccess ? "Trade" : "Join",
+        detail: hasWalletAccess
+          ? `${formatMarketAmount(selectedMarketBalance, selectedMarket)} ${marketSymbol(selectedMarket)}`
+          : "Connect"
+      },
+      ...(hasWalletAccess
+        ? [
+            {
+              key: "resolve" as const,
+              label: "Resolve",
+              detail: settlementStage,
+              count: selectedMarketAuditFlags.length || undefined
+            }
+          ]
+        : []),
+      {
+        key: "details",
+        label: "Info",
+        detail: `${selectedMarketActivities.length} trades`
+      }
+    ];
     const copyTraderPosition = (trader: { address: string; yes: bigint; no: bigint; total: bigint }) => {
       const side = trader.no > trader.yes ? Outcome.No : Outcome.Yes;
       const copyAmount = trader.total > selectedMarketBalance ? selectedMarketBalance : trader.total;
@@ -10955,7 +11035,7 @@ export default function App() {
     };
 
     return (
-      <section className="market-detail-view">
+      <section className="market-detail-view" data-mobile-tab={activeMobileMarketTab}>
         <section className="market-detail-hero">
           <div className={`detail-question-panel ${selectedMarketImageVariant}`}>
             <img src={selectedMarketImage} alt="" />
@@ -11010,6 +11090,24 @@ export default function App() {
           </aside>
         </section>
 
+        <nav className="mobile-market-tabs" aria-label="Market sections">
+          {mobileDetailTabs.map((tab) => (
+            <button
+              aria-current={activeMobileMarketTab === tab.key ? "page" : undefined}
+              className={activeMobileMarketTab === tab.key ? "active" : ""}
+              key={tab.key}
+              onClick={() => setMobileMarketTab(tab.key)}
+              type="button"
+            >
+              <span>
+                {tab.label}
+                {typeof tab.count === "number" && <b>{tab.count}</b>}
+              </span>
+              <small>{tab.detail}</small>
+            </button>
+          ))}
+        </nav>
+
         {selectedMarketAuditFlags.length > 0 && (
           <section className="market-risk-panel">
             <div>
@@ -11027,9 +11125,9 @@ export default function App() {
           </section>
         )}
 
-        <section className="detail-body-grid">
+        <section className="detail-body-grid" data-mobile-tab={activeMobileMarketTab}>
           <div className="detail-primary-column">
-          <section className="detail-chart-card">
+          <section className="detail-chart-card mobile-tab-overview">
             <div className="detail-chart-header">
               <div className="detail-chart-title">
                 <span className="section-label">Odds movement</span>
@@ -11178,7 +11276,7 @@ export default function App() {
           </section>
 
           {hasWalletAccess && (
-            <section id="market-resolution-zone" className="resolution-zone">
+            <section id="market-resolution-zone" className="resolution-zone mobile-tab-resolve">
               <div className="resolution-zone-head">
                 <div>
                   <span className="section-label">Settlement</span>
@@ -11471,7 +11569,7 @@ export default function App() {
           </div>
 
           {hasWalletAccess ? (
-            <aside className="detail-trade-card">
+            <aside className="detail-trade-card mobile-tab-trade">
             <div className="detail-outcome-row">
               <span className="outcome-dot yes" />
               <strong>YES</strong>
@@ -11668,7 +11766,7 @@ export default function App() {
             )}
           </aside>
           ) : (
-            <aside className="detail-public-card">
+            <aside className="detail-public-card mobile-tab-trade">
               <span className="section-label">Public preview</span>
               <h3>Connect wallet to interact</h3>
               <div className="public-market-stats">
@@ -11696,7 +11794,7 @@ export default function App() {
           )}
         </section>
 
-        <section className="market-detail-tab-card">
+        <section className="market-detail-tab-card mobile-tab-details">
           <div className="market-detail-tabs" role="tablist" aria-label="Market detail sections">
             {detailTabs.map((tab) => (
               <button
@@ -12689,6 +12787,60 @@ export default function App() {
             </button>
           )}
         </div>
+      </nav>
+
+      <nav className="mobile-bottom-nav" aria-label="Mobile navigation">
+        <button
+          aria-current={view === "markets" || view === "collection" || view === "market" ? "page" : undefined}
+          className={view === "markets" || view === "collection" || view === "market" ? "active" : ""}
+          onClick={goHomeTop}
+          type="button"
+        >
+          <MobileNavIcon icon="markets" />
+          <span>Markets</span>
+        </button>
+        <button
+          aria-current={view === "collection" && collectionView === "hot" ? "page" : undefined}
+          className={view === "collection" && collectionView === "hot" ? "active" : ""}
+          onClick={() => openCollection("hot")}
+          type="button"
+        >
+          <MobileNavIcon icon="hot" />
+          <span>Hot</span>
+        </button>
+        <button
+          aria-current={view === "notifications" ? "page" : undefined}
+          className={view === "notifications" ? "active" : ""}
+          onClick={account ? openNotifications : openWalletModal}
+          type="button"
+        >
+          <MobileNavIcon icon="alerts" />
+          <span>Alerts</span>
+          {notificationCount > 0 && <b>{notificationCount}</b>}
+        </button>
+        <button
+          aria-current={view === "profile" ? "page" : undefined}
+          className={view === "profile" ? "active" : ""}
+          onClick={account ? openProfile : openWalletModal}
+          type="button"
+        >
+          <MobileNavIcon icon="profile" />
+          <span>Profile</span>
+        </button>
+        <button
+          aria-current={view === "owner" || view === "security" ? "page" : undefined}
+          className={view === "owner" || view === "security" ? "active" : ""}
+          onClick={() => {
+            setSelectedMarketId(null);
+            setSelectedProfileAddress("");
+            updateMarketRoute(null);
+            setView(canReviewAsOwner ? "owner" : "security");
+          }}
+          type="button"
+        >
+          <MobileNavIcon icon="owner" />
+          <span>{canReviewAsOwner ? (isProtocolOwner ? "Owner" : "Review") : "Safety"}</span>
+        </button>
       </nav>
 
       {notice && (
