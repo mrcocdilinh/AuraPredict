@@ -9,6 +9,7 @@
     "indexer:export-static": "node indexer/export-static.mjs",
     "build": "tsc --noEmit && vite build",
     "compile": "hardhat compile",
+    "abi:v5": "node scripts/export_v5_abi.mjs",
     "test": "hardhat test",
     "test:e2e": "playwright test",
     "oracle:backtest": "node scripts/oracle_backtest.mjs",
@@ -16,6 +17,7 @@
     "smoke:resolution": "node scripts/check_resolution_run_api.mjs",
     "oracle:regression": "node scripts/oracle_regression_check.mjs",
     "deploy:arc": "hardhat run scripts/deploy.js --network arcTestnet",
+    "deploy:arc:v5": "set AURA_CONTRACT_VERSION=V5&& hardhat run scripts/deploy.js --network arcTestnet",
     "seed:markets": "hardhat run scripts/seed_markets.js --network arcTestnet",
     "seed:markets:dry": "set DRY_RUN=1&& hardhat run scripts/seed_markets.js --network arcTestnet"
   },

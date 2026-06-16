@@ -32,6 +32,7 @@ The project is a testnet MVP and a public builder project for the Arc ecosystem.
 - Read-only Agent API and MCP-style tool metadata for external AI agents and Arc builders.
 - Owner dashboard queues for reports, pending proposals, finalization, dispute/authority review, and flagged market-risk badges.
 - Public docs, risk disclosures, oracle policy, backtest sample, and frontend E2E coverage for core market flows.
+- V5 protocol branch with owner-reviewed drafts, multi-outcome markets, future settlement-token registry, per-market batch claims, report/cancel bonds, AI/oracle receipts, and ERC-2771 seedless-ready forwarding.
 
 ## Active Testnet Deployment
 
@@ -46,6 +47,8 @@ AuraPredict currently targets the V4 contract on Arc Testnet:
 - Faucet: `https://faucet.circle.com`
 
 New markets are created on V4. Older V3 markets still exist on the archived contract and can be accessed with `?deployment=v3` when needed.
+
+V5 is implemented as a new protocol branch but is not the active deployed contract until a new V5 address is deployed and the app/indexer environment is switched. See `docs/V5_PROTOCOL.md`.
 
 ## Quick Start
 
