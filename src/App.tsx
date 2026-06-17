@@ -650,10 +650,10 @@ export default function App() {
     [contractVersion, resolutionUnlockByMarketId]
   );
   const activeMarkets = markets.filter(
-    (market) => market.outcome === Outcome.Unresolved && market.closeTime > nowSeconds
+    (market) => !market.isDraft && market.outcome === Outcome.Unresolved && market.closeTime > nowSeconds
   );
   const pendingResolutionMarkets = markets.filter(
-    (market) => market.outcome === Outcome.Unresolved && resolutionUnlockTime(market) <= nowSeconds
+    (market) => !market.isDraft && market.outcome === Outcome.Unresolved && resolutionUnlockTime(market) <= nowSeconds
   );
   const marketRiskFlagsFor = useCallback(
     (market: MarketView) =>
@@ -1696,6 +1696,9 @@ export default function App() {
     },
     [aiResolutionReceipts, aiResolutionReports, marketRiskFlagsFor, nowSeconds, oracleProposals, ownerReviewReasonFor, resolutionUnlockTime]
   );
+  const draftMarkets = isProtocolOwner
+    ? markets.filter((market) => market.isDraft).sort((a, b) => b.id - a.id)
+    : [];
   const ownerOpenReports = Object.values(marketReports)
     .flat()
     .filter((report) => report.status === "open")
@@ -1775,6 +1778,7 @@ export default function App() {
     .sort((a, b) => b.severityRank - a.severityRank || b.market.traderCount - a.market.traderCount || b.market.id - a.market.id)
     .slice(0, 8);
   const ownerQueueCount =
+    draftMarkets.length +
     ownerPendingProposalQueue.length +
     ownerFinalizationQueue.length +
     ownerEscalatedReviewQueue.length +
@@ -5314,7 +5318,11 @@ export default function App() {
       setCreateModalOpen(false);
       setView("markets");
       setActiveCategory("All");
-      setNotice("Market created. It is shown locally now and will sync to the public indexer shortly.");
+      setNotice(
+        contractVersion === "v5"
+          ? "Market draft submitted. The owner must approve it before trading opens."
+          : "Market created. It is shown locally now and will sync to the public indexer shortly."
+      );
       window.setTimeout(() => {
         silentLoadRef.current = true;
         void loadMarkets();
@@ -6189,6 +6197,56 @@ export default function App() {
     }
   };
 
+  const approveDraftMarket = async (marketId: number) => {
+    if (!account || !isAddress(account)) throw new Error("Connect owner wallet first.");
+    if (!owner || !sameAddress(account, owner)) throw new Error("Only the protocol owner can approve draft markets.");
+    if (contractVersion !== "v5") throw new Error("Draft approval is only supported on V5 contracts.");
+    await switchToArc();
+    const walletClient = getActiveWalletClient();
+    const completed = await runTransaction(
+      () =>
+        walletClient.writeContract({
+          account: account as Address,
+          chain: arcTestnet,
+          address: contractAddress,
+          abi: arcPredictionMarketV5Abi,
+          functionName: "approveMarket",
+          args: [BigInt(marketId)]
+        }),
+      `Approving draft market #${marketId}...`
+    );
+    if (completed) {
+      setMarkets((current) =>
+        current.map((m) => (m.id === marketId ? { ...m, isDraft: false } : m))
+      );
+      setNotice(`Market #${marketId} approved. It is now live.`);
+    }
+  };
+
+  const rejectDraftMarket = async (marketId: number) => {
+    if (!account || !isAddress(account)) throw new Error("Connect owner wallet first.");
+    if (!owner || !sameAddress(account, owner)) throw new Error("Only the protocol owner can reject draft markets.");
+    if (contractVersion !== "v5") throw new Error("Draft rejection is only supported on V5 contracts.");
+    await switchToArc();
+    const walletClient = getActiveWalletClient();
+    const completed = await runTransaction(
+      () =>
+        walletClient.writeContract({
+          account: account as Address,
+          chain: arcTestnet,
+          address: contractAddress,
+          abi: arcPredictionMarketV5Abi,
+          functionName: "rejectMarket",
+          args: [BigInt(marketId), false, keccak256(stringToHex("Owner rejected draft market."))]
+        }),
+      `Rejecting draft market #${marketId}...`
+    );
+    if (completed) {
+      setMarkets((current) => current.filter((m) => m.id !== marketId));
+      setNotice(`Market #${marketId} rejected.`);
+    }
+  };
+
   const withdrawFees = async (token?: string) => {
     if (!account || !isAddress(account)) throw new Error("Connect owner wallet first.");
     if (!owner || !sameAddress(account, owner)) throw new Error("Only the protocol owner can withdraw fees.");
@@ -6645,6 +6703,7 @@ export default function App() {
     const selectedResolutionReady = nowSeconds >= selectedResolutionReadyAt;
     const canBet =
       account &&
+      !selectedMarket.isDraft &&
       selectedMarket.outcome === Outcome.Unresolved &&
       selectedMarket.proposedAt === 0 &&
       Date.now() / 1000 < selectedMarket.closeTime;
@@ -7154,6 +7213,34 @@ export default function App() {
 
     return (
       <section className="market-detail-view" data-mobile-tab={activeMobileMarketTab}>
+        {selectedMarket.isDraft && (
+          <div className="draft-market-notice">
+            <div>
+              <strong>Pending owner approval</strong>
+              <span>This market is in draft state. Betting is disabled until the owner approves it.</span>
+            </div>
+            {isProtocolOwner && (
+              <div className="draft-market-actions">
+                <button
+                  className="secondary"
+                  disabled={transactionPending}
+                  onClick={() => void approveDraftMarket(selectedMarket.id)}
+                  type="button"
+                >
+                  Approve
+                </button>
+                <button
+                  className="secondary"
+                  disabled={transactionPending}
+                  onClick={() => void rejectDraftMarket(selectedMarket.id)}
+                  type="button"
+                >
+                  Reject
+                </button>
+              </div>
+            )}
+          </div>
+        )}
         <section className="market-detail-hero">
           <div className={`detail-question-panel ${selectedMarketImageVariant}`}>
             <img src={selectedMarketImage} alt="" />
@@ -9512,6 +9599,44 @@ export default function App() {
                             </article>
                           );
                         })}
+                      </div>
+                    </article>
+
+                    <article className="owner-panel owner-panel-wide">
+                      <div className="panel-heading">
+                        <div>
+                          <span className="section-label">Draft market approvals</span>
+                          <h3>{draftMarkets.length} pending</h3>
+                        </div>
+                      </div>
+                      <div className="oracle-reputation-list">
+                        {draftMarkets.length === 0 && <span>No draft markets pending approval.</span>}
+                        {draftMarkets.map((market) => (
+                          <article className="owner-report-row" key={`draft-${market.id}`}>
+                            <button className="similar-market-row" onClick={() => openMarket(market.id)} type="button">
+                              <strong>#{market.id} {shortQuestion(market.question)}</strong>
+                              <small>By {displayNameForAddress(market.creator)} / closes {closeDate(market.closeTime)}</small>
+                            </button>
+                            <div className="market-report-actions">
+                              <button
+                                className="secondary"
+                                disabled={transactionPending}
+                                onClick={() => void approveDraftMarket(market.id)}
+                                type="button"
+                              >
+                                Approve
+                              </button>
+                              <button
+                                className="secondary"
+                                disabled={transactionPending}
+                                onClick={() => void rejectDraftMarket(market.id)}
+                                type="button"
+                              >
+                                Reject
+                              </button>
+                            </div>
+                          </article>
+                        ))}
                       </div>
                     </article>
 

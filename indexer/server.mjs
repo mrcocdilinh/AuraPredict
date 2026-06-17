@@ -559,6 +559,7 @@ function ensureMarket(marketId) {
       authorityReviewRequired: false,
       disputed: false,
       disputer: ZERO_ADDRESS,
+      isDraft: false,
       outcome: Outcome.Unresolved,
       resolvedAt: 0,
       createdTxHash: "",
@@ -791,6 +792,46 @@ async function processEvent(eventName, log) {
         logIndex
       });
     }
+    return;
+  }
+
+  if (eventName === "MarketDraftSubmitted") {
+    const marketId = Number(args.marketId ?? 0n);
+    const market = ensureMarket(marketId);
+    market.creator = args.creator ?? market.creator;
+    market.settlementToken = args.token ?? market.settlementToken;
+    market.createdAt = timestamp || market.createdAt;
+    market.isDraft = true;
+    market.createdTxHash = txHash;
+    market.updatedTxHash = txHash;
+    return;
+  }
+
+  if (eventName === "MarketApproved") {
+    const market = ensureMarket(Number(args.marketId ?? 0n));
+    market.isDraft = false;
+    market.updatedTxHash = txHash;
+    return;
+  }
+
+  if (eventName === "MarketCanceled") {
+    const market = ensureMarket(Number(args.marketId ?? 0n));
+    market.outcome = Outcome.Canceled;
+    market.isDraft = false;
+    market.resolvedAt = timestamp;
+    market.updatedTxHash = txHash;
+    addSnapshot(market, timestamp, txHash, logIndex);
+    return;
+  }
+
+  if (eventName === "MarketFinalized") {
+    const market = ensureMarket(Number(args.marketId ?? 0n));
+    market.outcome = v5OutcomeToLegacy(Number(args.outcomeId ?? V5_NO_OUTCOME));
+    market.isDraft = false;
+    market.resolvedAt = timestamp;
+    market.updatedTxHash = txHash;
+    addSnapshot(market, timestamp, txHash, logIndex);
+    return;
   }
 }
 
@@ -1094,6 +1135,7 @@ async function readMarketData(id) {
       authorityReviewRequired: Boolean(v5[15]),
       disputed: Boolean(v5[16]),
       disputer: v5[17],
+      isDraft: stateValue === V5_MARKET_STATE.Draft,
       outcome: v5StateToOutcome(stateValue, finalOutcomeId)
     };
   }
@@ -1353,7 +1395,7 @@ function activityReconciliationSummary(markets = Object.values(state.markets)) {
 }
 
 function computeStats() {
-  const markets = Object.values(state.markets);
+  const markets = Object.values(state.markets).filter((m) => !m.isDraft);
   const now = Math.floor(Date.now() / 1000);
   const totalVolume = markets.reduce((sum, market) => sum + toBigint(market.yesPool) + toBigint(market.noPool), 0n);
   const settlementSymbols = [...new Set(markets.map((market) => String(market.settlementSymbol || "USDC")))];
@@ -2012,7 +2054,7 @@ function oracleReputationSummary() {
 
 function hotAiMarkets(limit = 8) {
   return Object.values(state.markets)
-    .filter((market) => outcomeValue(market.outcome) === Outcome.Unresolved)
+    .filter((market) => !market.isDraft && outcomeValue(market.outcome) === Outcome.Unresolved)
     .map((market) => ({ market, insight: aiInsightForMarket(market), volume: marketPools(market).total }))
     .sort((a, b) => (b.volume > a.volume ? 1 : b.volume < a.volume ? -1 : Number(b.market.id) - Number(a.market.id)))
     .slice(0, limit)
@@ -2331,6 +2373,7 @@ function filterAgentMarkets(url) {
   const statusFilter = String(url.searchParams.get("status") || "all").trim().toLowerCase();
   const categoryFilter = String(url.searchParams.get("category") || "").trim().toLowerCase();
   return Object.values(state.markets)
+    .filter((m) => !m.isDraft)
     .map(agentMarketSummary)
     .filter((market) => statusFilter === "all" || market.status === statusFilter)
     .filter((market) => !categoryFilter || String(market.category || "").toLowerCase() === categoryFilter)
@@ -6034,9 +6077,16 @@ async function route(req, res) {
       return;
     }
 
+    if (url.pathname === "/api/admin/draft-markets") {
+      if (!adminAuthorized(req)) return json(res, 401, { error: "Unauthorized." });
+      const drafts = Object.values(state.markets).filter((m) => m.isDraft).sort((a, b) => b.id - a.id);
+      json(res, 200, { markets: drafts, total: drafts.length, updatedAt: state.updatedAt });
+      return;
+    }
+
     if (url.pathname === "/api/markets") {
       const limit = Number(url.searchParams.get("limit") || 0);
-      const markets = Object.values(state.markets).sort((a, b) => b.id - a.id);
+      const markets = Object.values(state.markets).filter((m) => !m.isDraft).sort((a, b) => b.id - a.id);
       json(res, 200, { markets: limit > 0 ? markets.slice(0, limit) : markets, total: state.marketCount, updatedAt: state.updatedAt });
       return;
     }
@@ -6103,24 +6153,6 @@ function startRealtimeSync() {
   const runtime = indexerRuntimeState();
   if (!realtimeClient) {
     runtime.wsStatus = "disabled";
-    return;
-  }
-
-  if (eventName === "MarketCanceled") {
-    const market = ensureMarket(Number(args.marketId ?? 0n));
-    market.outcome = Outcome.Canceled;
-    market.resolvedAt = timestamp;
-    market.updatedTxHash = txHash;
-    addSnapshot(market, timestamp, txHash, logIndex);
-    return;
-  }
-
-  if (eventName === "MarketFinalized") {
-    const market = ensureMarket(Number(args.marketId ?? 0n));
-    market.outcome = v5OutcomeToLegacy(Number(args.outcomeId ?? V5_NO_OUTCOME));
-    market.resolvedAt = timestamp;
-    market.updatedTxHash = txHash;
-    addSnapshot(market, timestamp, txHash, logIndex);
     return;
   }
 

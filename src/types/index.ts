@@ -118,6 +118,7 @@ export type MarketView = {
   authorityReviewRequired?: boolean;
   creator: string;
   resolver: string;
+  isDraft?: boolean;
   yesPool: bigint;
   noPool: bigint;
   traderCount: number;
