@@ -5751,8 +5751,13 @@ export default function App() {
   const showMobileWalletLinks = true;
   const recommendedWallets = ["Zerion", "MetaMask", "Rabby Wallet", "OKX Wallet", "Rainbow"];
   const walletConnectReady = Boolean(WALLETCONNECT_PROJECT_ID);
+  const seedlessLoginReady = SEEDLESS_ENABLED && Boolean(SEEDLESS_APP_ID);
+  const seedlessGasReady = isAddress(SEEDLESS_FORWARDER_ADDRESS);
   const authInstalledWallets = walletOptions.slice(0, 3);
-  const authDeepLinkWallets = WALLET_DEEP_LINKS.slice(0, 2);
+  const detectedWalletNames = new Set(walletOptions.map((wallet) => wallet.info.name.toLowerCase()));
+  const authDeepLinkWallets = WALLET_DEEP_LINKS.filter(
+    (wallet) => !detectedWalletNames.has(wallet.name.toLowerCase())
+  ).slice(0, 2);
   const hasExtraAuthWallets =
     walletOptions.length > authInstalledWallets.length ||
     WALLET_DEEP_LINKS.length > authDeepLinkWallets.length ||
@@ -15908,13 +15913,23 @@ export default function App() {
 
             <div className="auth-copy">
               <h2>Welcome to AuraPredict</h2>
-              <p>Sign in, get an Arc wallet, fund testnet stablecoins, and trade YES/NO markets from one account.</p>
+              <p>Sign in with Google, email, or a wallet. AuraPredict keeps the trading flow on Arc from one account.</p>
             </div>
 
-            <button className="auth-google-button" type="button" onClick={handleSeedlessGoogleLogin} disabled={connecting}>
+            <button
+              className="auth-google-button"
+              type="button"
+              onClick={handleSeedlessGoogleLogin}
+              disabled={connecting || !seedlessLoginReady}
+            >
               <span aria-hidden="true">G</span>
-              {connecting ? "Connecting..." : "Continue with Google"}
+              {connecting ? "Connecting..." : seedlessLoginReady ? "Continue with Google" : "Google login setup required"}
             </button>
+            {!seedlessLoginReady && (
+              <p className="auth-setup-hint">
+                Google and email login need the production seedless key before they can create an embedded Arc wallet.
+              </p>
+            )}
 
             <div className="auth-divider">
               <span>OR</span>
@@ -15929,8 +15944,8 @@ export default function App() {
                 type="email"
                 autoComplete="email"
               />
-              <button type="button" onClick={handleSeedlessEmailLogin} disabled={connecting}>
-                Continue
+              <button type="button" onClick={handleSeedlessEmailLogin} disabled={connecting || !seedlessLoginReady}>
+                {seedlessLoginReady ? "Continue" : "Setup"}
               </button>
             </div>
 
@@ -16039,13 +16054,13 @@ export default function App() {
             )}
 
             <div className="auth-seedless-note">
-              <strong>Seedless V5 wallet</strong>
+              <strong>{seedlessLoginReady ? "Seedless wallet ready" : "Seedless setup required"}</strong>
               <span>
-                {SEEDLESS_ENABLED
-                  ? SEEDLESS_APP_ID && isAddress(SEEDLESS_FORWARDER_ADDRESS)
-                    ? "Google/email creates an embedded Arc wallet. Gas sponsorship is enabled when the relayer is live."
-                    : "Google/email creates an embedded Arc wallet. Gas sponsorship activates after trusted forwarder and relayer setup."
-                  : "Enable production seedless login with VITE_SEEDLESS_ENABLED=1 and VITE_MAGIC_PUBLISHABLE_KEY."}
+                {seedlessLoginReady
+                  ? seedlessGasReady
+                    ? "Google/email creates an embedded Arc wallet. Gas sponsorship is configured when the relayer is live."
+                    : "Google/email can create an embedded Arc wallet. Add trusted forwarder and relayer settings to sponsor gas."
+                  : "Set VITE_SEEDLESS_ENABLED=1 and VITE_MAGIC_PUBLISHABLE_KEY in the frontend environment to enable Google/email login."}
               </span>
             </div>
 
