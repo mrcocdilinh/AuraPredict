@@ -6749,12 +6749,15 @@ export default function App() {
     setNotice("");
     setConnecting(true);
     const providerToUse = provider ?? selectedWalletProvider ?? window.ethereum ?? null;
+    const injected = getInjectedProvider(providerToUse);
     const walletClient = getWalletClient(providerToUse);
     const addresses = await walletClient.requestAddresses();
     await switchToArc(providerToUse);
-    const chainId = await walletClient.getChainId();
-    if (BigInt(chainId) !== ARC_CHAIN_ID_DECIMAL) {
-      throw new Error("Wallet is not on Arc Testnet.");
+    if (!injected.isMagic) {
+      const chainId = await walletClient.getChainId();
+      if (BigInt(chainId) !== ARC_CHAIN_ID_DECIMAL) {
+        throw new Error("Wallet is not on Arc Testnet.");
+      }
     }
     if (!addresses[0]) {
       throw new Error("No wallet account returned.");
