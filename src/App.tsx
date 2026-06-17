@@ -39,7 +39,6 @@ if (!browserGlobal.Buffer) {
 type EthereumProvider = {
   request: (args: { method: string; params?: unknown[] }) => Promise<unknown>;
   disconnect?: () => Promise<void> | void;
-  isMagic?: boolean;
   on?: (event: string, handler: (...args: unknown[]) => void) => void;
   removeListener?: (event: string, handler: (...args: unknown[]) => void) => void;
 };
@@ -846,13 +845,6 @@ const CHART_HEIGHT = CHART_BOTTOM - CHART_TOP;
 const WALLET_CONNECTED_KEY = "aurapredict.walletConnected";
 const WALLET_DISCONNECTED_KEY = "aurapredict.walletDisconnected";
 const WALLETCONNECT_PROJECT_ID = String(import.meta.env.VITE_WALLETCONNECT_PROJECT_ID || "").trim();
-const SEEDLESS_ENABLED = String(import.meta.env.VITE_SEEDLESS_ENABLED || "0").trim() === "1";
-const SEEDLESS_PROVIDER = String(import.meta.env.VITE_SEEDLESS_PROVIDER || "magic").trim().toLowerCase();
-const MAGIC_PUBLISHABLE_KEY = String(import.meta.env.VITE_MAGIC_PUBLISHABLE_KEY || "").trim();
-const SEEDLESS_APP_ID = String(
-  MAGIC_PUBLISHABLE_KEY || import.meta.env.VITE_PRIVY_APP_ID || import.meta.env.VITE_WEB3AUTH_CLIENT_ID || ""
-).trim();
-const SEEDLESS_FORWARDER_ADDRESS = String(import.meta.env.VITE_AURA_TRUSTED_FORWARDER_ADDRESS || "").trim();
 const CIRCLE_APP_KIT_KEY = String(import.meta.env.VITE_CIRCLE_APP_KIT_KEY || "").trim();
 const DISMISSED_RESULT_KEY = "aurapredict.dismissedResultNotices";
 const THEME_KEY = "aurapredict.theme";
@@ -883,6 +875,11 @@ const CURRENT_APP_URL =
   typeof window !== "undefined" ? `${window.location.host}${window.location.pathname}${window.location.search}` : "app.aurapredict.xyz";
 const WALLET_DEEP_LINKS = [
   {
+    name: "WalletConnect",
+    detail: "Scan a QR code from your wallet app",
+    url: ""
+  },
+  {
     name: "MetaMask",
     detail: "Open AuraPredict inside MetaMask mobile browser",
     url: `https://metamask.app.link/dapp/${CURRENT_APP_URL}`
@@ -901,6 +898,21 @@ const WALLET_DEEP_LINKS = [
     name: "OKX Wallet",
     detail: "Open with OKX wallet browser",
     url: `okx://wallet/dapp/details?dappUrl=${encodeURIComponent(`https://${CURRENT_APP_URL}`)}`
+  },
+  {
+    name: "Bitget Wallet",
+    detail: "Open Bitget Wallet and use the in-app browser",
+    url: "https://web3.bitget.com"
+  },
+  {
+    name: "Base",
+    detail: "Open with Coinbase Wallet",
+    url: `https://go.cb-w.com/dapp?cb_url=${encodeURIComponent(`https://${CURRENT_APP_URL}`)}`
+  },
+  {
+    name: "Coinbase",
+    detail: "Open with Coinbase Wallet",
+    url: `https://go.cb-w.com/dapp?cb_url=${encodeURIComponent(`https://${CURRENT_APP_URL}`)}`
   },
   {
     name: "Zerion",
@@ -978,49 +990,6 @@ function getInjectedProvider(provider?: EthereumProvider | null) {
     throw new Error("Open AuraPredict inside a wallet browser such as Zerion, MetaMask, Rabby, or OKX.");
   }
   return injected;
-}
-
-type SeedlessMagicClient = {
-  auth: {
-    loginWithEmailOTP: (configuration: { email: string; showUI?: boolean }) => PromiseLike<string | null>;
-  };
-  oauth2?: {
-    loginWithPopup: (configuration: { provider: "google"; scope?: string[] }) => PromiseLike<unknown>;
-  };
-  user: {
-    getInfo: () => PromiseLike<{ email?: string | null; publicAddress?: string | null }>;
-    isLoggedIn: () => PromiseLike<boolean>;
-    logout: () => PromiseLike<boolean>;
-  };
-  rpcProvider: EthereumProvider;
-};
-
-let seedlessMagicClientPromise: Promise<SeedlessMagicClient> | null = null;
-
-async function getSeedlessMagicClient() {
-  if (SEEDLESS_PROVIDER !== "magic") {
-    throw new Error("Only Magic seedless login is bundled in this build. Set VITE_SEEDLESS_PROVIDER=magic.");
-  }
-  if (!MAGIC_PUBLISHABLE_KEY) {
-    throw new Error("Missing VITE_MAGIC_PUBLISHABLE_KEY for seedless Google/email login.");
-  }
-  if (!seedlessMagicClientPromise) {
-    seedlessMagicClientPromise = Promise.all([
-      import("magic-sdk"),
-      import("@magic-ext/oauth2")
-    ]).then(([magicModule, oauthModule]) => {
-      const magic = new magicModule.Magic(MAGIC_PUBLISHABLE_KEY, {
-        network: {
-          rpcUrl: ARC_RPC_URL,
-          chainId: ARC_CHAIN_ID_NUMBER
-        },
-        extensions: [new oauthModule.OAuthExtension()]
-      }) as unknown as SeedlessMagicClient;
-      magic.rpcProvider.isMagic = true;
-      return magic;
-    });
-  }
-  return seedlessMagicClientPromise;
 }
 
 function getPublicClient() {
@@ -3245,18 +3214,6 @@ function errorMessage(error: unknown) {
 function walletConnectionErrorMessage(prefix: string, error: unknown) {
   const message = errorMessage(error);
   const lowerMessage = message.toLowerCase();
-  if (
-    lowerMessage.includes("has not approved access") ||
-    lowerMessage.includes("not approved access") ||
-    lowerMessage.includes("unauthorized domain") ||
-    lowerMessage.includes("invalid redirect") ||
-    lowerMessage.includes("not allowed origin")
-  ) {
-    return `${prefix}: Magic has not approved this domain yet. Add https://app.aurapredict.xyz to Magic Allowed Origins and Redirects, then try again.`;
-  }
-  if (lowerMessage.includes("rpc route not enabled") || lowerMessage.includes("provider not supported")) {
-    return `${prefix}: Magic Google OAuth is not enabled for this app yet. Enable Google/social login in Magic, or use email login after the domain is approved.`;
-  }
   if (lowerMessage.includes("same rpc endpoint as existing network")) {
     return `${prefix}: this wallet already has an Arc network saved with a conflicting chain ID. Remove the old Arc network in wallet settings, then reconnect.`;
   }
@@ -4462,7 +4419,6 @@ export default function App() {
   const [themeMenuOpen, setThemeMenuOpen] = useState(false);
   const [walletModalOpen, setWalletModalOpen] = useState(false);
   const [authMoreOpen, setAuthMoreOpen] = useState(false);
-  const [seedlessEmail, setSeedlessEmail] = useState("");
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [marketReloadToken, setMarketReloadToken] = useState(0);
@@ -5797,8 +5753,6 @@ export default function App() {
   const showMobileWalletLinks = true;
   const recommendedWallets = ["Zerion", "MetaMask", "Rabby Wallet", "OKX Wallet", "Rainbow"];
   const walletConnectReady = Boolean(WALLETCONNECT_PROJECT_ID);
-  const seedlessLoginReady = SEEDLESS_ENABLED && Boolean(SEEDLESS_APP_ID);
-  const seedlessGasReady = isAddress(SEEDLESS_FORWARDER_ADDRESS);
   const authInstalledWallets = walletOptions.slice(0, 3);
   const detectedWalletNames = new Set(walletOptions.map((wallet) => wallet.info.name.toLowerCase()));
   const authDeepLinkWallets = WALLET_DEEP_LINKS.filter(
@@ -6529,10 +6483,6 @@ export default function App() {
 
   const switchToArc = useCallback(async (provider?: EthereumProvider | null) => {
     const injected = getInjectedProvider(provider ?? selectedWalletProvider);
-    if (injected.isMagic) {
-      setIsArcNetwork(true);
-      return;
-    }
     const switchChain = async () => {
       const chainIds = [arcTestnetParams.chainId, arcTestnetParams.chainId.toLowerCase()];
       let lastError: unknown;
@@ -6753,11 +6703,9 @@ export default function App() {
     const walletClient = getWalletClient(providerToUse);
     const addresses = await walletClient.requestAddresses();
     await switchToArc(providerToUse);
-    if (!injected.isMagic) {
-      const chainId = await walletClient.getChainId();
-      if (BigInt(chainId) !== ARC_CHAIN_ID_DECIMAL) {
-        throw new Error("Wallet is not on Arc Testnet.");
-      }
+    const chainId = await walletClient.getChainId();
+    if (BigInt(chainId) !== ARC_CHAIN_ID_DECIMAL) {
+      throw new Error("Wallet is not on Arc Testnet.");
     }
     if (!addresses[0]) {
       throw new Error("No wallet account returned.");
@@ -6795,64 +6743,6 @@ export default function App() {
       setNotice(walletConnectionErrorMessage("WalletConnect failed", error));
     }
   }, [connectWallet]);
-
-  const ensureSeedlessReady = useCallback(() => {
-    if (!SEEDLESS_ENABLED) {
-      setNotice("Seedless login is V5-ready but disabled. Set VITE_SEEDLESS_ENABLED=1 after choosing an embedded-wallet provider.");
-      return false;
-    }
-    if (!SEEDLESS_APP_ID) {
-      setNotice(`Seedless login needs a ${SEEDLESS_PROVIDER} app/client key before Google or email login can start.`);
-      return false;
-    }
-    if (!isAddress(SEEDLESS_FORWARDER_ADDRESS)) {
-      setNotice(
-        "Seedless wallet login can start, but gas sponsorship is not active until VITE_AURA_TRUSTED_FORWARDER_ADDRESS and relayer are configured."
-      );
-    }
-    return true;
-  }, [setNotice]);
-
-  const connectSeedlessMagic = useCallback(
-    async (login: (magic: SeedlessMagicClient) => PromiseLike<unknown>, label: string) => {
-      if (!ensureSeedlessReady()) return;
-      try {
-        setNotice("");
-        setConnecting(true);
-        const magic = await getSeedlessMagicClient();
-        await login(magic);
-        await connectWallet(magic.rpcProvider);
-        const info = await Promise.resolve(magic.user.getInfo()).catch(() => null);
-        setWalletModalOpen(false);
-        setNotice(
-          `${label} seedless wallet connected${info?.email ? ` as ${info.email}` : ""}. V5 actions use the embedded wallet; sponsorship requires the configured forwarder/relayer.`
-        );
-      } catch (error) {
-        setConnecting(false);
-        setNotice(walletConnectionErrorMessage(`${label} seedless login failed`, error));
-      }
-    },
-    [connectWallet, ensureSeedlessReady]
-  );
-
-  const handleSeedlessGoogleLogin = useCallback(() => {
-    void connectSeedlessMagic(async (magic) => {
-      if (!magic.oauth2?.loginWithPopup) throw new Error("Magic OAuth2 extension is not available.");
-      await magic.oauth2.loginWithPopup({ provider: "google", scope: ["email", "profile"] });
-    }, "Google");
-  }, [connectSeedlessMagic]);
-
-  const handleSeedlessEmailLogin = useCallback(() => {
-    const email = seedlessEmail.trim();
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      setNotice("Enter a valid email before starting seedless login.");
-      return;
-    }
-    void connectSeedlessMagic(
-      async (magic) => magic.auth.loginWithEmailOTP({ email, showUI: true }),
-      "Email"
-    );
-  }, [connectSeedlessMagic, seedlessEmail, setNotice]);
 
   const openMobileWallet = useCallback((url: string) => {
     window.location.href = url;
@@ -6901,10 +6791,6 @@ export default function App() {
   const disconnectWallet = useCallback(async () => {
     const providerToDisconnect = selectedWalletProvider;
     try {
-      if (providerToDisconnect?.isMagic && seedlessMagicClientPromise) {
-        const magic = await seedlessMagicClientPromise;
-        await magic.user.logout();
-      }
       await providerToDisconnect?.disconnect?.();
     } catch {
       // Injected wallets usually do not expose disconnect; local session state is still cleared below.
@@ -12875,6 +12761,89 @@ export default function App() {
       : unifiedBalanceBusy === "deposit-spend"
       ? "Funding..."
       : "";
+  type WalletPickerRow = {
+    key: string;
+    name: string;
+    icon: string;
+    iconSrc?: string;
+    tag: string;
+    tagTone: "success" | "info" | "muted";
+    detail: string;
+    disabled: boolean;
+    onClick: () => void | Promise<void>;
+  };
+  const walletProviderFor = (aliases: string[]) =>
+    walletOptions.find((wallet) => {
+      const haystack = `${wallet.info.name || ""} ${wallet.info.rdns || ""}`.toLowerCase();
+      return aliases.some((alias) => haystack.includes(alias));
+    });
+  const providerWalletRows = [
+    {
+      key: "metamask",
+      name: "MetaMask",
+      icon: "MM",
+      aliases: ["metamask", "io.metamask"],
+      fallbackUrl: WALLET_DEEP_LINKS.find((wallet) => wallet.name === "MetaMask")?.url
+    },
+    {
+      key: "okx",
+      name: "OKX Wallet",
+      icon: "OKX",
+      aliases: ["okx", "com.okex.wallet"],
+      fallbackUrl: WALLET_DEEP_LINKS.find((wallet) => wallet.name === "OKX Wallet")?.url
+    },
+    {
+      key: "bitget",
+      name: "Bitget Wallet",
+      icon: "BG",
+      aliases: ["bitget", "bitkeep"],
+      fallbackUrl: WALLET_DEEP_LINKS.find((wallet) => wallet.name === "Bitget Wallet")?.url
+    },
+    {
+      key: "base",
+      name: "Base (Coinbase Wallet)",
+      icon: "B",
+      aliases: ["base", "coinbase", "coinbase wallet"],
+      fallbackUrl: WALLET_DEEP_LINKS.find((wallet) => wallet.name === "Base")?.url
+    },
+    {
+      key: "coinbase",
+      name: "Coinbase",
+      icon: "CB",
+      aliases: ["coinbase", "coinbase wallet"],
+      fallbackUrl: WALLET_DEEP_LINKS.find((wallet) => wallet.name === "Coinbase")?.url
+    }
+  ];
+  const quickWalletRows: WalletPickerRow[] = [
+    {
+      key: "walletconnect",
+      name: "WalletConnect",
+      icon: "WC",
+      tag: walletConnectReady ? "QR CODE" : "SETUP",
+      tagTone: walletConnectReady ? "info" : "muted",
+      detail: walletConnectReady ? "Scan from a mobile wallet" : "Add VITE_WALLETCONNECT_PROJECT_ID",
+      disabled: connecting || !walletConnectReady,
+      onClick: handleWalletConnect
+    },
+    ...providerWalletRows.map((wallet): WalletPickerRow => {
+    const detected = walletProviderFor(wallet.aliases || []);
+    return {
+      key: wallet.key,
+      name: wallet.name,
+      icon: wallet.icon,
+      iconSrc: detected?.info.icon,
+      tag: detected ? "INSTALLED" : "OPEN",
+      tagTone: detected ? "success" : "muted",
+      detail: detected ? "Detected in this browser" : "Open wallet app or install",
+      disabled: connecting || (!detected && !wallet.fallbackUrl),
+      onClick: () => (detected ? handleConnectWallet(detected.provider) : wallet.fallbackUrl ? openMobileWallet(wallet.fallbackUrl) : undefined)
+    };
+    })
+  ];
+  const extraDetectedWallets = walletOptions.filter((wallet) => {
+    const haystack = `${wallet.info.name || ""} ${wallet.info.rdns || ""}`.toLowerCase();
+    return !["metamask", "okx", "bitget", "bitkeep", "base", "coinbase"].some((alias) => haystack.includes(alias));
+  });
 
   return (
     <main className={`app-shell${view === "market" && selectedMarketId !== null ? " has-market-detail" : ""}`} id="top">
@@ -15975,109 +15944,67 @@ export default function App() {
       )}
 
       {walletModalOpen && (
-        <div className="modal-backdrop auth-backdrop" role="dialog" aria-modal="true" aria-label="Sign in to AuraPredict">
-          <section className="modal-panel wallet-connect-modal auth-connect-modal">
-            <button className="auth-close-button" type="button" onClick={() => setWalletModalOpen(false)} aria-label="Close sign in">
-              X
-            </button>
-
-            <div className="auth-brand-lockup">
-              <img src="/aurapredict-logo-64.png" alt="" />
-              <div>
-                <strong>AuraPredict</strong>
-                <span>Prediction markets on Arc</span>
-              </div>
-            </div>
-
-            <div className="auth-copy">
-              <h2>Welcome to AuraPredict</h2>
-              <p>Sign in with Google, email, or a wallet. AuraPredict keeps the trading flow on Arc from one account.</p>
-            </div>
-
-            <button
-              className="auth-google-button"
-              type="button"
-              onClick={handleSeedlessGoogleLogin}
-              disabled={connecting || !seedlessLoginReady}
-            >
-              <span aria-hidden="true">G</span>
-              {connecting ? "Connecting..." : seedlessLoginReady ? "Continue with Google" : "Google login setup required"}
-            </button>
-            {!seedlessLoginReady && (
-              <p className="auth-setup-hint">
-                Google and email login need the production seedless key before they can create an embedded Arc wallet.
-              </p>
-            )}
-
-            <div className="auth-divider">
-              <span>OR</span>
-            </div>
-
-            <div className="auth-email-row">
-              <input
-                id="seedless-email"
-                value={seedlessEmail}
-                onChange={(event) => setSeedlessEmail(event.target.value)}
-                placeholder="Email address"
-                type="email"
-                autoComplete="email"
-              />
-              <button type="button" onClick={handleSeedlessEmailLogin} disabled={connecting || !seedlessLoginReady}>
-                {seedlessLoginReady ? "Continue" : "Setup"}
+        <div className="modal-backdrop auth-backdrop" role="dialog" aria-modal="true" aria-label="Connect wallet">
+          <section className="modal-panel wallet-connect-modal auth-connect-modal wallet-picker-modal">
+            <header className="wallet-picker-header">
+              <button className="wallet-help-button" type="button" aria-label="Wallet help" onClick={() => window.open("https://metamask.io", "_blank")}>
+                ?
               </button>
-            </div>
+              <h2>Connect Wallet</h2>
+              <button className="wallet-picker-close" type="button" onClick={() => setWalletModalOpen(false)} aria-label="Close connect wallet">
+                X
+              </button>
+            </header>
 
-            <div className="auth-wallet-grid" aria-label="Wallet sign in options">
-              {authInstalledWallets.map((wallet) => (
+            <div className="wallet-picker-list" aria-label="Wallet options">
+              {quickWalletRows.map((wallet) => (
                 <button
-                  className="auth-wallet-tile"
-                  key={wallet.info.uuid}
-                  onClick={() => handleConnectWallet(wallet.provider)}
-                  disabled={connecting}
+                  className="wallet-picker-row"
+                  key={wallet.key}
                   type="button"
+                  onClick={wallet.onClick}
+                  disabled={wallet.disabled}
                 >
-                  {wallet.info.icon ? (
-                    <img src={wallet.info.icon} alt="" />
+                  {wallet.iconSrc ? (
+                    <img className="wallet-picker-icon wallet-picker-icon-image" src={wallet.iconSrc} alt="" />
                   ) : (
-                    <span>{wallet.info.name.slice(0, 1)}</span>
+                    <span className={`wallet-picker-icon wallet-icon-${wallet.key}`}>{wallet.icon}</span>
                   )}
-                  <small>{wallet.info.name}</small>
+                  <span className="wallet-picker-copy">
+                    <strong>{wallet.name}</strong>
+                    <small>{wallet.detail}</small>
+                  </span>
+                  <span className={`wallet-picker-tag ${wallet.tagTone}`}>{wallet.tag}</span>
+                  <span className="wallet-picker-chevron" aria-hidden="true">
+                    &gt;
+                  </span>
                 </button>
               ))}
+
               <button
-                className="auth-wallet-tile"
+                aria-expanded={authMoreOpen}
+                className="wallet-picker-row wallet-search-row"
                 type="button"
-                onClick={handleWalletConnect}
-                disabled={connecting || !walletConnectReady}
+                onClick={() => setAuthMoreOpen((open) => !open)}
               >
-                <span>WC</span>
-                <small>WalletConnect</small>
+                <span className="wallet-picker-icon wallet-icon-search">S</span>
+                <span className="wallet-picker-copy">
+                  <strong>Search Wallet</strong>
+                  <small>{extraDetectedWallets.length + WALLET_DEEP_LINKS.length}+ options</small>
+                </span>
+                <span className="wallet-picker-tag muted">160+</span>
+                <span className="wallet-picker-chevron" aria-hidden="true">
+                  &gt;
+                </span>
               </button>
-              {authDeepLinkWallets.map((wallet) => (
-                <button className="auth-wallet-tile" key={wallet.name} type="button" onClick={() => openMobileWallet(wallet.url)}>
-                  <span>{wallet.name.slice(0, 1)}</span>
-                  <small>{wallet.name}</small>
-                </button>
-              ))}
-              {hasExtraAuthWallets && (
-                <button
-                  aria-expanded={authMoreOpen}
-                  className="auth-wallet-tile auth-more-tile"
-                  type="button"
-                  onClick={() => setAuthMoreOpen((open) => !open)}
-                >
-                  <span>...</span>
-                  <small>More</small>
-                </button>
-              )}
             </div>
 
             {authMoreOpen && (
-              <div className="auth-more-wallets">
-                {walletOptions.length > authInstalledWallets.length && (
+              <div className="auth-more-wallets wallet-picker-more">
+                {extraDetectedWallets.length > 0 && (
                   <div>
                     <span className="wallet-group-label">Detected wallets</span>
-                    {walletOptions.slice(authInstalledWallets.length).map((wallet) => (
+                    {extraDetectedWallets.map((wallet) => (
                       <button
                         className="wallet-option"
                         key={wallet.info.uuid}
@@ -16098,7 +16025,7 @@ export default function App() {
                 )}
                 <div>
                   <span className="wallet-group-label">Open in wallet browser</span>
-                  {WALLET_DEEP_LINKS.slice(authDeepLinkWallets.length).map((wallet) => (
+                  {WALLET_DEEP_LINKS.filter((wallet) => wallet.url).map((wallet) => (
                     <button className="wallet-option mobile-wallet-option" key={wallet.name} type="button" onClick={() => openMobileWallet(wallet.url)}>
                       <span className="wallet-badge">{wallet.name.slice(0, 1)}</span>
                       <strong>{wallet.name}</strong>
@@ -16131,19 +16058,10 @@ export default function App() {
               </div>
             )}
 
-            {!seedlessLoginReady && (
-              <div className="auth-seedless-note">
-                <strong>Seedless setup required</strong>
-                <span>
-                  Set VITE_SEEDLESS_ENABLED=1 and VITE_MAGIC_PUBLISHABLE_KEY in the frontend environment to enable Google/email login.
-                </span>
-              </div>
-            )}
+            <div className="wallet-picker-footer">
+              <span>UX by</span>
+              <strong>AuraPredict</strong>
 
-            <div className="auth-footer">
-              <span>Terms</span>
-              <span aria-hidden="true">·</span>
-              <span>Privacy</span>
             </div>
           </section>
         </div>
@@ -16193,3 +16111,4 @@ export default function App() {
     </main>
   );
 }
+
