@@ -37,13 +37,13 @@ The project is a testnet MVP and a public builder project for the Arc ecosystem.
 
 ## Active Testnet Deployment
 
-AuraPredict now targets the V5 contract surface. Deploy V5 first, then point the app and indexer at that address:
+AuraPredict now targets the deployed V5 contract surface:
 
 - Chain ID: `5042002`
 - RPC: `https://rpc.testnet.arc.network`
 - Explorer: `https://testnet.arcscan.app`
-- Active V5 contract: set `VITE_PREDICTION_MARKET_ADDRESS` or `VITE_AURAPREDICT_V5_ADDRESS`
-- V5 deployment block: set `VITE_AURAPREDICT_V5_DEPLOYMENT_BLOCK` and `AURA_INDEXER_START_BLOCK`
+- Active V5 contract: `0xb3B74ee71a02a25eB668A6206ed3F74b3444611A`
+- V5 deployment block: `47380000`
 - Arc native gas token: USDC
 - Faucet: `https://faucet.circle.com`
 
