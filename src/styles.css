@@ -5071,74 +5071,45 @@ textarea {
 }
 
 .auth-connect-modal {
-  background: linear-gradient(180deg, rgba(26, 30, 38, 0.98), rgba(18, 22, 29, 0.98));
-  border: 1px solid rgba(64, 73, 88, 0.84);
-  border-radius: 8px;
+  background: #1c1f26;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 14px;
   box-shadow: 0 30px 90px rgba(0, 0, 0, 0.62);
   color: #f4f6f9;
   display: grid;
-  gap: 16px;
+  gap: 14px;
   grid-template-columns: 1fr;
-  max-width: 560px;
+  max-width: 440px;
   overflow: hidden;
-  padding: 28px;
+  padding: 28px 24px 22px;
   position: relative;
-  width: min(560px, calc(100vw - 28px));
+  width: min(440px, calc(100vw - 28px));
 }
 
 .auth-close-button {
   align-items: center;
-  background: #252b34;
-  border: 1px solid rgba(69, 78, 93, 0.78);
+  background: transparent;
+  border: 0;
   border-radius: 999px;
-  color: #e6ebf2;
+  color: #8b95a8;
   display: inline-flex;
-  font-weight: 950;
-  height: 34px;
+  font-weight: 700;
+  height: 32px;
   justify-content: center;
   position: absolute;
-  right: 18px;
-  top: 18px;
-  width: 34px;
-  min-height: 34px;
+  right: 16px;
+  top: 16px;
+  width: 32px;
+  min-height: 32px;
 }
 
 .auth-close-button:hover {
-  background: #303845;
+  background: rgba(255, 255, 255, 0.06);
   color: #ffffff;
 }
 
 .auth-brand-lockup {
-  align-items: center;
-  display: grid;
-  gap: 12px;
-  grid-template-columns: 44px 1fr;
-  padding-right: 44px;
-}
-
-.auth-brand-lockup img {
-  background: #10151d;
-  border: 1px solid rgba(65, 76, 94, 0.78);
-  border-radius: 8px;
-  height: 44px;
-  object-fit: contain;
-  padding: 3px;
-  width: 44px;
-}
-
-.auth-brand-lockup strong,
-.auth-brand-lockup span {
-  display: block;
-}
-
-.auth-brand-lockup strong {
-  font-size: 1rem;
-}
-
-.auth-brand-lockup span {
-  color: #a0a7b4;
-  font-size: 0.78rem;
-  font-weight: 850;
+  display: none;
 }
 
 .auth-copy {
@@ -5147,22 +5118,19 @@ textarea {
 
 .auth-copy h2 {
   color: #ffffff;
-  font-size: clamp(1.35rem, 4vw, 1.85rem);
-  margin: 4px 0 8px;
+  font-size: 1.5rem;
+  font-weight: 800;
+  margin: 4px 0 4px;
 }
 
 .auth-copy p {
-  color: #a7afbd;
-  font-size: 0.92rem;
-  line-height: 1.5;
-  margin: 0 auto;
-  max-width: 420px;
+  display: none;
 }
 
 .auth-google-button {
   align-items: center;
   background: #2f6bff;
-  border: 1px solid rgba(91, 140, 255, 0.7);
+  border: 0;
   border-radius: 8px;
   box-shadow: 0 12px 30px rgba(47, 107, 255, 0.18);
   color: #ffffff;
@@ -5228,23 +5196,28 @@ textarea {
 }
 
 .auth-email-row {
-  background: #191f28;
-  border: 1px solid rgba(67, 76, 91, 0.8);
-  border-radius: 8px;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
   display: grid;
   gap: 8px;
   grid-template-columns: minmax(0, 1fr) auto;
-  padding: 8px;
+  padding: 0;
 }
 
 .auth-email-row input {
-  background: transparent;
-  border: 0;
+  background: #2a2e37;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 10px;
   color: #f4f6f9;
   font: inherit;
   min-width: 0;
   outline: none;
-  padding: 10px 12px;
+  padding: 13px 14px;
+}
+
+.auth-email-row input:focus {
+  border-color: rgba(47, 107, 255, 0.5);
 }
 
 .auth-email-row input::placeholder {
@@ -5252,18 +5225,22 @@ textarea {
 }
 
 .auth-email-row button {
-  background: #2f6bff;
-  border: 0;
-  border-radius: 8px;
-  color: #ffffff;
-  font-weight: 950;
-  min-width: 108px;
+  background: #2a2e37;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 10px;
+  color: #2f6bff;
+  font-weight: 800;
+  min-width: 96px;
   padding: 10px 16px;
 }
 
+.auth-email-row button:hover:not(:disabled) {
+  background: #333742;
+}
+
 .auth-email-row button:disabled {
-  background: #2a313b;
-  color: #9ca5b2;
+  background: #23262e;
+  color: #6b7280;
   cursor: not-allowed;
 }
 
@@ -5275,47 +5252,41 @@ textarea {
 
 .auth-wallet-tile {
   align-items: center;
-  background: #161b25;
-  border: 1px solid rgba(60, 70, 86, 0.7);
-  border-radius: 10px;
+  aspect-ratio: 1 / 1;
+  background: #2a2e37;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
   color: #f4f6f9;
-  display: grid;
-  gap: 7px;
-  justify-items: center;
-  min-height: 72px;
+  display: flex;
+  justify-content: center;
+  min-height: 0;
   min-width: 0;
-  padding: 10px 8px;
+  padding: 0;
 }
 
 .auth-wallet-tile:hover:not(:disabled),
 .auth-wallet-tile[aria-expanded="true"] {
-  background: #1c222e;
-  border-color: rgba(47, 107, 255, 0.5);
+  background: #333742;
+  border-color: rgba(47, 107, 255, 0.55);
 }
 
 .auth-wallet-tile img,
 .auth-wallet-tile span {
   align-items: center;
-  background: #232b38;
-  border-radius: 9px;
-  color: #ffffff;
+  background: transparent;
+  border-radius: 8px;
+  color: #c5cbd6;
   display: inline-flex;
-  font-size: 0.72rem;
-  font-weight: 950;
-  height: 34px;
+  font-size: 0.82rem;
+  font-weight: 800;
+  height: 30px;
   justify-content: center;
-  object-fit: cover;
-  width: 34px;
+  object-fit: contain;
+  width: 30px;
 }
 
 .auth-wallet-tile small {
-  color: #d3d8e0;
-  font-size: 0.68rem;
-  font-weight: 900;
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  display: none;
 }
 
 .auth-more-wallets {

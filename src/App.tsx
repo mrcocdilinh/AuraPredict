@@ -16131,23 +16131,19 @@ export default function App() {
               </div>
             )}
 
-            <div className="auth-seedless-note">
-              <strong>{seedlessLoginReady ? "Seedless wallet ready" : "Seedless setup required"}</strong>
-              <span>
-                {seedlessLoginReady
-                  ? seedlessGasReady
-                    ? "Google/email creates an embedded Arc wallet. Gas sponsorship is configured when the relayer is live."
-                    : "Google/email can create an embedded Arc wallet. Add trusted forwarder and relayer settings to sponsor gas."
-                  : "Set VITE_SEEDLESS_ENABLED=1 and VITE_MAGIC_PUBLISHABLE_KEY in the frontend environment to enable Google/email login."}
-              </span>
-            </div>
+            {!seedlessLoginReady && (
+              <div className="auth-seedless-note">
+                <strong>Seedless setup required</strong>
+                <span>
+                  Set VITE_SEEDLESS_ENABLED=1 and VITE_MAGIC_PUBLISHABLE_KEY in the frontend environment to enable Google/email login.
+                </span>
+              </div>
+            )}
 
             <div className="auth-footer">
               <span>Terms</span>
+              <span aria-hidden="true">·</span>
               <span>Privacy</span>
-              <button className="link-button" type="button" onClick={() => window.open("https://metamask.io", "_blank")}>
-                Need a wallet?
-              </button>
             </div>
           </section>
         </div>
