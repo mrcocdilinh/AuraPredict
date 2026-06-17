@@ -194,6 +194,7 @@ contract ArcPredictionMarketV5 {
     event MarketCreated(uint256 indexed marketId, address indexed creator, address indexed token, uint16 outcomeCount);
     event PositionTaken(uint256 indexed marketId, address indexed user, uint16 indexed outcomeId, uint256 amount);
     event MarketResultProposed(uint256 indexed marketId, uint16 indexed outcomeId, address indexed proposer, bytes32 receiptHash);
+    event AuthorityReviewRequested(uint256 indexed marketId, address indexed requester, bytes32 reasonHash);
     event MarketDisputed(uint256 indexed marketId, address indexed disputer, bytes32 reasonHash);
     event MarketReported(uint256 indexed marketId, address indexed reporter, bytes32 reasonHash);
     event ReportResolved(uint256 indexed marketId, bool accepted, bytes32 reasonHash);
@@ -268,9 +269,67 @@ contract ArcPredictionMarketV5 {
         blockedAccounts[account] = blocked;
     }
 
+    function restrictedMarketCreation() external pure returns (bool) {
+        return true;
+    }
+
+    function approvedMarketCreators(address account) external view returns (bool) {
+        return account == owner;
+    }
+
+    function setRestrictedMarketCreation(bool) external onlyOwner {}
+
+    function setApprovedMarketCreator(address, bool) external onlyOwner {}
+
     function setApprovedResolutionAdapter(address adapter, bool approved) external onlyOwner {
         if (adapter == address(0)) revert InvalidInput();
         approvedAdapters[adapter] = approved;
+    }
+
+    function approvedResolutionAdapters(address adapter) external view returns (bool) {
+        return approvedAdapters[adapter];
+    }
+
+    function setProposalGracePeriod(uint256 newGracePeriod) external onlyOwner {
+        if (newGracePeriod < disputeWindow) revert InvalidInput();
+        proposalGracePeriod = newGracePeriod;
+    }
+
+    function setMarketCreationFee(uint256 newFee) external onlyOwner {
+        assetConfigs[defaultSettlementToken].marketCreationFee = newFee;
+    }
+
+    function setProtocolFeeBps(uint256 newFeeBps) external onlyOwner {
+        if (newFeeBps > MAX_PROTOCOL_FEE_BPS) revert InvalidInput();
+        assetConfigs[defaultSettlementToken].protocolFeeBps = newFeeBps;
+    }
+
+    function minStake() external view returns (uint256) {
+        return assetConfigs[defaultSettlementToken].minStake;
+    }
+
+    function creatorBond() external view returns (uint256) {
+        return assetConfigs[defaultSettlementToken].creatorBond;
+    }
+
+    function disputeBond() external view returns (uint256) {
+        return assetConfigs[defaultSettlementToken].disputeBond;
+    }
+
+    function disputeGracePeriod() external view returns (uint256) {
+        return proposalGracePeriod;
+    }
+
+    function marketCreationFee() external view returns (uint256) {
+        return assetConfigs[defaultSettlementToken].marketCreationFee;
+    }
+
+    function protocolFeeBps() external view returns (uint256) {
+        return assetConfigs[defaultSettlementToken].protocolFeeBps;
+    }
+
+    function accumulatedProtocolFees() external view returns (uint256) {
+        return accumulatedProtocolFeesByToken[defaultSettlementToken];
     }
 
     function configureSettlementAsset(
@@ -284,7 +343,7 @@ contract ArcPredictionMarketV5 {
         uint256 disputeBondAmount,
         uint256 reportBondAmount,
         uint256 creationFee,
-        uint256 protocolFeeBps,
+        uint256 protocolFeeRateBps,
         uint256 creatorFeeBps
     ) external onlyOwner {
         _configureAsset(
@@ -298,7 +357,7 @@ contract ArcPredictionMarketV5 {
             disputeBondAmount,
             reportBondAmount,
             creationFee,
-            protocolFeeBps,
+            protocolFeeRateBps,
             creatorFeeBps
         );
     }
@@ -387,6 +446,15 @@ contract ArcPredictionMarketV5 {
 
     function proposeCancel(uint256 marketId, bytes32 evidenceHash, bytes32 receiptHash) public nonReentrant {
         _propose(marketId, NO_OUTCOME, evidenceHash, receiptHash, NO_OUTCOME, NO_OUTCOME, 0, bytes32(0));
+    }
+
+    function requestAuthorityReview(uint256 marketId, bytes32 reasonHash) external nonReentrant {
+        address sender = _msgSender();
+        Market storage market = _market(marketId);
+        if (market.state != MarketState.Proposed) revert InvalidState();
+        if (sender != market.creator && !_isAuthority(market, sender)) revert NotAuthorized();
+        market.authorityReviewRequired = true;
+        emit AuthorityReviewRequested(marketId, sender, reasonHash);
     }
 
     function dispute(uint256 marketId) external {
@@ -556,7 +624,13 @@ contract ArcPredictionMarketV5 {
             uint16 finalOutcome,
             bytes32 outcomeLabelsHash,
             bytes32 evidenceHash,
-            bytes32 receiptHash
+            bytes32 receiptHash,
+            uint256 proposedAt,
+            uint256 termsDisputeWindow,
+            uint256 termsProposalGracePeriod,
+            bool authorityReviewRequired,
+            bool disputed,
+            address disputer
         )
     {
         Market storage market = _market(marketId);
@@ -572,7 +646,13 @@ contract ArcPredictionMarketV5 {
             market.finalOutcome,
             market.outcomeLabelsHash,
             market.evidenceHash,
-            market.receiptHash
+            market.receiptHash,
+            market.proposedAt,
+            market.disputeWindow,
+            market.proposalGracePeriod,
+            market.authorityReviewRequired,
+            market.disputed,
+            market.disputer
         );
     }
 
@@ -842,11 +922,11 @@ contract ArcPredictionMarketV5 {
         uint256 disputeBondAmount,
         uint256 reportBondAmount,
         uint256 creationFee,
-        uint256 protocolFeeBps,
+        uint256 protocolFeeRateBps,
         uint256 creatorFeeBps
     ) private {
         if (token == address(0) || assetMinStake == 0) revert UnsupportedAsset();
-        if (protocolFeeBps > MAX_PROTOCOL_FEE_BPS || creatorFeeBps > MAX_CREATOR_FEE_BPS) revert InvalidInput();
+        if (protocolFeeRateBps > MAX_PROTOCOL_FEE_BPS || creatorFeeBps > MAX_CREATOR_FEE_BPS) revert InvalidInput();
         assetConfigs[token] = AssetConfig(
             enabled,
             symbol,
@@ -857,7 +937,7 @@ contract ArcPredictionMarketV5 {
             disputeBondAmount,
             reportBondAmount,
             creationFee,
-            protocolFeeBps,
+            protocolFeeRateBps,
             creatorFeeBps
         );
         emit SettlementAssetConfigured(token, enabled, symbol, decimals);

@@ -13,7 +13,7 @@ function readUnits(name, fallback, decimals) {
 }
 
 async function main() {
-  const version = String(process.env.AURA_CONTRACT_VERSION || "V4").trim().toUpperCase();
+  const version = String(process.env.AURA_CONTRACT_VERSION || "V5").trim().toUpperCase();
   if (version === "V5") {
     await deployV5();
     return;

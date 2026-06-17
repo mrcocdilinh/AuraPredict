@@ -6,7 +6,7 @@ The project is a testnet MVP and a public builder project for the Arc ecosystem.
 
 ## What Is Included
 
-- Solidity smart contract: `contracts/ArcPredictionMarket.sol`
+- Solidity smart contracts: `contracts/ArcPredictionMarketV5.sol` is the active protocol; older V3/V4 contracts remain in the repo only for historical reference.
 - Hardhat compile, test, and deploy scripts
 - Vite + React frontend in `src/`
 - Local backend/indexer in `indexer/`
@@ -32,23 +32,22 @@ The project is a testnet MVP and a public builder project for the Arc ecosystem.
 - Read-only Agent API and MCP-style tool metadata for external AI agents and Arc builders.
 - Owner dashboard queues for reports, pending proposals, finalization, dispute/authority review, and flagged market-risk badges.
 - Public docs, risk disclosures, oracle policy, backtest sample, and frontend E2E coverage for core market flows.
-- V5 protocol branch with owner-reviewed drafts, multi-outcome markets, future settlement-token registry, per-market batch claims, report/cancel bonds, AI/oracle receipts, and ERC-2771 seedless-ready forwarding.
+- Active V5 protocol with owner-reviewed drafts, multi-outcome markets, settlement-token registry, per-market batch claims, report/cancel bonds, AI/oracle receipts, Agent API metadata, and ERC-2771 seedless-ready forwarding.
+- Seedless login path for Magic embedded wallets using Google popup or email OTP when `VITE_SEEDLESS_ENABLED=1` and `VITE_MAGIC_PUBLISHABLE_KEY` are configured.
 
 ## Active Testnet Deployment
 
-AuraPredict currently targets the V4 contract on Arc Testnet:
+AuraPredict now targets the V5 contract surface. Deploy V5 first, then point the app and indexer at that address:
 
 - Chain ID: `5042002`
 - RPC: `https://rpc.testnet.arc.network`
 - Explorer: `https://testnet.arcscan.app`
-- Active V4 contract: `0x3c853AE2eC705B453c9657569b6335e762631536`
-- Archived V3 contract: `0x4399ea3f59AA14e4D19217f1af2aD0681f5FafFd`
+- Active V5 contract: set `VITE_PREDICTION_MARKET_ADDRESS` or `VITE_AURAPREDICT_V5_ADDRESS`
+- V5 deployment block: set `VITE_AURAPREDICT_V5_DEPLOYMENT_BLOCK` and `AURA_INDEXER_START_BLOCK`
 - Arc native gas token: USDC
 - Faucet: `https://faucet.circle.com`
 
-New markets are created on V4. Older V3 markets still exist on the archived contract and can be accessed with `?deployment=v3` when needed.
-
-V5 is implemented as a new protocol branch but is not the active deployed contract until a new V5 address is deployed and the app/indexer environment is switched. See `docs/V5_PROTOCOL.md`.
+New markets are created through the V5 owner-reviewed draft flow. See `docs/V5_PROTOCOL.md`.
 
 ## Quick Start
 
@@ -108,7 +107,7 @@ See `docs/AGENT_API_AND_MCP.md`.
 
 ## Oracle And Resolution Flow
 
-AuraPredict V4 separates market trading close time from event resolution time. Results cannot be proposed before the event resolution timestamp.
+AuraPredict V5 separates market trading close time from event resolution time. Results cannot be proposed before the event resolution timestamp, and public market creation now goes through owner review before a market becomes live.
 
 Supported resolution paths include:
 
@@ -148,7 +147,7 @@ The main dapp should continue to deploy from the repository root.
 
 ## Test Markets
 
-Sample V4 markets are available in:
+Legacy V4 sample markets remain available for regression testing only:
 
 ```text
 scripts/seed_markets_v4_test_20.json

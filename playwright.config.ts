@@ -16,7 +16,13 @@ export default defineConfig({
     command: "npm run dev -- --host 127.0.0.1 --port 5178",
     url: "http://127.0.0.1:5178",
     reuseExistingServer: false,
-    timeout: 120_000
+    timeout: 120_000,
+    env: {
+      VITE_PREDICTION_MARKET_ADDRESS: "0x1000000000000000000000000000000000000001",
+      VITE_AURAPREDICT_V5_ADDRESS: "0x1000000000000000000000000000000000000001",
+      VITE_AURAPREDICT_V5_DEPLOYMENT_BLOCK: "1",
+      VITE_AURA_INDEXER_URL: "http://127.0.0.1:8787"
+    }
   },
   projects: [
     {

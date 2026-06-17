@@ -25,9 +25,11 @@
     "@circle-fin/adapter-viem-v2": "^1.11.2",
     "@circle-fin/app-kit": "^1.7.0",
     "@lifi/sdk": "^3.16.3",
+    "@magic-ext/oauth2": "^15.8.0",
     "@walletconnect/ethereum-provider": "^2.23.9",
     "buffer": "^6.0.3",
     "dotenv": "^16.4.7",
+    "magic-sdk": "^33.7.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "viem": "^2.23.7"

@@ -4958,6 +4958,58 @@ textarea {
   border-color: #dfe6f1;
 }
 
+.seedless-email-box {
+  background: #ffffff;
+  border: 1px solid #dfe6f1;
+  border-radius: 8px;
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+}
+
+.seedless-email-box label {
+  color: #172033;
+  font-size: 0.82rem;
+  font-weight: 950;
+}
+
+.seedless-email-row {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.seedless-email-row input {
+  background: #f8fafc;
+  border: 1px solid #dfe6f1;
+  border-radius: 8px;
+  color: #172033;
+  font: inherit;
+  min-width: 0;
+  padding: 10px 11px;
+}
+
+.seedless-email-row button {
+  background: linear-gradient(135deg, #18d7ff, #7f5cff);
+  border: 1px solid rgba(24, 215, 255, 0.4);
+  border-radius: 8px;
+  color: #041827;
+  font-weight: 950;
+  padding: 10px 14px;
+  white-space: nowrap;
+}
+
+.seedless-email-row button:disabled {
+  opacity: 0.55;
+}
+
+.seedless-email-box small {
+  color: #667085;
+  font-size: 0.74rem;
+  font-weight: 720;
+  line-height: 1.35;
+}
+
 .wallet-badge {
   align-items: center;
   align-self: center;
@@ -8488,6 +8540,25 @@ label {
   border-color: #202a3f;
 }
 
+[data-theme="dark"] .seedless-email-box {
+  background: #0b1020;
+  border-color: #26334a;
+}
+
+[data-theme="dark"] .seedless-email-box label {
+  color: #f7f9ff;
+}
+
+[data-theme="dark"] .seedless-email-box small {
+  color: #9aa7bd;
+}
+
+[data-theme="dark"] .seedless-email-row input {
+  background: #080d1b;
+  border-color: #26334a;
+  color: #f7f9ff;
+}
+
 [data-theme="dark"] .profile-resolution-callout,
 [data-theme="dark"] .profile-bond-return-card {
   background: #0b1020;
@@ -10905,6 +10976,10 @@ label {
     max-height: calc(100dvh - 12px);
     overflow: auto;
     width: 100%;
+  }
+
+  .seedless-email-row {
+    grid-template-columns: 1fr;
   }
 
   .unified-balance-modal {

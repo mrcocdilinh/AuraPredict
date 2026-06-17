@@ -23,10 +23,15 @@ async function main() {
   }
 
   const [signer] = await ethers.getSigners();
-  const factory = await ethers.getContractFactory("ArcPredictionMarket");
-  const contract = factory.attach(contractAddress);
+  const v5Factory = await ethers.getContractFactory("ArcPredictionMarketV5");
+  const legacyFactory = await ethers.getContractFactory("ArcPredictionMarket");
+  let contract = v5Factory.attach(contractAddress);
   const version = await contract.CONTRACT_VERSION().catch(() => "legacy");
-  const isStablecoinContract = version === "AURAPREDICT_V3" || version === "AURAPREDICT_V4";
+  const isV5 = version === "AURAPREDICT_V5";
+  if (!isV5) {
+    contract = legacyFactory.attach(contractAddress);
+  }
+  const isStablecoinContract = version === "AURAPREDICT_V3" || version === "AURAPREDICT_V4" || isV5;
   const isV4 = version === "AURAPREDICT_V4";
   const settlementToken = isStablecoinContract ? await contract.defaultSettlementToken() : ethers.ZeroAddress;
   const asset = isStablecoinContract ? await contract.assetConfigs(settlementToken) : null;
@@ -129,7 +134,25 @@ async function main() {
       if (isV4 && (!resolutionRule || resolutionRule.length > 2048)) {
         throw new Error(`Invalid resolutionRule at index ${i}`);
       }
-      tx = isV4
+      if (isV5) {
+        tx = await contract.submitMarketDraft({
+          question,
+          category,
+          sourceUrl: resolutionSource,
+          resolutionRule,
+          metadataURI: String(item.metadataURI || resolutionSource || "").trim(),
+          token: settlementToken,
+          adapter: resolutionAdapter,
+          closeTime,
+          resolutionTime,
+          mode: resolutionMode,
+          outcomeCount: Number(item.outcomeCount || 2),
+          outcomeLabelsHash: item.outcomeLabelsHash || ethers.keccak256(ethers.toUtf8Bytes("YES|NO")),
+          sourceHash: ethers.keccak256(ethers.toUtf8Bytes(resolutionSource)),
+          ruleHash: ethers.keccak256(ethers.toUtf8Bytes(resolutionRule))
+        });
+      } else {
+        tx = isV4
         ? await contract.createMarket(
             question,
             category,
@@ -143,6 +166,7 @@ async function main() {
             resolutionAdapter
           )
         : await contract.createMarket(question, category, settlementToken, closeTime, resolutionTime, metadataHash, "", 0);
+      }
     } else {
       tx = await contract.createMarket(question, category, closeTime, { value: requiredValue });
     }

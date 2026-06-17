@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 import { createPublicClient, createWalletClient, encodeAbiParameters, fallback, formatUnits, http, isAddress, keccak256, stringToHex, webSocket } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { arcPredictionMarketV2Abi, arcPredictionMarketV3Abi, arcPredictionMarketV4Abi } from "./arcPredictionMarketAbi.mjs";
+import { arcPredictionMarketV5Abi } from "./arcPredictionMarketV5Abi.mjs";
 import { scoreEvidenceSearchResult } from "./evidenceSearchPolicy.mjs";
 import {
   NUMERIC_COMPARATORS,
@@ -23,15 +24,12 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = path.join(__dirname, "data");
 const DATA_FILE = path.join(DATA_DIR, "aurapredict-index.json");
 
-const ACTIVE_V3_CONTRACT_ADDRESS = "0x4399ea3f59AA14e4D19217f1af2aD0681f5FafFd";
-const ACTIVE_V3_DEPLOYMENT_BLOCK = 44074836n;
-const ACTIVE_V4_CONTRACT_ADDRESS = "0x3c853AE2eC705B453c9657569b6335e762631536";
-const ACTIVE_V4_DEPLOYMENT_BLOCK = 44083985n;
 const CONTRACT_ADDRESS = String(
   process.env.AURA_INDEXER_CONTRACT_ADDRESS ||
     process.env.PREDICTION_MARKET_ADDRESS ||
     process.env.VITE_PREDICTION_MARKET_ADDRESS ||
-    ACTIVE_V4_CONTRACT_ADDRESS
+    process.env.VITE_AURAPREDICT_V5_ADDRESS ||
+    ""
 ).trim();
 const RPC_URLS = (
   process.env.AURA_INDEXER_RPC_URLS ||
@@ -57,7 +55,7 @@ const WS_URLS = (
   .filter(Boolean);
 const REALTIME_SYNC_ENABLED = String(process.env.AURA_INDEXER_WS_ENABLED || "1").trim() !== "0";
 const REALTIME_SYNC_DEBOUNCE_MS = Math.max(100, Number(process.env.AURA_INDEXER_WS_DEBOUNCE_MS || 750) || 750);
-const START_BLOCK = BigInt(process.env.START_BLOCK || process.env.AURA_INDEXER_START_BLOCK || ACTIVE_V4_DEPLOYMENT_BLOCK);
+const START_BLOCK = BigInt(process.env.START_BLOCK || process.env.AURA_INDEXER_START_BLOCK || process.env.VITE_AURAPREDICT_V5_DEPLOYMENT_BLOCK || 0);
 const CHUNK_SIZE = BigInt(process.env.AURA_INDEXER_CHUNK_SIZE || 100);
 const READ_RETRY_COUNT = Math.max(0, Number(process.env.AURA_INDEXER_READ_RETRIES || 3) || 3);
 const READ_RETRY_BASE_MS = Math.max(100, Number(process.env.AURA_INDEXER_READ_RETRY_BASE_MS || 350) || 350);
@@ -161,6 +159,23 @@ const V3_EVENT_NAMES = [
   "Claimed"
 ];
 const V4_EVENT_NAMES = [...V3_EVENT_NAMES, "UnproposedMarketCanceled"];
+const V5_EVENT_NAMES = [
+  "MarketDraftSubmitted",
+  "MarketApproved",
+  "MarketCreated",
+  "PositionTaken",
+  "MarketResultProposed",
+  "AuthorityReviewRequested",
+  "MarketDisputed",
+  "MarketReported",
+  "ReportResolved",
+  "MarketCanceled",
+  "MarketFinalized",
+  "Claimed",
+  "ClaimedBatch",
+  "WithdrawalCredited",
+  "WithdrawalCompleted"
+];
 const legacyGetMarketAbi = [
   {
     type: "function",
@@ -187,6 +202,35 @@ const Outcome = {
   No: 2,
   Canceled: 3
 };
+const V5_MARKET_STATE = {
+  Draft: 0,
+  Live: 1,
+  Proposed: 2,
+  Disputed: 3,
+  Finalized: 4,
+  Canceled: 5,
+  Rejected: 6
+};
+const V5_NO_OUTCOME = 65535;
+
+function legacyOutcomeToV5(outcome) {
+  if (Number(outcome) === Outcome.Yes) return 0;
+  if (Number(outcome) === Outcome.No) return 1;
+  return V5_NO_OUTCOME;
+}
+
+function v5OutcomeToLegacy(outcomeId) {
+  if (Number(outcomeId) === 0) return Outcome.Yes;
+  if (Number(outcomeId) === 1) return Outcome.No;
+  if (Number(outcomeId) === V5_NO_OUTCOME) return Outcome.Canceled;
+  return Outcome.Unresolved;
+}
+
+function v5StateToOutcome(state, finalOutcome) {
+  if (Number(state) === V5_MARKET_STATE.Finalized) return v5OutcomeToLegacy(finalOutcome);
+  if (Number(state) === V5_MARKET_STATE.Canceled || Number(state) === V5_MARKET_STATE.Rejected) return Outcome.Canceled;
+  return Outcome.Unresolved;
+}
 
 const client = createPublicClient({
   chain: ARC_CHAIN,
@@ -551,6 +595,14 @@ async function processEvent(eventName, log) {
   if (eventName === "MarketCreated") {
     const marketId = Number(args.marketId ?? 0n);
     const market = ensureMarket(marketId);
+    if (isV5Contract()) {
+      market.creator = args.creator ?? market.creator;
+      market.settlementToken = args.token ?? market.settlementToken;
+      market.createdAt = timestamp || market.createdAt;
+      market.createdTxHash = txHash;
+      market.updatedTxHash = txHash;
+      return;
+    }
     market.question = String(args.question ?? market.question);
     market.category = String(args.category ?? market.category ?? "Other");
     market.closeTime = toNumber(args.closeTime);
@@ -605,11 +657,44 @@ async function processEvent(eventName, log) {
     return;
   }
 
+  if (eventName === "PositionTaken") {
+    const marketId = Number(args.marketId ?? 0n);
+    const market = ensureMarket(marketId);
+    const outcomeId = Number(args.outcomeId ?? V5_NO_OUTCOME);
+    const amount = toBigint(args.amount);
+    if (outcomeId === 0) market.yesPool = toAmount(toBigint(market.yesPool) + amount);
+    if (outcomeId === 1) market.noPool = toAmount(toBigint(market.noPool) + amount);
+    market.updatedTxHash = txHash;
+
+    const id = `${txHash}-${logIndex}`;
+    if (!state.trades.some((trade) => trade.id === id)) {
+      state.trades.push({
+        id,
+        marketId,
+        user: args.user ?? ZERO_ADDRESS,
+        side: v5OutcomeToLegacy(outcomeId),
+        outcomeId,
+        amount: toAmount(amount),
+        yesPool: market.yesPool,
+        noPool: market.noPool,
+        timestamp,
+        txHash,
+        blockNumber: String(log.blockNumber ?? ""),
+        logIndex
+      });
+    }
+    addSnapshot(market, timestamp, txHash, logIndex);
+    return;
+  }
+
   if (eventName === "MarketResultProposed") {
     const market = ensureMarket(Number(args.marketId ?? 0n));
-    market.proposedOutcome = Number(args.outcome ?? Outcome.Unresolved);
+    const proposedOutcome = isV5Contract()
+      ? v5OutcomeToLegacy(Number(args.outcomeId ?? V5_NO_OUTCOME))
+      : Number(args.outcome ?? Outcome.Unresolved);
+    market.proposedOutcome = proposedOutcome;
     market.proposedAt = timestamp;
-    market.disputeDeadline = toNumber(args.disputeDeadline);
+    market.disputeDeadline = toNumber(args.disputeDeadline) || timestamp + Number(market.termsDisputeWindow || state.disputeWindow || 0);
     if (isStablecoinContract()) {
       market.proposedBy = args.proposer ?? ZERO_ADDRESS;
       market.proposalEvidenceHash = args.evidenceHash ?? ZERO_HASH;
@@ -717,11 +802,16 @@ function isV4Contract() {
   return state.contractVersion === "AURAPREDICT_V4";
 }
 
+function isV5Contract() {
+  return state.contractVersion === "AURAPREDICT_V5";
+}
+
 function isStablecoinContract() {
-  return isV3Contract() || isV4Contract();
+  return isV3Contract() || isV4Contract() || isV5Contract();
 }
 
 function currentContractAbi() {
+  if (isV5Contract()) return arcPredictionMarketV5Abi;
   if (isV4Contract()) return arcPredictionMarketV4Abi;
   return isV3Contract() ? arcPredictionMarketV3Abi : arcPredictionMarketV2Abi;
 }
@@ -759,6 +849,8 @@ function circleCliArg(value) {
 }
 
 function circleFunctionSignature(functionName) {
+  if (functionName === "proposeOutcome") return "proposeOutcome(uint256,uint16,bytes32,bytes32,uint16,uint16,uint16,bytes32)";
+  if (functionName === "proposeCancel") return "proposeCancel(uint256,bytes32,bytes32)";
   if (functionName === "cancelEmptyMarket") return "cancelEmptyMarket(uint256)";
   if (functionName === "resolveWithAiAttestation") return "resolveWithAiAttestation(uint256,uint8,bytes32,bytes32,uint8,bytes)";
   if (functionName === "cancel") return isStablecoinContract() ? "cancel(uint256,bytes32,bytes32)" : "cancel(uint256)";
@@ -954,6 +1046,58 @@ async function readContract(functionName, args = []) {
 }
 
 async function readMarketData(id) {
+  if (isV5Contract()) {
+    const [summary, v5, pools] = await Promise.all([
+      readContract("getMarket", [BigInt(id)]),
+      readContract("getMarketV5", [BigInt(id)]),
+      readContract("getOutcomePools", [BigInt(id)])
+    ]);
+    const asset = await readContract("assetConfigs", [summary[7]]);
+    const stateValue = Number(summary[2]);
+    const proposedOutcomeId = Number(v5[7]);
+    const finalOutcomeId = Number(v5[8]);
+    const proposedAt = Number(v5[12] || 0n);
+    const termsDisputeWindow = Number(v5[13] || 0n);
+    const termsProposalGracePeriod = Number(v5[14] || 0n);
+    return {
+      question: summary[0],
+      category: summary[1],
+      settlementToken: summary[7],
+      settlementSymbol: String(asset[1] || "USDC"),
+      settlementDecimals: Number(asset[2] || V3_SETTLEMENT_DECIMALS),
+      closeTime: Number(summary[3]),
+      resolutionTime: Number(summary[4]),
+      creator: summary[6],
+      resolver: v5[3],
+      authority: v5[4],
+      resolutionMode: Number(v5[1]),
+      metadataHash: v5[9],
+      metadataURI: summary[9],
+      fallbackSourceURI: "",
+      resolutionRule: summary[10],
+      resolutionAdapter: v5[5],
+      termsProtocolFeeBps: Number(asset[9] || 0n),
+      termsCreatorBond: toAmount(asset[4]),
+      termsDisputeBond: toAmount(asset[6]),
+      termsDisputeWindow,
+      termsDisputeGracePeriod: termsProposalGracePeriod,
+      termsProposalGracePeriod,
+      yesPool: toAmount(pools[0] ?? 0n),
+      noPool: toAmount(pools[1] ?? 0n),
+      traderCount: Number(state.markets[String(id)]?.traderCount || 0),
+      proposedOutcome:
+        stateValue === V5_MARKET_STATE.Proposed || stateValue === V5_MARKET_STATE.Disputed
+          ? v5OutcomeToLegacy(proposedOutcomeId)
+          : Outcome.Unresolved,
+      proposedAt,
+      disputeDeadline: proposedAt > 0 ? proposedAt + termsDisputeWindow : 0,
+      authorityReviewRequired: Boolean(v5[15]),
+      disputed: Boolean(v5[16]),
+      disputer: v5[17],
+      outcome: v5StateToOutcome(stateValue, finalOutcomeId)
+    };
+  }
+
   if (isStablecoinContract()) {
     const data = await readContract("getMarket", [BigInt(id)]);
     const terms = isV4Contract() ? await readContract("getMarketTerms", [BigInt(id)]) : null;
@@ -1087,7 +1231,7 @@ async function refreshContractState() {
     state.resolutionAuthority = resolutionAuthority || state.owner;
     state.disputeGracePeriod = Number(disputeGracePeriod);
     state.marketCreationFee = toAmount(marketCreationFee);
-    if (isV4Contract()) {
+    if (isV4Contract() || isV5Contract()) {
       const [proposalGracePeriod, aiAttestationSigner] = await Promise.all([
         readContract("proposalGracePeriod"),
         readContract("aiAttestationSigner")
@@ -4492,21 +4636,37 @@ async function proposeOracleOnchain(proposal) {
   const receiptHash = isBytes32(proposal.dataHash) ? proposal.dataHash : ZERO_HASH;
   const evidenceRows = oracleEvidenceRowsForMarket(proposal.marketId);
   const evidenceHash = keccak256(stringToHex(JSON.stringify(evidenceRows.length > 0 ? evidenceRows : [proposal])));
-  const functionName =
-    isStablecoinContract() && noLiquidity && outcome === Outcome.Canceled
+  const functionName = isV5Contract()
+    ? outcome === Outcome.Canceled
+      ? "proposeCancel"
+      : "proposeOutcome"
+    : isStablecoinContract() && noLiquidity && outcome === Outcome.Canceled
       ? "cancelEmptyMarket"
       : outcome === Outcome.Canceled
         ? "cancel"
         : "resolve";
-  const args = isV4Contract() || isV3Contract()
-    ? functionName === "cancelEmptyMarket"
-      ? [BigInt(proposal.marketId)]
+  const args = isV5Contract()
+    ? functionName === "proposeCancel"
+      ? [BigInt(proposal.marketId), evidenceHash, receiptHash]
+      : [
+          BigInt(proposal.marketId),
+          legacyOutcomeToV5(outcome),
+          evidenceHash,
+          receiptHash,
+          V5_NO_OUTCOME,
+          legacyOutcomeToV5(outcome),
+          Math.max(0, Math.min(10_000, Math.round(Number(proposal.confidence || 0) * 100))),
+          keccak256(stringToHex(String(proposal.adapter || "oracle")))
+        ]
+    : isV4Contract() || isV3Contract()
+      ? functionName === "cancelEmptyMarket"
+        ? [BigInt(proposal.marketId)]
+        : functionName === "cancel"
+          ? [BigInt(proposal.marketId), evidenceHash, receiptHash]
+          : [BigInt(proposal.marketId), outcome, evidenceHash, receiptHash]
       : functionName === "cancel"
-        ? [BigInt(proposal.marketId), evidenceHash, receiptHash]
-        : [BigInt(proposal.marketId), outcome, evidenceHash, receiptHash]
-    : functionName === "cancel"
-      ? [BigInt(proposal.marketId)]
-      : [BigInt(proposal.marketId), outcome];
+        ? [BigInt(proposal.marketId)]
+        : [BigInt(proposal.marketId), outcome];
 
   try {
     const txHash = await writeResolverContract(functionName, args);
@@ -5074,38 +5234,54 @@ async function proposeResolutionOnchain(receipt) {
   const noLiquidity = toBigint(market.yesPool) === 0n && toBigint(market.noPool) === 0n;
   const receiptHash = isBytes32(receipt.receiptHash) ? receipt.receiptHash : ZERO_HASH;
   const evidenceHash = keccak256(stringToHex(JSON.stringify(receipt.evidence || [])));
-  const functionName =
-    isStablecoinContract() && noLiquidity
+  const functionName = isV5Contract()
+    ? receipt.proposedOutcomeValue === Outcome.Canceled
+      ? "proposeCancel"
+      : "proposeOutcome"
+    : isStablecoinContract() && noLiquidity
       ? "cancelEmptyMarket"
       : isV4Contract() && isSignature(receipt.attestation) && receipt.proposedOutcomeValue !== Outcome.Canceled
         ? "resolveWithAiAttestation"
-      : receipt.proposedOutcomeValue === Outcome.Canceled
-        ? "cancel"
-        : "resolve";
-  const args = isV4Contract()
-    ? functionName === "cancelEmptyMarket"
-      ? [BigInt(receipt.marketId)]
-      : functionName === "resolveWithAiAttestation"
-        ? [
-            BigInt(receipt.marketId),
-            receipt.proposedOutcomeValue,
-            evidenceHash,
-            receiptHash,
-            receipt.proposedOutcomeValue,
-            receipt.attestation
-          ]
+        : receipt.proposedOutcomeValue === Outcome.Canceled
+          ? "cancel"
+          : "resolve";
+  const args = isV5Contract()
+    ? functionName === "proposeCancel"
+      ? [BigInt(receipt.marketId), evidenceHash, receiptHash]
+      : [
+          BigInt(receipt.marketId),
+          legacyOutcomeToV5(receipt.proposedOutcomeValue),
+          evidenceHash,
+          receiptHash,
+          legacyOutcomeToV5(receipt.proposedOutcomeValue),
+          V5_NO_OUTCOME,
+          0,
+          ZERO_HASH
+        ]
+    : isV4Contract()
+      ? functionName === "cancelEmptyMarket"
+        ? [BigInt(receipt.marketId)]
+        : functionName === "resolveWithAiAttestation"
+          ? [
+              BigInt(receipt.marketId),
+              receipt.proposedOutcomeValue,
+              evidenceHash,
+              receiptHash,
+              receipt.proposedOutcomeValue,
+              receipt.attestation
+            ]
+          : functionName === "cancel"
+            ? [BigInt(receipt.marketId), evidenceHash, receiptHash]
+            : [BigInt(receipt.marketId), receipt.proposedOutcomeValue, evidenceHash, receiptHash]
+      : isV3Contract()
+        ? functionName === "cancelEmptyMarket"
+          ? [BigInt(receipt.marketId)]
+          : functionName === "cancel"
+            ? [BigInt(receipt.marketId), evidenceHash, receiptHash]
+            : [BigInt(receipt.marketId), receipt.proposedOutcomeValue, evidenceHash, receiptHash]
         : functionName === "cancel"
-          ? [BigInt(receipt.marketId), evidenceHash, receiptHash]
-          : [BigInt(receipt.marketId), receipt.proposedOutcomeValue, evidenceHash, receiptHash]
-    : isV3Contract()
-    ? functionName === "cancelEmptyMarket"
-      ? [BigInt(receipt.marketId)]
-      : functionName === "cancel"
-        ? [BigInt(receipt.marketId), evidenceHash, receiptHash]
-        : [BigInt(receipt.marketId), receipt.proposedOutcomeValue, evidenceHash, receiptHash]
-    : functionName === "cancel"
-      ? [BigInt(receipt.marketId)]
-      : [BigInt(receipt.marketId), receipt.proposedOutcomeValue];
+          ? [BigInt(receipt.marketId)]
+          : [BigInt(receipt.marketId), receipt.proposedOutcomeValue];
   const txHash = await writeResolverContract(functionName, args);
   receipt.txHash = txHash;
   receipt.status = "proposed";
@@ -5143,7 +5319,7 @@ async function runAutoResolutionSweep() {
 async function syncRange(fromBlock, toBlock) {
   const logs = [];
   const abi = currentContractAbi();
-  const eventNames = isV4Contract() ? V4_EVENT_NAMES : isV3Contract() ? V3_EVENT_NAMES : V2_EVENT_NAMES;
+  const eventNames = isV5Contract() ? V5_EVENT_NAMES : isV4Contract() ? V4_EVENT_NAMES : isV3Contract() ? V3_EVENT_NAMES : V2_EVENT_NAMES;
   for (const eventName of eventNames) {
     const eventLogs = await eventClient.getContractEvents({
       address: CONTRACT_ADDRESS,
@@ -5927,6 +6103,24 @@ function startRealtimeSync() {
   const runtime = indexerRuntimeState();
   if (!realtimeClient) {
     runtime.wsStatus = "disabled";
+    return;
+  }
+
+  if (eventName === "MarketCanceled") {
+    const market = ensureMarket(Number(args.marketId ?? 0n));
+    market.outcome = Outcome.Canceled;
+    market.resolvedAt = timestamp;
+    market.updatedTxHash = txHash;
+    addSnapshot(market, timestamp, txHash, logIndex);
+    return;
+  }
+
+  if (eventName === "MarketFinalized") {
+    const market = ensureMarket(Number(args.marketId ?? 0n));
+    market.outcome = v5OutcomeToLegacy(Number(args.outcomeId ?? V5_NO_OUTCOME));
+    market.resolvedAt = timestamp;
+    market.updatedTxHash = txHash;
+    addSnapshot(market, timestamp, txHash, logIndex);
     return;
   }
 

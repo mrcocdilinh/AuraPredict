@@ -3,6 +3,7 @@ import { encodeAbiParameters, toFunctionSelector } from "viem";
 
 const OWNER = "0xAAAEE8880C73a00cACe246B9445C62B77506b9b2";
 const AUTHORITY = "0x035E03F8C0a9D22a24b8212c466895A210645DC6";
+const CONTRACT = "0x1000000000000000000000000000000000000001";
 const USDC = "0x3600000000000000000000000000000000000000";
 const EURC = "0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a";
 const selectors = {
@@ -21,7 +22,9 @@ const selectors = {
   defaultSettlementToken: toFunctionSelector("defaultSettlementToken()"),
   assetConfigs: toFunctionSelector("assetConfigs(address)"),
   positionOf: toFunctionSelector("positionOf(uint256,address)"),
-  potentialPayout: toFunctionSelector("potentialPayout(uint256,address)")
+  potentialPayout: toFunctionSelector("potentialPayout(uint256,address)"),
+  getUserPosition: toFunctionSelector("getUserPosition(uint256,address)"),
+  getClaimable: toFunctionSelector("getClaimable(uint256,address)")
 };
 
 function uint256(value: bigint | number) {
@@ -45,9 +48,13 @@ function assetConfig() {
       { type: "uint256" },
       { type: "uint256" },
       { type: "uint256" },
+      { type: "uint256" },
+      { type: "uint256" },
+      { type: "uint256" },
+      { type: "uint256" },
       { type: "uint256" }
     ],
-    [true, "USDC", 6, 100_000n, 1_000_000n, 1_000_000n, 0n]
+    [true, "USDC", 6, 100_000n, 1_000_000n, 1_000_000n, 1_000_000n, 1_000_000n, 0n, 200n, 0n]
   );
 }
 
@@ -55,6 +62,13 @@ function positionValue(yes: bigint, no: bigint, claimed: boolean) {
   return encodeAbiParameters(
     [{ type: "uint256" }, { type: "uint256" }, { type: "bool" }],
     [yes, no, claimed]
+  );
+}
+
+function v5PositionValue(stakes: bigint[], claimed: boolean) {
+  return encodeAbiParameters(
+    [{ type: "uint256[]" }, { type: "bool" }],
+    [stakes, claimed]
   );
 }
 
@@ -188,7 +202,7 @@ async function mockAuraBackend(page: Page) {
             ]
           },
           contract: {
-            version: "AURAPREDICT_V4",
+            version: "AURAPREDICT_V5",
             owner: OWNER,
             resolutionAuthority: AUTHORITY,
             creatorBond: "1000000",
@@ -352,7 +366,7 @@ async function mockRpc(route: Route) {
           blockHash: "0x" + "d".repeat(64),
           blockNumber: "0x2b4f121",
           from: OWNER,
-          to: "0x3c853AE2eC705B453c9657569b6335e762631536",
+          to: CONTRACT,
           cumulativeGasUsed: "0x5208",
           gasUsed: "0x5208",
           effectiveGasPrice: "0x1",
@@ -367,13 +381,13 @@ async function mockRpc(route: Route) {
     if (call.method === "eth_call") {
       const data = String(call.params?.[0]?.data || "").slice(0, 10);
       const responses: Record<string, string> = {
-        [selectors.marketCount]: uint256(0),
+        [selectors.marketCount]: uint256(markets.length),
         [selectors.owner]: address(OWNER),
         [selectors.minStake]: uint256(100_000),
         [selectors.creatorBond]: uint256(1_000_000),
         [selectors.disputeBond]: uint256(1_000_000),
         [selectors.disputeWindow]: uint256(43_200),
-        [selectors.contractVersion]: stringValue("AURAPREDICT_V4"),
+        [selectors.contractVersion]: stringValue("AURAPREDICT_V5"),
         [selectors.resolutionAuthority]: address(AUTHORITY),
         [selectors.disputeGracePeriod]: uint256(259_200),
         [selectors.marketCreationFee]: uint256(0),
@@ -382,7 +396,9 @@ async function mockRpc(route: Route) {
         [selectors.defaultSettlementToken]: address(USDC),
         [selectors.assetConfigs]: assetConfig(),
         [selectors.positionOf]: positionValue(1_000_000n, 0n, false),
-        [selectors.potentialPayout]: uint256(1_000_000)
+        [selectors.potentialPayout]: uint256(1_000_000),
+        [selectors.getUserPosition]: v5PositionValue([1_000_000n, 0n], false),
+        [selectors.getClaimable]: uint256(1_000_000)
       };
       result = responses[data] || "0x" + "0".repeat(64);
     }
@@ -407,7 +423,7 @@ test("create market form defaults to authority/oracle review", async ({ page }) 
   await expect(page.getByRole("heading", { name: /Create a new market/i })).toBeVisible();
   await expect(page.getByLabel(/Resolution mode/i)).toHaveValue("2");
   await expect(page.getByLabel(/Resolution source URL/i)).toBeVisible();
-  await expect(page.getByText(/New markets default to authority\/oracle review/i)).toBeVisible();
+  await expect(page.getByText(/V5 markets launch as owner-reviewed drafts/i)).toBeVisible();
   await expect(page.getByText(/AI market quality/i)).toBeVisible();
 });
 
@@ -492,5 +508,5 @@ test("wallet notifications expose claim all and claim filters", async ({ page })
   await expect(page.getByText(/Claim available/i).first()).toBeVisible();
 
   await page.getByRole("button", { name: /Claim all 2\.00 USDC/i }).click();
-  await expect(page.getByText(/Claim all finished: 2 claimed/i)).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByText(/Claimed 2 available V5 payouts/i)).toBeVisible({ timeout: 10_000 });
 });

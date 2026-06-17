@@ -28,6 +28,7 @@ import {
 } from "./arc";
 import { arcPredictionMarketV3Abi, arcPredictionMarketV4Abi, settlementTokenAbi } from "./contracts/arcPredictionMarketAbi";
 import { arcPredictionMarketV2Abi as arcPredictionMarketAbi } from "./contracts/arcPredictionMarketV2Abi";
+import { arcPredictionMarketV5Abi } from "./contracts/arcPredictionMarketV5Abi";
 import { claimAllResultNotice, type ClaimAllFailure } from "./lib/claims";
 
 const browserGlobal = globalThis as typeof globalThis & { Buffer?: typeof Buffer };
@@ -38,6 +39,7 @@ if (!browserGlobal.Buffer) {
 type EthereumProvider = {
   request: (args: { method: string; params?: unknown[] }) => Promise<unknown>;
   disconnect?: () => Promise<void> | void;
+  isMagic?: boolean;
   on?: (event: string, handler: (...args: unknown[]) => void) => void;
   removeListener?: (event: string, handler: (...args: unknown[]) => void) => void;
 };
@@ -277,7 +279,7 @@ type ChainMarketSnapshot = Pick<
   "proposedOutcome" | "proposedAt" | "disputeDeadline" | "authorityReviewRequired" | "disputed" | "outcome"
 >;
 
-type MarketContractVersion = "unknown" | "legacy" | "dispute" | "v2" | "v3" | "v4";
+type MarketContractVersion = "unknown" | "legacy" | "dispute" | "v2" | "v3" | "v4" | "v5";
 
 type ActivityItem = {
   id: string;
@@ -790,6 +792,7 @@ type ContractEventRow = {
     marketId?: bigint;
     user?: Address;
     side?: number;
+    outcomeId?: number;
     amount?: bigint;
   };
   blockNumber?: bigint | null;
@@ -806,11 +809,13 @@ enum Outcome {
 
 const ACTIVE_V3_CONTRACT_ADDRESS = "0x4399ea3f59AA14e4D19217f1af2aD0681f5FafFd";
 const ACTIVE_V3_DEPLOYMENT_BLOCK = "44074836";
-const ACTIVE_V4_CONTRACT_ADDRESS = "0x3c853AE2eC705B453c9657569b6335e762631536";
-const ACTIVE_V4_DEPLOYMENT_BLOCK = "44083985";
+const ACTIVE_V5_CONTRACT_ADDRESS = String(
+  import.meta.env.VITE_PREDICTION_MARKET_ADDRESS || import.meta.env.VITE_AURAPREDICT_V5_ADDRESS || ""
+).trim();
+const ACTIVE_V5_DEPLOYMENT_BLOCK = String(import.meta.env.VITE_AURAPREDICT_V5_DEPLOYMENT_BLOCK || "0").trim();
 const ACTIVE_V3_EURC_TOKEN_ADDRESS = "0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a";
-const PRIMARY_CONTRACT_ADDRESS = ACTIVE_V4_CONTRACT_ADDRESS;
-const PRIMARY_DEPLOYMENT_BLOCK = ACTIVE_V4_DEPLOYMENT_BLOCK;
+const PRIMARY_CONTRACT_ADDRESS = ACTIVE_V5_CONTRACT_ADDRESS;
+const PRIMARY_DEPLOYMENT_BLOCK = ACTIVE_V5_DEPLOYMENT_BLOCK;
 const REQUESTED_DEPLOYMENT =
   typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("deployment") : null;
 const VIEWING_V3_ARCHIVE =
@@ -841,6 +846,13 @@ const CHART_HEIGHT = CHART_BOTTOM - CHART_TOP;
 const WALLET_CONNECTED_KEY = "aurapredict.walletConnected";
 const WALLET_DISCONNECTED_KEY = "aurapredict.walletDisconnected";
 const WALLETCONNECT_PROJECT_ID = String(import.meta.env.VITE_WALLETCONNECT_PROJECT_ID || "").trim();
+const SEEDLESS_ENABLED = String(import.meta.env.VITE_SEEDLESS_ENABLED || "0").trim() === "1";
+const SEEDLESS_PROVIDER = String(import.meta.env.VITE_SEEDLESS_PROVIDER || "magic").trim().toLowerCase();
+const MAGIC_PUBLISHABLE_KEY = String(import.meta.env.VITE_MAGIC_PUBLISHABLE_KEY || "").trim();
+const SEEDLESS_APP_ID = String(
+  MAGIC_PUBLISHABLE_KEY || import.meta.env.VITE_PRIVY_APP_ID || import.meta.env.VITE_WEB3AUTH_CLIENT_ID || ""
+).trim();
+const SEEDLESS_FORWARDER_ADDRESS = String(import.meta.env.VITE_AURA_TRUSTED_FORWARDER_ADDRESS || "").trim();
 const CIRCLE_APP_KIT_KEY = String(import.meta.env.VITE_CIRCLE_APP_KIT_KEY || "").trim();
 const DISMISSED_RESULT_KEY = "aurapredict.dismissedResultNotices";
 const THEME_KEY = "aurapredict.theme";
@@ -966,6 +978,49 @@ function getInjectedProvider(provider?: EthereumProvider | null) {
     throw new Error("Open AuraPredict inside a wallet browser such as Zerion, MetaMask, Rabby, or OKX.");
   }
   return injected;
+}
+
+type SeedlessMagicClient = {
+  auth: {
+    loginWithEmailOTP: (configuration: { email: string; showUI?: boolean }) => PromiseLike<string | null>;
+  };
+  oauth2?: {
+    loginWithPopup: (configuration: { provider: "google"; scope?: string[] }) => PromiseLike<unknown>;
+  };
+  user: {
+    getInfo: () => PromiseLike<{ email?: string | null; publicAddress?: string | null }>;
+    isLoggedIn: () => PromiseLike<boolean>;
+    logout: () => PromiseLike<boolean>;
+  };
+  rpcProvider: EthereumProvider;
+};
+
+let seedlessMagicClientPromise: Promise<SeedlessMagicClient> | null = null;
+
+async function getSeedlessMagicClient() {
+  if (SEEDLESS_PROVIDER !== "magic") {
+    throw new Error("Only Magic seedless login is bundled in this build. Set VITE_SEEDLESS_PROVIDER=magic.");
+  }
+  if (!MAGIC_PUBLISHABLE_KEY) {
+    throw new Error("Missing VITE_MAGIC_PUBLISHABLE_KEY for seedless Google/email login.");
+  }
+  if (!seedlessMagicClientPromise) {
+    seedlessMagicClientPromise = Promise.all([
+      import("magic-sdk"),
+      import("@magic-ext/oauth2")
+    ]).then(([magicModule, oauthModule]) => {
+      const magic = new magicModule.Magic(MAGIC_PUBLISHABLE_KEY, {
+        network: {
+          rpcUrl: ARC_RPC_URL,
+          chainId: ARC_CHAIN_ID_NUMBER
+        },
+        extensions: [new oauthModule.OAuthExtension()]
+      }) as unknown as SeedlessMagicClient;
+      magic.rpcProvider.isMagic = true;
+      return magic;
+    });
+  }
+  return seedlessMagicClientPromise;
 }
 
 function getPublicClient() {
@@ -2820,7 +2875,43 @@ function sameAddress(left: string, right: string) {
 }
 
 function isStablecoinContractVersion(version: MarketContractVersion) {
-  return version === "v3" || version === "v4";
+  return version === "v3" || version === "v4" || version === "v5";
+}
+
+function stablecoinMarketAbi(version: MarketContractVersion) {
+  if (version === "v5") return arcPredictionMarketV5Abi;
+  return version === "v4" ? arcPredictionMarketV4Abi : arcPredictionMarketV3Abi;
+}
+
+const V5_MARKET_STATE = {
+  Draft: 0,
+  Live: 1,
+  Proposed: 2,
+  Disputed: 3,
+  Finalized: 4,
+  Canceled: 5,
+  Rejected: 6
+} as const;
+const V5_NO_OUTCOME = 65535;
+const V5_BINARY_OUTCOME_LABELS_HASH = keccak256(stringToHex("YES|NO"));
+
+function legacyOutcomeToV5(outcome: Outcome) {
+  if (outcome === Outcome.Yes) return 0;
+  if (outcome === Outcome.No) return 1;
+  return V5_NO_OUTCOME;
+}
+
+function v5OutcomeToLegacy(outcomeId: number) {
+  if (outcomeId === 0) return Outcome.Yes;
+  if (outcomeId === 1) return Outcome.No;
+  if (outcomeId === V5_NO_OUTCOME) return Outcome.Canceled;
+  return Outcome.Unresolved;
+}
+
+function v5StateToOutcome(state: number, finalOutcome: number) {
+  if (state === V5_MARKET_STATE.Finalized) return v5OutcomeToLegacy(finalOutcome);
+  if (state === V5_MARKET_STATE.Canceled || state === V5_MARKET_STATE.Rejected) return Outcome.Canceled;
+  return Outcome.Unresolved;
 }
 
 function hasUserPosition(market: MarketView) {
@@ -4324,6 +4415,7 @@ export default function App() {
   const [notificationMenuOpen, setNotificationMenuOpen] = useState(false);
   const [themeMenuOpen, setThemeMenuOpen] = useState(false);
   const [walletModalOpen, setWalletModalOpen] = useState(false);
+  const [seedlessEmail, setSeedlessEmail] = useState("");
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [marketReloadToken, setMarketReloadToken] = useState(0);
@@ -6137,7 +6229,7 @@ export default function App() {
           const value = await withRpcRetry(() =>
             getPublicClient().readContract({
               address: contractAddress,
-              abi: arcPredictionMarketV4Abi,
+              abi: stablecoinMarketAbi(contractVersion),
               functionName: "accumulatedProtocolFeesByToken",
               args: [asset.token as Address]
             })
@@ -6379,6 +6471,10 @@ export default function App() {
 
   const switchToArc = useCallback(async (provider?: EthereumProvider | null) => {
     const injected = getInjectedProvider(provider ?? selectedWalletProvider);
+    if (injected.isMagic) {
+      setIsArcNetwork(true);
+      return;
+    }
     const switchChain = async () => {
       const chainIds = [arcTestnetParams.chainId, arcTestnetParams.chainId.toLowerCase()];
       let lastError: unknown;
@@ -6580,7 +6676,7 @@ export default function App() {
       tokens.map(async (token) => {
         const amount = await withRpcRetry(() => getPublicClient().readContract({
           address: contractAddress,
-          abi: arcPredictionMarketV3Abi,
+          abi: stablecoinMarketAbi(contractVersion),
           functionName: "pendingWithdrawals",
           args: [token as Address, account as Address]
         }));
@@ -6639,6 +6735,64 @@ export default function App() {
     }
   }, [connectWallet]);
 
+  const ensureSeedlessReady = useCallback(() => {
+    if (!SEEDLESS_ENABLED) {
+      setNotice("Seedless login is V5-ready but disabled. Set VITE_SEEDLESS_ENABLED=1 after choosing an embedded-wallet provider.");
+      return false;
+    }
+    if (!SEEDLESS_APP_ID) {
+      setNotice(`Seedless login needs a ${SEEDLESS_PROVIDER} app/client key before Google or email login can start.`);
+      return false;
+    }
+    if (!isAddress(SEEDLESS_FORWARDER_ADDRESS)) {
+      setNotice(
+        "Seedless wallet login can start, but gas sponsorship is not active until VITE_AURA_TRUSTED_FORWARDER_ADDRESS and relayer are configured."
+      );
+    }
+    return true;
+  }, [setNotice]);
+
+  const connectSeedlessMagic = useCallback(
+    async (login: (magic: SeedlessMagicClient) => PromiseLike<unknown>, label: string) => {
+      if (!ensureSeedlessReady()) return;
+      try {
+        setNotice("");
+        setConnecting(true);
+        const magic = await getSeedlessMagicClient();
+        await login(magic);
+        await connectWallet(magic.rpcProvider);
+        const info = await Promise.resolve(magic.user.getInfo()).catch(() => null);
+        setWalletModalOpen(false);
+        setNotice(
+          `${label} seedless wallet connected${info?.email ? ` as ${info.email}` : ""}. V5 actions use the embedded wallet; sponsorship requires the configured forwarder/relayer.`
+        );
+      } catch (error) {
+        setConnecting(false);
+        setNotice(walletConnectionErrorMessage(`${label} seedless login failed`, error));
+      }
+    },
+    [connectWallet, ensureSeedlessReady]
+  );
+
+  const handleSeedlessGoogleLogin = useCallback(() => {
+    void connectSeedlessMagic(async (magic) => {
+      if (!magic.oauth2?.loginWithPopup) throw new Error("Magic OAuth2 extension is not available.");
+      await magic.oauth2.loginWithPopup({ provider: "google", scope: ["email", "profile"] });
+    }, "Google");
+  }, [connectSeedlessMagic]);
+
+  const handleSeedlessEmailLogin = useCallback(() => {
+    const email = seedlessEmail.trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setNotice("Enter a valid email before starting seedless login.");
+      return;
+    }
+    void connectSeedlessMagic(
+      async (magic) => magic.auth.loginWithEmailOTP({ email, showUI: true }),
+      "Email"
+    );
+  }, [connectSeedlessMagic, seedlessEmail, setNotice]);
+
   const openMobileWallet = useCallback((url: string) => {
     window.location.href = url;
   }, []);
@@ -6685,6 +6839,10 @@ export default function App() {
   const disconnectWallet = useCallback(async () => {
     const providerToDisconnect = selectedWalletProvider;
     try {
+      if (providerToDisconnect?.isMagic && seedlessMagicClientPromise) {
+        const magic = await seedlessMagicClientPromise;
+        await magic.user.logout();
+      }
       await providerToDisconnect?.disconnect?.();
     } catch {
       // Injected wallets usually do not expose disconnect; local session state is still cleared below.
@@ -8065,7 +8223,9 @@ export default function App() {
             }))
           ]);
         detectedContractVersion =
-          String(contractVersionName) === "AURAPREDICT_V4"
+          String(contractVersionName) === "AURAPREDICT_V5"
+            ? "v5"
+            : String(contractVersionName) === "AURAPREDICT_V4"
             ? "v4"
             : String(contractVersionName) === "AURAPREDICT_V3"
               ? "v3"
@@ -8079,12 +8239,12 @@ export default function App() {
         if (isStablecoinContractVersion(detectedContractVersion)) {
           const token = await withRpcRetry(() => publicClient.readContract({
             address: contractAddress,
-            abi: arcPredictionMarketV3Abi,
+            abi: stablecoinMarketAbi(detectedContractVersion),
             functionName: "defaultSettlementToken"
           }));
           const asset = await withRpcRetry(() => publicClient.readContract({
             address: contractAddress,
-            abi: arcPredictionMarketV3Abi,
+            abi: stablecoinMarketAbi(detectedContractVersion),
             functionName: "assetConfigs",
             args: [token]
           }));
@@ -8136,24 +8296,40 @@ export default function App() {
                 indexedRows,
                 MARKET_LOAD_CONCURRENCY,
                 async (market) => {
-                  const position = await withRpcRetry(() => publicClient.readContract({
-                    address: contractAddress,
-                    abi: arcPredictionMarketAbi,
-                    functionName: "positionOf",
-                    args: [BigInt(market.id), accountForPositions]
-                  }));
-                  const yesPosition = position[0];
-                  const noPosition = position[1];
-                  const claimed = position[2];
+                  const position = detectedContractVersion === "v5"
+                    ? await withRpcRetry(() => publicClient.readContract({
+                        address: contractAddress,
+                        abi: arcPredictionMarketV5Abi,
+                        functionName: "getUserPosition",
+                        args: [BigInt(market.id), accountForPositions]
+                      }))
+                    : await withRpcRetry(() => publicClient.readContract({
+                        address: contractAddress,
+                        abi: arcPredictionMarketAbi,
+                        functionName: "positionOf",
+                        args: [BigInt(market.id), accountForPositions]
+                      }));
+                  const v5Position = position as readonly [readonly bigint[], boolean];
+                  const legacyPosition = position as readonly [bigint, bigint, boolean];
+                  const yesPosition = detectedContractVersion === "v5" ? (v5Position[0][0] ?? 0n) : legacyPosition[0];
+                  const noPosition = detectedContractVersion === "v5" ? (v5Position[0][1] ?? 0n) : legacyPosition[1];
+                  const claimed = detectedContractVersion === "v5" ? Boolean(v5Position[1]) : Boolean(legacyPosition[2]);
                   let potentialPayout = 0n;
 
                   if (market.outcome !== Outcome.Unresolved && !claimed && (yesPosition > 0n || noPosition > 0n)) {
-                    potentialPayout = await withRpcRetry(() => publicClient.readContract({
-                      address: contractAddress,
-                      abi: arcPredictionMarketAbi,
-                      functionName: "potentialPayout",
-                      args: [BigInt(market.id), accountForPositions]
-                    }));
+                    potentialPayout = detectedContractVersion === "v5"
+                      ? await withRpcRetry(() => publicClient.readContract({
+                          address: contractAddress,
+                          abi: arcPredictionMarketV5Abi,
+                          functionName: "getClaimable",
+                          args: [BigInt(market.id), accountForPositions]
+                        }))
+                      : await withRpcRetry(() => publicClient.readContract({
+                          address: contractAddress,
+                          abi: arcPredictionMarketAbi,
+                          functionName: "potentialPayout",
+                          args: [BigInt(market.id), accountForPositions]
+                        }));
                   }
 
                   return {
@@ -8185,6 +8361,92 @@ export default function App() {
       let failedMarketLoads = 0;
       setDataSource("rpc");
       const readMarketById = async (id: number, trackFailure: boolean) => {
+        if (detectedContractVersion === "v5") {
+          try {
+            const [summary, v5, pools] = await Promise.all([
+              withRpcRetry(() => publicClient.readContract({
+                address: contractAddress,
+                abi: arcPredictionMarketV5Abi,
+                functionName: "getMarket",
+                args: [BigInt(id)]
+              })),
+              withRpcRetry(() => publicClient.readContract({
+                address: contractAddress,
+                abi: arcPredictionMarketV5Abi,
+                functionName: "getMarketV5",
+                args: [BigInt(id)]
+              })),
+              withRpcRetry(() => publicClient.readContract({
+                address: contractAddress,
+                abi: arcPredictionMarketV5Abi,
+                functionName: "getOutcomePools",
+                args: [BigInt(id)]
+              }))
+            ]);
+            const asset = await withRpcRetry(() => publicClient.readContract({
+              address: contractAddress,
+              abi: arcPredictionMarketV5Abi,
+              functionName: "assetConfigs",
+              args: [summary[7]]
+            }));
+            const state = Number(summary[2]);
+            const proposedRaw = Number(v5[7]);
+            const finalRaw = Number(v5[8]);
+            const proposedAt = Number(v5[12] || 0n);
+            const termsDisputeWindow = Number(v5[13] || 0n);
+            const termsProposalGracePeriod = Number(v5[14] || 0n);
+            return {
+              market: {
+                id,
+                question: summary[0],
+                category: normalizeCategory(summary[1]),
+                settlementToken: summary[7],
+                settlementSymbol: String(asset[1] || detectedSettlementSymbol),
+                settlementDecimals: Number(asset[2] || detectedSettlementDecimals),
+                createdAt: 0,
+                closeTime: Number(summary[3]),
+                resolutionTime: Number(summary[4]),
+                creator: summary[6],
+                resolver: v5[3],
+                authority: v5[4],
+                resolutionMode: Number(v5[1]),
+                metadataHash: v5[9],
+                metadataURI: summary[9],
+                fallbackSourceURI: "",
+                resolutionRule: summary[10],
+                resolutionAdapter: v5[5],
+                termsProtocolFeeBps: Number(asset[9] || 0n),
+                termsCreatorBond: asset[4],
+                termsDisputeBond: asset[6],
+                termsDisputeWindow,
+                termsDisputeGracePeriod: termsProposalGracePeriod,
+                termsProposalGracePeriod,
+                yesPool: pools[0] ?? 0n,
+                noPool: pools[1] ?? 0n,
+                traderCount: 0,
+                proposedOutcome:
+                  state === V5_MARKET_STATE.Proposed || state === V5_MARKET_STATE.Disputed
+                    ? v5OutcomeToLegacy(proposedRaw)
+                    : Outcome.Unresolved,
+                proposedAt,
+                disputeDeadline: proposedAt > 0 ? proposedAt + termsDisputeWindow : 0,
+                authorityReviewRequired: Boolean(v5[15]),
+                disputed: Boolean(v5[16]),
+                disputer: v5[17],
+                outcome: v5StateToOutcome(state, finalRaw),
+                yesPosition: 0n,
+                noPosition: 0n,
+                claimed: false,
+                potentialPayout: 0n
+              },
+              isLegacyMarket: false
+            };
+          } catch (error) {
+            if (trackFailure) failedMarketLoads += 1;
+            console.warn(`Failed to load V5 market #${id}`, error);
+            return null;
+          }
+        }
         if (isStablecoinContractVersion(detectedContractVersion)) {
           try {
             const data = await withRpcRetry(() => publicClient.readContract({
@@ -8496,24 +8758,40 @@ export default function App() {
               sortedRows,
               MARKET_LOAD_CONCURRENCY,
               async (market) => {
-                const position = await withRpcRetry(() => publicClient.readContract({
-                  address: contractAddress,
-                  abi: arcPredictionMarketAbi,
-                  functionName: "positionOf",
-                  args: [BigInt(market.id), accountForPositions]
-                }));
-                const yesPosition = position[0];
-                const noPosition = position[1];
-                const claimed = position[2];
+                const position = detectedContractVersion === "v5"
+                  ? await withRpcRetry(() => publicClient.readContract({
+                      address: contractAddress,
+                      abi: arcPredictionMarketV5Abi,
+                      functionName: "getUserPosition",
+                      args: [BigInt(market.id), accountForPositions]
+                    }))
+                  : await withRpcRetry(() => publicClient.readContract({
+                      address: contractAddress,
+                      abi: arcPredictionMarketAbi,
+                      functionName: "positionOf",
+                      args: [BigInt(market.id), accountForPositions]
+                    }));
+                const v5Position = position as readonly [readonly bigint[], boolean];
+                const legacyPosition = position as readonly [bigint, bigint, boolean];
+                const yesPosition = detectedContractVersion === "v5" ? (v5Position[0][0] ?? 0n) : legacyPosition[0];
+                const noPosition = detectedContractVersion === "v5" ? (v5Position[0][1] ?? 0n) : legacyPosition[1];
+                const claimed = detectedContractVersion === "v5" ? Boolean(v5Position[1]) : Boolean(legacyPosition[2]);
                 let potentialPayout = 0n;
 
                 if (market.outcome !== Outcome.Unresolved && !claimed && (yesPosition > 0n || noPosition > 0n)) {
-                  potentialPayout = await withRpcRetry(() => publicClient.readContract({
-                    address: contractAddress,
-                    abi: arcPredictionMarketAbi,
-                    functionName: "potentialPayout",
-                    args: [BigInt(market.id), accountForPositions]
-                  }));
+                  potentialPayout = detectedContractVersion === "v5"
+                    ? await withRpcRetry(() => publicClient.readContract({
+                        address: contractAddress,
+                        abi: arcPredictionMarketV5Abi,
+                        functionName: "getClaimable",
+                        args: [BigInt(market.id), accountForPositions]
+                      }))
+                    : await withRpcRetry(() => publicClient.readContract({
+                        address: contractAddress,
+                        abi: arcPredictionMarketAbi,
+                        functionName: "potentialPayout",
+                        args: [BigInt(market.id), accountForPositions]
+                      }));
                 }
 
                 return {
@@ -8539,10 +8817,11 @@ export default function App() {
       }
 
       if (!isSilentLoad) try {
-        const getContractEventsChunked = async (eventName: "MarketCreated" | "BetPlaced") => {
+        const getContractEventsChunked = async (eventName: "MarketCreated" | "BetPlaced" | "PositionTaken") => {
           const latestBlock = await withRpcRetry(() => publicClient.getBlockNumber());
           const events: ContractEventRow[] = [];
           let fromBlock = EVENT_START_BLOCK;
+          const eventAbi = detectedContractVersion === "v5" ? arcPredictionMarketV5Abi : arcPredictionMarketAbi;
 
           while (fromBlock <= latestBlock) {
             const toBlock =
@@ -8550,7 +8829,7 @@ export default function App() {
             const rows = await withRpcRetry(() =>
               publicClient.getContractEvents({
                 address: contractAddress,
-                abi: arcPredictionMarketAbi,
+                abi: eventAbi,
                 eventName,
                 fromBlock,
                 toBlock
@@ -8573,7 +8852,7 @@ export default function App() {
         };
         const [createdEvents, betEvents] = await Promise.all([
           getContractEventsChunked("MarketCreated"),
-          getContractEventsChunked("BetPlaced")
+          getContractEventsChunked(contractVersion === "v5" ? "PositionTaken" : "BetPlaced")
         ]);
         const createdAtByMarket = new Map<number, number>();
         const activityMarketRows = projectMarkets.length > 0 ? projectMarkets : sortedRows;
@@ -8621,16 +8900,20 @@ export default function App() {
               marketId?: bigint;
               user?: Address;
               side?: number;
+              outcomeId?: number;
               amount?: bigint;
             };
             const marketId = Number(args.marketId ?? 0n);
+            const side = contractVersion === "v5"
+              ? v5OutcomeToLegacy(Number(args.outcomeId ?? V5_NO_OUTCOME))
+              : Number(args.side ?? 0) as Outcome;
 
             return {
               id: `${event.transactionHash}-${event.logIndex}`,
               user: args.user ?? "0x0000000000000000000000000000000000000000",
               marketId,
               question: marketMap.get(marketId)?.question ?? `Market #${marketId}`,
-              side: Number(args.side ?? 0) as Outcome,
+              side,
               amount: args.amount ?? 0n,
               timestamp: await getBlockTimestamp(event.blockNumber)
             };
@@ -8751,10 +9034,34 @@ export default function App() {
 
   const readChainMarketSnapshot = async (marketId: number): Promise<ChainMarketSnapshot | null> => {
     if (!isStablecoinContractVersion(contractVersion)) return null;
+    if (contractVersion === "v5") {
+      const v5 = await withRpcRetry(() =>
+        getPublicClient().readContract({
+          address: contractAddress,
+          abi: arcPredictionMarketV5Abi,
+          functionName: "getMarketV5",
+          args: [BigInt(marketId)]
+        })
+      );
+      const state = Number(v5[0]);
+      const proposedAt = Number(v5[12] ?? 0n);
+      const disputeWindowSeconds = Number(v5[13] ?? 0n);
+      return {
+        proposedOutcome:
+          state === V5_MARKET_STATE.Proposed || state === V5_MARKET_STATE.Disputed
+            ? v5OutcomeToLegacy(Number(v5[7]))
+            : Outcome.Unresolved,
+        proposedAt,
+        disputeDeadline: proposedAt > 0 ? proposedAt + disputeWindowSeconds : 0,
+        authorityReviewRequired: Boolean(v5[15]),
+        disputed: Boolean(v5[16]),
+        outcome: v5StateToOutcome(state, Number(v5[8]))
+      };
+    }
     const data = (await withRpcRetry(() =>
       getPublicClient().readContract({
         address: contractAddress,
-        abi: contractVersion === "v4" ? arcPredictionMarketV4Abi : arcPredictionMarketV3Abi,
+        abi: stablecoinMarketAbi(contractVersion),
         functionName: "getMarket",
         args: [BigInt(marketId)]
       })
@@ -8862,28 +9169,47 @@ export default function App() {
   const refreshClaimEligibility = useCallback(
     async (marketId: number) => {
       if (!account || !isAddress(account)) throw new Error("Connect wallet first.");
-      const [position, payout] = await Promise.all([
-        withRpcRetry(() => getPublicClient().readContract({
-          address: contractAddress,
-          abi: arcPredictionMarketAbi,
-          functionName: "positionOf",
-          args: [BigInt(marketId), account as Address]
-        })),
-        withRpcRetry(() => getPublicClient().readContract({
-          address: contractAddress,
-          abi: arcPredictionMarketAbi,
-          functionName: "potentialPayout",
-          args: [BigInt(marketId), account as Address]
-        }))
-      ]);
-      const claimed = Boolean(position[2]);
+      const [position, payout] = contractVersion === "v5"
+        ? await Promise.all([
+            withRpcRetry(() => getPublicClient().readContract({
+              address: contractAddress,
+              abi: arcPredictionMarketV5Abi,
+              functionName: "getUserPosition",
+              args: [BigInt(marketId), account as Address]
+            })),
+            withRpcRetry(() => getPublicClient().readContract({
+              address: contractAddress,
+              abi: arcPredictionMarketV5Abi,
+              functionName: "getClaimable",
+              args: [BigInt(marketId), account as Address]
+            }))
+          ])
+        : await Promise.all([
+            withRpcRetry(() => getPublicClient().readContract({
+              address: contractAddress,
+              abi: arcPredictionMarketAbi,
+              functionName: "positionOf",
+              args: [BigInt(marketId), account as Address]
+            })),
+            withRpcRetry(() => getPublicClient().readContract({
+              address: contractAddress,
+              abi: arcPredictionMarketAbi,
+              functionName: "potentialPayout",
+              args: [BigInt(marketId), account as Address]
+            }))
+          ]);
+      const v5Position = position as readonly [readonly bigint[], boolean];
+      const legacyPosition = position as readonly [bigint, bigint, boolean];
+      const yesPosition = contractVersion === "v5" ? (v5Position[0][0] ?? 0n) : legacyPosition[0];
+      const noPosition = contractVersion === "v5" ? (v5Position[0][1] ?? 0n) : legacyPosition[1];
+      const claimed = contractVersion === "v5" ? Boolean(v5Position[1]) : Boolean(legacyPosition[2]);
       setMarkets((current) =>
         current.map((market) =>
           market.id === marketId
             ? {
                 ...market,
-                yesPosition: position[0],
-                noPosition: position[1],
+                yesPosition,
+                noPosition,
                 claimed,
                 potentialPayout: claimed ? 0n : payout
               }
@@ -8893,7 +9219,7 @@ export default function App() {
       if (claimed) markClaimedLocally(marketId);
       return { claimed, payout };
     },
-    [account, contractAddress, markClaimedLocally]
+    [account, contractAddress, contractVersion, markClaimedLocally]
   );
 
   const createMarket = async (event: React.FormEvent) => {
@@ -8968,14 +9294,18 @@ export default function App() {
         if (!isAddress(settlementToken)) throw new Error("Settlement token is not configured for this contract.");
         const asset = await withRpcRetry(() => getPublicClient().readContract({
           address: contractAddress,
-          abi: arcPredictionMarketV3Abi,
+          abi: stablecoinMarketAbi(contractVersion),
           functionName: "assetConfigs",
           args: [settlementToken]
         }));
-        if (!asset[0]) throw new Error("Selected settlement token is not enabled in the contract.");
-        createdSettlementSymbol = String(asset[1] || "TOKEN");
-        createdSettlementDecimals = Number(asset[2] || V3_STABLECOIN_DECIMALS);
-        const createCost = asset[4] + asset[6];
+        const assetConfig = asset as unknown as readonly [boolean, string, number, bigint, bigint, bigint, bigint, bigint, bigint];
+        if (!assetConfig[0]) throw new Error("Selected settlement token is not enabled in the contract.");
+        createdSettlementSymbol = String(assetConfig[1] || "TOKEN");
+        createdSettlementDecimals = Number(assetConfig[2] || V3_STABLECOIN_DECIMALS);
+        const createCost =
+          contractVersion === "v5"
+            ? (assetConfig[4] ?? 0n) + (assetConfig[8] ?? 0n)
+            : (assetConfig[4] ?? 0n) + (assetConfig[6] ?? 0n);
         const tokenBalance = await withRpcRetry(() => getPublicClient().readContract({
           address: settlementToken,
           abi: settlementTokenAbi,
@@ -9014,7 +9344,33 @@ export default function App() {
         }
         completed = await runTransaction(
           () =>
-            contractVersion === "v4"
+            contractVersion === "v5"
+              ? walletClient.writeContract({
+                  account: account as Address,
+                  chain: arcTestnet,
+                  address: contractAddress,
+                  abi: arcPredictionMarketV5Abi,
+                  functionName: "submitMarketDraft",
+                  args: [
+                    {
+                      question,
+                      category,
+                      sourceUrl: resolutionSource,
+                      resolutionRule: contractResolutionRule,
+                      metadataURI: resolutionSource,
+                      token: settlementToken,
+                      adapter: ZERO_ADDRESS,
+                      closeTime,
+                      resolutionTime,
+                      mode: Number(createForm.resolutionMode),
+                      outcomeCount: 2,
+                      outcomeLabelsHash: V5_BINARY_OUTCOME_LABELS_HASH,
+                      sourceHash: keccak256(stringToHex(resolutionSource)),
+                      ruleHash: keccak256(stringToHex(contractResolutionRule))
+                    }
+                  ]
+                })
+              : contractVersion === "v4"
               ? walletClient.writeContract({
                   account: account as Address,
                   chain: arcTestnet,
@@ -9066,7 +9422,7 @@ export default function App() {
               .map((log) => {
                 try {
                   return decodeEventLog({
-                    abi: contractVersion === "v4" ? arcPredictionMarketV4Abi : arcPredictionMarketV3Abi,
+                    abi: stablecoinMarketAbi(contractVersion),
                     data: log.data,
                     topics: log.topics
                   });
@@ -9074,7 +9430,7 @@ export default function App() {
                   return null;
                 }
               })
-              .find((event) => event?.eventName === "MarketCreated");
+              .find((event) => event?.eventName === (contractVersion === "v5" ? "MarketDraftSubmitted" : "MarketCreated"));
             const args = createdEvent?.args as { marketId?: bigint } | undefined;
             if (args?.marketId !== undefined) createdMarketId = Number(args.marketId);
           }
@@ -9343,9 +9699,11 @@ export default function App() {
                 account: account as Address,
                 chain: arcTestnet,
                 address: contractAddress,
-                abi: contractVersion === "v4" ? arcPredictionMarketV4Abi : arcPredictionMarketV3Abi,
-                functionName: "bet",
-                args: [BigInt(marketId), side, value]
+                abi: stablecoinMarketAbi(contractVersion),
+                functionName: contractVersion === "v5" ? "placePosition" : "bet",
+                args: contractVersion === "v5"
+                  ? [BigInt(marketId), legacyOutcomeToV5(side), value]
+                  : [BigInt(marketId), side, value]
               })
             : walletClient.writeContract({
                 account: account as Address,
@@ -9479,7 +9837,25 @@ export default function App() {
     try {
       const success = await runTransaction(
         () =>
-          contractVersion === "v4" && signedAiSuggestion
+          contractVersion === "v5"
+            ? walletClient.writeContract({
+                account: account as Address,
+                chain: arcTestnet,
+                address: contractAddress,
+                abi: arcPredictionMarketV5Abi,
+                functionName: "proposeOutcome",
+                args: [
+                  BigInt(marketId),
+                  legacyOutcomeToV5(outcome),
+                  evidenceHash,
+                  storedReceiptHash,
+                  hasAiSuggestion ? legacyOutcomeToV5(aiSuggestedOutcome as Outcome) : V5_NO_OUTCOME,
+                  V5_NO_OUTCOME,
+                  0,
+                  ZERO_HASH
+                ]
+              })
+            : contractVersion === "v4" && signedAiSuggestion
             ? walletClient.writeContract({
                 account: account as Address,
                 chain: arcTestnet,
@@ -9520,7 +9896,7 @@ export default function App() {
               try {
                 return decodeEventLog({
                   abi: isStablecoinContractVersion(contractVersion)
-                    ? contractVersion === "v4" ? arcPredictionMarketV4Abi : arcPredictionMarketV3Abi
+                    ? stablecoinMarketAbi(contractVersion)
                     : arcPredictionMarketAbi,
                   data: log.data,
                   topics: log.topics
@@ -9531,12 +9907,16 @@ export default function App() {
             })
             .find((event) => event?.eventName === "MarketResultProposed");
           const args = proposedEvent?.args as
-            | { marketId?: bigint; outcome?: number; disputeDeadline?: bigint }
+            | { marketId?: bigint; outcome?: number; outcomeId?: number; disputeDeadline?: bigint }
             | undefined;
+          const eventOutcome =
+            contractVersion === "v5" && args?.outcomeId !== undefined
+              ? v5OutcomeToLegacy(Number(args.outcomeId))
+              : Number(args?.outcome ?? outcome) as Outcome;
           markMarketResultProposed(
             Number(args?.marketId ?? BigInt(marketId)),
-            Number(args?.outcome ?? outcome) as Outcome,
-            Number(args?.disputeDeadline ?? 0n)
+            eventOutcome,
+            Number(args?.disputeDeadline ?? BigInt(Math.floor(Date.now() / 1000) + (market?.termsDisputeWindow || disputeWindow || 0)))
           );
         }
       );
@@ -9605,7 +9985,7 @@ export default function App() {
               account: account as Address,
               chain: arcTestnet,
               address: contractAddress,
-              abi: contractVersion === "v4" ? arcPredictionMarketV4Abi : arcPredictionMarketV3Abi,
+              abi: stablecoinMarketAbi(contractVersion),
               functionName: "dispute",
               args: [BigInt(marketId)]
             })
@@ -9643,7 +10023,7 @@ export default function App() {
             account: account as Address,
             chain: arcTestnet,
             address: contractAddress,
-            abi: arcPredictionMarketAbi,
+            abi: contractVersion === "v5" ? arcPredictionMarketV5Abi : arcPredictionMarketAbi,
             functionName: "finalize",
             args: [BigInt(marketId)]
           }),
@@ -9654,7 +10034,7 @@ export default function App() {
             .map((log) => {
               try {
                 return decodeEventLog({
-                  abi: arcPredictionMarketAbi,
+                  abi: contractVersion === "v5" ? arcPredictionMarketV5Abi : arcPredictionMarketAbi,
                   data: log.data,
                   topics: log.topics
                 });
@@ -9662,9 +10042,13 @@ export default function App() {
                 return null;
               }
             })
-            .find((event) => event?.eventName === "MarketResolved");
-          const args = resolvedEvent?.args as { marketId?: bigint; outcome?: number } | undefined;
-          markMarketFinalized(Number(args?.marketId ?? BigInt(marketId)), Number(args?.outcome ?? fallbackOutcome) as Outcome);
+            .find((event) => event?.eventName === (contractVersion === "v5" ? "MarketFinalized" : "MarketResolved"));
+          const args = resolvedEvent?.args as { marketId?: bigint; outcome?: number; outcomeId?: number } | undefined;
+          const finalOutcome =
+            contractVersion === "v5" && args?.outcomeId !== undefined
+              ? v5OutcomeToLegacy(Number(args.outcomeId))
+              : Number(args?.outcome ?? fallbackOutcome) as Outcome;
+          markMarketFinalized(Number(args?.marketId ?? BigInt(marketId)), finalOutcome);
         }
       );
     } finally {
@@ -9702,7 +10086,16 @@ export default function App() {
       const walletClient = getActiveWalletClient();
       await runTransaction(
         () =>
-          isStablecoinContractVersion(contractVersion)
+          contractVersion === "v5"
+            ? walletClient.writeContract({
+                account: account as Address,
+                chain: arcTestnet,
+                address: contractAddress,
+                abi: arcPredictionMarketV5Abi,
+                functionName: "finalizeOutcome",
+                args: [BigInt(marketId), legacyOutcomeToV5(outcome), evidenceHash, receiptHash]
+              })
+          : isStablecoinContractVersion(contractVersion)
             ? walletClient.writeContract({
                 account: account as Address,
                 chain: arcTestnet,
@@ -9772,7 +10165,7 @@ export default function App() {
 
   const cancelUnproposedMarket = async (marketId: number) => {
     if (!account || !isAddress(account)) throw new Error("Connect wallet first.");
-    if (contractVersion !== "v4" || isMarketActionPending("unproposed-cancel", marketId)) return;
+    if ((contractVersion !== "v4" && contractVersion !== "v5") || isMarketActionPending("unproposed-cancel", marketId)) return;
     await switchToArc();
     const walletClient = getActiveWalletClient();
     setMarketActionPending("unproposed-cancel", marketId, true);
@@ -9783,7 +10176,7 @@ export default function App() {
             account: account as Address,
             chain: arcTestnet,
             address: contractAddress,
-            abi: arcPredictionMarketV4Abi,
+            abi: contractVersion === "v5" ? arcPredictionMarketV5Abi : arcPredictionMarketV4Abi,
             functionName: "cancelUnproposedMarket",
             args: [BigInt(marketId)]
           }),
@@ -9812,7 +10205,16 @@ export default function App() {
     try {
       const success = await runTransaction(
         () =>
-          isStablecoinContractVersion(contractVersion) && market && hasNoLiquidity(market)
+          contractVersion === "v5"
+            ? walletClient.writeContract({
+                account: account as Address,
+                chain: arcTestnet,
+                address: contractAddress,
+                abi: arcPredictionMarketV5Abi,
+                functionName: "proposeCancel",
+                args: [BigInt(marketId), evidenceHash, receiptHash]
+              })
+          : isStablecoinContractVersion(contractVersion) && market && hasNoLiquidity(market)
             ? walletClient.writeContract({
                 account: account as Address,
                 chain: arcTestnet,
@@ -9843,7 +10245,7 @@ export default function App() {
           : "Proposing market cancel...",
         true,
         (receipt) => {
-          if (isStablecoinContractVersion(contractVersion) && market && hasNoLiquidity(market)) {
+          if (isStablecoinContractVersion(contractVersion) && contractVersion !== "v5" && market && hasNoLiquidity(market)) {
             markMarketFinalized(marketId, Outcome.Canceled);
             return;
           }
@@ -9852,7 +10254,7 @@ export default function App() {
               try {
                 return decodeEventLog({
                   abi: isStablecoinContractVersion(contractVersion)
-                    ? contractVersion === "v4" ? arcPredictionMarketV4Abi : arcPredictionMarketV3Abi
+                    ? stablecoinMarketAbi(contractVersion)
                     : arcPredictionMarketAbi,
                   data: log.data,
                   topics: log.topics
@@ -9863,11 +10265,15 @@ export default function App() {
             })
             .find((event) => event?.eventName === "MarketResultProposed");
           const args = proposedEvent?.args as
-            | { marketId?: bigint; outcome?: number; disputeDeadline?: bigint }
+            | { marketId?: bigint; outcome?: number; outcomeId?: number; disputeDeadline?: bigint }
             | undefined;
+          const proposedOutcome =
+            contractVersion === "v5" && args?.outcomeId !== undefined
+              ? v5OutcomeToLegacy(Number(args.outcomeId))
+              : Number(args?.outcome ?? Outcome.Canceled) as Outcome;
           markMarketResultProposed(
             Number(args?.marketId ?? BigInt(marketId)),
-            Number(args?.outcome ?? Outcome.Canceled) as Outcome,
+            proposedOutcome,
             Number(args?.disputeDeadline ?? 0n)
           );
         }
@@ -9902,7 +10308,7 @@ export default function App() {
           account: account as Address,
           chain: arcTestnet,
           address: contractAddress,
-          abi: arcPredictionMarketAbi,
+          abi: isStablecoinContractVersion(contractVersion) ? stablecoinMarketAbi(contractVersion) : arcPredictionMarketAbi,
           functionName: "claim",
           args: [BigInt(marketId)]
         }),
@@ -9923,7 +10329,7 @@ export default function App() {
         account: account as Address,
         chain: arcTestnet,
         address: contractAddress,
-        abi: contractVersion === "v4" ? arcPredictionMarketV4Abi : arcPredictionMarketV3Abi,
+        abi: stablecoinMarketAbi(contractVersion),
         functionName: "withdrawBalance",
         args: [market.settlementToken as Address]
       }),
@@ -9951,7 +10357,7 @@ export default function App() {
         account: account as Address,
         chain: arcTestnet,
         address: contractAddress,
-        abi: contractVersion === "v4" ? arcPredictionMarketV4Abi : arcPredictionMarketV3Abi,
+        abi: stablecoinMarketAbi(contractVersion),
         functionName: "requestAuthorityReview",
         args: [BigInt(market.id), reasonHash]
       }),
@@ -10020,6 +10426,39 @@ export default function App() {
         return;
       }
 
+      if (contractVersion === "v5") {
+        let failureMessage = "";
+        const targetIds = claimTargets.map((market) => BigInt(market.id));
+        const completed = await runTransaction(
+          () =>
+            walletClient.writeContract({
+              account: account as Address,
+              chain: arcTestnet,
+              address: contractAddress,
+              abi: arcPredictionMarketV5Abi,
+              functionName: "claimMany",
+              args: [targetIds]
+            }),
+          `Claiming ${claimTargets.length} V5 payouts in one transaction...`,
+          false,
+          () => claimTargets.forEach((market) => markClaimedLocally(market.id)),
+          (message) => {
+            failureMessage = message;
+          }
+        );
+        if (completed) {
+          setClaimRetryMarketIds([]);
+          setNotificationMenuOpen(false);
+          setNotice(`Claimed ${claimTargets.length} available V5 payout${claimTargets.length === 1 ? "" : "s"}.`);
+          void refreshWalletBalance();
+          void loadMarkets();
+          return;
+        }
+        setClaimRetryMarketIds(claimTargets.map((market) => market.id));
+        setNotice(`Claim all failed before confirmation: ${failureMessage || "Claim transaction failed."}`);
+        return;
+      }
+
       let claimedCount = 0;
       const failedClaims: ClaimAllFailure[] = [];
       for (const [index, market] of claimTargets.entries()) {
@@ -10078,7 +10517,7 @@ export default function App() {
           account: account as Address,
           chain: arcTestnet,
           address: contractAddress,
-          abi: contractVersion === "v4" ? arcPredictionMarketV4Abi : arcPredictionMarketAbi,
+          abi: isStablecoinContractVersion(contractVersion) ? stablecoinMarketAbi(contractVersion) : arcPredictionMarketAbi,
           functionName: "withdrawProtocolFees",
           args: isStablecoinContractVersion(contractVersion)
             ? [targetToken, account as Address, 0n]
@@ -15134,6 +15573,7 @@ export default function App() {
               Market close time is saved in UTC and must be at least 5 minutes after the current UTC time.
               {isStablecoinContractVersion(contractVersion) && " Resolution time is enforced onchain and cannot be earlier than close time."}
               {contractVersion === "v4" && " The primary source, fallback source, and resolution rule are stored onchain. New markets default to authority/oracle review so creators do not need to publish their own result."}
+              {contractVersion === "v5" && " V5 markets launch as owner-reviewed drafts. The owner must approve each draft before trading opens."}
               {contractVersion === "legacy"
                 ? " This legacy contract does not use creator bonds or dispute windows."
                 : marketCreationFee > 0n
@@ -15481,6 +15921,35 @@ export default function App() {
                   <small>Use a wallet app below to open AuraPredict with an injected provider.</small>
                 </button>
               )}
+              <span className="wallet-group-label">Seedless V5</span>
+              <button className="wallet-option seedless-wallet-option" type="button" onClick={handleSeedlessGoogleLogin} disabled={connecting}>
+                <span className="wallet-badge">G</span>
+                <strong>Continue with Google</strong>
+                <small>
+                  {SEEDLESS_ENABLED
+                    ? SEEDLESS_APP_ID && isAddress(SEEDLESS_FORWARDER_ADDRESS)
+                      ? "Embedded wallet on Arc. Gas sponsorship is enabled when the relayer is live."
+                      : "Embedded wallet is ready; sponsorship activates after trusted forwarder/relayer config."
+                    : "Enable with VITE_SEEDLESS_ENABLED=1 and VITE_MAGIC_PUBLISHABLE_KEY."}
+                </small>
+              </button>
+              <div className="seedless-email-box">
+                <label htmlFor="seedless-email">Email OTP</label>
+                <div className="seedless-email-row">
+                  <input
+                    id="seedless-email"
+                    value={seedlessEmail}
+                    onChange={(event) => setSeedlessEmail(event.target.value)}
+                    placeholder="you@example.com"
+                    type="email"
+                    autoComplete="email"
+                  />
+                  <button type="button" onClick={handleSeedlessEmailLogin} disabled={connecting}>
+                    Continue
+                  </button>
+                </div>
+                <small>Creates or opens an embedded V5 wallet. No browser extension required.</small>
+              </div>
               <span className="wallet-group-label">Connect from Chrome or desktop</span>
               <button className="wallet-option" type="button" onClick={handleWalletConnect} disabled={connecting || !walletConnectReady}>
                 <span className="wallet-badge">W</span>

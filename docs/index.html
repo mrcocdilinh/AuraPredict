@@ -87,7 +87,7 @@
             </div>
             <div>
               <dt>Active contract</dt>
-              <dd>0x3c853...1536</dd>
+              <dd>V5 env deployment</dd>
             </div>
           </dl>
         </aside>
@@ -282,14 +282,14 @@
             </article>
           </div>
           <div class="reference-table">
-            <article><span>Contract</span><strong>contracts/ArcPredictionMarket.sol</strong></article>
-            <article><span>ABI</span><strong>src/contracts/arcPredictionMarketAbi.ts</strong></article>
-            <article><span>Tests</span><strong>test/ArcPredictionMarket.js</strong></article>
+            <article><span>Contract</span><strong>contracts/ArcPredictionMarketV5.sol</strong></article>
+            <article><span>ABI</span><strong>src/contracts/arcPredictionMarketV5Abi.ts</strong></article>
+            <article><span>Tests</span><strong>test/ArcPredictionMarketV5.js</strong></article>
             <article><span>Deploy script</span><strong>scripts/deploy.js</strong></article>
             <article><span>Contract controls</span><strong>source/rule terms, resolutionTime, asset snapshots, authority review, signed Aura hooks, adapter-only mode, policy gates, receipt hashes, pull withdrawals</strong></article>
           </div>
           <div class="note">
-            Deployment status: the primary AuraPredict app and indexer use the active Arc Testnet contract at <code>0x3c853AE2eC705B453c9657569b6335e762631536</code> from block <code>44083985</code>.
+            Deployment status: the primary AuraPredict app and indexer now target the V5 deployment configured by <code>VITE_AURAPREDICT_V5_ADDRESS</code> and <code>VITE_AURAPREDICT_V5_DEPLOYMENT_BLOCK</code>.
           </div>
           <div class="note">
             Arc USDC has a native gas representation and an ERC-20 interface for the same asset. The active contract uses the official ERC-20 interface at <code>0x3600000000000000000000000000000000000000</code> for allowance-based settlement and keeps amounts at 6 decimals.
@@ -601,10 +601,11 @@ npm run build</code></pre>
           <div class="two-column">
             <article>
               <h3>Frontend environment</h3>
-              <pre><code>VITE_PREDICTION_MARKET_ADDRESS=0x3c853AE2eC705B453c9657569b6335e762631536
+              <pre><code>VITE_AURAPREDICT_V5_ADDRESS=0x_your_v5_contract
+VITE_PREDICTION_MARKET_ADDRESS=0x_your_v5_contract
 VITE_ARC_EURC_TOKEN_ADDRESS=0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a
 VITE_AURA_INDEXER_URL=https://api.aurapredict.xyz
-VITE_PREDICTION_MARKET_START_BLOCK=44083985
+VITE_AURAPREDICT_V5_DEPLOYMENT_BLOCK=your_v5_deployment_block
 VITE_WALLETCONNECT_PROJECT_ID=your_project_id
 VITE_CIRCLE_APP_KIT_KEY=optional_app_kit_key</code></pre>
             </article>

@@ -24,7 +24,7 @@ http://127.0.0.1:8787
 
 ## Environment
 
-The production indexer is pinned to AuraPredict V4 at `0x3c853AE2eC705B453c9657569b6335e762631536` from block `44083985`, detects its ABI at startup, and indexes the primary V4 market surface. Optional runtime settings:
+The production indexer now targets the active AuraPredict V5 contract from environment variables, detects its ABI at startup, and indexes the V5 market surface. Legacy V3/V4 ABI support is kept only so historical deployments can still be inspected when explicitly configured. Optional runtime settings:
 
 ```bash
 VITE_AURA_INDEXER_URL=http://127.0.0.1:8787
@@ -45,7 +45,7 @@ AURA_ORACLE_AUTO_PROPOSE_MIN_CONFIDENCE=78
 AURA_ORACLE_AUTO_PROPOSE_ADAPTERS=crypto-price,stock-yahoo-chart,macro-yahoo-chart,status-health,status-page,liquidity-rule
 ```
 
-The active production contract and its initial block are pinned in `indexer/server.mjs` for the V4 cutover. Arc RPC currently limits `eth_getLogs` ranges and some public endpoints enforce daily quotas, so production should use one stable RPC plus WebSocket sync, a 60-second poll fallback, and a small `eth_getLogs` chunk. `AURA_INDEXER_READ_RETRIES` and `AURA_INDEXER_MARKET_READ_CONCURRENCY` protect static exports from temporary RPC failures. With `AURA_INDEXER_MARKET_READ_FAIL_SOFT=1`, a failed market read keeps the restored cached row when one exists instead of failing the whole export.
+The active production contract and its initial block must be set in `/opt/aurapredict/.env` after each V5 deployment. Arc RPC currently limits `eth_getLogs` ranges and some public endpoints enforce daily quotas, so production should use one stable RPC plus WebSocket sync, a 60-second poll fallback, and a small `eth_getLogs` chunk. `AURA_INDEXER_READ_RETRIES` and `AURA_INDEXER_MARKET_READ_CONCURRENCY` protect static exports from temporary RPC failures. With `AURA_INDEXER_MARKET_READ_FAIL_SOFT=1`, a failed market read keeps the restored cached row when one exists instead of failing the whole export.
 
 ## API
 
@@ -87,7 +87,7 @@ The frontend uses `VITE_AURA_INDEXER_URL` when available and falls back to direc
 When `VITE_AURA_INDEXER_URL` points to a live web service, the frontend also persists comments, evidence, follows, profile metadata, and wallet notification history through these social endpoints. Static GitHub Pages exports remain read-only, so the app falls back to browser-local storage for social actions on that setup.
 Profile usernames are normalized to lowercase `a-z`, `0-9`, and `_`, then reserved in `state.social.usernames` so two wallets cannot claim the same display name through the live indexer.
 Market reports now have an owner-review lifecycle. Reports start as `open`, then the owner/reviewer can mark them `resolved`, `flagged`, or `dismissed` with an owner note so stale reports do not keep markets in review forever.
-V4 settlement assets are restricted to 6-decimal stablecoins. If more than one asset such as USDC and EURC is used, `/api/stats` includes `assetBreakdown` so volume and live liquidity can be reported per token instead of merged into one generic total. The indexer does not perform FX conversion.
+V5 settlement assets are restricted to owner-approved tokens, with the current stablecoin path optimized for 6-decimal assets such as USDC and EURC. If more than one asset is used, `/api/stats` includes `assetBreakdown` so volume and live liquidity can be reported per token instead of merged into one generic total. The indexer does not perform FX conversion.
 
 Admin reconcile can safely backfill missed trade/claim activity without resetting state. It replays contract events by tx hash and log index, refreshes market reads, and returns the activity integrity summary before and after the scan:
 
@@ -120,7 +120,7 @@ These endpoints are read-only. They do not propose, finalize, dispute, claim fun
 
 Oracle proposal v1 is deterministic offchain assistance for markets with objective data sources. It does not spend AI quota. By default it only writes a saved suggestion for the settlement report. When explicitly enabled, the indexer can also auto-submit the first onchain proposal through either a private-key resolver or a Circle Agent Wallet signer, but it still does not auto-finalize funded markets.
 
-New V4 markets can include an `AURA_RULE_JSON` metadata line inside the onchain resolution rule. The indexer strips that line for human display, but uses it for adapter matching: asset, comparator, target, primary source, fallback source, close time, and resolution time. This keeps Aura Agent, Oracle proposals, resolver actions, and final-review reporting aligned on the same source rule.
+New V5 market drafts can include an `AURA_RULE_JSON` metadata line inside the onchain resolution rule. The indexer strips that line for human display, but uses it for adapter matching: asset, comparator, target, primary source, fallback source, close time, and resolution time. This keeps Aura Agent, Oracle proposals, resolver actions, and final-review reporting aligned on the same source rule.
 
 Supported adapters:
 
@@ -296,13 +296,15 @@ https://api.aurapredict.xyz/health
 https://api.aurapredict.xyz/api/stats
 ```
 
-The current V4 address and block are pinned in `indexer/server.mjs`:
+The current V5 address and deployment block are configured in `/opt/aurapredict/.env`:
 
 ```bash
-VITE_PREDICTION_MARKET_ADDRESS=0x3c853AE2eC705B453c9657569b6335e762631536
-AURA_INDEXER_START_BLOCK=44083985
-AURA_INDEXER_CHUNK_SIZE=9000
-AURA_INDEXER_POLL_MS=12000
+VITE_AURAPREDICT_V5_ADDRESS=0x_your_v5_contract
+VITE_PREDICTION_MARKET_ADDRESS=0x_your_v5_contract
+AURA_INDEXER_CONTRACT_ADDRESS=0x_your_v5_contract
+AURA_INDEXER_START_BLOCK=your_v5_deployment_block
+AURA_INDEXER_CHUNK_SIZE=100
+AURA_INDEXER_POLL_MS=60000
 AURA_INDEXER_WS_URL=wss://rpc.testnet.arc.network
 AURA_INDEXER_WS_ENABLED=1
 ```

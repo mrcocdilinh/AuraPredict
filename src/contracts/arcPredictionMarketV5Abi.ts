@@ -137,6 +137,31 @@ export const arcPredictionMarketV5Abi = [
       {
         "indexed": true,
         "internalType": "address",
+        "name": "requester",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "bytes32",
+        "name": "reasonHash",
+        "type": "bytes32"
+      }
+    ],
+    "name": "AuthorityReviewRequested",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "marketId",
+        "type": "uint256"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
         "name": "user",
         "type": "address"
       },
@@ -721,6 +746,19 @@ export const arcPredictionMarketV5Abi = [
     "type": "function"
   },
   {
+    "inputs": [],
+    "name": "accumulatedProtocolFees",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
     "inputs": [
       {
         "internalType": "address",
@@ -774,6 +812,44 @@ export const arcPredictionMarketV5Abi = [
       }
     ],
     "name": "approvedAdapters",
+    "outputs": [
+      {
+        "internalType": "bool",
+        "name": "",
+        "type": "bool"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "account",
+        "type": "address"
+      }
+    ],
+    "name": "approvedMarketCreators",
+    "outputs": [
+      {
+        "internalType": "bool",
+        "name": "",
+        "type": "bool"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "adapter",
+        "type": "address"
+      }
+    ],
+    "name": "approvedResolutionAdapters",
     "outputs": [
       {
         "internalType": "bool",
@@ -977,7 +1053,7 @@ export const arcPredictionMarketV5Abi = [
       },
       {
         "internalType": "uint256",
-        "name": "protocolFeeBps",
+        "name": "protocolFeeRateBps",
         "type": "uint256"
       },
       {
@@ -1084,6 +1160,19 @@ export const arcPredictionMarketV5Abi = [
   },
   {
     "inputs": [],
+    "name": "creatorBond",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
     "name": "defaultSettlementToken",
     "outputs": [
       {
@@ -1106,6 +1195,32 @@ export const arcPredictionMarketV5Abi = [
     "name": "dispute",
     "outputs": [],
     "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "disputeBond",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "disputeGracePeriod",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
     "type": "function"
   },
   {
@@ -1396,6 +1511,36 @@ export const arcPredictionMarketV5Abi = [
         "internalType": "bytes32",
         "name": "receiptHash",
         "type": "bytes32"
+      },
+      {
+        "internalType": "uint256",
+        "name": "proposedAt",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "termsDisputeWindow",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "termsProposalGracePeriod",
+        "type": "uint256"
+      },
+      {
+        "internalType": "bool",
+        "name": "authorityReviewRequired",
+        "type": "bool"
+      },
+      {
+        "internalType": "bool",
+        "name": "disputed",
+        "type": "bool"
+      },
+      {
+        "internalType": "address",
+        "name": "disputer",
+        "type": "address"
       }
     ],
     "stateMutability": "view",
@@ -1542,6 +1687,32 @@ export const arcPredictionMarketV5Abi = [
   {
     "inputs": [],
     "name": "marketCount",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "marketCreationFee",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "minStake",
     "outputs": [
       {
         "internalType": "uint256",
@@ -1733,6 +1904,19 @@ export const arcPredictionMarketV5Abi = [
     "type": "function"
   },
   {
+    "inputs": [],
+    "name": "protocolFeeBps",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
     "inputs": [
       {
         "internalType": "uint256",
@@ -1774,6 +1958,24 @@ export const arcPredictionMarketV5Abi = [
     "type": "function"
   },
   {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "marketId",
+        "type": "uint256"
+      },
+      {
+        "internalType": "bytes32",
+        "name": "reasonHash",
+        "type": "bytes32"
+      }
+    ],
+    "name": "requestAuthorityReview",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
     "inputs": [],
     "name": "resolutionAuthority",
     "outputs": [
@@ -1810,6 +2012,19 @@ export const arcPredictionMarketV5Abi = [
     "type": "function"
   },
   {
+    "inputs": [],
+    "name": "restrictedMarketCreation",
+    "outputs": [
+      {
+        "internalType": "bool",
+        "name": "",
+        "type": "bool"
+      }
+    ],
+    "stateMutability": "pure",
+    "type": "function"
+  },
+  {
     "inputs": [
       {
         "internalType": "address",
@@ -1818,6 +2033,24 @@ export const arcPredictionMarketV5Abi = [
       }
     ],
     "name": "setAiAttestationSigner",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      },
+      {
+        "internalType": "bool",
+        "name": "",
+        "type": "bool"
+      }
+    ],
+    "name": "setApprovedMarketCreator",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
@@ -1861,6 +2094,19 @@ export const arcPredictionMarketV5Abi = [
   {
     "inputs": [
       {
+        "internalType": "uint256",
+        "name": "newFee",
+        "type": "uint256"
+      }
+    ],
+    "name": "setMarketCreationFee",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
         "internalType": "bool",
         "name": "paused",
         "type": "bool"
@@ -1874,12 +2120,51 @@ export const arcPredictionMarketV5Abi = [
   {
     "inputs": [
       {
+        "internalType": "uint256",
+        "name": "newGracePeriod",
+        "type": "uint256"
+      }
+    ],
+    "name": "setProposalGracePeriod",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "newFeeBps",
+        "type": "uint256"
+      }
+    ],
+    "name": "setProtocolFeeBps",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
         "internalType": "address",
         "name": "authority",
         "type": "address"
       }
     ],
     "name": "setResolutionAuthority",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "bool",
+        "name": "",
+        "type": "bool"
+      }
+    ],
+    "name": "setRestrictedMarketCreation",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
