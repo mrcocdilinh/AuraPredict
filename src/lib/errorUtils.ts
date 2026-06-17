@@ -94,3 +94,26 @@ export async function withRpcRetry<T>(request: () => Promise<T>) {
 
   throw lastError;
 }
+
+export function isUnknownChainError(error: unknown) {
+  const code = (error as { code?: number }).code;
+  const message = errorMessage(error).toLowerCase();
+  return (
+    code === 4902 ||
+    message.includes("4902") ||
+    message.includes("not added") ||
+    message.includes("unknown chain") ||
+    message.includes("unrecognized chain") ||
+    message.includes("try adding") ||
+    message.includes("wallet_addethereumchain")
+  );
+}
+
+export function isDuplicateRpcNetworkError(error: unknown) {
+  const message = errorMessage(error).toLowerCase();
+  return (
+    message.includes("same rpc endpoint as existing network") ||
+    message.includes("already exists") ||
+    message.includes("already been added")
+  );
+}
