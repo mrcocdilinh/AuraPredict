@@ -5161,10 +5161,10 @@ textarea {
 
 .auth-google-button {
   align-items: center;
-  background: #1d9bf0;
-  border: 1px solid rgba(84, 173, 255, 0.76);
+  background: #2f6bff;
+  border: 1px solid rgba(91, 140, 255, 0.7);
   border-radius: 8px;
-  box-shadow: 0 12px 30px rgba(29, 155, 240, 0.18);
+  box-shadow: 0 12px 30px rgba(47, 107, 255, 0.18);
   color: #ffffff;
   display: flex;
   font-size: 1rem;
@@ -5179,7 +5179,7 @@ textarea {
   align-items: center;
   background: rgba(255, 255, 255, 0.98);
   border-radius: 999px;
-  color: #1d4ed8;
+  color: #2f6bff;
   display: inline-flex;
   font-weight: 950;
   height: 26px;
@@ -5188,7 +5188,7 @@ textarea {
 }
 
 .auth-google-button:hover:not(:disabled) {
-  background: #2aa3f5;
+  background: #3b76ff;
   transform: translateY(-1px);
 }
 
@@ -5252,7 +5252,7 @@ textarea {
 }
 
 .auth-email-row button {
-  background: #1d9bf0;
+  background: #2f6bff;
   border: 0;
   border-radius: 8px;
   color: #ffffff;
@@ -5275,9 +5275,9 @@ textarea {
 
 .auth-wallet-tile {
   align-items: center;
-  background: #202631;
-  border: 1px solid rgba(67, 76, 91, 0.82);
-  border-radius: 8px;
+  background: #161b25;
+  border: 1px solid rgba(60, 70, 86, 0.7);
+  border-radius: 10px;
   color: #f4f6f9;
   display: grid;
   gap: 7px;
@@ -5289,15 +5289,15 @@ textarea {
 
 .auth-wallet-tile:hover:not(:disabled),
 .auth-wallet-tile[aria-expanded="true"] {
-  background: #2a313d;
-  border-color: rgba(88, 102, 122, 0.95);
+  background: #1c222e;
+  border-color: rgba(47, 107, 255, 0.5);
 }
 
 .auth-wallet-tile img,
 .auth-wallet-tile span {
   align-items: center;
-  background: #2b3340;
-  border-radius: 8px;
+  background: #232b38;
+  border-radius: 9px;
   color: #ffffff;
   display: inline-flex;
   font-size: 0.72rem;
