@@ -1,4 +1,4 @@
-import {
+﻿import {
   createPublicClient,
   createWalletClient,
   custom,
@@ -17,12 +17,8 @@ import {
 import { Buffer } from "buffer";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  ARC_CHAIN_ID_NUMBER,
   ARC_CHAIN_ID_DECIMAL,
   ARC_RPC_URL,
-  ARC_EXPLORER_URL,
-  ARC_NATIVE_USDC_DECIMALS,
-  ARC_RPC_URLS,
   arcTestnet,
   arcTestnetParams
 } from "./arc";
@@ -30,1265 +26,307 @@ import { arcPredictionMarketV3Abi, arcPredictionMarketV4Abi, settlementTokenAbi 
 import { arcPredictionMarketV2Abi as arcPredictionMarketAbi } from "./contracts/arcPredictionMarketV2Abi";
 import { arcPredictionMarketV5Abi } from "./contracts/arcPredictionMarketV5Abi";
 import { claimAllResultNotice, type ClaimAllFailure } from "./lib/claims";
+import {
+  Outcome,
+  type EthereumProvider,
+  type Eip6963ProviderDetail,
+  type LifiSwapRoute,
+  type StablecoinSwapDirection,
+  type StablecoinSwapPair,
+  type AppKitSwapQuote,
+  type LifiStablecoinSwapQuote,
+  type StablecoinSwapQuote,
+  type SwapProviderState,
+  type SwapProviderHealth,
+  type UnifiedBalanceSourceChainKey,
+  type UnifiedBalanceBusy,
+  type UnifiedBalanceChainBalance,
+  type UnifiedBalanceSummary,
+  type UnifiedBalanceFeeLine,
+  type UnifiedBalanceTx,
+  type UnifiedBalanceWalletBalance,
+  type MarketView,
+  type ChainMarketSnapshot,
+  type MarketContractVersion,
+  type ActivityItem,
+  type AppView,
+  type LeaderboardMetric,
+  type LeaderboardPeriod,
+  type MarketSectionKey,
+  type ThemeMode,
+  type MarketViewMode,
+  type ChartWindowKey,
+  type MarketDetailTab,
+  type MobileMarketTab,
+  type MarketSortKey,
+  type SortDirection,
+  type NotificationType,
+  type NotificationFilter,
+  type LeaderboardRow,
+  type UserRegistry,
+  type ProjectStats,
+  type AssetStats,
+  type MarketComment,
+  type MarketEvidence,
+  type MarketReportStatus,
+  type MarketReport,
+  type ActiveNotificationItem,
+  type EvidenceDraft,
+  type CreateFormState,
+  type StructuredResolutionRule,
+  type MismatchConfirmState,
+  type SettlementAuditStatus,
+  type SettlementAudit,
+  type SocialMarketResponse,
+  type SocialProfileResponse,
+  type SocialProfileSaveResponse,
+  type SocialReportsResponse,
+  type AiMarketDraft,
+  type MarketRiskSeverity,
+  type MarketRiskFlag,
+  type ProfileHistoryFilter,
+  type AiResolutionReport,
+  type AiResolutionReceipt,
+  type OracleProposal,
+  type ResolutionReceiptResponse,
+  type OracleProposalResponse,
+  type AiMarketInsight,
+  type PublicOracleReceipt,
+  type OracleReputation,
+  type PublicOracleReceiptResponse,
+  type AiMarketInsightResponse,
+  type OracleReputationResponse,
+  type AuraBreakdown,
+  type IndexedMarket,
+  type IndexedActivity,
+  type IndexedAssetStats,
+  type IndexedProjectStats,
+  type IndexedSnapshot,
+  type LandingHealth,
+  type ContractEventRow,
+  type CachedMarketView
+} from "./types";
+import {
+  SWAP_TOLERANCE_OPTIONS,
+  DEFAULT_SWAP_TOLERANCE_BPS,
+  SWAP_QUOTE_MAX_AGE_MS,
+  UNIFIED_BALANCE_SOURCE_CHAINS,
+  UNIFIED_BALANCE_WALLET_CHAINS,
+  LIFI_QUOTE_ENDPOINT,
+  LIFI_PROBE_AMOUNTS,
+  AURA_RULE_JSON_PREFIX,
+  ACTIVE_V3_CONTRACT_ADDRESS,
+  ACTIVE_V3_DEPLOYMENT_BLOCK,
+  ACTIVE_V5_CONTRACT_ADDRESS,
+  ACTIVE_V5_DEPLOYMENT_BLOCK,
+  ACTIVE_V3_EURC_TOKEN_ADDRESS,
+  PRIMARY_CONTRACT_ADDRESS,
+  PRIMARY_DEPLOYMENT_BLOCK,
+  REQUESTED_DEPLOYMENT,
+  VIEWING_V3_ARCHIVE,
+  CONTRACT_ADDRESS,
+  EURC_TOKEN_ADDRESS,
+  V3_STABLECOIN_DECIMALS,
+  ZERO_ADDRESS,
+  ZERO_HASH,
+  CATEGORIES,
+  SECTION_LIMIT,
+  COLLECTION_PAGE_SIZE,
+  PROFILE_PAGE_SIZE,
+  LEADERBOARD_LIMIT,
+  MARKET_INITIAL_LOAD,
+  MARKET_LOAD_STEP,
+  MARKET_LOAD_CONCURRENCY,
+  EVENT_LOAD_CONCURRENCY,
+  RPC_RETRY_ATTEMPTS,
+  RPC_RETRY_DELAY_MS,
+  RPC_CALL_STAGGER_MS,
+  CHART_LEFT,
+  CHART_RIGHT,
+  CHART_TOP,
+  CHART_BOTTOM,
+  CHART_HEIGHT,
+  WALLET_CONNECTED_KEY,
+  WALLET_DISCONNECTED_KEY,
+  WALLETCONNECT_PROJECT_ID,
+  CIRCLE_APP_KIT_KEY,
+  DISMISSED_RESULT_KEY,
+  THEME_KEY,
+  PROFILE_NAMES_KEY,
+  PROFILE_JOINED_KEY,
+  PROFILE_PUBLIC_KEY,
+  USER_REGISTRY_KEY,
+  MARKET_CACHE_KEY,
+  FOLLOWED_CREATORS_KEY,
+  MARKET_COMMENTS_KEY,
+  MARKET_EVIDENCE_KEY,
+  MARKET_REPORTS_KEY,
+  LOCAL_CLAIMED_MARKETS_KEY,
+  ONBOARDING_DISMISSED_KEY,
+  MARKET_QUERY_KEY,
+  PROFILE_QUERY_KEY,
+  PROFILE_NAME_QUERY_KEY,
+  LANDING_HOSTS,
+  APP_URL,
+  DOCS_URL,
+  ARC_FAUCET_URL,
+  ARC_UNIFIED_BALANCE_URL,
+  X_URL,
+  DISCORD_URL,
+  DEMO_VIDEO_URL,
+  DEMO_EMBED_URL,
+  CURRENT_APP_URL,
+  WALLET_DEEP_LINKS,
+  INDEXER_URL,
+  EVENT_START_BLOCK,
+  EVENT_LOG_CHUNK_SIZE,
+  CATEGORY_META,
+  CATEGORY_SET,
+  MARKET_IMAGE_CATEGORIES,
+  MARKET_IMAGE_COUNT,
+  LEADERBOARD_PERIODS,
+  LEADERBOARD_METRICS,
+  REPUTATION_TIERS,
+  CHART_WINDOWS,
+  MARKET_SORT_OPTIONS,
+  ARC_CHAIN_ID_NUMBER,
+  ARC_EXPLORER_URL,
+  ARC_NATIVE_USDC_DECIMALS,
+  ARC_RPC_URLS
+} from "./constants";
+import { FundOnArcActions } from "./components/FundOnArcActions";
+import {
+  CategoryIcon,
+  ThemeIcon,
+  CheckIcon,
+  GridViewIcon,
+  ListViewIcon,
+  MobileMarketTabIcon,
+  MobileNavIcon
+} from "./components/icons";
+import { LandingPage } from "./components/LandingPage";
+import { AppUpdateNotice } from "./components/AppUpdateNotice";
+import {
+  indexedMarketToView,
+  normalizeCategory,
+  indexedStatsToProjectStats,
+  indexedActivityToItem,
+  mergeMarketState,
+  mergeMarketRows
+} from "./lib/marketTransform";
+import {
+  fetchIndexerJson,
+  postIndexerJson,
+  postIndexerJsonWithStatus,
+  loadIndexedSnapshot
+} from "./lib/indexerClient";
+import {
+  formatUsdc,
+  formatStatUsdc,
+  formatSignedUsdc,
+  formatUsdcInput,
+  parseUsdcInput,
+  shortAddress,
+  compactAccountLabel,
+  shortHash,
+  transactionUrl,
+  maybeTransactionUrl
+} from "./lib/format";
+import {
+  marketVolume,
+  marketDecimals,
+  marketSymbol,
+  formatMarketAmount,
+  assetStatsFromMarkets,
+  fallbackAssetStatsFromProject,
+  formatAssetSummary
+} from "./lib/marketStats";
+import { timeAgo } from "./lib/timeUtils";
+import {
+  getInjectedProvider,
+  getPublicClient,
+  getWalletClient,
+  getWalletConnectProvider
+} from "./lib/rpcClient";
+import {
+  errorMessage,
+  walletConnectionErrorMessage,
+  isRateLimitError,
+  isTransientRpcError,
+  compactErrorMessage,
+  sleep,
+  withRpcRetry
+} from "./lib/errorUtils";
+import {
+  readJsonStorage,
+  claimedMarketKey,
+  readCachedMarkets,
+  writeCachedMarkets
+} from "./lib/storage";
+import { useWalletProviders } from "./hooks/useWalletProviders";
+import { useCurrentTime } from "./hooks/useCurrentTime";
+import { useTheme } from "./hooks/useTheme";
+import { useBodyScrollLock } from "./hooks/useBodyScrollLock";
+import { useLocalStoragePersist } from "./hooks/useLocalStoragePersist";
+import {
+  chartTimeLabel,
+  chartAxisLabel,
+  clampChartValue,
+  formatChartPercent,
+  smoothPathFromPoints
+} from "./lib/chartUtils";
+import { updateMarketRoute, updateProfileRoute } from "./lib/routeUtils";
+import { mapWithConcurrency } from "./lib/asyncUtils";
+import {
+  stablecoinSwapPairKey,
+  formatSwapTolerance,
+  providerHealthLabel,
+  lifiRouteDiagnostic,
+  swapQuoteEstimatedAmount,
+  swapQuoteMinimumAmount,
+  swapQuoteGasCost,
+  swapQuoteProviderLabel,
+  estimateArcAppKitSwap,
+  executeArcAppKitSwap,
+  unifiedBalanceChainLabel,
+  formatUnifiedBalanceDecimal,
+  hasUnifiedBalanceValue,
+  normalizeUnifiedBalanceAmount,
+  unifiedBalanceGatewayAmount,
+  addUnifiedBalanceDecimals,
+  flattenUnifiedBalanceSummary,
+  flattenUnifiedBalanceFees,
+  unifiedBalanceTxFromResult,
+  createUnifiedBalanceSpendParams,
+  createUnifiedBalanceRuntime,
+  readUnifiedBalanceWalletBalances
+} from "./lib/swapUtils";
+import {
+  resolutionTimeFor,
+  percent,
+  compareBigint,
+  betEstimate,
+  outcomeLabel,
+  closeDate,
+  isoDateLabel,
+  closeDateLocal,
+  countdownText,
+  isStablecoinContractVersion,
+  categoryMeta,
+  marketImageFor,
+  marketImageVariant,
+  shortQuestion,
+  sameAddress,
+  durationText
+} from "./lib/marketUtils";
 
 const browserGlobal = globalThis as typeof globalThis & { Buffer?: typeof Buffer };
 if (!browserGlobal.Buffer) {
   browserGlobal.Buffer = Buffer;
 }
 
-type EthereumProvider = {
-  request: (args: { method: string; params?: unknown[] }) => Promise<unknown>;
-  disconnect?: () => Promise<void> | void;
-  on?: (event: string, handler: (...args: unknown[]) => void) => void;
-  removeListener?: (event: string, handler: (...args: unknown[]) => void) => void;
-};
 
-type Eip6963ProviderDetail = {
-  info: {
-    uuid: string;
-    name: string;
-    icon?: string;
-    rdns?: string;
-  };
-  provider: EthereumProvider;
-};
 
-type LifiSwapRoute = Awaited<ReturnType<(typeof import("@lifi/sdk"))["getRoutes"]>>["routes"][number];
-type StablecoinSwapDirection = "USDC_TO_EURC" | "EURC_TO_USDC";
-type StablecoinSwapPair = {
-  fromToken: Address;
-  fromSymbol: string;
-  toToken: Address;
-  toSymbol: string;
-  decimals: number;
-};
-type AppKitSwapQuote = {
-  provider: "arc-app-kit";
-  amountIn: string;
-  estimatedAmountOut: string;
-  minimumAmountOut: string;
-  pairKey: string;
-  slippageBps: number;
-};
-type LifiStablecoinSwapQuote = {
-  provider: "lifi";
-  route: LifiSwapRoute;
-};
-type StablecoinSwapQuote = AppKitSwapQuote | LifiStablecoinSwapQuote;
-type SwapProviderState = "idle" | "ok" | "fail" | "skipped";
-type SwapProviderHealth = {
-  circle: SwapProviderState;
-  lifi: SwapProviderState;
-  circleMessage?: string;
-  lifiMessage?: string;
-};
-type UnifiedBalanceSourceChainKey = "Base_Sepolia" | "Arbitrum_Sepolia" | "Ethereum_Sepolia";
-type UnifiedBalanceBusy = "idle" | "balances" | "estimate" | "deposit" | "spend" | "deposit-spend";
-type UnifiedBalanceChainBalance = {
-  chain: string;
-  confirmedBalance: string;
-  pendingBalance?: string;
-};
-type UnifiedBalanceSummary = {
-  totalConfirmedBalance: string;
-  totalPendingBalance?: string;
-  breakdown: UnifiedBalanceChainBalance[];
-};
-type UnifiedBalanceFeeLine = {
-  type: string;
-  token: string;
-  amount: string;
-  detail?: string;
-};
-type UnifiedBalanceTx = {
-  label: string;
-  chain?: string;
-  txHash?: string;
-  explorerUrl?: string;
-};
-type UnifiedBalanceWalletBalance = {
-  chain: string;
-  label: string;
-  balance: bigint;
-  decimals: number;
-  tokenAddress: Address;
-  error?: string;
-};
-
-const SWAP_TOLERANCE_OPTIONS = [50, 100, 300, 500] as const;
-const DEFAULT_SWAP_TOLERANCE_BPS = 300;
-const SWAP_QUOTE_MAX_AGE_MS = 30_000;
-const UNIFIED_BALANCE_SOURCE_CHAINS: Array<{
-  value: UnifiedBalanceSourceChainKey;
-  label: string;
-  chainIdHex: string;
-  chainName: string;
-  nativeCurrency: { name: string; symbol: string; decimals: number };
-  rpcUrls: string[];
-  blockExplorerUrls: string[];
-  usdcAddress: Address;
-  decimals: number;
-}> = [
-  {
-    value: "Base_Sepolia",
-    label: "Base Sepolia",
-    chainIdHex: "0x14a34",
-    chainName: "Base Sepolia",
-    nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
-    rpcUrls: ["https://sepolia.base.org"],
-    blockExplorerUrls: ["https://sepolia.basescan.org"],
-    usdcAddress: "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
-    decimals: 6
-  },
-  {
-    value: "Arbitrum_Sepolia",
-    label: "Arbitrum Sepolia",
-    chainIdHex: "0x66eee",
-    chainName: "Arbitrum Sepolia",
-    nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
-    rpcUrls: ["https://sepolia-rollup.arbitrum.io/rpc"],
-    blockExplorerUrls: ["https://sepolia.arbiscan.io"],
-    usdcAddress: "0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d",
-    decimals: 6
-  },
-  {
-    value: "Ethereum_Sepolia",
-    label: "Ethereum Sepolia",
-    chainIdHex: "0xaa36a7",
-    chainName: "Ethereum Sepolia",
-    nativeCurrency: { name: "Sepolia Ether", symbol: "ETH", decimals: 18 },
-    rpcUrls: ["https://ethereum-sepolia-rpc.publicnode.com"],
-    blockExplorerUrls: ["https://sepolia.etherscan.io"],
-    usdcAddress: "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238",
-    decimals: 6
-  }
-];
-const UNIFIED_BALANCE_WALLET_CHAINS = [
-  ...UNIFIED_BALANCE_SOURCE_CHAINS,
-  {
-    value: "Arc_Testnet",
-    label: "Arc Testnet",
-    rpcUrls: ARC_RPC_URLS,
-    usdcAddress: "0x3600000000000000000000000000000000000000" as Address,
-    decimals: 6
-  }
-];
-const LIFI_QUOTE_ENDPOINT = "https://li.quest/v1/quote";
-const LIFI_PROBE_AMOUNTS = [1_000n, 10_000n, 100_000n, 1_000_000n, 5_000_000n, 10_000_000n];
-const AURA_RULE_JSON_PREFIX = "AURA_RULE_JSON:";
-
-function stablecoinSwapPairKey(pair: StablecoinSwapPair) {
-  return `${pair.fromToken.toLowerCase()}:${pair.toToken.toLowerCase()}`;
-}
-
-function formatSwapTolerance(bps: number) {
-  return `${bps / 100}%`;
-}
-
-function providerHealthLabel(state: SwapProviderState) {
-  if (state === "ok") return "OK";
-  if (state === "fail") return "Failed";
-  if (state === "skipped") return "Skipped";
-  return "Idle";
-}
-
-function FundOnArcActions({
-  compact = false,
-  targetSymbol = "USDC",
-  onUnifiedBalance
-}: {
-  compact?: boolean;
-  targetSymbol?: string;
-  onUnifiedBalance?: () => void;
-}) {
-  const symbol = targetSymbol || "USDC";
-
-  return (
-    <div className={`fund-on-arc-actions${compact ? " compact" : ""}`}>
-      <a className="fund-on-arc-primary" href={ARC_FAUCET_URL} target="_blank" rel="noreferrer">
-        Fund on Arc
-      </a>
-      {onUnifiedBalance ? (
-        <button className="fund-on-arc-secondary" type="button" onClick={onUnifiedBalance}>
-          Unified Balance
-        </button>
-      ) : (
-        <a className="fund-on-arc-secondary" href={ARC_UNIFIED_BALANCE_URL} target="_blank" rel="noreferrer">
-          Unified Balance
-        </a>
-      )}
-      {!compact && (
-        <small>
-          Need {symbol}? Claim testnet funds from Circle Faucet or move USDC from supported testnets with Arc Unified Balance.
-        </small>
-      )}
-    </div>
-  );
-}
-
-declare global {
-  interface Window {
-    ethereum?: EthereumProvider;
-  }
-}
-
-type MarketView = {
-  id: number;
-  question: string;
-  category: string;
-  createdAt: number;
-  closeTime: number;
-  resolutionTime?: number;
-  settlementToken?: string;
-  settlementSymbol?: string;
-  settlementDecimals?: number;
-  authority?: string;
-  resolutionMode?: number;
-  metadataHash?: string;
-  metadataURI?: string;
-  fallbackSourceURI?: string;
-  resolutionRule?: string;
-  resolutionAdapter?: string;
-  termsProtocolFeeBps?: number;
-  termsCreatorBond?: bigint;
-  termsDisputeBond?: bigint;
-  termsDisputeWindow?: number;
-  termsDisputeGracePeriod?: number;
-  termsProposalGracePeriod?: number;
-  authorityReviewRequired?: boolean;
-  creator: string;
-  resolver: string;
-  yesPool: bigint;
-  noPool: bigint;
-  traderCount: number;
-  proposedOutcome: Outcome;
-  proposedAt: number;
-  disputeDeadline: number;
-  disputed: boolean;
-  disputer: string;
-  outcome: Outcome;
-  yesPosition: bigint;
-  noPosition: bigint;
-  claimed: boolean;
-  potentialPayout: bigint;
-};
-
-type ChainMarketSnapshot = Pick<
-  MarketView,
-  "proposedOutcome" | "proposedAt" | "disputeDeadline" | "authorityReviewRequired" | "disputed" | "outcome"
->;
-
-type MarketContractVersion = "unknown" | "legacy" | "dispute" | "v2" | "v3" | "v4" | "v5";
-
-type ActivityItem = {
-  id: string;
-  user: string;
-  marketId: number;
-  question: string;
-  side: Outcome;
-  amount: bigint;
-  timestamp: number;
-  txHash?: Hash | string;
-};
-
-type AppView = "markets" | "ended" | "leaderboard" | "profile" | "collection" | "market" | "security" | "notifications" | "owner";
-type LeaderboardMetric = "volume" | "winRate" | "pnl" | "auraPoints";
-type LeaderboardPeriod = "day" | "7d" | "30d" | "all";
-type MarketSectionKey = "fresh" | "hot" | "closing" | "live";
-type ThemeMode = "dark" | "light";
-type MarketViewMode = "grid" | "list";
-type ChartWindowKey = "1h" | "6h" | "1d" | "1w" | "1m" | "all";
-type MarketDetailTab = "overview" | "comments" | "activity" | "holders";
-type MobileMarketTab = "overview" | "trade" | "resolve" | "details";
-type MarketSortKey = "created" | "ending" | "volume" | "participants" | "yes" | "no";
-type SortDirection = "asc" | "desc";
-type NotificationFilter = NotificationType | "all";
-
-type LeaderboardRow = {
-  address: string;
-  volume: bigint;
-  stake: bigint;
-  payout: bigint;
-  pnl: bigint;
-  wonMarkets: number;
-  resolvedMarkets: number;
-  winRate: number;
-  auraPoints: number;
-  createdMarkets: number;
-};
-
-type UserRegistry = Record<string, { address: string; joinedAt: string }>;
-
-type ProjectStats = {
-  totalMarkets: number;
-  indexedMarkets: number;
-  liveMarkets: number;
-  endedMarkets: number;
-  pendingMarkets: number;
-  totalVolume: bigint;
-  liveLiquidity: bigint;
-  averageMarketVolume: bigint;
-  participantEntries: number;
-  knownPlayers: number;
-  settlementSymbols?: string[];
-  hasMixedSettlementAssets?: boolean;
-  activityReconciliation?: {
-    ok: boolean;
-    mismatchCount: number;
-    checkedMarkets: number;
-    sample?: Array<{
-      marketId: number;
-      question: string;
-      expectedYes: string;
-      indexedYes: string;
-      yesDelta: string;
-      expectedNo: string;
-      indexedNo: string;
-      noDelta: string;
-      tradeCount: number;
-      settlementSymbol: string;
-      settlementDecimals: number;
-    }>;
-  };
-  assetBreakdown?: AssetStats[];
-};
-
-type AssetStats = {
-  token?: string;
-  symbol: string;
-  decimals: number;
-  marketCount: number;
-  liveMarkets: number;
-  endedMarkets: number;
-  pendingMarkets: number;
-  participantEntries: number;
-  totalVolume: bigint;
-  liveLiquidity: bigint;
-  averageMarketVolume: bigint;
-};
-
-type MarketComment = {
-  id: string;
-  marketId: number;
-  author: string;
-  text: string;
-  createdAt: string;
-};
-
-type MarketEvidence = {
-  id: string;
-  marketId: number;
-  title: string;
-  url: string;
-  notes: string;
-  addedBy: string;
-  createdAt: string;
-};
-
-type MarketReportStatus = "open" | "dismissed" | "flagged" | "resolved";
-
-type MarketReport = {
-  id: string;
-  marketId: number;
-  reporter: string;
-  reason: string;
-  url: string;
-  status: MarketReportStatus;
-  createdAt: string;
-  ownerNote?: string;
-  resolvedBy?: string;
-  resolvedAt?: string;
-};
-
-type NotificationType =
-  | "resolve"
-  | "finalize"
-  | "owner-review"
-  | "dispute-review"
-  | "stale-review"
-  | "proposal"
-  | "dispute-resolved"
-  | "report"
-  | "flag"
-  | "claim"
-  | "result";
-
-type ActiveNotificationItem = {
-  key: string;
-  type: NotificationType;
-  label: string;
-  title: string;
-  detail: string;
-  marketId?: number;
-};
-
-type EvidenceDraft = {
-  title: string;
-  url: string;
-  notes: string;
-};
-
-type CreateFormState = {
-  question: string;
-  category: string;
-  closeTime: string;
-  resolutionTime: string;
-  settlementToken: string;
-  resolutionMode: "0" | "1" | "2";
-  resolutionSource: string;
-  resolutionRule: string;
-  fallbackSource: string;
-};
-
-type StructuredResolutionRule = {
-  version: 1;
-  kind: "crypto-price" | "stock-price" | "macro-price" | "status-health" | "status-page" | "sports-fixture" | "manual-review";
-  asset?: string;
-  metric?: string;
-  comparator?: "gt" | "gte" | "lt" | "lte" | "eq";
-  target?: string;
-  closeTimeUtc?: string;
-  resolutionTimeUtc?: string;
-  primarySource?: string;
-  fallbackSource?: string;
-};
-
-type MismatchConfirmState = {
-  marketId: number;
-  outcome: Outcome;
-  aiSuggestedOutcome: Outcome.Yes | Outcome.No;
-};
-
-type SettlementAuditStatus = "safe" | "review" | "conflict";
-
-type SettlementAudit = {
-  status: SettlementAuditStatus;
-  label: string;
-  detail: string;
-  severity: MarketRiskSeverity;
-  blocksFinalize: boolean;
-};
-
-type SocialMarketResponse = {
-  comments?: MarketComment[];
-  evidence?: MarketEvidence[];
-  reports?: MarketReport[];
-};
-
-type SocialProfileResponse = {
-  profile?: {
-    address: string;
-    name?: string;
-    isPublic?: boolean;
-    joinedAt?: string;
-  } | null;
-  follows?: string[];
-};
-
-type SocialProfileSaveResponse = SocialProfileResponse & {
-  code?: string;
-  error?: string;
-  username?: string;
-};
-
-type SocialReportsResponse = {
-  reports?: MarketReport[];
-  updatedAt?: string;
-};
-
-type AiMarketDraft = {
-  question?: string;
-  category?: string;
-  closeTime?: string;
-  resolutionCriteria?: string;
-  sources?: string[];
-  clarityScore?: number;
-  duplicateRisk?: "LOW" | "MEDIUM" | "HIGH";
-  similarMarkets?: Array<{
-    id: number;
-    question: string;
-    category: string;
-    closeTime: number;
-    volume: string;
-    traderCount: number;
-    similarity: number;
-    reason: string;
-  }>;
-  riskFlags?: string[];
-  creatorNote?: string;
-};
-
-type MarketRiskSeverity = "info" | "warn" | "bad";
-type MarketRiskFlag = {
-  label: string;
-  detail: string;
-  severity: MarketRiskSeverity;
-};
-type ProfileHistoryFilter = "all" | "live" | "claimable" | "won" | "lost" | "refund";
-
-type AiResolutionReport = {
-  suggestedOutcome?: string;
-  confidence?: number;
-  summary?: string;
-  evidence?: Array<{ title?: string; url?: string; finding?: string }>;
-  disputeRisks?: string[];
-  resolverAction?: string;
-};
-
-type AiResolutionReceipt = {
-  id?: string;
-  marketId: number;
-  generatedAt?: string;
-  provider?: string;
-  model?: string;
-  receiptHash?: string;
-  attestation?: string;
-  attestationSigner?: string;
-  status?: string;
-  proposedOutcome?: string;
-  proposedOutcomeValue?: number;
-  txHash?: string;
-  error?: string;
-  consensus?: {
-    outcome?: string;
-    confidence?: number;
-    agreed?: number;
-    approved?: boolean;
-  };
-  reviews?: Array<{
-    outcome?: string;
-    confidence?: number;
-    reasoning?: string;
-    risks?: string[];
-    keyEvidence?: Array<{ title?: string; url?: string; finding?: string }>;
-  }>;
-  evidence?: MarketEvidence[];
-};
-
-type OracleProposal = {
-  id?: string;
-  marketId: number;
-  adapter?: string;
-  status?: string;
-  outcome?: string;
-  outcomeValue?: number;
-  confidence?: number;
-  observedValue?: string;
-  comparator?: string;
-  targetValue?: string;
-  observedAt?: string;
-  sourceUrls?: string[];
-  summary?: string;
-  checks?: string[];
-  generatedAt?: string;
-  dataHash?: string;
-  txHash?: string;
-  autoProposed?: boolean;
-  autoProposedAt?: string;
-  autoProposeSkipped?: string;
-  autoProposeError?: string;
-  onchainFunction?: string;
-};
-
-type ResolutionReceiptResponse = {
-  receipt?: AiResolutionReceipt | null;
-};
-
-type OracleProposalResponse = {
-  proposal?: OracleProposal | null;
-};
-
-type AiMarketInsight = {
-  marketId: number;
-  question?: string;
-  category?: string;
-  status?: string;
-  marketYesPrice: number;
-  marketNoPrice: number;
-  estimatedYesProbability: number;
-  edge: number;
-  edgeSide: "YES" | "NO" | "balanced" | string;
-  confidence: number;
-  confidenceBand: string;
-  basis: string;
-  summary: string;
-  riskFlags: string[];
-  sourceUrls: string[];
-  receiptHash?: string;
-  oracleDataHash?: string;
-  txHash?: string;
-  updatedAt?: string;
-};
-
-type PublicOracleReceipt = {
-  marketId: number;
-  status: string;
-  finalOutcome: string;
-  proposedOutcome: string;
-  ai?: {
-    status: string;
-    outcome: string;
-    confidence: number;
-    agreed?: number | null;
-    receiptHash?: string;
-    provider?: string;
-    model?: string;
-    generatedAt?: string;
-    txHash?: string;
-  } | null;
-  oracle?: {
-    status: string;
-    adapter: string;
-    outcome: string;
-    confidence: number;
-    observedValue?: string;
-    dataHash?: string;
-    txHash?: string;
-    summary?: string;
-  } | null;
-  evidence?: MarketEvidence[];
-  sourceUrls?: string[];
-  hashes?: {
-    proposalEvidenceHash?: string;
-    aiReceiptHash?: string;
-    oracleDataHash?: string;
-  };
-};
-
-type OracleReputation = {
-  agent?: {
-    name?: string;
-    network?: string;
-    chainId?: number;
-    contractAddress?: string;
-    apiBaseUrl?: string;
-    manifestUrl?: string;
-    mcpToolsUrl?: string;
-    signerMode?: string;
-    circleAgentWallet?: string;
-  };
-  reputationScore: number;
-  tier: string;
-  coverage: number;
-  accuracy: number;
-  reversalRate: number;
-  avgOracleConfidence: number;
-  avgAiConfidence: number;
-  evidenceQuality: number;
-  oracleProposals: number;
-  aiReceipts: number;
-  finalizedMarkets: number;
-  disputedMarkets: number;
-  authorityReviewMarkets: number;
-  autoProposed: number;
-  adapters: Record<string, number>;
-  recent: Array<{
-    marketId: number;
-    question: string;
-    adapter: string;
-    status: string;
-    outcome: string;
-    confidence: number;
-    txHash?: string;
-    generatedAt?: string;
-  }>;
-  safeguards?: string[];
-  policy: string;
-  updatedAt?: string;
-};
-
-type PublicOracleReceiptResponse = {
-  receipt?: PublicOracleReceipt | null;
-};
-
-type AiMarketInsightResponse = {
-  insight?: AiMarketInsight | null;
-};
-
-type OracleReputationResponse = {
-  reputation?: OracleReputation | null;
-};
-
-type AuraBreakdown = {
-  items: Array<{ label: string; detail: string; value: number }>;
-  total: number;
-  winRate: number;
-};
-
-type IndexedMarket = Omit<
-  MarketView,
-  "yesPool" | "noPool" | "yesPosition" | "noPosition" | "claimed" | "potentialPayout"
-> & {
-  yesPool: string;
-  noPool: string;
-  yesPosition?: string;
-  noPosition?: string;
-  claimed?: boolean;
-  potentialPayout?: string;
-};
-
-type IndexedActivity = Omit<ActivityItem, "amount" | "side"> & {
-  amount: string;
-  side: number;
-};
-
-type IndexedAssetStats = Omit<AssetStats, "totalVolume" | "liveLiquidity" | "averageMarketVolume"> & {
-  totalVolume: string;
-  liveLiquidity: string;
-  averageMarketVolume: string;
-};
-
-type IndexedProjectStats = Omit<ProjectStats, "totalVolume" | "liveLiquidity" | "averageMarketVolume" | "assetBreakdown"> & {
-  totalVolume: string;
-  liveLiquidity: string;
-  averageMarketVolume: string;
-  assetBreakdown?: IndexedAssetStats[];
-};
-
-type IndexedSnapshot = {
-  markets: MarketView[];
-  activities: ActivityItem[];
-  stats: ProjectStats | null;
-  total: number;
-  health?: LandingHealth | null;
-};
-
-type LandingHealth = {
-  ok: boolean;
-  updatedAt?: string | null;
-  lastIndexedBlock?: string;
-  marketCount?: number;
-  indexer?: {
-    mode?: string;
-    pollMs?: number;
-    wsEnabled?: boolean;
-    wsStatus?: string;
-    wsLastBlock?: string;
-    wsLastEventAt?: string | null;
-    wsLastError?: string;
-    lastSyncReason?: string;
-    lastSyncedAt?: string;
-    lastSyncError?: string;
-    lastSyncStartedAt?: string;
-    lastSyncTargetBlock?: string;
-  };
-  features?: {
-    socialReports?: boolean;
-    socialNotifications?: boolean;
-    oracleReceipts?: boolean;
-    realtimeSync?: boolean;
-    evidenceSearch?: {
-      enabled?: boolean;
-      configured?: boolean;
-      provider?: string;
-      keyCount?: number;
-    };
-  };
-};
-
-type ContractEventRow = {
-  args: {
-    marketId?: bigint;
-    user?: Address;
-    side?: number;
-    outcomeId?: number;
-    amount?: bigint;
-  };
-  blockNumber?: bigint | null;
-  transactionHash?: Hash;
-  logIndex?: number;
-};
-
-enum Outcome {
-  Unresolved = 0,
-  Yes = 1,
-  No = 2,
-  Canceled = 3
-}
-
-const ACTIVE_V3_CONTRACT_ADDRESS = "0x4399ea3f59AA14e4D19217f1af2aD0681f5FafFd";
-const ACTIVE_V3_DEPLOYMENT_BLOCK = "44074836";
-const ACTIVE_V5_CONTRACT_ADDRESS = String(
-  import.meta.env.VITE_PREDICTION_MARKET_ADDRESS || import.meta.env.VITE_AURAPREDICT_V5_ADDRESS || ""
-).trim();
-const ACTIVE_V5_DEPLOYMENT_BLOCK = String(import.meta.env.VITE_AURAPREDICT_V5_DEPLOYMENT_BLOCK || "0").trim();
-const ACTIVE_V3_EURC_TOKEN_ADDRESS = "0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a";
-const PRIMARY_CONTRACT_ADDRESS = ACTIVE_V5_CONTRACT_ADDRESS;
-const PRIMARY_DEPLOYMENT_BLOCK = ACTIVE_V5_DEPLOYMENT_BLOCK;
-const REQUESTED_DEPLOYMENT =
-  typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("deployment") : null;
-const VIEWING_V3_ARCHIVE =
-  REQUESTED_DEPLOYMENT === "v3" &&
-  PRIMARY_CONTRACT_ADDRESS.toLowerCase() !== ACTIVE_V3_CONTRACT_ADDRESS.toLowerCase();
-const CONTRACT_ADDRESS = VIEWING_V3_ARCHIVE ? ACTIVE_V3_CONTRACT_ADDRESS : PRIMARY_CONTRACT_ADDRESS;
-const EURC_TOKEN_ADDRESS = ACTIVE_V3_EURC_TOKEN_ADDRESS;
-const V3_STABLECOIN_DECIMALS = 6;
-const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
-const ZERO_HASH = "0x0000000000000000000000000000000000000000000000000000000000000000";
-const CATEGORIES = ["All", "Crypto", "Macro", "Sports", "Politics", "Arc", "AI", "Other"];
-const SECTION_LIMIT = 6;
-const COLLECTION_PAGE_SIZE = 12;
-const PROFILE_PAGE_SIZE = 10;
-const LEADERBOARD_LIMIT = 100;
-const MARKET_INITIAL_LOAD = 9999;
-const MARKET_LOAD_STEP = 24;
-const MARKET_LOAD_CONCURRENCY = 4;
-const EVENT_LOAD_CONCURRENCY = 2;
-const RPC_RETRY_ATTEMPTS = 3;
-const RPC_RETRY_DELAY_MS = 450;
-const RPC_CALL_STAGGER_MS = 40;
-const CHART_LEFT = 8;
-const CHART_RIGHT = 92;
-const CHART_TOP = 8;
-const CHART_BOTTOM = 54;
-const CHART_HEIGHT = CHART_BOTTOM - CHART_TOP;
-const WALLET_CONNECTED_KEY = "aurapredict.walletConnected";
-const WALLET_DISCONNECTED_KEY = "aurapredict.walletDisconnected";
-const WALLETCONNECT_PROJECT_ID = String(import.meta.env.VITE_WALLETCONNECT_PROJECT_ID || "").trim();
-const CIRCLE_APP_KIT_KEY = String(import.meta.env.VITE_CIRCLE_APP_KIT_KEY || "").trim();
-const DISMISSED_RESULT_KEY = "aurapredict.dismissedResultNotices";
-const THEME_KEY = "aurapredict.theme";
-const PROFILE_NAMES_KEY = "aurapredict.profileNames";
-const PROFILE_JOINED_KEY = "aurapredict.profileJoined";
-const PROFILE_PUBLIC_KEY = "aurapredict.profilePublic";
-const USER_REGISTRY_KEY = "aurapredict.userRegistry";
-const MARKET_CACHE_KEY = "aurapredict.marketCache";
-const FOLLOWED_CREATORS_KEY = "aurapredict.followedCreators";
-const MARKET_COMMENTS_KEY = "aurapredict.marketComments";
-const MARKET_EVIDENCE_KEY = "aurapredict.marketEvidence";
-const MARKET_REPORTS_KEY = "aurapredict.marketReports";
-const LOCAL_CLAIMED_MARKETS_KEY = "aurapredict.localClaimedMarkets";
-const ONBOARDING_DISMISSED_KEY = "aurapredict.onboardingDismissed";
-const MARKET_QUERY_KEY = "market";
-const PROFILE_QUERY_KEY = "profile";
-const PROFILE_NAME_QUERY_KEY = "name";
-const LANDING_HOSTS = new Set(["aurapredict.xyz", "www.aurapredict.xyz"]);
-const APP_URL = "https://app.aurapredict.xyz";
-const DOCS_URL = "https://docs.aurapredict.xyz";
-const ARC_FAUCET_URL = "https://faucet.circle.com";
-const ARC_UNIFIED_BALANCE_URL = "https://docs.arc.io/app-kit/unified-balance";
-const X_URL = "https://x.com/AuraPredict";
-const DISCORD_URL = "https://discord.gg/3wTYhdsr";
-const DEMO_VIDEO_URL = "https://www.youtube.com/watch?v=tdYqpAIG82s";
-const DEMO_EMBED_URL = "https://www.youtube.com/embed/tdYqpAIG82s";
-const CURRENT_APP_URL =
-  typeof window !== "undefined" ? `${window.location.host}${window.location.pathname}${window.location.search}` : "app.aurapredict.xyz";
-const WALLET_DEEP_LINKS = [
-  {
-    name: "WalletConnect",
-    detail: "Scan a QR code from your wallet app",
-    url: ""
-  },
-  {
-    name: "MetaMask",
-    detail: "Open AuraPredict inside MetaMask mobile browser",
-    url: `https://metamask.app.link/dapp/${CURRENT_APP_URL}`
-  },
-  {
-    name: "Rabby",
-    detail: "Open AuraPredict inside Rabby mobile browser",
-    url: `https://rabby.io/dapp?url=${encodeURIComponent(`https://${CURRENT_APP_URL}`)}`
-  },
-  {
-    name: "Rainbow",
-    detail: "Open AuraPredict in Rainbow browser",
-    url: `https://rnbwapp.com/wc?uri=${encodeURIComponent(`https://${CURRENT_APP_URL}`)}`
-  },
-  {
-    name: "OKX Wallet",
-    detail: "Open with OKX wallet browser",
-    url: `okx://wallet/dapp/details?dappUrl=${encodeURIComponent(`https://${CURRENT_APP_URL}`)}`
-  },
-  {
-    name: "Bitget Wallet",
-    detail: "Open Bitget Wallet and use the in-app browser",
-    url: "https://web3.bitget.com"
-  },
-  {
-    name: "Base",
-    detail: "Open with Coinbase Wallet",
-    url: `https://go.cb-w.com/dapp?cb_url=${encodeURIComponent(`https://${CURRENT_APP_URL}`)}`
-  },
-  {
-    name: "Coinbase",
-    detail: "Open with Coinbase Wallet",
-    url: `https://go.cb-w.com/dapp?cb_url=${encodeURIComponent(`https://${CURRENT_APP_URL}`)}`
-  },
-  {
-    name: "Zerion",
-    detail: "Open with Zerion mobile wallet",
-    url: `https://link.zerion.io/dapp/${CURRENT_APP_URL}`
-  }
-];
-const INDEXER_URL = String(
-  import.meta.env.VITE_AURA_INDEXER_URL ||
-    (import.meta.env.DEV ? "http://127.0.0.1:8787" : "https://api.aurapredict.xyz")
-).replace(/\/$/, "");
-const EVENT_START_BLOCK = BigInt(VIEWING_V3_ARCHIVE ? ACTIVE_V3_DEPLOYMENT_BLOCK : PRIMARY_DEPLOYMENT_BLOCK);
-const EVENT_LOG_CHUNK_SIZE = 9_000n;
-const CATEGORY_META: Record<string, { label: string; className: string }> = {
-  All: { label: "All", className: "category-all" },
-  Crypto: { label: "Crypto", className: "category-crypto" },
-  Macro: { label: "Macro", className: "category-macro" },
-  Sports: { label: "Sports", className: "category-sports" },
-  Politics: { label: "Politics", className: "category-politics" },
-  Arc: { label: "Arc", className: "category-arc" },
-  AI: { label: "AI", className: "category-ai" },
-  Other: { label: "Other", className: "category-other" }
-};
-const CATEGORY_SET = new Set(CATEGORIES.filter((category) => category !== "All"));
-const MARKET_IMAGE_CATEGORIES = ["crypto", "sports", "politics", "macro", "ai", "arc", "other"] as const;
-const MARKET_IMAGE_COUNT = 6;
-const LEADERBOARD_PERIODS: Array<{ value: LeaderboardPeriod; label: string; seconds: number | null }> = [
-  { value: "day", label: "24H", seconds: 24 * 60 * 60 },
-  { value: "7d", label: "7D", seconds: 7 * 24 * 60 * 60 },
-  { value: "30d", label: "1M", seconds: 30 * 24 * 60 * 60 },
-  { value: "all", label: "All", seconds: null }
-];
-const LEADERBOARD_METRICS: Array<{ value: LeaderboardMetric; label: string }> = [
-  { value: "volume", label: "Volume" },
-  { value: "winRate", label: "Win rate" },
-  { value: "pnl", label: "PNL" },
-  { value: "auraPoints", label: "Aura points" }
-];
-const REPUTATION_TIERS = [
-  { value: "bronze", label: "Bronze", min: 0 },
-  { value: "silver", label: "Silver", min: 1000 },
-  { value: "gold", label: "Gold", min: 2500 },
-  { value: "diamond", label: "Diamond", min: 5000 }
-] as const;
-const CHART_WINDOWS: Array<{ value: ChartWindowKey; label: string; seconds: number | null }> = [
-  { value: "1h", label: "1H", seconds: 60 * 60 },
-  { value: "6h", label: "6H", seconds: 6 * 60 * 60 },
-  { value: "1d", label: "1D", seconds: 24 * 60 * 60 },
-  { value: "1w", label: "1W", seconds: 7 * 24 * 60 * 60 },
-  { value: "1m", label: "1M", seconds: 30 * 24 * 60 * 60 },
-  { value: "all", label: "ALL", seconds: null }
-];
-const MARKET_SORT_OPTIONS: Array<{ value: MarketSortKey; label: string }> = [
-  { value: "created", label: "Created time" },
-  { value: "ending", label: "Ending time" },
-  { value: "volume", label: "Volume" },
-  { value: "participants", label: "Participants" },
-  { value: "yes", label: "YES %" },
-  { value: "no", label: "NO %" }
-];
-
-type CachedMarketView = Omit<
-  MarketView,
-  "yesPool" | "noPool" | "yesPosition" | "noPosition" | "potentialPayout" | "termsCreatorBond" | "termsDisputeBond"
-> & {
-  yesPool: string;
-  noPool: string;
-  termsCreatorBond?: string;
-  termsDisputeBond?: string;
-};
-
-function getInjectedProvider(provider?: EthereumProvider | null) {
-  const injected = provider ?? window.ethereum;
-  if (!injected) {
-    throw new Error("Open AuraPredict inside a wallet browser such as Zerion, MetaMask, Rabby, or OKX.");
-  }
-  return injected;
-}
-
-function getPublicClient() {
-  const envRpc = String(import.meta.env.VITE_ARC_RPC_URL || "").trim();
-  const rpcUrls = [envRpc, ...ARC_RPC_URLS].filter(
-    (url, index, list): url is string => Boolean(url) && list.indexOf(url) === index
-  );
-
-  return createPublicClient({
-    chain: arcTestnet,
-    transport: fallback(
-      rpcUrls.map((url) => http(url, { retryCount: 1, retryDelay: 250, timeout: 10_000 })),
-      { rank: false, retryCount: 2, retryDelay: 500 }
-    )
-  });
-}
-
-function getWalletClient(provider?: EthereumProvider | null) {
-  return createWalletClient({
-    chain: arcTestnet,
-    transport: custom(getInjectedProvider(provider) as never)
-  });
-}
-
-let walletConnectProviderPromise: Promise<EthereumProvider> | null = null;
-
-async function getWalletConnectProvider() {
-  if (!WALLETCONNECT_PROJECT_ID) {
-    throw new Error("WalletConnect is not configured. Set VITE_WALLETCONNECT_PROJECT_ID in Vercel to connect from mobile Chrome.");
-  }
-
-  const { EthereumProvider: WalletConnectEthereumProvider } = await import("@walletconnect/ethereum-provider");
-
-  walletConnectProviderPromise ??= WalletConnectEthereumProvider.init({
-    projectId: WALLETCONNECT_PROJECT_ID,
-    optionalChains: [ARC_CHAIN_ID_NUMBER],
-    showQrModal: true,
-    rpcMap: {
-      [String(ARC_CHAIN_ID_NUMBER)]: ARC_RPC_URL
-    },
-    metadata: {
-      name: "AuraPredict",
-      description: "Prediction markets on Arc Testnet",
-      url: typeof window !== "undefined" ? window.location.origin : "https://app.aurapredict.xyz",
-      icons: [typeof window !== "undefined" ? `${window.location.origin}/aurapredict-logo.png` : "https://app.aurapredict.xyz/aurapredict-logo.png"]
-    },
-    methods: [
-      "eth_requestAccounts",
-      "eth_accounts",
-      "eth_sendTransaction",
-      "personal_sign",
-      "eth_signTypedData",
-      "eth_signTypedData_v4",
-      "wallet_switchEthereumChain",
-      "wallet_addEthereumChain"
-    ],
-    events: ["accountsChanged", "chainChanged", "disconnect", "connect"]
-  }) as Promise<EthereumProvider>;
-
-  return walletConnectProviderPromise;
-}
-
-function sleep(ms: number) {
-  return new Promise((resolve) => window.setTimeout(resolve, ms));
-}
-
-function readJsonStorage<T>(key: string, fallback: T) {
-  try {
-    const raw = window.localStorage.getItem(key);
-    return raw ? (JSON.parse(raw) as T) : fallback;
-  } catch {
-    return fallback;
-  }
-}
-
-function claimedMarketKey(account: string, marketId: number) {
-  return `${account.toLowerCase()}:${marketId}`;
-}
-
-function readCachedMarkets() {
-  try {
-    const rows = JSON.parse(window.localStorage.getItem(MARKET_CACHE_KEY) || "[]") as CachedMarketView[];
-    return rows
-      .map((market) => ({
-        ...market,
-        yesPool: BigInt(market.yesPool || "0"),
-        noPool: BigInt(market.noPool || "0"),
-        yesPosition: 0n,
-        noPosition: 0n,
-        claimed: false,
-        potentialPayout: 0n,
-        termsCreatorBond: market.termsCreatorBond !== undefined ? BigInt(market.termsCreatorBond || "0") : undefined,
-        termsDisputeBond: market.termsDisputeBond !== undefined ? BigInt(market.termsDisputeBond || "0") : undefined
-      }))
-      .filter((market) => Number.isInteger(market.id));
-  } catch {
-    return [];
-  }
-}
-
-function writeCachedMarkets(markets: MarketView[]) {
-  try {
-    const cachedRows: CachedMarketView[] = markets.slice(0, 120).map((market) => ({
-      id: market.id,
-      question: market.question,
-      category: market.category,
-      createdAt: market.createdAt,
-      closeTime: market.closeTime,
-      resolutionTime: market.resolutionTime,
-      settlementToken: market.settlementToken,
-      settlementSymbol: market.settlementSymbol,
-      settlementDecimals: market.settlementDecimals,
-      authority: market.authority,
-      resolutionMode: market.resolutionMode,
-      metadataHash: market.metadataHash,
-      metadataURI: market.metadataURI,
-      termsProtocolFeeBps: market.termsProtocolFeeBps,
-      termsCreatorBond: market.termsCreatorBond?.toString(),
-      termsDisputeBond: market.termsDisputeBond?.toString(),
-      termsDisputeWindow: market.termsDisputeWindow,
-      termsDisputeGracePeriod: market.termsDisputeGracePeriod,
-      authorityReviewRequired: market.authorityReviewRequired,
-      creator: market.creator,
-      resolver: market.resolver,
-      yesPool: market.yesPool.toString(),
-      noPool: market.noPool.toString(),
-      traderCount: market.traderCount,
-      proposedOutcome: market.proposedOutcome,
-      proposedAt: market.proposedAt,
-      disputeDeadline: market.disputeDeadline,
-      disputed: market.disputed,
-      disputer: market.disputer,
-      outcome: market.outcome,
-      claimed: false
-    }));
-    window.localStorage.setItem(MARKET_CACHE_KEY, JSON.stringify(cachedRows));
-  } catch {
-    // Cache is a best-effort UX optimization.
-  }
-}
-
-function indexedMarketToView(market: IndexedMarket): MarketView {
-  const normalizedCategory = normalizeCategory(market.category);
-  return {
-    ...market,
-    category: normalizedCategory,
-    createdAt: Number(market.createdAt || 0),
-    closeTime: Number(market.closeTime || 0),
-    resolutionTime: Number(market.resolutionTime || market.closeTime || 0),
-    settlementDecimals: Number(market.settlementDecimals ?? ARC_NATIVE_USDC_DECIMALS),
-    termsCreatorBond: market.termsCreatorBond !== undefined ? BigInt(String(market.termsCreatorBond || "0")) : undefined,
-    termsDisputeBond: market.termsDisputeBond !== undefined ? BigInt(String(market.termsDisputeBond || "0")) : undefined,
-    termsDisputeGracePeriod: market.termsDisputeGracePeriod !== undefined ? Number(market.termsDisputeGracePeriod) : undefined,
-    yesPool: BigInt(market.yesPool || "0"),
-    noPool: BigInt(market.noPool || "0"),
-    traderCount: Number(market.traderCount || 0),
-    proposedOutcome: Number(market.proposedOutcome || 0) as Outcome,
-    proposedAt: Number(market.proposedAt || 0),
-    disputeDeadline: Number(market.disputeDeadline || 0),
-    disputed: Boolean(market.disputed),
-    outcome: Number(market.outcome || 0) as Outcome,
-    yesPosition: BigInt(market.yesPosition || "0"),
-    noPosition: BigInt(market.noPosition || "0"),
-    claimed: false,
-    potentialPayout: BigInt(market.potentialPayout || "0")
-  };
-}
-
-function normalizeCategory(category?: string) {
-  const value = String(category || "").trim();
-  if (!value) return "Other";
-  return CATEGORY_SET.has(value) ? value : "Other";
-}
-
-function indexedStatsToProjectStats(stats: IndexedProjectStats): ProjectStats {
-  return {
-    ...stats,
-    totalVolume: BigInt(stats.totalVolume || "0"),
-    liveLiquidity: BigInt(stats.liveLiquidity || "0"),
-    averageMarketVolume: BigInt(stats.averageMarketVolume || "0"),
-    assetBreakdown: (stats.assetBreakdown || []).map((asset) => ({
-      ...asset,
-      totalVolume: BigInt(asset.totalVolume || "0"),
-      liveLiquidity: BigInt(asset.liveLiquidity || "0"),
-      averageMarketVolume: BigInt(asset.averageMarketVolume || "0")
-    }))
-  };
-}
-
-function indexedActivityToItem(activity: IndexedActivity, marketsById: Map<number, MarketView>): ActivityItem {
-  return {
-    ...activity,
-    question: activity.question || marketsById.get(activity.marketId)?.question || `Market #${activity.marketId}`,
-    side: Number(activity.side || 0) as Outcome,
-    amount: BigInt(activity.amount || "0")
-  };
-}
-
-function mergeMarketState(incoming: MarketView, current?: MarketView) {
-  if (!current) return incoming;
-  const shouldPreserveLocalProposal =
-    current.outcome === Outcome.Unresolved &&
-    incoming.outcome === Outcome.Unresolved &&
-    current.proposedAt > incoming.proposedAt;
-  const shouldPreserveLocalResolution =
-    current.outcome !== Outcome.Unresolved && incoming.outcome === Outcome.Unresolved;
-
-  return {
-    ...incoming,
-    ...(shouldPreserveLocalProposal || shouldPreserveLocalResolution
-      ? {
-          proposedOutcome: current.proposedOutcome,
-          proposedAt: current.proposedAt,
-          disputeDeadline: current.disputeDeadline,
-          disputed: current.disputed,
-          disputer: current.disputer,
-          outcome: current.outcome
-        }
-      : {}),
-    yesPosition: current.yesPosition,
-    noPosition: current.noPosition,
-    claimed: current.claimed,
-    potentialPayout: current.potentialPayout
-  };
-}
-
-function mergeMarketRows(incomingRows: MarketView[], currentRows: MarketView[], totalMarketCount: number) {
-  const incomingIds = new Set(incomingRows.map((market) => market.id));
-  const currentById = new Map(currentRows.map((market) => [market.id, market]));
-  const mergedRows = incomingRows.map((market) => mergeMarketState(market, currentById.get(market.id)));
-  const localOnlyRows = currentRows.filter((market) => !incomingIds.has(market.id) && market.id < totalMarketCount);
-  return [...mergedRows, ...localOnlyRows].sort((a, b) => b.id - a.id);
-}
-
-async function fetchIndexerJson<T>(path: string): Promise<T | null> {
-  if (!INDEXER_URL || VIEWING_V3_ARCHIVE) return null;
-  const [route, query = ""] = path.split("?");
-  const urls = [
-    `${INDEXER_URL}${path}`,
-    `${INDEXER_URL}${route}.json${query ? `?${query}` : ""}`
-  ];
-  const controller = new AbortController();
-  const timeout = window.setTimeout(() => controller.abort(), 7000);
-  try {
-    for (const url of urls) {
-      const response = await fetch(url, {
-        headers: { accept: "application/json" },
-        signal: controller.signal
-      });
-      if (response.ok) return (await response.json()) as T;
-    }
-    return null;
-  } catch {
-    return null;
-  } finally {
-    window.clearTimeout(timeout);
-  }
-}
-
-async function postIndexerJson<T>(path: string, payload: unknown): Promise<T | null> {
-  if (!INDEXER_URL || INDEXER_URL.includes("github.io") || VIEWING_V3_ARCHIVE) return null;
-  try {
-    const response = await fetch(`${INDEXER_URL}${path}`, {
-      method: "POST",
-      headers: {
-        accept: "application/json",
-        "content-type": "application/json"
-      },
-      body: JSON.stringify(payload)
-    });
-    if (!response.ok) return null;
-    return (await response.json()) as T;
-  } catch {
-    return null;
-  }
-}
-
-async function postIndexerJsonWithStatus<T extends { error?: string }>(
-  path: string,
-  payload: unknown
-): Promise<{ ok: boolean; status: number; data: T | null }> {
-  if (!INDEXER_URL || INDEXER_URL.includes("github.io") || VIEWING_V3_ARCHIVE) {
-    return { ok: false, status: 0, data: null };
-  }
-  try {
-    const response = await fetch(`${INDEXER_URL}${path}`, {
-      method: "POST",
-      headers: {
-        accept: "application/json",
-        "content-type": "application/json"
-      },
-      body: JSON.stringify(payload)
-    });
-    const data = (await response.json().catch(() => null)) as T | null;
-    return { ok: response.ok, status: response.status, data };
-  } catch {
-    return { ok: false, status: 0, data: null };
-  }
-}
 
 function normalizeProfileUsername(value: string) {
   return value
@@ -1301,469 +339,6 @@ function normalizeProfileUsername(value: string) {
     .slice(0, 20);
 }
 
-async function loadIndexedSnapshot(account?: string): Promise<IndexedSnapshot | null> {
-  const activityLimit = 2_000;
-  const walletActivityLimit = 20_000;
-  const accountActivityPath =
-    account && isAddress(account) ? `/api/activity?limit=${walletActivityLimit}&user=${account}` : "";
-  const [marketsResponse, activityResponse, accountActivityResponse, statsResponse, healthResponse] = await Promise.all([
-    fetchIndexerJson<{ markets: IndexedMarket[]; total: number }>("/api/markets"),
-    fetchIndexerJson<{ activities: IndexedActivity[] }>(`/api/activity?limit=${activityLimit}`),
-    accountActivityPath
-      ? fetchIndexerJson<{ activities: IndexedActivity[] }>(accountActivityPath)
-      : Promise.resolve(null),
-    fetchIndexerJson<{ stats: IndexedProjectStats }>("/api/stats"),
-    fetchIndexerJson<LandingHealth>("/health")
-  ]);
-
-  if (!marketsResponse?.markets?.length) return null;
-
-  const markets = marketsResponse.markets.map(indexedMarketToView).sort((a, b) => b.id - a.id);
-  const marketsById = new Map(markets.map((market) => [market.id, market]));
-  const activityRowsById = new Map<string, IndexedActivity>();
-  for (const activity of [...(activityResponse?.activities ?? []), ...(accountActivityResponse?.activities ?? [])]) {
-    if (activity?.id) activityRowsById.set(activity.id, activity);
-  }
-  const activities = [...activityRowsById.values()]
-    .map((activity) => indexedActivityToItem(activity, marketsById))
-    .sort((a, b) => b.timestamp - a.timestamp);
-
-  return {
-    markets,
-    activities,
-    stats: statsResponse?.stats ? indexedStatsToProjectStats(statsResponse.stats) : null,
-    total: marketsResponse.total || markets.length,
-    health: healthResponse?.ok ? healthResponse : null
-  };
-}
-
-function shortAddress(address: string) {
-  return `${address.slice(0, 6)}...${address.slice(-4)}`;
-}
-
-function compactAccountLabel(label: string) {
-  const trimmed = label.trim();
-  if (trimmed.length <= 14) return trimmed;
-  return `${trimmed.slice(0, 6)}...${trimmed.slice(-4)}`;
-}
-
-function shortHash(hash: string) {
-  return `${hash.slice(0, 10)}...${hash.slice(-6)}`;
-}
-
-function formatUsdc(value: bigint, decimals = ARC_NATIVE_USDC_DECIMALS) {
-  const formatted = Number(formatUnits(value, decimals));
-  return new Intl.NumberFormat("en-US", {
-    minimumFractionDigits: formatted < 1 && formatted > 0 ? 4 : 2,
-    maximumFractionDigits: 6
-  }).format(formatted);
-}
-
-function formatStatUsdc(value: bigint, decimals = ARC_NATIVE_USDC_DECIMALS) {
-  const formatted = Number(formatUnits(value, decimals));
-  return new Intl.NumberFormat("en-US", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2
-  }).format(formatted);
-}
-
-function formatSignedUsdc(value: bigint, decimals = ARC_NATIVE_USDC_DECIMALS) {
-  if (value === 0n) return "0.00";
-  const sign = value < 0n ? "-" : "+";
-  const absolute = value < 0n ? -value : value;
-  return `${sign}${formatUsdc(absolute, decimals)}`;
-}
-
-function formatUsdcInput(value: bigint, decimals = ARC_NATIVE_USDC_DECIMALS) {
-  const raw = formatUnits(value, decimals);
-  return raw.includes(".") ? raw.replace(/0+$/, "").replace(/\.$/, "") : raw;
-}
-
-function transactionUrl(hash: Hash) {
-  return `${ARC_EXPLORER_URL}/tx/${hash}`;
-}
-
-function maybeTransactionUrl(hash?: string) {
-  return hash && /^0x[a-fA-F0-9]{64}$/.test(hash) ? `${ARC_EXPLORER_URL}/tx/${hash}` : "";
-}
-
-function compactErrorMessage(error: unknown) {
-  const raw = errorMessage(error);
-  const firstLine = raw.split("\n").find(Boolean) || raw;
-  const lower = raw.toLowerCase();
-  if (
-    lower.includes("failed to fetch") ||
-    lower.includes("http request failed") ||
-    lower.includes("networkerror") ||
-    lower.includes("timeout")
-  ) {
-    return "Arc RPC request failed. This is usually a temporary network/RPC issue. Refresh or try again in a few seconds.";
-  }
-  if (lower.includes("user rejected") || lower.includes("user denied")) return "Transaction rejected in wallet.";
-  if (lower.includes("insufficient funds")) return "Insufficient wallet balance for this transaction. Check USDC for gas and the selected market token.";
-  if (lower.includes("insufficientamountout") || lower.includes("0xe52970aa")) {
-    return "Swap rate moved below the minimum receive amount. Nothing was exchanged. Get a fresh quote or select a higher price tolerance.";
-  }
-  if (lower.includes("transferfailed")) {
-    return "Token transfer failed. Check the selected token balance and allowance before trying again.";
-  }
-  if (lower.includes("execution reverted")) {
-    return "Transaction reverted by the contract. Check market status, amount, wallet permission, or open the transaction on Arcscan.";
-  }
-  if (lower.includes("contract interaction failed")) {
-    return "Contract interaction failed. Check wallet balance, market status, contract address, or open the transaction details in your wallet.";
-  }
-  return firstLine.length > 220 ? `${firstLine.slice(0, 220)}...` : firstLine;
-}
-
-function lifiQuoteUrl(pair: StablecoinSwapPair, amount: bigint, account: string, slippage: number) {
-  const params = new URLSearchParams({
-    fromChain: String(ARC_CHAIN_ID_NUMBER),
-    toChain: String(ARC_CHAIN_ID_NUMBER),
-    fromToken: pair.fromToken,
-    toToken: pair.toToken,
-    fromAmount: amount.toString(),
-    fromAddress: account,
-    toAddress: account,
-    slippage: String(slippage)
-  });
-  return `${LIFI_QUOTE_ENDPOINT}?${params.toString()}`;
-}
-
-function hasLifiQuote(data: unknown) {
-  if (!data || typeof data !== "object") return false;
-  const record = data as Record<string, unknown>;
-  return Boolean(record.transactionRequest || record.estimate || record.toAmount);
-}
-
-function firstLifiFailureMessage(data: unknown) {
-  if (!data || typeof data !== "object") return "";
-  const record = data as Record<string, unknown>;
-  if (typeof record.message === "string" && record.message) return record.message;
-  const errors = record.errors;
-  if (!errors || typeof errors !== "object") return "";
-  const failed = (errors as Record<string, unknown>).failed;
-  if (!Array.isArray(failed)) return "";
-  for (const item of failed) {
-    if (!item || typeof item !== "object") continue;
-    const itemRecord = item as Record<string, unknown>;
-    const subpaths = itemRecord.subpaths;
-    if (!subpaths || typeof subpaths !== "object") continue;
-    for (const attempts of Object.values(subpaths as Record<string, unknown>)) {
-      if (!Array.isArray(attempts)) continue;
-      for (const attempt of attempts) {
-        if (!attempt || typeof attempt !== "object") continue;
-        const message = (attempt as Record<string, unknown>).message;
-        if (typeof message === "string" && message) return message;
-      }
-    }
-  }
-  return "";
-}
-
-async function fetchLifiQuoteJson(pair: StablecoinSwapPair, amount: bigint, account: string, slippage: number) {
-  const response = await fetch(lifiQuoteUrl(pair, amount, account, slippage));
-  return (await response.json()) as unknown;
-}
-
-async function lifiRouteDiagnostic(pair: StablecoinSwapPair, requestedAmount: bigint, account: string, slippage: number) {
-  try {
-    const requested = await fetchLifiQuoteJson(pair, requestedAmount, account, slippage);
-    if (hasLifiQuote(requested)) return "";
-    const directFailure = firstLifiFailureMessage(requested);
-    let largestWorkingProbe = 0n;
-    for (const probeAmount of LIFI_PROBE_AMOUNTS) {
-      if (probeAmount >= requestedAmount) continue;
-      const probe = await fetchLifiQuoteJson(pair, probeAmount, account, slippage);
-      if (hasLifiQuote(probe)) largestWorkingProbe = probeAmount;
-    }
-    if (largestWorkingProbe > 0n) {
-      return `LI.FI has only shallow ${pair.fromSymbol} to ${pair.toSymbol} liquidity on Arc Testnet right now. Try ${formatUsdcInput(
-        largestWorkingProbe,
-        pair.decimals
-      )} ${pair.fromSymbol} or less, or wait for LI.FI liquidity to recover.`;
-    }
-    if (pair.fromSymbol === "EURC" && pair.toSymbol === "USDC") {
-      return "LI.FI currently has no EURC to USDC route on Arc Testnet. This is a LI.FI/liquidity limitation, not an AuraPredict market issue. Use USDC directly or try again later.";
-    }
-    if (directFailure.toLowerCase().includes("liquidity")) {
-      return `LI.FI does not have enough ${pair.fromSymbol} to ${pair.toSymbol} liquidity on Arc Testnet for this amount. Try a much smaller amount or try again later.`;
-    }
-    return directFailure
-      ? `LI.FI could not quote this ${pair.fromSymbol} to ${pair.toSymbol} swap on Arc Testnet: ${directFailure}`
-      : `LI.FI could not quote ${pair.fromSymbol} to ${pair.toSymbol} on Arc Testnet right now. Try again later.`;
-  } catch {
-    return `LI.FI quote diagnostics are unavailable, and no ${pair.fromSymbol} to ${pair.toSymbol} route was returned. Try again later.`;
-  }
-}
-
-function swapAmountToDecimalString(amount: bigint, decimals: number) {
-  return formatUnits(amount, decimals);
-}
-
-function swapQuoteEstimatedAmount(quote: StablecoinSwapQuote, pair: StablecoinSwapPair) {
-  return quote.provider === "lifi" ? BigInt(quote.route.toAmount) : parseUsdcInput(quote.estimatedAmountOut, pair.decimals);
-}
-
-function swapQuoteMinimumAmount(quote: StablecoinSwapQuote, pair: StablecoinSwapPair) {
-  return quote.provider === "lifi" ? BigInt(quote.route.toAmountMin) : parseUsdcInput(quote.minimumAmountOut, pair.decimals);
-}
-
-function swapQuoteGasCost(quote: StablecoinSwapQuote) {
-  return quote.provider === "lifi" ? quote.route.gasCostUSD || "" : "";
-}
-
-function swapQuoteProviderLabel(quote?: StablecoinSwapQuote | null) {
-  if (!quote) return CIRCLE_APP_KIT_KEY ? "Circle App Kit, fallback LI.FI" : "LI.FI";
-  return quote.provider === "arc-app-kit" ? "Circle App Kit" : "LI.FI";
-}
-
-async function createArcAppKitSwapRuntime(provider: EthereumProvider) {
-  const [{ AppKit, Blockchain }, { createViemAdapterFromProvider }] = await Promise.all([
-    import("@circle-fin/app-kit"),
-    import("@circle-fin/adapter-viem-v2")
-  ]);
-  const adapter = await createViemAdapterFromProvider({ provider: provider as never });
-  return { kit: new AppKit(), Blockchain, adapter };
-}
-
-async function createUnifiedBalanceRuntime(provider: EthereumProvider) {
-  return createArcAppKitSwapRuntime(provider);
-}
-
-async function estimateArcAppKitSwap(
-  provider: EthereumProvider,
-  pair: StablecoinSwapPair,
-  requestedAmount: bigint,
-  toleranceBps: number
-): Promise<AppKitSwapQuote> {
-  if (!CIRCLE_APP_KIT_KEY) throw new Error("Circle App Kit key is not configured.");
-  const { kit, Blockchain, adapter } = await createArcAppKitSwapRuntime(provider);
-  const amountIn = swapAmountToDecimalString(requestedAmount, pair.decimals);
-  const estimate = await kit.estimateSwap({
-    from: { adapter, chain: Blockchain.Arc_Testnet },
-    tokenIn: pair.fromSymbol,
-    tokenOut: pair.toSymbol,
-    amountIn,
-    config: {
-      kitKey: CIRCLE_APP_KIT_KEY,
-      slippageBps: toleranceBps
-    }
-  } as never);
-  return {
-    provider: "arc-app-kit",
-    amountIn,
-    estimatedAmountOut: estimate.estimatedOutput.amount,
-    minimumAmountOut: estimate.stopLimit.amount,
-    pairKey: stablecoinSwapPairKey(pair),
-    slippageBps: toleranceBps
-  };
-}
-
-async function executeArcAppKitSwap(provider: EthereumProvider, pair: StablecoinSwapPair, quote: AppKitSwapQuote) {
-  if (!CIRCLE_APP_KIT_KEY) throw new Error("Circle App Kit key is not configured.");
-  const { kit, Blockchain, adapter } = await createArcAppKitSwapRuntime(provider);
-  return kit.swap({
-    from: { adapter, chain: Blockchain.Arc_Testnet },
-    tokenIn: pair.fromSymbol,
-    tokenOut: pair.toSymbol,
-    amountIn: quote.amountIn,
-    config: {
-      kitKey: CIRCLE_APP_KIT_KEY,
-      slippageBps: quote.slippageBps,
-      stopLimit: quote.minimumAmountOut
-    }
-  } as never);
-}
-
-function unifiedBalanceChainLabel(chain: string) {
-  if (chain === "Arc_Testnet") return "Arc Testnet";
-  const source = UNIFIED_BALANCE_SOURCE_CHAINS.find((item) => item.value === chain);
-  return source?.label ?? chain.replace(/_/g, " ");
-}
-
-function unifiedBalanceString(value: unknown, fallback = "0") {
-  if (typeof value === "string" && value.trim()) return value;
-  if (typeof value === "number" && Number.isFinite(value)) return String(value);
-  if (typeof value === "bigint") return value.toString();
-  return fallback;
-}
-
-function formatUnifiedBalanceDecimal(value?: string) {
-  const raw = value && value.trim() ? value.trim() : "0";
-  const numeric = Number(raw);
-  if (!Number.isFinite(numeric)) return raw;
-  return new Intl.NumberFormat("en-US", {
-    minimumFractionDigits: numeric > 0 && numeric < 1 ? 4 : 0,
-    maximumFractionDigits: 6
-  }).format(numeric);
-}
-
-function hasUnifiedBalanceValue(value?: string) {
-  const numeric = Number(value || "0");
-  return Number.isFinite(numeric) && numeric > 0;
-}
-
-function normalizeUnifiedBalanceAmount(value: string) {
-  const amount = parseUsdcInput(value, 6);
-  if (amount <= 0n) throw new Error("Enter a USDC amount greater than 0.");
-  return formatUsdcInput(amount, 6);
-}
-
-function unifiedBalanceGatewayAmount(
-  summary: UnifiedBalanceSummary | null | undefined,
-  chain: UnifiedBalanceSourceChainKey,
-  field: "confirmedBalance" | "pendingBalance"
-) {
-  const row = summary?.breakdown.find((entry) => entry.chain === chain);
-  return parseUsdcInput(row?.[field] || "0", 6);
-}
-
-function addUnifiedBalanceDecimals(left?: string, right?: string) {
-  const total = parseUsdcInput(left || "0", 6) + parseUsdcInput(right || "0", 6);
-  return formatUsdcInput(total, 6);
-}
-
-function flattenUnifiedBalanceSummary(data: unknown): UnifiedBalanceSummary {
-  const record = data && typeof data === "object" ? (data as Record<string, unknown>) : {};
-  const accounts = Array.isArray(record.breakdown) ? record.breakdown : [];
-  const rows = accounts.flatMap((account) => {
-    const accountRecord = account && typeof account === "object" ? (account as Record<string, unknown>) : {};
-    const breakdown = Array.isArray(accountRecord.breakdown) ? accountRecord.breakdown : [];
-    return breakdown.map((entry) => {
-      const entryRecord = entry && typeof entry === "object" ? (entry as Record<string, unknown>) : {};
-      return {
-        chain: unifiedBalanceString(entryRecord.chain, "Unknown"),
-        confirmedBalance: unifiedBalanceString(entryRecord.confirmedBalance),
-        pendingBalance: entryRecord.pendingBalance === undefined ? undefined : unifiedBalanceString(entryRecord.pendingBalance)
-      };
-    });
-  });
-  const byChain = new Map<string, UnifiedBalanceChainBalance>();
-  for (const row of rows) {
-    const current = byChain.get(row.chain);
-    byChain.set(row.chain, {
-      chain: row.chain,
-      confirmedBalance: addUnifiedBalanceDecimals(current?.confirmedBalance, row.confirmedBalance),
-      pendingBalance:
-        current?.pendingBalance || row.pendingBalance
-          ? addUnifiedBalanceDecimals(current?.pendingBalance, row.pendingBalance)
-          : undefined
-    });
-  }
-
-  return {
-    totalConfirmedBalance: unifiedBalanceString(record.totalConfirmedBalance),
-    totalPendingBalance: record.totalPendingBalance === undefined ? undefined : unifiedBalanceString(record.totalPendingBalance),
-    breakdown: [...byChain.values()].sort((left, right) =>
-      unifiedBalanceChainLabel(left.chain).localeCompare(unifiedBalanceChainLabel(right.chain))
-    )
-  };
-}
-
-function flattenUnifiedBalanceFees(data: unknown): UnifiedBalanceFeeLine[] {
-  const record = data && typeof data === "object" ? (data as Record<string, unknown>) : {};
-  const fees = Array.isArray(record.fees) ? record.fees : [];
-  return fees.map((fee) => {
-    const feeRecord = fee && typeof fee === "object" ? (fee as Record<string, unknown>) : {};
-    const allocations = Array.isArray(feeRecord.allocations) ? feeRecord.allocations : [];
-    const detail = allocations
-      .map((allocation) => {
-        const allocationRecord = allocation && typeof allocation === "object" ? (allocation as Record<string, unknown>) : {};
-        const chain = unifiedBalanceString(allocationRecord.chain, "Chain");
-        const amount = unifiedBalanceString(allocationRecord.amount);
-        return `${unifiedBalanceChainLabel(chain)} ${formatUnifiedBalanceDecimal(amount)}`;
-      })
-      .filter(Boolean)
-      .join(" / ");
-    return {
-      type: unifiedBalanceString(feeRecord.type, "fee"),
-      token: unifiedBalanceString(feeRecord.token, "USDC"),
-      amount: unifiedBalanceString(feeRecord.amount),
-      detail
-    };
-  });
-}
-
-function unifiedBalanceTxFromResult(label: string, data: unknown): UnifiedBalanceTx {
-  const record = data && typeof data === "object" ? (data as Record<string, unknown>) : {};
-  return {
-    label,
-    chain: unifiedBalanceString(record.chain ?? record.destinationChain, ""),
-    txHash: unifiedBalanceString(record.txHash, ""),
-    explorerUrl: unifiedBalanceString(record.explorerUrl, "")
-  };
-}
-
-function createUnifiedBalanceSpendParams(
-  adapter: unknown,
-  blockchain: Record<string, unknown>,
-  sourceChain: UnifiedBalanceSourceChainKey,
-  amount: string,
-  recipientAddress: string
-) {
-  return {
-    from: {
-      adapter,
-      allocations: { amount, chain: sourceChain }
-    },
-    to: {
-      chain: blockchain.Arc_Testnet,
-      recipientAddress,
-      useForwarder: true
-    },
-    token: "USDC",
-    amount
-  };
-}
-
-async function readUnifiedBalanceWalletBalances(account: string): Promise<UnifiedBalanceWalletBalance[]> {
-  if (!account || !isAddress(account)) return [];
-  return Promise.all(
-    UNIFIED_BALANCE_WALLET_CHAINS.map(async (chain) => {
-      try {
-        const client = createPublicClient({
-          transport: fallback(
-            chain.rpcUrls.map((url) => http(url, { retryCount: 1, retryDelay: 250, timeout: 10_000 })),
-            { rank: false, retryCount: 1, retryDelay: 400 }
-          )
-        });
-        const balance = (await client.readContract({
-          address: chain.usdcAddress,
-          abi: settlementTokenAbi,
-          functionName: "balanceOf",
-          args: [account as Address]
-        })) as bigint;
-        return {
-          chain: chain.value,
-          label: chain.label,
-          balance,
-          decimals: chain.decimals,
-          tokenAddress: chain.usdcAddress
-        };
-      } catch (error) {
-        return {
-          chain: chain.value,
-          label: chain.label,
-          balance: 0n,
-          decimals: chain.decimals,
-          tokenAddress: chain.usdcAddress,
-          error: compactErrorMessage(error)
-        };
-      }
-    })
-  );
-}
-
-function parseUsdcInput(value: string, decimals = ARC_NATIVE_USDC_DECIMALS) {
-  const normalized = value.trim().replace(/,/g, ".");
-  if (!normalized || Number(normalized) <= 0) return 0n;
-  try {
-    return parseUnits(normalized, decimals);
-  } catch {
-    return 0n;
-  }
-}
 
 function normalizeReferenceUrl(value: string) {
   const trimmed = value.trim();
@@ -2021,251 +596,6 @@ function resolutionRuleForContract(input: {
   return `${humanRule}\n${AURA_RULE_JSON_PREFIX}${JSON.stringify(metadata)}`;
 }
 
-function marketVolume(market: MarketView) {
-  return market.yesPool + market.noPool;
-}
-
-function marketDecimals(market?: Pick<MarketView, "settlementDecimals">) {
-  return market?.settlementDecimals ?? ARC_NATIVE_USDC_DECIMALS;
-}
-
-function marketSymbol(market?: Pick<MarketView, "settlementSymbol">) {
-  return market?.settlementSymbol || "USDC";
-}
-
-function formatMarketAmount(value: bigint, market?: Pick<MarketView, "settlementDecimals">) {
-  return formatUsdc(value, marketDecimals(market));
-}
-
-function assetStatsFromMarkets(
-  markets: MarketView[],
-  nowSeconds: number,
-  defaultToken: string,
-  defaultSymbol: string,
-  defaultDecimals: number
-) {
-  const rows = new Map<string, AssetStats>();
-
-  for (const market of markets) {
-    const token = (market.settlementToken || defaultToken || market.settlementSymbol || defaultSymbol || "USDC").toLowerCase();
-    const symbol = marketSymbol({ settlementSymbol: market.settlementSymbol || defaultSymbol });
-    const decimals = marketDecimals({ settlementDecimals: market.settlementDecimals ?? defaultDecimals });
-    const volume = marketVolume(market);
-    const isLive = market.outcome === Outcome.Unresolved && market.closeTime > nowSeconds;
-    const isPending = market.outcome === Outcome.Unresolved && market.closeTime <= nowSeconds;
-    const current = rows.get(token) ?? {
-      token: isAddress(market.settlementToken || "") ? market.settlementToken : isAddress(defaultToken) ? defaultToken : undefined,
-      symbol,
-      decimals,
-      marketCount: 0,
-      liveMarkets: 0,
-      endedMarkets: 0,
-      pendingMarkets: 0,
-      participantEntries: 0,
-      totalVolume: 0n,
-      liveLiquidity: 0n,
-      averageMarketVolume: 0n
-    };
-
-    current.marketCount += 1;
-    current.participantEntries += market.traderCount;
-    current.totalVolume += volume;
-    if (isLive) {
-      current.liveMarkets += 1;
-      current.liveLiquidity += volume;
-    } else if (isPending) {
-      current.pendingMarkets += 1;
-    } else {
-      current.endedMarkets += 1;
-    }
-    current.averageMarketVolume = current.marketCount > 0 ? current.totalVolume / BigInt(current.marketCount) : 0n;
-    rows.set(token, current);
-  }
-
-  return [...rows.values()].sort((a, b) => a.symbol.localeCompare(b.symbol));
-}
-
-function fallbackAssetStatsFromProject(stats: ProjectStats | null, defaultSymbol = "USDC", defaultDecimals = ARC_NATIVE_USDC_DECIMALS) {
-  if (!stats) return [];
-  if (stats.assetBreakdown && stats.assetBreakdown.length > 0) return stats.assetBreakdown;
-  const symbols = stats.settlementSymbols && stats.settlementSymbols.length > 0 ? stats.settlementSymbols : [defaultSymbol];
-  if (symbols.length === 1) {
-    return [{
-      symbol: symbols[0],
-      decimals: defaultDecimals,
-      marketCount: stats.totalMarkets,
-      liveMarkets: stats.liveMarkets,
-      endedMarkets: stats.endedMarkets,
-      pendingMarkets: stats.pendingMarkets,
-      participantEntries: stats.participantEntries,
-      totalVolume: stats.totalVolume,
-      liveLiquidity: stats.liveLiquidity,
-      averageMarketVolume: stats.averageMarketVolume
-    }];
-  }
-  return symbols.map((symbol) => ({
-    symbol,
-    decimals: defaultDecimals,
-    marketCount: 0,
-    liveMarkets: 0,
-    endedMarkets: 0,
-    pendingMarkets: 0,
-    participantEntries: 0,
-    totalVolume: 0n,
-    liveLiquidity: 0n,
-    averageMarketVolume: 0n
-  }));
-}
-
-function formatAssetSummary(assets: AssetStats[], field: "totalVolume" | "liveLiquidity" | "averageMarketVolume") {
-  if (assets.length === 0) return "--";
-  return assets
-    .map((asset) => `${formatUsdc(asset[field], asset.decimals)} ${asset.symbol}`)
-    .join(" / ");
-}
-
-function resolutionTimeFor(market: Pick<MarketView, "closeTime" | "resolutionTime">) {
-  return market.resolutionTime || market.closeTime;
-}
-
-function percent(value: bigint, total: bigint) {
-  if (total === 0n) return 50;
-  return Number((value * 10000n) / total) / 100;
-}
-
-function compareBigint(a: bigint, b: bigint) {
-  if (a === b) return 0;
-  return a > b ? 1 : -1;
-}
-
-function betEstimate(market: MarketView, side: Outcome, amount: bigint, feeBps: number) {
-  if (amount <= 0n || (side !== Outcome.Yes && side !== Outcome.No)) {
-    return { payout: 0n, profit: 0n, pricePercent: side === Outcome.No ? 50 : 50 };
-  }
-
-  const sidePool = side === Outcome.Yes ? market.yesPool + amount : market.noPool + amount;
-  const totalAfter = marketVolume(market) + amount;
-  const grossPayout = sidePool > 0n ? (amount * totalAfter) / sidePool : 0n;
-  const profit = grossPayout > amount ? grossPayout - amount : 0n;
-  const fee = (profit * BigInt(feeBps)) / 10000n;
-  const payout = grossPayout - fee;
-  const pricePercent = percent(sidePool, totalAfter);
-
-  return {
-    payout,
-    profit: payout > amount ? payout - amount : 0n,
-    pricePercent
-  };
-}
-
-function outcomeLabel(outcome: Outcome) {
-  if (outcome === Outcome.Yes) return "YES won";
-  if (outcome === Outcome.No) return "NO won";
-  if (outcome === Outcome.Canceled) return "Canceled";
-  return "Live";
-}
-
-function closeDate(value: number) {
-  return new Intl.DateTimeFormat("en-US", {
-    timeZone: "UTC",
-    month: "short",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false
-  }).format(new Date(value * 1000)) + " UTC";
-}
-
-function isoDateLabel(value?: string) {
-  const timestamp = Date.parse(value || "");
-  return Number.isFinite(timestamp) ? closeDate(Math.floor(timestamp / 1000)) : "Just now";
-}
-
-function closeDateLocal(value: number) {
-  return new Intl.DateTimeFormat("en-US", {
-    month: "short",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false
-  }).format(new Date(value * 1000));
-}
-
-function chartTimeLabel(value: number, includeDate = false) {
-  return new Intl.DateTimeFormat("en-US", {
-    timeZone: "UTC",
-    ...(includeDate ? { month: "short", day: "2-digit" } : {}),
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false
-  }).format(new Date(value * 1000));
-}
-
-function chartAxisLabel(value: number, rangeSeconds: number) {
-  if (rangeSeconds >= 2 * 24 * 60 * 60) {
-    return new Intl.DateTimeFormat("en-US", {
-      timeZone: "UTC",
-      month: "short",
-      day: "2-digit"
-    }).format(new Date(value * 1000));
-  }
-  return chartTimeLabel(value);
-}
-
-function clampChartValue(value: number, min: number, max: number) {
-  return Math.min(max, Math.max(min, value));
-}
-
-function formatChartPercent(value: number) {
-  const rounded = Math.abs(value - Math.round(value)) < 0.05 ? Math.round(value) : Number(value.toFixed(1));
-  return `${rounded}%`;
-}
-
-function smoothPathFromPoints(points: Array<{ x: number; y: number }>) {
-  const cleanedPoints = points.reduce<Array<{ x: number; y: number }>>((acc, point) => {
-    if (!Number.isFinite(point.x) || !Number.isFinite(point.y)) return acc;
-    const nextPoint = { x: point.x, y: point.y };
-    const lastPoint = acc[acc.length - 1];
-    if (lastPoint && Math.abs(lastPoint.x - nextPoint.x) < 0.05) {
-      lastPoint.y = nextPoint.y;
-      return acc;
-    }
-    acc.push(nextPoint);
-    return acc;
-  }, []);
-
-  if (cleanedPoints.length === 0) return "";
-  if (cleanedPoints.length === 1) return `M${cleanedPoints[0].x},${cleanedPoints[0].y}`;
-
-  const coord = (value: number) => Number(value.toFixed(3));
-  const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
-  let path = `M${coord(cleanedPoints[0].x)},${coord(cleanedPoints[0].y)}`;
-
-  for (let index = 0; index < cleanedPoints.length - 1; index += 1) {
-    const p0 = cleanedPoints[Math.max(0, index - 1)];
-    const p1 = cleanedPoints[index];
-    const p2 = cleanedPoints[index + 1];
-    const p3 = cleanedPoints[Math.min(cleanedPoints.length - 1, index + 2)];
-    const dx = p2.x - p1.x;
-    if (dx <= 0.05) {
-      path += ` L${coord(p2.x)},${coord(p2.y)}`;
-      continue;
-    }
-
-    const smoothing = 0.32;
-    const previousSlope = (p2.y - p0.y) / Math.max(0.1, p2.x - p0.x);
-    const nextSlope = (p3.y - p1.y) / Math.max(0.1, p3.x - p1.x);
-    const minY = Math.min(p1.y, p2.y);
-    const maxY = Math.max(p1.y, p2.y);
-    const cp1x = p1.x + dx * smoothing;
-    const cp2x = p2.x - dx * smoothing;
-    const cp1y = clamp(p1.y + previousSlope * dx * smoothing, minY, maxY);
-    const cp2y = clamp(p2.y - nextSlope * dx * smoothing, minY, maxY);
-    path += ` C${coord(cp1x)},${coord(cp1y)} ${coord(cp2x)},${coord(cp2y)} ${coord(p2.x)},${coord(p2.y)}`;
-  }
-
-  return path;
-}
 
 function parseUtcDateTime(value: string) {
   const normalizedValue = value.trim().replace("T", " ");
@@ -2302,7 +632,7 @@ function inferKnownEventDeadlineFromText(value: string) {
   const text = value.toLowerCase();
   if (
     /\b(?:2026\s+)?fifa\s+world\s+cup\b|\bworld\s+cup\s+2026\b/.test(text) &&
-    /\bwin\b|\bwinner\b|\bchampion\b|\bchampionship\b|\bvô địch\b/.test(text)
+    /\bwin\b|\bwinner\b|\bchampion\b|\bchampionship\b|\bvÃ´ Ä‘á»‹ch\b/.test(text)
   ) {
     return "2026-07-19 23:59";
   }
@@ -2312,7 +642,7 @@ function inferKnownEventDeadlineFromText(value: string) {
 function isSportsTournamentWinnerQuestion(value: string) {
   const text = value.toLowerCase();
   return (
-    /\bwin\b|\bwinner\b|\bchampion\b|\bchampionship\b|\bvô địch\b/.test(text) &&
+    /\bwin\b|\bwinner\b|\bchampion\b|\bchampionship\b|\bvÃ´ Ä‘á»‹ch\b/.test(text) &&
     /\bworld cup\b|\bfifa\b|\bclub world cup\b|\btournament\b|\bleague\b|\bcup\b|\bchampions league\b|\bnba finals\b|\bsuper bowl\b|\bgrand slam\b/.test(text)
   );
 }
@@ -2793,59 +1123,6 @@ function utcInputFromNow(now: Date, offsetMinutes: number) {
   return utcDateTimeInputValue(new Date(timestamp));
 }
 
-function countdownText(closeTime: number, now: Date) {
-  let remaining = Math.max(0, closeTime * 1000 - now.getTime());
-  if (remaining === 0) return "Ended";
-
-  const day = 24 * 60 * 60 * 1000;
-  const hour = 60 * 60 * 1000;
-  const minute = 60 * 1000;
-
-  const days = Math.floor(remaining / day);
-  remaining -= days * day;
-  const hours = Math.floor(remaining / hour);
-  remaining -= hours * hour;
-  const minutes = Math.floor(remaining / minute);
-
-  if (days > 0) return `${days}D ${hours}H`;
-  if (hours > 0) return `${hours}H ${minutes}M`;
-  return `${minutes}M`;
-}
-
-function durationText(seconds: number) {
-  if (!Number.isFinite(seconds) || seconds <= 0) return "Not set";
-  const days = Math.floor(seconds / 86400);
-  const hours = Math.floor((seconds % 86400) / 3600);
-  const minutes = Math.floor((seconds % 3600) / 60);
-  const parts = [];
-  if (days > 0) parts.push(`${days}d`);
-  if (hours > 0) parts.push(`${hours}h`);
-  if (minutes > 0 && days === 0) parts.push(`${minutes}m`);
-  return parts.length > 0 ? parts.join(" ") : `${seconds}s`;
-}
-
-function timeAgo(timestamp: number, now: Date) {
-  if (timestamp <= 0) return "";
-  const elapsed = Math.max(0, Math.floor((now.getTime() - timestamp * 1000) / 1000));
-  if (elapsed < 60) return `${elapsed}s ago`;
-  const minutes = Math.floor(elapsed / 60);
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  return `${Math.floor(hours / 24)}d ago`;
-}
-
-function shortQuestion(question: string) {
-  return question.length > 70 ? `${question.slice(0, 67)}...` : question;
-}
-
-function sameAddress(left: string, right: string) {
-  return left.toLowerCase() === right.toLowerCase();
-}
-
-function isStablecoinContractVersion(version: MarketContractVersion) {
-  return version === "v3" || version === "v4" || version === "v5";
-}
 
 function stablecoinMarketAbi(version: MarketContractVersion) {
   if (version === "v5") return arcPredictionMarketV5Abi;
@@ -3203,1171 +1480,8 @@ function isDuplicateRpcNetworkError(error: unknown) {
   );
 }
 
-function errorMessage(error: unknown) {
-  if (error instanceof Error && error.message) return error.message;
-  if (typeof error === "object" && error !== null && "message" in error) {
-    return String((error as { message?: unknown }).message);
-  }
-  return String(error);
-}
 
-function walletConnectionErrorMessage(prefix: string, error: unknown) {
-  const message = errorMessage(error);
-  const lowerMessage = message.toLowerCase();
-  if (lowerMessage.includes("same rpc endpoint as existing network")) {
-    return `${prefix}: this wallet already has an Arc network saved with a conflicting chain ID. Remove the old Arc network in wallet settings, then reconnect.`;
-  }
-  if (
-    lowerMessage.includes("unrecognized chain") ||
-    lowerMessage.includes("unknown chain") ||
-    lowerMessage.includes("wallet_addethereumchain") ||
-    lowerMessage.includes("not added") ||
-    lowerMessage.includes("try adding")
-  ) {
-    return `${prefix}: Arc Testnet is not added in this wallet. Approve Add network when prompted, then reconnect.`;
-  }
-  return `${prefix}: ${message}`;
-}
 
-function isRateLimitError(error: unknown) {
-  const message = errorMessage(error).toLowerCase();
-  return message.includes("429") || message.includes("too many requests") || message.includes("rate limit");
-}
-
-function isTransientRpcError(error: unknown) {
-  const message = errorMessage(error).toLowerCase();
-  return (
-    isRateLimitError(error) ||
-    message.includes("failed to fetch") ||
-    message.includes("http request failed") ||
-    message.includes("networkerror") ||
-    message.includes("timeout")
-  );
-}
-
-async function withRpcRetry<T>(request: () => Promise<T>) {
-  let lastError: unknown;
-
-  for (let attempt = 0; attempt < RPC_RETRY_ATTEMPTS; attempt += 1) {
-    try {
-      return await request();
-    } catch (error) {
-      lastError = error;
-      if (!isTransientRpcError(error) || attempt === RPC_RETRY_ATTEMPTS - 1) {
-        throw error;
-      }
-
-      const delay = RPC_RETRY_DELAY_MS * 2 ** attempt + Math.floor(Math.random() * 250);
-      await sleep(delay);
-    }
-  }
-
-  throw lastError;
-}
-
-async function mapWithConcurrency<T, R>(
-  items: T[],
-  limit: number,
-  mapper: (item: T, index: number) => Promise<R>
-) {
-  const results = new Array<R>(items.length);
-  let nextIndex = 0;
-  const workerCount = Math.min(limit, items.length);
-
-  await Promise.all(
-    Array.from({ length: workerCount }, async () => {
-      while (nextIndex < items.length) {
-        const index = nextIndex;
-        nextIndex += 1;
-        results[index] = await mapper(items[index], index);
-        if (RPC_CALL_STAGGER_MS > 0) {
-          await sleep(RPC_CALL_STAGGER_MS);
-        }
-      }
-    })
-  );
-
-  return results;
-}
-
-function updateMarketRoute(marketId: number | null) {
-  const url = new URL(window.location.href);
-  url.searchParams.delete(PROFILE_QUERY_KEY);
-  if (marketId === null) {
-    url.searchParams.delete(MARKET_QUERY_KEY);
-  } else {
-    url.searchParams.set(MARKET_QUERY_KEY, String(marketId));
-  }
-  window.history.pushState({}, "", `${url.pathname}${url.search}${url.hash}`);
-}
-
-function updateProfileRoute(address: string | null) {
-  const url = new URL(window.location.href);
-  url.searchParams.delete(MARKET_QUERY_KEY);
-  if (address) {
-    url.searchParams.set(PROFILE_QUERY_KEY, address);
-  } else {
-    url.searchParams.delete(PROFILE_QUERY_KEY);
-  }
-  window.history.pushState({}, "", `${url.pathname}${url.search}${url.hash}`);
-}
-
-function categoryMeta(category: string) {
-  return CATEGORY_META[category] ?? CATEGORY_META.Other;
-}
-
-function marketImageFor(market: Pick<MarketView, "id" | "category">) {
-  const rawCategory = (market.category || "Other").toLowerCase();
-  const category = MARKET_IMAGE_CATEGORIES.includes(rawCategory as (typeof MARKET_IMAGE_CATEGORIES)[number])
-    ? rawCategory
-    : "other";
-  const index = Math.abs(market.id % MARKET_IMAGE_COUNT) + 1;
-  return `/market-images/${category}-${index}.webp`;
-}
-
-function marketImageVariant(market: Pick<MarketView, "id">) {
-  return `market-image-variant-${Math.abs(market.id % 6)}`;
-}
-
-function CategoryIcon({ category }: { category: string }) {
-  const key = categoryMeta(category).label;
-
-  if (key === "Crypto") {
-    return (
-      <svg className="category-icon" viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M12 3 20 12 12 21 4 12 12 3Z" />
-        <path d="M12 3v18" />
-        <path d="M4 12h16" />
-      </svg>
-    );
-  }
-
-  if (key === "Macro") {
-    return (
-      <svg className="category-icon" viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M5 19V9" />
-        <path d="M12 19V5" />
-        <path d="M19 19v-7" />
-        <path d="M3 19h18" />
-      </svg>
-    );
-  }
-
-  if (key === "Sports") {
-    return (
-      <svg className="category-icon" viewBox="0 0 24 24" aria-hidden="true">
-        <circle cx="12" cy="12" r="8" />
-        <path d="M6.5 8.5c3.6 1.4 7.4 1.4 11 0" />
-        <path d="M6.5 15.5c3.6-1.4 7.4-1.4 11 0" />
-      </svg>
-    );
-  }
-
-  if (key === "Politics") {
-    return (
-      <svg className="category-icon" viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M4 20h16" />
-        <path d="M6 17V9" />
-        <path d="M18 17V9" />
-        <path d="M12 17V9" />
-        <path d="M3 9h18L12 4 3 9Z" />
-      </svg>
-    );
-  }
-
-  if (key === "Arc") {
-    return (
-      <svg className="category-icon" viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M4 17c3.1-6.8 12.9-6.8 16 0" />
-        <path d="M8 18 12 9l4 9" />
-      </svg>
-    );
-  }
-
-  if (key === "AI") {
-    return (
-      <svg className="category-icon" viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M12 3v5" />
-        <path d="M12 16v5" />
-        <path d="M3 12h5" />
-        <path d="M16 12h5" />
-        <path d="M9 9h6v6H9z" />
-      </svg>
-    );
-  }
-
-  if (key === "Other") {
-    return (
-      <svg className="category-icon" viewBox="0 0 24 24" aria-hidden="true">
-        <circle cx="6" cy="12" r="2" />
-        <circle cx="12" cy="12" r="2" />
-        <circle cx="18" cy="12" r="2" />
-      </svg>
-    );
-  }
-
-  return (
-    <svg className="category-icon" viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M4 5h6v6H4z" />
-      <path d="M14 5h6v6h-6z" />
-      <path d="M4 15h6v4H4z" />
-      <path d="M14 15h6v4h-6z" />
-    </svg>
-  );
-}
-
-function ThemeIcon({ theme }: { theme: ThemeMode }) {
-  if (theme === "light") {
-    return (
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <circle cx="12" cy="12" r="4" />
-        <path d="M12 2v2" />
-        <path d="M12 20v2" />
-        <path d="M4.93 4.93 6.34 6.34" />
-        <path d="M17.66 17.66 19.07 19.07" />
-        <path d="M2 12h2" />
-        <path d="M20 12h2" />
-        <path d="M4.93 19.07 6.34 17.66" />
-        <path d="M17.66 6.34 19.07 4.93" />
-      </svg>
-    );
-  }
-
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M20 14.2A8 8 0 0 1 9.8 4 7 7 0 1 0 20 14.2Z" />
-    </svg>
-  );
-}
-
-function CheckIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="m5 12 4 4L19 6" />
-    </svg>
-  );
-}
-
-function GridViewIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M5 5h5v5H5z" />
-      <path d="M14 5h5v5h-5z" />
-      <path d="M5 14h5v5H5z" />
-      <path d="M14 14h5v5h-5z" />
-    </svg>
-  );
-}
-
-function ListViewIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M8 6h12" />
-      <path d="M8 12h12" />
-      <path d="M8 18h12" />
-      <path d="M4 6h.01" />
-      <path d="M4 12h.01" />
-      <path d="M4 18h.01" />
-    </svg>
-  );
-}
-
-function MobileMarketTabIcon({ tabKey }: { tabKey: "overview" | "trade" | "resolve" | "details" }) {
-  if (tabKey === "overview") {
-    return (
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M3 3v18h18" />
-        <path d="m19 9-5 5-4-4-4 4" />
-      </svg>
-    );
-  }
-  if (tabKey === "trade") {
-    return (
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <circle cx="12" cy="12" r="9" />
-        <path d="M12 7v5l3 3" />
-      </svg>
-    );
-  }
-  if (tabKey === "resolve") {
-    return (
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M12 3 5 6v5c0 4.5 2.8 8 7 10 4.2-2 7-5.5 7-10V6l-7-3Z" />
-        <path d="m9 12 2 2 4-5" />
-      </svg>
-    );
-  }
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <circle cx="12" cy="12" r="9" />
-      <path d="M12 8v4" />
-      <circle cx="12" cy="16" r="0.5" fill="currentColor" />
-    </svg>
-  );
-}
-
-function MobileNavIcon({ icon }: { icon: "markets" | "hot" | "alerts" | "profile" | "owner" }) {
-  if (icon === "markets") {
-    return (
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M4 11.5 12 4l8 7.5" />
-        <path d="M6.5 10.5V20h11v-9.5" />
-        <path d="M9.5 20v-5h5v5" />
-      </svg>
-    );
-  }
-
-  if (icon === "hot") {
-    return (
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M4 18h16" />
-        <path d="m5 15 4-4 3 3 6-7" />
-        <path d="M15 7h3v3" />
-      </svg>
-    );
-  }
-
-  if (icon === "alerts") {
-    return (
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M18 16v-5a6 6 0 0 0-12 0v5l-2 2h16l-2-2Z" />
-        <path d="M9.5 20a2.5 2.5 0 0 0 5 0" />
-      </svg>
-    );
-  }
-
-  if (icon === "profile") {
-    return (
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <circle cx="12" cy="8" r="4" />
-        <path d="M5 20a7 7 0 0 1 14 0" />
-      </svg>
-    );
-  }
-
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M12 3 5 6v5c0 4.5 2.8 8 7 10 4.2-2 7-5.5 7-10V6l-7-3Z" />
-      <path d="m9 12 2 2 4-5" />
-    </svg>
-  );
-}
-
-function LandingPage() {
-  const [landingTheme, setLandingTheme] = useState<ThemeMode>(() => {
-    try {
-      return window.localStorage.getItem(THEME_KEY) === "light" ? "light" : "dark";
-    } catch {
-      return "dark";
-    }
-  });
-  const [landingStats, setLandingStats] = useState<ProjectStats | null>(null);
-  const [landingMarketAssetStats, setLandingMarketAssetStats] = useState<AssetStats[]>([]);
-  const [landingHealth, setLandingHealth] = useState<LandingHealth | null>(null);
-  const indexerIsRealtime = INDEXER_URL && !INDEXER_URL.includes("github.io");
-  const featureCards = [
-    {
-      title: "YES/NO markets",
-      text: "Create binary prediction markets for crypto, macro, sports, politics, Arc, AI, and community events."
-    },
-    {
-      title: "Stablecoin settlement",
-      text: "The current contract supports 6-decimal settlement assets by market, including Arc Testnet USDC and EURC, with selected-token balance checks before actions."
-    },
-  {
-      title: "Arc funding and swap access",
-      text: "Wallets can fund Arc USDC through Circle Unified Balance, then request USDC/EURC quotes from a market or profile. Aura tries Circle App Kit first for Arc swaps, then falls back to LI.FI liquidity before the wallet signs."
-    },
-    {
-      title: "Onchain market terms",
-      text: "Each market's primary source, fallback source, and resolution rule are stored onchain so settlement criteria stay tied to the market."
-    },
-    {
-      title: "Circle Agent Wallet signer",
-      text: "Resolution authority can be operated by a Circle Agent Wallet on Arc Testnet, giving authority/oracle-only markets a server-side signer for source-backed proposals."
-    },
-    {
-      title: "Objective oracle proposals",
-      text: "The indexer can check objective markets such as crypto prices, macro prices, and health/status endpoints, then show or auto-submit a high-confidence Oracle proposal before dispute/final review."
-    },
-    {
-      title: "Policy controls",
-      text: "Operational controls can pause new activity, allow approved creators, or block new positions without preventing existing markets from settling."
-    },
-    {
-      title: "Protocol revenue",
-      text: "Configurable creation fees and winner-profit fees accrue onchain for the owner to review and withdraw from an owner-only dashboard."
-    },
-    {
-      title: "Profiles and reputation",
-      text: "Set a username, share your profile, view USDC/EURC balances, open Unified Balance funding, track PNL, win rate, created markets, and prediction history."
-    },
-    {
-      title: "Aura Points",
-      text: "A social score for forecasters, combining volume, winning markets, PNL, resolved activity, and market creation."
-    },
-    {
-      title: "Leaderboard",
-      text: "Rank traders by volume, win rate, PNL, and Aura Points across 24H, 7D, 1M, and all-time views."
-    },
-    {
-      title: "Social forecasting",
-      text: "Follow creators, copy wallet addresses, share to X, embed market links, and study top traders before staking."
-    },
-    {
-      title: "Aura Agent",
-      text: "Use AI assistance to draft clearer markets, review duplicate risk, prepare source-based rules, and receive visible result suggestions."
-    },
-    {
-      title: "AI resolution receipts",
-      text: "View a suggested YES or NO outcome with confidence, supporting detail, and a settlement report that compares AI, creator proposal, dispute status, and final action."
-    },
-    {
-      title: "Live indexer",
-      text: "Read market history, wallet-searchable bet activity, token-specific USDC/EURC stats, and leaderboard data from the live AuraPredict indexer before falling back to Arc RPC."
-    }
-  ];
-  const flow = ["Create a market", "Stake YES or NO", "Track odds", "Resolve result", "Claim payout"];
-  const architectureSteps = ["Wallet", "AuraPredict UI", "AuraPredict Indexer", "Arc RPC", "Market Contract", "Arcscan"];
-  const settlementSteps = [
-    "Trading closes at the published UTC time",
-    "Resolution opens only after the rule's event timestamp",
-    "Resolver or authority reviews Aura and Oracle suggestions with confidence",
-    "Resolution actions show a settlement report with AI choice, creator proposal, dispute/review state, pools, and timelines",
-    "Creator, authority, or Circle Agent Wallet signer can submit the first onchain proposal when permitted",
-    "Owner receives an alert when the proposed result needs extra review",
-    "Dispute window stays open",
-    "Disputes are routed to owner/resolution authority review",
-    "Stale disputes can be canceled to refund users",
-    "Final outcome is locked",
-    "Winners claim payout"
-  ];
-  const dataFlow = [
-    "The live AuraPredict indexer now powers market history, per-token volume, participants, activity, and leaderboards",
-    "Wallet UI shows USDC and EURC balances with copy-address, faucet, Unified Balance funding, and swap access from markets or the user's profile",
-    "Market cards are now compact click-through summaries; staking, Aura review, Oracle checks, dispute, finalize, and claim actions happen inside the market page",
-    "The app checks selected-token balance and allowance before create, stake, or dispute transactions",
-    "Aura Agent drafts clearer markets, checks similar questions, and prepares rules with source links",
-    "Oracle proposal checks objective data sources such as Binance, Yahoo chart data, and health/status endpoints without spending AI quota",
-    "Objective oracle automation can auto-submit the first onchain proposal through the configured Circle Agent Wallet while keeping dispute and owner review open",
-    "After the rule timestamp, Aura displays a suggested outcome and confidence in Resolution actions",
-    "A saved AI receipt can be viewed without running a new AI request; Ask or Refresh requests a new review",
-    "The settlement report explains what AI suggested, what the resolver proposed, whether a dispute exists, and what the final reviewer should do next",
-    "Resolver, authority, or agent-signed decisions that differ from Aura and user disputes are flagged for owner/authority review",
-    "Owner wallets get a private dashboard for reporting, user activity, protocol fees, and fee withdrawal",
-    "Aura analysis remains off-chain; the contract anchors source/rule terms, evidence hashes, and receipt hashes in wallet-signed proposal actions",
-    "Wallet actions still sign directly against the Arc contract, with Arcscan as the verification layer"
-  ];
-  const oracleAdapters = [
-    {
-      title: "Crypto price",
-      text: "BTC, ETH, SOL, BNB, XRP, ADA, DOGE, AVAX, and LINK markets can be checked against Binance 1-minute price data, with a near-time CoinGecko fallback when exact data is unavailable."
-    },
-    {
-      title: "Macro chart",
-      text: "Gold and US Dollar Index markets can be checked against Yahoo chart data near the market's onchain resolution timestamp."
-    },
-    {
-      title: "Health and status",
-      text: "API health checks, JSON ok:true endpoints, and supported public status pages can produce a source-based Oracle suggestion."
-    },
-    {
-      title: "Liquidity safety",
-      text: "If YES or NO has no funded positions, Oracle suggests Cancel/Refund instead of awarding a one-sided market."
-    },
-    {
-      title: "No AI quota",
-      text: "Oracle proposals use deterministic source checks from the indexer, so they do not consume Gemini/OpenAI quota like Aura Agent reviews."
-    },
-    {
-      title: "Circle Agent proposal signer",
-      text: "When automation is enabled, a configured Circle Agent Wallet can submit high-confidence Oracle proposals on Arc while finalization still follows the contract's review windows."
-    }
-  ];
-  const infrastructureCards = [
-    {
-      title: "Prediction market API",
-      text: "Public endpoints expose markets, activity, AI insights, public oracle receipts, hot markets, and oracle reputation so other builders can consume AuraPredict data on Arc."
-    },
-    {
-      title: "Embeddable market cards",
-      text: "Each market can be shared as a compact card or embedded by URL, turning AuraPredict markets into portable forecasting components for partner apps and docs."
-    },
-    {
-      title: "Public oracle receipts",
-      text: "Aura and Oracle decisions publish outcome, confidence, source URLs, evidence hashes, receipt hashes, and transaction references before final settlement."
-    },
-    {
-      title: "Unified Balance funding",
-      text: "Circle Gateway and Unified Balance funding help users bring testnet USDC toward Arc before staking, while market actions stay wallet-signed on the Arc contract."
-    },
-    {
-      title: "AI market intelligence",
-      text: "Market detail compares current YES pricing with Aura's probability estimate, possible edge, confidence, and risk flags."
-    },
-    {
-      title: "Oracle Agent reputation",
-      text: "The owner dashboard tracks coverage, confidence, final-match accuracy, reversal rate, evidence depth, adapters, and auto-propose history."
-    }
-  ];
-  const roadmapItems = [
-    "Add websocket or event streaming for absolute realtime odds and cross-user updates",
-    "Harden AI receipt review with better evidence policy, audit logs, and operator dashboards",
-    "Back up off-chain social state with stronger moderation, export, and recovery tooling",
-    "Expand oracle adapters, committee policies, and Circle Agent Wallet operations after evidence policy is hardened"
-  ];
-  const nextTheme = landingTheme === "dark" ? "light" : "dark";
-  const heroMarketCount = landingHealth?.marketCount ?? landingStats?.totalMarkets ?? 0;
-  const heroMarketText = heroMarketCount > 0 ? heroMarketCount.toLocaleString("en-US") : "--";
-  const landingAssetRows =
-    landingStats?.assetBreakdown && landingStats.assetBreakdown.length > 0
-      ? landingStats.assetBreakdown
-      : landingMarketAssetStats.length > 0
-        ? landingMarketAssetStats
-        : fallbackAssetStatsFromProject(landingStats);
-  const indexedVolumeText = landingStats ? formatAssetSummary(landingAssetRows, "totalVolume") : "--";
-  const landingLiveLiquidityText = landingStats ? formatAssetSummary(landingAssetRows, "liveLiquidity") : "--";
-  const participantsText = landingStats ? landingStats.participantEntries.toLocaleString("en-US") : "--";
-  const knownPlayersText = landingStats ? landingStats.knownPlayers.toLocaleString("en-US") : "--";
-  const liveMarketsText = landingStats ? landingStats.liveMarkets.toLocaleString("en-US") : "--";
-  const pendingMarketsText = landingStats ? landingStats.pendingMarkets.toLocaleString("en-US") : "--";
-  const indexedBlockText = landingHealth?.lastIndexedBlock
-    ? Number(landingHealth.lastIndexedBlock).toLocaleString("en-US")
-    : "--";
-  const updatedText = landingHealth?.updatedAt
-    ? `${timeAgo(Math.floor(new Date(landingHealth.updatedAt).getTime() / 1000), new Date())} synced`
-    : "syncing";
-  const liveMetricCards = [
-    {
-      value: heroMarketText,
-      label: "Markets created"
-    },
-    {
-      value: indexedVolumeText,
-      label: "Indexed volume by token"
-    },
-    {
-      value: participantsText,
-      label: "Participant entries"
-    },
-    {
-      value: liveMarketsText,
-      label: "Live markets"
-    }
-  ];
-
-  useEffect(() => {
-    window.localStorage.setItem(THEME_KEY, landingTheme);
-  }, [landingTheme]);
-
-  useEffect(() => {
-    let canceled = false;
-    const loadLandingData = async () => {
-      const [statsResponse, healthResponse] = await Promise.all([
-        fetchIndexerJson<{ stats: IndexedProjectStats }>("/api/stats"),
-        fetchIndexerJson<LandingHealth>("/health")
-      ]);
-      if (canceled) return;
-      if (statsResponse?.stats) {
-        const nextStats = indexedStatsToProjectStats(statsResponse.stats);
-        setLandingStats(nextStats);
-        if (!nextStats.assetBreakdown || nextStats.assetBreakdown.length === 0) {
-          const marketResponse = await fetchIndexerJson<{ markets: IndexedMarket[] }>("/api/markets");
-          if (!canceled && marketResponse?.markets) {
-            setLandingMarketAssetStats(
-              assetStatsFromMarkets(
-                marketResponse.markets.map(indexedMarketToView),
-                Math.floor(Date.now() / 1000),
-                "",
-                "USDC",
-                ARC_NATIVE_USDC_DECIMALS
-              )
-            );
-          }
-        } else {
-          setLandingMarketAssetStats([]);
-        }
-      }
-      if (healthResponse?.ok) setLandingHealth(healthResponse);
-    };
-    void loadLandingData();
-    const interval = window.setInterval(loadLandingData, 15_000);
-    return () => {
-      canceled = true;
-      window.clearInterval(interval);
-    };
-  }, []);
-
-  return (
-    <main className={`landing-page landing-${landingTheme}`}>
-      <AppUpdateNotice />
-      <nav className="landing-nav">
-        <a className="landing-brand" href="#top" aria-label="AuraPredict home">
-          <img src="/aurapredict-logo.png" alt="AuraPredict" />
-          <span>AuraPredict</span>
-          <span className="arc-brand-chip">
-            <img src="/arc-icon-navy-gradient.svg" alt="" />
-            Built on Arc
-          </span>
-        </a>
-        <div>
-          <a href="#features">Features</a>
-          <a href="#oracle">Oracle</a>
-          <a href="#how-it-works">How it works</a>
-          <a href="#demo">Demo</a>
-          <a href={DOCS_URL}>Docs</a>
-          <a href={X_URL} target="_blank" rel="noreferrer">
-            X
-          </a>
-          <a href={DISCORD_URL} target="_blank" rel="noreferrer">
-            Discord
-          </a>
-          <button
-            className="landing-theme-toggle"
-            onClick={() => setLandingTheme(nextTheme)}
-            type="button"
-            aria-label={`Switch to ${nextTheme} mode`}
-          >
-            <ThemeIcon theme={landingTheme} />
-          </button>
-          <a className="landing-enter-small" href={APP_URL}>
-            Enter Dapp
-          </a>
-        </div>
-      </nav>
-
-      <section className="landing-hero" id="top">
-        <div className="landing-hero-copy">
-          <div className="landing-network-row">
-            <span>AuraPredict</span>
-            <span className="landing-arc-powered">
-              <img src="/arc-logo-white.svg" alt="Arc" />
-              Testnet
-            </span>
-            <strong>{indexerIsRealtime ? "Network :: Live" : "Network :: Indexed"}</strong>
-          </div>
-          <p className="landing-kicker">Arc Testnet prediction markets</p>
-          <h1>
-            <span>{heroMarketText}</span> prediction markets indexed.
-          </h1>
-          <p>
-            Trade YES/NO markets with Arc testnet stablecoins while the live AuraPredict indexer keeps market
-            history, volume, participants, leaderboards, comments, evidence, AI resolution receipts, oracle proposals,
-            Circle Agent Wallet proposal status, and profile reputation fast enough for public forecasting.
-          </p>
-          <div className="landing-hero-ledger" aria-label="AuraPredict live indexer metrics">
-            <div>
-              <span>Total volume by token</span>
-              <strong>{indexedVolumeText}</strong>
-            </div>
-            <div>
-              <span>Live liquidity by token</span>
-              <strong>{landingLiveLiquidityText}</strong>
-            </div>
-            <div>
-              <span>Participant entries</span>
-              <strong>{participantsText}</strong>
-            </div>
-            <div>
-              <span>Known players</span>
-              <strong>{knownPlayersText}</strong>
-            </div>
-          </div>
-          <div className="landing-actions">
-            <a className="landing-primary" href={APP_URL}>
-              Launch the App
-            </a>
-            <a className="landing-secondary" href={DOCS_URL}>
-              Read Docs
-            </a>
-            <a className="landing-secondary" href={DEMO_VIDEO_URL} target="_blank" rel="noreferrer">
-              Watch Demo
-            </a>
-          </div>
-          <div className="landing-proof">
-            <span>{indexerIsRealtime ? "AuraPredict indexer live" : "Indexer fallback active"}</span>
-            <span className="landing-proof-arc">
-              <img src="/arc-icon-white.svg" alt="" />
-              Deployed on Arc Testnet
-            </span>
-            <span>{updatedText}</span>
-            <span>{pendingMarketsText} pending resolution</span>
-            <span>Circle Agent Wallet authority ready</span>
-          </div>
-        </div>
-        <aside className="landing-network-panel" aria-label="Live AuraPredict network metrics">
-          <div>
-            <span>Live markets</span>
-            <strong>{liveMarketsText}</strong>
-          </div>
-          <div>
-            <span>Last indexed block</span>
-            <strong>{indexedBlockText}</strong>
-          </div>
-          <div>
-            <span>Awaiting result</span>
-            <strong>{pendingMarketsText}</strong>
-          </div>
-          <div>
-            <span>Sync age</span>
-            <strong>{updatedText}</strong>
-          </div>
-          <div className="landing-network-wide">
-            <span>Realtime data path</span>
-            <strong>AuraPredict indexer to UI to wallet-signed Arc transactions</strong>
-          </div>
-        </aside>
-      </section>
-
-      <section className="landing-strip landing-live-stats" aria-label="AuraPredict live stats">
-        {liveMetricCards.map((metric) => (
-          <div key={metric.label}>
-            <strong>{metric.value}</strong>
-            <span>{metric.label}</span>
-          </div>
-        ))}
-      </section>
-
-      <section className="landing-section" id="features">
-        <div className="landing-section-head">
-          <p className="landing-kicker">Core features</p>
-          <h2>Built for people who want their forecasts to compound into reputation.</h2>
-          <p>
-            The app keeps the trading surface simple while making evidence, profiles, and leaderboard
-            performance visible enough for social forecasting. AuraPredict combines onchain YES/NO
-            staking, an indexer-backed data layer, AI-assisted market quality checks, AI resolution
-            receipts, objective oracle proposals, and Circle Agent Wallet signing for eligible authority/oracle markets. The current contract is deployed on Arc Testnet with onchain source/rule terms, structured rule metadata, resolution timing, configurable settlement assets, signed-Aura hooks, and authority/oracle controls.
-          </p>
-        </div>
-        <div className="landing-feature-grid">
-          {featureCards.map((feature) => (
-            <article key={feature.title}>
-              <span />
-              <h3>{feature.title}</h3>
-              <p>{feature.text}</p>
-            </article>
-          ))}
-        </div>
-      </section>
-
-      <section className="landing-section" id="oracle">
-        <div className="landing-section-head">
-          <p className="landing-kicker">Objective Oracle v1</p>
-          <h2>Source-based proposals for markets that can be checked without AI.</h2>
-          <p>
-            AuraPredict now separates two kinds of help during resolution. Aura Agent is used for reasoning-heavy
-            questions and evidence review. Oracle proposal v1 is used when the market can be checked directly against
-            objective data sources. It gives reviewers a YES, NO, Cancel, or manual-review signal before they sign a
-            contract action. When auto-propose is enabled and confidence passes the policy threshold, the configured
-            Circle Agent Wallet can submit that first proposal onchain. For new markets, the same structured source rule
-            is shared by Aura, Oracle, the resolver, and the final reviewer.
-          </p>
-        </div>
-        <div className="landing-feature-grid">
-          {oracleAdapters.map((adapter) => (
-            <article key={adapter.title}>
-              <span />
-              <h3>{adapter.title}</h3>
-              <p>{adapter.text}</p>
-            </article>
-          ))}
-        </div>
-        <div className="docs-note">
-          <strong>Settlement boundary</strong>
-          <p>
-            Oracle proposal v1 does not move funds by itself. The contract still enforces resolution time,
-            review/dispute windows, and finalization. The proposal simply gives the signer, including the Circle Agent
-            Wallet signer when configured, a clearer source-based report before choosing YES, NO, or Cancel.
-          </p>
-        </div>
-      </section>
-
-      <section className="landing-section" id="infrastructure">
-        <div className="landing-section-head">
-          <p className="landing-kicker">Open infrastructure</p>
-          <h2>Open Prediction Market Infrastructure on Arc.</h2>
-          <p>
-            AuraPredict is expanding from a trading dapp into a reusable prediction-market layer for Arc. Builders can
-            read market data, embed live cards, inspect AI and Oracle receipts, and route users into USDC funding before
-            they stake onchain.
-          </p>
-        </div>
-        <div className="landing-feature-grid">
-          {infrastructureCards.map((feature) => (
-            <article key={feature.title}>
-              <span />
-              <h3>{feature.title}</h3>
-              <p>{feature.text}</p>
-            </article>
-          ))}
-        </div>
-        <div className="docs-note">
-          <strong>AI proposes, evidence proves, smart contracts enforce.</strong>
-          <p>
-            Aura Agent helps create clearer markets and explain probabilities. Oracle adapters check objective sources.
-            Final proposals, disputes, review, and claims still follow the contract.
-          </p>
-        </div>
-      </section>
-
-      <section className="landing-section landing-demo-section" id="demo">
-        <div className="landing-section-head">
-          <p className="landing-kicker">Demo</p>
-          <h2>Preview the dapp flow after the live network stats.</h2>
-          <p>
-            Watch the AuraPredict walkthrough, then launch the app to create markets, check Aura Agent duplicate
-            risk, stake YES/NO, and resolve outcomes on Arc Testnet.
-          </p>
-        </div>
-        <div className="landing-video-card">
-          <div className="landing-video-frame">
-            <iframe
-              src={`${DEMO_EMBED_URL}?rel=0&modestbranding=1`}
-              title="AuraPredict demo video"
-              loading="lazy"
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-              allowFullScreen
-            />
-          </div>
-        </div>
-      </section>
-
-      <section className="landing-section landing-split" id="how-it-works">
-        <div>
-          <p className="landing-kicker">How it works</p>
-          <h2>From question to payout, every step is transparent.</h2>
-          <p>
-            A market starts as a clear YES/NO question. Users stake based on their conviction.
-            Creation now requires a primary resolution source and an explicit resolution rule.
-            After the event timestamp in the resolution rule has passed, the resolver opens the
-            market to request or view Aura and Oracle suggestions with confidence. The creator,
-            configured authority, or Circle Agent Wallet signer then proposes the result through a contract action.
-            Resolution actions summarize AI choice, creator proposal, dispute status, pools, and deadlines
-            before any final reviewer action. Users can dispute during the window, and winners claim directly after finalization.
-          </p>
-          <a className="landing-primary" href={APP_URL}>
-            Launch the App
-          </a>
-        </div>
-        <div className="landing-flow">
-          {flow.map((item, index) => (
-            <article key={item}>
-              <span>{index + 1}</span>
-              <strong>{item}</strong>
-            </article>
-          ))}
-        </div>
-      </section>
-
-      <section className="landing-section landing-docs" id="docs">
-        <div className="landing-section-head">
-          <p className="landing-kicker">Project docs</p>
-          <h2>Transparent testnet mechanics without hiding the roadmap.</h2>
-          <p>
-            AuraPredict is live as an Arc Testnet MVP with its public indexer hosted at api.aurapredict.xyz. The current product
-            proves market creation, staking, dispute-aware settlement, profiles, comments, evidence,
-            AI resolution receipts, objective Oracle automation, Circle Agent Wallet proposal signing, live stats, notifications, and public reputation while wallet
-            actions remain fully onchain. Production reads the active Arc Testnet contract through the AuraPredict indexer and wallet transactions remain verifiable on Arcscan.
-          </p>
-          <div className="landing-docs-actions">
-            <a className="landing-primary" href={DOCS_URL}>
-              Open Full Docs
-            </a>
-            <a className="landing-secondary" href="https://github.com/mrcocdilinh/AuraPredict" target="_blank" rel="noreferrer">
-              View GitHub
-            </a>
-          </div>
-        </div>
-
-        <div className="docs-summary-grid">
-          <article className="docs-card">
-            <span className="docs-label">Purpose</span>
-            <h3>Make forecasting social on Arc</h3>
-            <p>
-              Users can create public markets, back YES or NO with the market's testnet stablecoin, track odds, and
-              build a visible record through profiles, rankings, PNL, win rate, and Aura Points.
-            </p>
-          </article>
-          <article className="docs-card">
-            <span className="docs-label">Current network</span>
-            <h3>Arc Testnet first</h3>
-            <p>
-              The app currently targets Arc Testnet and is designed for testing product flow, market
-              mechanics, wallet UX, and community behavior before any mainnet deployment decisions.
-            </p>
-          </article>
-          <article className="docs-card">
-            <span className="docs-label">Resolution model</span>
-            <h3>AI and Oracle assisted, contract settled</h3>
-            <p>
-              Aura displays a suggested outcome with confidence after the rule timestamp, Oracle checks objective sources,
-              and a configured Circle Agent Wallet can submit eligible high-confidence proposals. The settlement report
-              shows AI choice, proposed result, dispute status, and final review guidance before users reach finalization.
-            </p>
-          </article>
-          <article className="docs-card">
-            <span className="docs-label">AI layer</span>
-            <h3>Aura Agent plus receipts</h3>
-            <p>
-              Aura Agent helps draft questions, score clarity, surface similar markets, summarize
-              evidence, and expose resolution receipts that users can inspect without rerunning AI.
-              A source router now scans configured links before Aura reviews deadline-style markets.
-            </p>
-          </article>
-        </div>
-
-        <div className="docs-diagram-panel">
-          <div>
-            <span className="docs-label">System architecture</span>
-            <h3>Live indexer, wallet signed</h3>
-            <p>
-              The public app reads the AuraPredict indexer first for low-latency market state, social data,
-              and AI receipts. Wallets still sign transactions against the prediction market contract,
-              and Arcscan remains the verification layer.
-            </p>
-          </div>
-          <div className="docs-flow-diagram" aria-label="AuraPredict architecture diagram">
-            {architectureSteps.map((step, index) => (
-              <div className="docs-flow-step" key={step}>
-                <span>{index + 1}</span>
-                <strong>{step}</strong>
-                {index < architectureSteps.length - 1 && <i />}
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="docs-two-column">
-          <article className="docs-card docs-large-card">
-            <span className="docs-label">Market lifecycle</span>
-            <h3>From question to payout</h3>
-            <div className="docs-step-list">
-              {settlementSteps.map((step, index) => (
-                <div key={step}>
-                  <span>{index + 1}</span>
-                  <p>{step}</p>
-                </div>
-              ))}
-            </div>
-          </article>
-
-          <article className="docs-card docs-large-card">
-            <span className="docs-label">Data loading</span>
-            <h3>What the data layer does</h3>
-            <div className="docs-step-list">
-              {dataFlow.map((step, index) => (
-                <div key={step}>
-                  <span>{index + 1}</span>
-                  <p>{step}</p>
-                </div>
-              ))}
-            </div>
-          </article>
-        </div>
-
-        <div className="docs-feature-table">
-          <article>
-            <span>Market creation</span>
-            <strong>YES/NO questions with UTC close time, separate resolution time, category labels, required source URL, and required resolution rule.</strong>
-          </article>
-          <article>
-            <span>Market terms</span>
-            <strong>Primary source, fallback source, and resolution rule are stored onchain for every new market.</strong>
-          </article>
-          <article>
-            <span>Trading</span>
-            <strong>Users stake the market's configured Arc testnet stablecoin, such as USDC or EURC, directly from their wallet. Markets never convert payout currency.</strong>
-          </article>
-          <article>
-            <span>Wallet UX</span>
-            <strong>The wallet menu and profile show USDC/EURC balances, copy-address access, faucet shortcut, Unified Balance funding, swap access, and selected-token balance checks before transactions.</strong>
-          </article>
-          <article>
-            <span>Swap access</span>
-            <strong>A trader can bring USDC to Arc through Circle Unified Balance, then swap USDC/EURC on Arc with visible minimum receive and adjustable tolerance before staking.</strong>
-          </article>
-          <article>
-            <span>Settlement</span>
-            <strong>AI receipts and Oracle proposals can support the result, but finalized outcomes still unlock payouts through the contract.</strong>
-          </article>
-          <article>
-            <span>Settlement report</span>
-            <strong>Resolution actions summarize AI suggestion, Oracle suggestion, creator proposal, dispute/review state, YES/NO pools, volume, and timing so final reviewers know what they are signing.</strong>
-          </article>
-          <article>
-            <span>Oracle proposal</span>
-            <strong>Objective adapters can fetch crypto price, macro chart, and health/status API data, then display or auto-submit YES/NO/Cancel guidance without spending AI quota.</strong>
-          </article>
-          <article>
-            <span>AI resolution</span>
-            <strong>Aura-first flow: the suggested result is visible before proposal, with mismatch alerts and dispute review when needed.</strong>
-          </article>
-          <article>
-            <span>Source router</span>
-            <strong>Before Aura reviews publish, announce, blog, news, fixture, and schedule markets, the indexer scans primary/fallback/inferred sources such as official blogs, status pages, sports schedules, and selected government pages, then turns findings into explicit evidence rows.</strong>
-          </article>
-          <article>
-            <span>AI efficiency</span>
-            <strong>Saved resolution receipts can be displayed again without rerunning Aura; only Ask or Refresh spends AI quota.</strong>
-          </article>
-          <article>
-            <span>Oracle path</span>
-            <strong>Circle Agent Wallet signing is now supported by the indexer; the contract also includes approved adapter and signed-Aura hooks for future oracle or committee markets.</strong>
-          </article>
-          <article>
-            <span>Deadline outcomes</span>
-            <strong>For a clearly defined event due by a fixed time, Aura may suggest NO after the deadline when reviewed evidence provides no credible confirmation, while displaying its confidence and risk.</strong>
-          </article>
-          <article>
-            <span>Timeout safety</span>
-            <strong>Timed-out markets can be canceled and refunded after the proposal grace period when no result is proposed.</strong>
-          </article>
-          <article>
-            <span>Profiles</span>
-            <strong>Wallet profile tracks USDC/EURC balances, participation, created markets, PNL, win rate, and claims.</strong>
-          </article>
-          <article>
-            <span>Leaderboard</span>
-            <strong>Ranks users by volume, win rate, PNL, and Aura Points.</strong>
-          </article>
-          <article>
-            <span>Admin controls</span>
-            <strong>Operational credentials and automation policies stay private; public docs only show user-facing behavior and rules.</strong>
-          </article>
-          <article>
-            <span>Docs domain</span>
-            <strong>docs.aurapredict.xyz documents app usage, smart contract behavior, indexer setup, and deployment.</strong>
-          </article>
-        </div>
-
-        <div className="docs-diagram-panel docs-roadmap-panel">
-          <div>
-            <span className="docs-label">Roadmap</span>
-            <h3>Path toward a production-grade prediction market</h3>
-            <p>
-            AuraPredict now has a live public indexer, AI market drafting, duplicate-risk checks, comments,
-              evidence fields, AI resolution receipts, profile reputation, and leaderboard metrics. The remaining
-              gap is production-grade realtime streaming, durable social data, and broader oracle-backed settlement coverage.
-            </p>
-          </div>
-          <div className="docs-roadmap">
-            {roadmapItems.map((item, index) => (
-              <article key={item}>
-                <span>{`0${index + 1}`}</span>
-                <strong>{item}</strong>
-              </article>
-            ))}
-          </div>
-        </div>
-
-        <div className="docs-note">
-          <strong>Important note</strong>
-          <p>
-            AuraPredict is currently a testnet dapp. It is not financial advice and the current market
-            resolution flow uses AI and source-based Oracle checks as decision aids, not as a trustless oracle.
-            Circle Agent Wallet proposals still follow contract timing, dispute, review, and finalization rules.
-          </p>
-        </div>
-      </section>
-
-      <section className="landing-section landing-dark-panel">
-        <div className="landing-section-head">
-          <p className="landing-kicker">Why AuraPredict</p>
-          <h2>Prediction markets become more powerful when they are social.</h2>
-          <p>
-            AuraPredict is designed around public forecasting identity. Every trade, market, payout,
-            and ranking can help users build a visible prediction track record.
-          </p>
-        </div>
-        <div className="landing-benefit-grid">
-          <article>
-            <strong>For traders</strong>
-            <p>Discover fresh markets, back your view with the market's stablecoin, track positions, and compete on leaderboard metrics.</p>
-          </article>
-          <article>
-            <strong>For creators</strong>
-            <p>Launch markets for your community, resolve outcomes, build creator reputation, and grow market volume.</p>
-          </article>
-          <article>
-            <strong>For Arc</strong>
-            <p>Create an engaging social finance primitive around information, events, and ecosystem participation.</p>
-          </article>
-        </div>
-      </section>
-
-      <section className="landing-cta">
-        <div>
-          <p className="landing-kicker">Start predicting</p>
-          <h2>Watch the demo, then enter the live Arc Testnet app.</h2>
-        </div>
-        <div className="landing-actions">
-          <a className="landing-secondary" href={DEMO_VIDEO_URL} target="_blank" rel="noreferrer">
-            View Demo
-          </a>
-          <a className="landing-secondary" href={DOCS_URL}>
-            Read Docs
-          </a>
-          <a className="landing-primary" href={APP_URL}>
-            Enter Dapp
-          </a>
-        </div>
-      </section>
-    </main>
-  );
-}
-
-function currentBundleSrcFromDocument() {
-  const script = document.querySelector<HTMLScriptElement>('script[type="module"][src*="/assets/index-"]');
-  return script?.src || "";
-}
-
-function bundleSrcFromHtml(html: string) {
-  const match = html.match(/<script[^>]+type=["']module["'][^>]+src=["']([^"']*\/assets\/index-[^"']+\.js)["']/i);
-  if (!match?.[1]) return "";
-  return new URL(match[1], window.location.origin).href;
-}
-
-function AppUpdateNotice() {
-  const [updateAvailable, setUpdateAvailable] = useState(false);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const currentBundleSrc = currentBundleSrcFromDocument();
-    if (!currentBundleSrc) return;
-
-    let canceled = false;
-    const checkForUpdate = async () => {
-      try {
-        const response = await fetch(`/?_=${Date.now()}`, { cache: "no-store" });
-        const html = await response.text();
-        const latestBundleSrc = bundleSrcFromHtml(html);
-        if (!canceled && latestBundleSrc && latestBundleSrc !== currentBundleSrc) {
-          setUpdateAvailable(true);
-        }
-      } catch {
-        // Update checks are best effort; the app should keep working offline or behind flaky RPC/network.
-      }
-    };
-
-    void checkForUpdate();
-    const interval = window.setInterval(checkForUpdate, 60_000);
-    return () => {
-      canceled = true;
-      window.clearInterval(interval);
-    };
-  }, []);
-
-  if (!updateAvailable) return null;
-
-  return (
-    <div className="app-update-notice" role="status" aria-live="polite">
-      <span>A new AuraPredict version is available.</span>
-      <button onClick={() => window.location.reload()} type="button">
-        Refresh
-      </button>
-    </div>
-  );
-}
 
 export default function App() {
   const isLandingHost = typeof window !== "undefined" && LANDING_HOSTS.has(window.location.hostname.toLowerCase());
@@ -4412,7 +1526,7 @@ export default function App() {
   const [connecting, setConnecting] = useState(false);
   const [switchingNetwork, setSwitchingNetwork] = useState(false);
   const [isArcNetwork, setIsArcNetwork] = useState(true);
-  const [walletProviders, setWalletProviders] = useState<Eip6963ProviderDetail[]>([]);
+  const { walletProviders } = useWalletProviders();
   const [selectedWalletProvider, setSelectedWalletProvider] = useState<EthereumProvider | null>(null);
   const [walletMenuOpen, setWalletMenuOpen] = useState(false);
   const [notificationMenuOpen, setNotificationMenuOpen] = useState(false);
@@ -4420,7 +1534,7 @@ export default function App() {
   const [walletModalOpen, setWalletModalOpen] = useState(false);
   const [authMoreOpen, setAuthMoreOpen] = useState(false);
   const [createModalOpen, setCreateModalOpen] = useState(false);
-  const [currentTime, setCurrentTime] = useState(new Date());
+  const currentTime = useCurrentTime();
   const [marketReloadToken, setMarketReloadToken] = useState(0);
   const [lastDataRefresh, setLastDataRefresh] = useState<Date | null>(null);
   const [notice, setNoticeText] = useState("");
@@ -4547,13 +1661,7 @@ export default function App() {
       return {};
     }
   });
-  const [theme, setTheme] = useState<ThemeMode>(() => {
-    try {
-      return window.localStorage.getItem(THEME_KEY) === "light" ? "light" : "dark";
-    } catch {
-      return "dark";
-    }
-  });
+  const { theme, setTheme } = useTheme();
   const [dismissedResultNotices, setDismissedResultNotices] = useState<string[]>(() => {
     try {
       return JSON.parse(window.localStorage.getItem(DISMISSED_RESULT_KEY) || "[]") as string[];
@@ -5763,40 +2871,7 @@ export default function App() {
     WALLET_DEEP_LINKS.length > authDeepLinkWallets.length ||
     recommendedWallets.length > 0;
 
-  useEffect(() => {
-    if (!modalOpen) return;
-
-    const { body, documentElement } = document;
-    const scrollY = window.scrollY;
-    const scrollbarWidth = window.innerWidth - documentElement.clientWidth;
-    const previousBodyStyle = {
-      overflow: body.style.overflow,
-      paddingRight: body.style.paddingRight,
-      position: body.style.position,
-      top: body.style.top,
-      width: body.style.width
-    };
-    const previousHtmlOverflow = documentElement.style.overflow;
-
-    body.style.overflow = "hidden";
-    body.style.position = "fixed";
-    body.style.top = `-${scrollY}px`;
-    body.style.width = "100%";
-    if (scrollbarWidth > 0) {
-      body.style.paddingRight = `${scrollbarWidth}px`;
-    }
-    documentElement.style.overflow = "hidden";
-
-    return () => {
-      body.style.overflow = previousBodyStyle.overflow;
-      body.style.paddingRight = previousBodyStyle.paddingRight;
-      body.style.position = previousBodyStyle.position;
-      body.style.top = previousBodyStyle.top;
-      body.style.width = previousBodyStyle.width;
-      documentElement.style.overflow = previousHtmlOverflow;
-      window.scrollTo(0, scrollY);
-    };
-  }, [modalOpen]);
+  useBodyScrollLock(modalOpen);
 
   useEffect(() => {
     const handleOutsidePointer = (event: PointerEvent) => {
@@ -6112,30 +3187,12 @@ export default function App() {
     return () => window.clearTimeout(timeout);
   }, [notice]);
 
-  useEffect(() => {
-    document.documentElement.dataset.theme = theme;
-    window.localStorage.setItem(THEME_KEY, theme);
-  }, [theme]);
 
-  useEffect(() => {
-    window.localStorage.setItem(FOLLOWED_CREATORS_KEY, JSON.stringify(followedCreators));
-  }, [followedCreators]);
-
-  useEffect(() => {
-    window.localStorage.setItem(MARKET_COMMENTS_KEY, JSON.stringify(marketComments));
-  }, [marketComments]);
-
-  useEffect(() => {
-    window.localStorage.setItem(MARKET_EVIDENCE_KEY, JSON.stringify(marketEvidence));
-  }, [marketEvidence]);
-
-  useEffect(() => {
-    window.localStorage.setItem(MARKET_REPORTS_KEY, JSON.stringify(marketReports));
-  }, [marketReports]);
-
-  useEffect(() => {
-    window.localStorage.setItem(LOCAL_CLAIMED_MARKETS_KEY, JSON.stringify(locallyClaimedMarkets.slice(-400)));
-  }, [locallyClaimedMarkets]);
+  useLocalStoragePersist(FOLLOWED_CREATORS_KEY, followedCreators);
+  useLocalStoragePersist(MARKET_COMMENTS_KEY, marketComments);
+  useLocalStoragePersist(MARKET_EVIDENCE_KEY, marketEvidence);
+  useLocalStoragePersist(MARKET_REPORTS_KEY, marketReports);
+  useLocalStoragePersist(LOCAL_CLAIMED_MARKETS_KEY, locallyClaimedMarkets.slice(-400));
 
   useEffect(() => {
     let canceled = false;
@@ -6350,47 +3407,6 @@ export default function App() {
     setProfileCreatedPage(1);
   }, [profileHistoryFilter, viewedProfileKey]);
 
-  useEffect(() => {
-    const providers = new Map<string, Eip6963ProviderDetail>();
-    const addProvider = (detail: Eip6963ProviderDetail) => {
-      if (!detail?.provider || !detail.info?.uuid) return;
-      providers.set(detail.info.uuid, detail);
-      setWalletProviders(Array.from(providers.values()));
-    };
-
-    const handleProvider = (event: Event) => {
-      addProvider((event as CustomEvent<Eip6963ProviderDetail>).detail);
-    };
-
-    window.addEventListener("eip6963:announceProvider", handleProvider as EventListener);
-    window.dispatchEvent(new Event("eip6963:requestProvider"));
-
-    const legacyProviders = ((window.ethereum as EthereumProvider & { providers?: EthereumProvider[] })?.providers || [])
-      .filter(Boolean)
-      .map((provider, index) => ({
-        info: {
-          uuid: `legacy-${index}`,
-          name:
-            (provider as EthereumProvider & { isZerion?: boolean; isRabby?: boolean; isOkxWallet?: boolean; isMetaMask?: boolean })
-              .isZerion
-              ? "Zerion"
-              : (provider as EthereumProvider & { isRabby?: boolean }).isRabby
-                ? "Rabby Wallet"
-                : (provider as EthereumProvider & { isOkxWallet?: boolean }).isOkxWallet
-                  ? "OKX Wallet"
-                  : (provider as EthereumProvider & { isMetaMask?: boolean }).isMetaMask
-                    ? "MetaMask"
-                    : `Browser Wallet ${index + 1}`
-        },
-        provider
-      }));
-
-    for (const provider of legacyProviders) addProvider(provider);
-
-    return () => {
-      window.removeEventListener("eip6963:announceProvider", handleProvider as EventListener);
-    };
-  }, []);
 
   const getActiveWalletClient = useCallback(
     (provider?: EthereumProvider | null) => getWalletClient(provider ?? selectedWalletProvider),
@@ -10518,13 +7534,6 @@ export default function App() {
     };
   }, [refreshNetworkState, refreshWalletBalance, registerUser]);
 
-  useEffect(() => {
-    const timer = window.setInterval(() => {
-      setCurrentTime(new Date());
-    }, 1000);
-
-    return () => window.clearInterval(timer);
-  }, []);
 
   useEffect(() => {
     if (!window.ethereum) return;
