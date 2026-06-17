@@ -4415,6 +4415,7 @@ export default function App() {
   const [notificationMenuOpen, setNotificationMenuOpen] = useState(false);
   const [themeMenuOpen, setThemeMenuOpen] = useState(false);
   const [walletModalOpen, setWalletModalOpen] = useState(false);
+  const [authMoreOpen, setAuthMoreOpen] = useState(false);
   const [seedlessEmail, setSeedlessEmail] = useState("");
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
@@ -5750,6 +5751,12 @@ export default function App() {
   const showMobileWalletLinks = true;
   const recommendedWallets = ["Zerion", "MetaMask", "Rabby Wallet", "OKX Wallet", "Rainbow"];
   const walletConnectReady = Boolean(WALLETCONNECT_PROJECT_ID);
+  const authInstalledWallets = walletOptions.slice(0, 3);
+  const authDeepLinkWallets = WALLET_DEEP_LINKS.slice(0, 2);
+  const hasExtraAuthWallets =
+    walletOptions.length > authInstalledWallets.length ||
+    WALLET_DEEP_LINKS.length > authDeepLinkWallets.length ||
+    recommendedWallets.length > 0;
 
   useEffect(() => {
     if (!modalOpen) return;
@@ -6800,6 +6807,7 @@ export default function App() {
   const openWalletModal = useCallback(() => {
     setWalletMenuOpen(false);
     setNotificationMenuOpen(false);
+    setAuthMoreOpen(false);
     setWalletModalOpen(true);
   }, []);
 
@@ -12227,7 +12235,7 @@ export default function App() {
                 </div>
               </div>
               <button onClick={openWalletModal} disabled={connecting} type="button">
-                {connecting ? "Connecting..." : "Connect Wallet"}
+                {connecting ? "Connecting..." : "Sign in"}
               </button>
             </aside>
           )}
@@ -13222,7 +13230,7 @@ export default function App() {
             </>
           ) : (
             <button onClick={openWalletModal} disabled={connecting}>
-              {connecting ? "Connecting..." : "Connect Wallet"}
+              {connecting ? "Connecting..." : "Sign in"}
             </button>
           )}
         </div>
@@ -15884,145 +15892,168 @@ export default function App() {
       )}
 
       {walletModalOpen && (
-        <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Connect wallet">
-          <section className="modal-panel wallet-connect-modal">
-            <div className="wallet-list-panel">
-              <div className="modal-header">
-                <h2>Connect a wallet</h2>
-                <button className="icon-button" type="button" onClick={() => setWalletModalOpen(false)}>
-                  X
-                </button>
-              </div>
-              <span className="wallet-group-label">Installed</span>
-              <small className="wallet-connect-hint">
-                If wallet opens on another chain, AuraPredict will request switching to Arc Testnet automatically.
-              </small>
-              {walletOptions.length > 0 ? (
-                walletOptions.map((wallet) => (
-                  <button
-                    className="wallet-option"
-                    key={wallet.info.uuid}
-                    onClick={() => handleConnectWallet(wallet.provider)}
-                    disabled={connecting}
-                  >
-                    {wallet.info.icon ? (
-                      <img className="wallet-badge wallet-badge-image" src={wallet.info.icon} alt="" />
-                    ) : (
-                      <span className="wallet-badge">{wallet.info.name.slice(0, 1)}</span>
-                    )}
-                    <strong>{wallet.info.name}</strong>
-                    <small>Detected provider</small>
-                  </button>
-                ))
-              ) : (
-                <button className="wallet-option disabled-wallet" type="button" disabled>
-                  <span className="wallet-badge">W</span>
-                  <strong>No wallet detected</strong>
-                  <small>Use a wallet app below to open AuraPredict with an injected provider.</small>
-                </button>
-              )}
-              <span className="wallet-group-label">Seedless V5</span>
-              <button className="wallet-option seedless-wallet-option" type="button" onClick={handleSeedlessGoogleLogin} disabled={connecting}>
-                <span className="wallet-badge">G</span>
-                <strong>Continue with Google</strong>
-                <small>
-                  {SEEDLESS_ENABLED
-                    ? SEEDLESS_APP_ID && isAddress(SEEDLESS_FORWARDER_ADDRESS)
-                      ? "Embedded wallet on Arc. Gas sponsorship is enabled when the relayer is live."
-                      : "Embedded wallet is ready; sponsorship activates after trusted forwarder/relayer config."
-                    : "Enable with VITE_SEEDLESS_ENABLED=1 and VITE_MAGIC_PUBLISHABLE_KEY."}
-                </small>
-              </button>
-              <div className="seedless-email-box">
-                <label htmlFor="seedless-email">Email OTP</label>
-                <div className="seedless-email-row">
-                  <input
-                    id="seedless-email"
-                    value={seedlessEmail}
-                    onChange={(event) => setSeedlessEmail(event.target.value)}
-                    placeholder="you@example.com"
-                    type="email"
-                    autoComplete="email"
-                  />
-                  <button type="button" onClick={handleSeedlessEmailLogin} disabled={connecting}>
-                    Continue
-                  </button>
-                </div>
-                <small>Creates or opens an embedded V5 wallet. No browser extension required.</small>
-              </div>
-              <span className="wallet-group-label">Connect from Chrome or desktop</span>
-              <button className="wallet-option" type="button" onClick={handleWalletConnect} disabled={connecting || !walletConnectReady}>
-                <span className="wallet-badge">W</span>
-                <strong>WalletConnect</strong>
-                <small>
-                  {walletConnectReady
-                    ? "Open MetaMask, Rabby, Zerion, OKX, or another WalletConnect wallet."
-                    : "Set VITE_WALLETCONNECT_PROJECT_ID in Vercel to enable this."}
-                </small>
-              </button>
-              <span className="wallet-group-label">Open in wallet browser</span>
-              {WALLET_DEEP_LINKS.map((wallet) => (
-                <button className="wallet-option mobile-wallet-option" key={wallet.name} type="button" onClick={() => openMobileWallet(wallet.url)}>
-                  <span className="wallet-badge">{wallet.name.slice(0, 1)}</span>
-                  <strong>{wallet.name}</strong>
-                  <small>{wallet.detail}</small>
-                </button>
-              ))}
-              <span className="wallet-group-label">Recommended</span>
-              {recommendedWallets.map((walletName) => {
-                const detected = walletOptions.find((wallet) =>
-                  wallet.info.name.toLowerCase().includes(walletName.toLowerCase().replace(" wallet", ""))
-                );
+        <div className="modal-backdrop auth-backdrop" role="dialog" aria-modal="true" aria-label="Sign in to AuraPredict">
+          <section className="modal-panel wallet-connect-modal auth-connect-modal">
+            <button className="auth-close-button" type="button" onClick={() => setWalletModalOpen(false)} aria-label="Close sign in">
+              X
+            </button>
 
-                return (
+            <div className="auth-brand-lockup">
+              <img src="/aurapredict-logo-64.png" alt="" />
+              <div>
+                <strong>AuraPredict</strong>
+                <span>Prediction markets on Arc</span>
+              </div>
+            </div>
+
+            <div className="auth-copy">
+              <h2>Welcome to AuraPredict</h2>
+              <p>Sign in, get an Arc wallet, fund testnet stablecoins, and trade YES/NO markets from one account.</p>
+            </div>
+
+            <button className="auth-google-button" type="button" onClick={handleSeedlessGoogleLogin} disabled={connecting}>
+              <span aria-hidden="true">G</span>
+              {connecting ? "Connecting..." : "Continue with Google"}
+            </button>
+
+            <div className="auth-divider">
+              <span>OR</span>
+            </div>
+
+            <div className="auth-email-row">
+              <input
+                id="seedless-email"
+                value={seedlessEmail}
+                onChange={(event) => setSeedlessEmail(event.target.value)}
+                placeholder="Email address"
+                type="email"
+                autoComplete="email"
+              />
+              <button type="button" onClick={handleSeedlessEmailLogin} disabled={connecting}>
+                Continue
+              </button>
+            </div>
+
+            <div className="auth-wallet-grid" aria-label="Wallet sign in options">
+              {authInstalledWallets.map((wallet) => (
                 <button
-                  className={detected ? "wallet-option" : "wallet-option disabled-wallet"}
-                  key={walletName}
-                  onClick={() => detected && handleConnectWallet(detected.provider)}
-                  disabled={connecting || !detected}
+                  className="auth-wallet-tile"
+                  key={wallet.info.uuid}
+                  onClick={() => handleConnectWallet(wallet.provider)}
+                  disabled={connecting}
                   type="button"
                 >
-                  <span className="wallet-badge">{walletName.slice(0, 1)}</span>
-                  <strong>{walletName}</strong>
-                  <small>{detected ? "Detected" : "Use the wallet in-app browser"}</small>
-                </button>
-                );
-              })}
-              <span className="wallet-group-label">Other</span>
-              {["Phantom", "WalletConnect"].map((wallet) => (
-                <button className="wallet-option disabled-wallet" key={wallet} type="button" disabled>
-                  <span className="wallet-badge">{wallet.slice(0, 1)}</span>
-                  <strong>{wallet}</strong>
-                  <small>Coming soon</small>
+                  {wallet.info.icon ? (
+                    <img src={wallet.info.icon} alt="" />
+                  ) : (
+                    <span>{wallet.info.name.slice(0, 1)}</span>
+                  )}
+                  <small>{wallet.info.name}</small>
                 </button>
               ))}
+              <button
+                className="auth-wallet-tile"
+                type="button"
+                onClick={handleWalletConnect}
+                disabled={connecting || !walletConnectReady}
+              >
+                <span>WC</span>
+                <small>WalletConnect</small>
+              </button>
+              {authDeepLinkWallets.map((wallet) => (
+                <button className="auth-wallet-tile" key={wallet.name} type="button" onClick={() => openMobileWallet(wallet.url)}>
+                  <span>{wallet.name.slice(0, 1)}</span>
+                  <small>{wallet.name}</small>
+                </button>
+              ))}
+              {hasExtraAuthWallets && (
+                <button
+                  aria-expanded={authMoreOpen}
+                  className="auth-wallet-tile auth-more-tile"
+                  type="button"
+                  onClick={() => setAuthMoreOpen((open) => !open)}
+                >
+                  <span>...</span>
+                  <small>More</small>
+                </button>
+              )}
             </div>
-            <div className="wallet-info-panel">
-              <h2>What is a wallet?</h2>
-              <div className="wallet-info-item">
-                <span className="wallet-info-icon">1</span>
+
+            {authMoreOpen && (
+              <div className="auth-more-wallets">
+                {walletOptions.length > authInstalledWallets.length && (
+                  <div>
+                    <span className="wallet-group-label">Detected wallets</span>
+                    {walletOptions.slice(authInstalledWallets.length).map((wallet) => (
+                      <button
+                        className="wallet-option"
+                        key={wallet.info.uuid}
+                        onClick={() => handleConnectWallet(wallet.provider)}
+                        disabled={connecting}
+                        type="button"
+                      >
+                        {wallet.info.icon ? (
+                          <img className="wallet-badge wallet-badge-image" src={wallet.info.icon} alt="" />
+                        ) : (
+                          <span className="wallet-badge">{wallet.info.name.slice(0, 1)}</span>
+                        )}
+                        <strong>{wallet.info.name}</strong>
+                        <small>Detected provider</small>
+                      </button>
+                    ))}
+                  </div>
+                )}
                 <div>
-                  <strong>Your account for digital assets</strong>
-                  <p>Use it to sign transactions, stake testnet stablecoins, and claim payouts on Arc Testnet.</p>
+                  <span className="wallet-group-label">Open in wallet browser</span>
+                  {WALLET_DEEP_LINKS.slice(authDeepLinkWallets.length).map((wallet) => (
+                    <button className="wallet-option mobile-wallet-option" key={wallet.name} type="button" onClick={() => openMobileWallet(wallet.url)}>
+                      <span className="wallet-badge">{wallet.name.slice(0, 1)}</span>
+                      <strong>{wallet.name}</strong>
+                      <small>{wallet.detail}</small>
+                    </button>
+                  ))}
+                </div>
+                <div>
+                  <span className="wallet-group-label">Recommended</span>
+                  {recommendedWallets.map((walletName) => {
+                    const detected = walletOptions.find((wallet) =>
+                      wallet.info.name.toLowerCase().includes(walletName.toLowerCase().replace(" wallet", ""))
+                    );
+
+                    return (
+                      <button
+                        className={detected ? "wallet-option" : "wallet-option disabled-wallet"}
+                        key={walletName}
+                        onClick={() => detected && handleConnectWallet(detected.provider)}
+                        disabled={connecting || !detected}
+                        type="button"
+                      >
+                        <span className="wallet-badge">{walletName.slice(0, 1)}</span>
+                        <strong>{walletName}</strong>
+                        <small>{detected ? "Detected" : "Use the wallet in-app browser"}</small>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
-              <div className="wallet-info-item">
-                <span className="wallet-info-icon">2</span>
-                <div>
-                  <strong>No password for this dapp</strong>
-                  <p>AuraPredict never receives your private key. Your wallet asks before every transaction.</p>
-                </div>
-              </div>
-              <div className="wallet-info-item">
-                <span className="wallet-info-icon">3</span>
-                <div>
-                  <strong>Fund on Arc</strong>
-                  <p>Use Circle Faucet for testnet funds, then swap stablecoins inside AuraPredict when a route is available.</p>
-                  <FundOnArcActions compact targetSymbol={defaultSettlementSymbol} onUnifiedBalance={openUnifiedBalanceModal} />
-                </div>
-              </div>
-              <button className="secondary" type="button" onClick={() => window.open("https://metamask.io", "_blank")}>
-                Get a wallet
+            )}
+
+            <div className="auth-seedless-note">
+              <strong>Seedless V5 wallet</strong>
+              <span>
+                {SEEDLESS_ENABLED
+                  ? SEEDLESS_APP_ID && isAddress(SEEDLESS_FORWARDER_ADDRESS)
+                    ? "Google/email creates an embedded Arc wallet. Gas sponsorship is enabled when the relayer is live."
+                    : "Google/email creates an embedded Arc wallet. Gas sponsorship activates after trusted forwarder and relayer setup."
+                  : "Enable production seedless login with VITE_SEEDLESS_ENABLED=1 and VITE_MAGIC_PUBLISHABLE_KEY."}
+              </span>
+            </div>
+
+            <div className="auth-footer">
+              <span>Terms</span>
+              <span>Privacy</span>
+              <button className="link-button" type="button" onClick={() => window.open("https://metamask.io", "_blank")}>
+                Need a wallet?
               </button>
             </div>
           </section>
