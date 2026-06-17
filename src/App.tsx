@@ -607,6 +607,7 @@ export default function App() {
       return [];
     }
   });
+  const [localQuestionDraft, setLocalQuestionDraft] = useState("");
   const [createForm, setCreateForm] = useState<CreateFormState>({
     question: "",
     category: "Crypto",
@@ -3523,6 +3524,7 @@ export default function App() {
         "Use the primary source value at the exact UTC close timestamp defined by this market.",
       fallbackSource: secondSource || current.fallbackSource
     }));
+    if (aiMarketDraft.question) setLocalQuestionDraft(aiMarketDraft.question);
     setDuplicateAcknowledged(false);
     if (!firstSource && rawSources.length > 0) {
       const unresolvedHint = unresolvedSourceNames.length > 0 ? ` (${unresolvedSourceNames.join(", ")})` : "";
@@ -5335,6 +5337,7 @@ export default function App() {
         resolutionRule: "",
         fallbackSource: ""
       });
+      setLocalQuestionDraft("");
       setAiMarketDraft(null);
       setAuraCreateStatus("idle");
       setDuplicateAcknowledged(false);
@@ -11199,12 +11202,15 @@ export default function App() {
                 Question <span className="required-mark">*</span>
               </span>
               <textarea
-                value={createForm.question}
-                onChange={(event) => {
-                  setCreateForm({ ...createForm, question: event.target.value });
-                  setAiMarketDraft(null);
-                  setAuraCreateStatus("idle");
-                  setDuplicateAcknowledged(false);
+                value={localQuestionDraft}
+                onChange={(event) => setLocalQuestionDraft(event.target.value)}
+                onBlur={() => {
+                  if (localQuestionDraft !== createForm.question) {
+                    setCreateForm({ ...createForm, question: localQuestionDraft });
+                    setAiMarketDraft(null);
+                    setAuraCreateStatus("idle");
+                    setDuplicateAcknowledged(false);
+                  }
                 }}
                 placeholder="Will Arc Testnet pass 1M transactions this week?"
                 minLength={8}
