@@ -3245,6 +3245,18 @@ function errorMessage(error: unknown) {
 function walletConnectionErrorMessage(prefix: string, error: unknown) {
   const message = errorMessage(error);
   const lowerMessage = message.toLowerCase();
+  if (
+    lowerMessage.includes("has not approved access") ||
+    lowerMessage.includes("not approved access") ||
+    lowerMessage.includes("unauthorized domain") ||
+    lowerMessage.includes("invalid redirect") ||
+    lowerMessage.includes("not allowed origin")
+  ) {
+    return `${prefix}: Magic has not approved this domain yet. Add https://app.aurapredict.xyz to Magic Allowed Origins and Redirects, then try again.`;
+  }
+  if (lowerMessage.includes("rpc route not enabled") || lowerMessage.includes("provider not supported")) {
+    return `${prefix}: Magic Google OAuth is not enabled for this app yet. Enable Google/social login in Magic, or use email login after the domain is approved.`;
+  }
   if (lowerMessage.includes("same rpc endpoint as existing network")) {
     return `${prefix}: this wallet already has an Arc network saved with a conflicting chain ID. Remove the old Arc network in wallet settings, then reconnect.`;
   }
