@@ -341,6 +341,9 @@ import {
   urlHostLabel
 } from "./lib/settlementUtils";
 import { mapWithConcurrency } from "./lib/asyncUtils";
+import { normalizeProfileUsername } from "./lib/profileUtils";
+import { stablecoinMarketAbi } from "./lib/contractUtils";
+import { useWalletState } from "./hooks/useWalletState";
 import {
   stablecoinSwapPairKey,
   formatSwapTolerance,
@@ -392,23 +395,6 @@ if (!browserGlobal.Buffer) {
 
 
 
-function normalizeProfileUsername(value: string) {
-  return value
-    .trim()
-    .toLowerCase()
-    .replace(/\s+/g, "_")
-    .replace(/[^a-z0-9_]/g, "")
-    .replace(/_+/g, "_")
-    .replace(/^_+|_+$/g, "")
-    .slice(0, 20);
-}
-
-
-
-function stablecoinMarketAbi(version: MarketContractVersion) {
-  if (version === "v5") return arcPredictionMarketV5Abi;
-  return version === "v4" ? arcPredictionMarketV4Abi : arcPredictionMarketV3Abi;
-}
 
 export default function App() {
   const isLandingHost = typeof window !== "undefined" && LANDING_HOSTS.has(window.location.hostname.toLowerCase());
@@ -425,7 +411,6 @@ export default function App() {
   const notificationMenuRef = useRef<HTMLDivElement | null>(null);
   const walletMenuRef = useRef<HTMLDivElement | null>(null);
   const themeMenuRef = useRef<HTMLDivElement | null>(null);
-  const [account, setAccount] = useState("");
   const [owner, setOwner] = useState("");
   const [contractVersion, setContractVersion] = useState<MarketContractVersion>(VIEWING_V3_ARCHIVE ? "v3" : "unknown");
   const [resolutionAuthority, setResolutionAuthority] = useState("");
@@ -441,30 +426,56 @@ export default function App() {
   const [marketCreationFee, setMarketCreationFee] = useState<bigint>(0n);
   const [accumulatedProtocolFees, setAccumulatedProtocolFees] = useState<bigint>(0n);
   const [protocolFeesByToken, setProtocolFeesByToken] = useState<Record<string, bigint>>({});
-  const [walletBalance, setWalletBalance] = useState<bigint>(0n);
-  const [walletTokenBalances, setWalletTokenBalances] = useState<Record<string, bigint>>({});
-  const [pendingWithdrawalsByToken, setPendingWithdrawalsByToken] = useState<Record<string, bigint>>({});
   const [markets, setMarkets] = useState<MarketView[]>(() => readCachedMarkets());
   const [activities, setActivities] = useState<ActivityItem[]>([]);
   const [knownMarketCount, setKnownMarketCount] = useState(() => readCachedMarkets().length);
   const [dataSource, setDataSource] = useState<"cache" | "indexer" | "rpc">("cache");
   const [marketLoadLimit, setMarketLoadLimit] = useState(MARKET_INITIAL_LOAD);
   const [loading, setLoading] = useState(false);
-  const [connecting, setConnecting] = useState(false);
-  const [switchingNetwork, setSwitchingNetwork] = useState(false);
-  const [isArcNetwork, setIsArcNetwork] = useState(true);
   const { walletProviders } = useWalletProviders();
-  const [selectedWalletProvider, setSelectedWalletProvider] = useState<EthereumProvider | null>(null);
-  const [walletMenuOpen, setWalletMenuOpen] = useState(false);
   const [notificationMenuOpen, setNotificationMenuOpen] = useState(false);
   const [themeMenuOpen, setThemeMenuOpen] = useState(false);
-  const [walletModalOpen, setWalletModalOpen] = useState(false);
-  const [authMoreOpen, setAuthMoreOpen] = useState(false);
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const currentTime = useCurrentTime();
   const [marketReloadToken, setMarketReloadToken] = useState(0);
   const [lastDataRefresh, setLastDataRefresh] = useState<Date | null>(null);
   const [notice, setNoticeText] = useState("");
+  const {
+    account,
+    setAccount,
+    selectedWalletProvider,
+    setSelectedWalletProvider,
+    connecting,
+    setConnecting,
+    isArcNetwork,
+    setIsArcNetwork,
+    switchingNetwork,
+    walletBalance,
+    walletTokenBalances,
+    pendingWithdrawalsByToken,
+    walletMenuOpen,
+    setWalletMenuOpen,
+    walletModalOpen,
+    setWalletModalOpen,
+    authMoreOpen,
+    setAuthMoreOpen,
+    setPendingWithdrawalsByToken,
+    switchToArc,
+    refreshNetworkState,
+    refreshWalletBalance,
+    ensureArcNetwork,
+    connectWallet,
+    handleConnectWallet,
+    handleWalletConnect,
+    disconnectWallet
+  } = useWalletState({
+    contractVersion,
+    defaultSettlementToken,
+    defaultSettlementDecimals,
+    contractAddress: CONTRACT_ADDRESS as Address,
+    markets,
+    setNotice: setNoticeText
+  });
   const [noticeTxHash, setNoticeTxHash] = useState<Hash | "">("");
   const [transactionPending, setTransactionPending] = useState(false);
   const [pendingMarketActions, setPendingMarketActions] = useState<Record<string, boolean>>({});
@@ -2424,58 +2435,6 @@ export default function App() {
     setUnifiedBalanceLog((current) => [`${timestamp} - ${message}`, ...current].slice(0, 5));
   }, []);
 
-  const switchToArc = useCallback(async (provider?: EthereumProvider | null) => {
-    const injected = getInjectedProvider(provider ?? selectedWalletProvider);
-    const switchChain = async () => {
-      const chainIds = [arcTestnetParams.chainId, arcTestnetParams.chainId.toLowerCase()];
-      let lastError: unknown;
-      for (const chainId of chainIds) {
-        try {
-          await injected.request({
-            method: "wallet_switchEthereumChain",
-            params: [{ chainId }]
-          });
-          return;
-        } catch (error) {
-          lastError = error;
-        }
-      }
-      throw lastError;
-    };
-    const addChain = async () => {
-      const addAttempts = [
-        arcTestnetParams,
-        { ...arcTestnetParams, chainId: arcTestnetParams.chainId.toLowerCase() },
-        ...ARC_RPC_URLS.map((rpcUrl) => ({
-          ...arcTestnetParams,
-          rpcUrls: [rpcUrl]
-        }))
-      ];
-      let lastError: unknown;
-      for (const params of addAttempts) {
-        try {
-          await injected.request({
-            method: "wallet_addEthereumChain",
-            params: [params]
-          });
-          return;
-        } catch (error) {
-          lastError = error;
-          if (isDuplicateRpcNetworkError(error)) continue;
-        }
-      }
-      if (lastError && !isDuplicateRpcNetworkError(lastError)) throw lastError;
-    };
-    try {
-      await switchChain();
-    } catch (error) {
-      if (!isUnknownChainError(error)) throw error;
-      await addChain();
-      await switchChain();
-    }
-    setIsArcNetwork(true);
-  }, [selectedWalletProvider]);
-
   const switchToUnifiedBalanceSourceChain = useCallback(
     async (sourceChain: UnifiedBalanceSourceChainKey, provider?: EthereumProvider | null) => {
       const chain = UNIFIED_BALANCE_SOURCE_CHAINS.find((item) => item.value === sourceChain);
@@ -2519,29 +2478,6 @@ export default function App() {
     [selectedWalletProvider]
   );
 
-  const refreshNetworkState = useCallback(async (provider?: EthereumProvider | null) => {
-    try {
-      const walletClient = getWalletClient(provider ?? selectedWalletProvider ?? window.ethereum ?? null);
-      const chainId = await walletClient.getChainId();
-      setIsArcNetwork(BigInt(chainId) === ARC_CHAIN_ID_DECIMAL);
-    } catch {
-      setIsArcNetwork(false);
-    }
-  }, [selectedWalletProvider]);
-
-  const ensureArcNetwork = useCallback(async (provider?: EthereumProvider | null) => {
-    setSwitchingNetwork(true);
-    try {
-      await switchToArc(provider);
-      await refreshNetworkState(provider);
-      setNotice("Arc Testnet network is ready.");
-    } catch (error) {
-      setNotice(walletConnectionErrorMessage("Network switch failed", error));
-    } finally {
-      setSwitchingNetwork(false);
-    }
-  }, [refreshNetworkState, setNotice, switchToArc]);
-
   const registerUser = useCallback((address: string) => {
     if (!address || !isAddress(address)) return;
     const key = address.toLowerCase();
@@ -2553,139 +2489,18 @@ export default function App() {
     });
   }, []);
 
-  const refreshWalletBalance = useCallback(async (address = account) => {
-    if (!address || !isAddress(address)) {
-      setWalletBalance(0n);
-      setWalletTokenBalances({});
-      return;
-    }
+  // Register user in local registry when wallet connects
+  useEffect(() => {
+    if (account) registerUser(account);
+  }, [account, registerUser]);
 
-    try {
-      const balance =
-        isStablecoinContractVersion(contractVersion) && isAddress(defaultSettlementToken)
-          ? await withRpcRetry(() => getPublicClient().readContract({
-              address: defaultSettlementToken as Address,
-              abi: settlementTokenAbi,
-              functionName: "balanceOf",
-              args: [address as Address]
-            }))
-          : await withRpcRetry(() => getPublicClient().getBalance({ address: address as Address }));
-      setWalletBalance(balance);
-
-      if (isStablecoinContractVersion(contractVersion)) {
-        const tokenSet = new Set<string>();
-        if (isAddress(defaultSettlementToken)) tokenSet.add(defaultSettlementToken.toLowerCase());
-        if (isAddress(EURC_TOKEN_ADDRESS)) tokenSet.add(EURC_TOKEN_ADDRESS.toLowerCase());
-        const balances = await Promise.all(
-          Array.from(tokenSet).map(async (token) => {
-            if (isAddress(defaultSettlementToken) && sameAddress(token, defaultSettlementToken)) {
-              return [token, balance] as const;
-            }
-            const value = await withRpcRetry(() => getPublicClient().readContract({
-              address: token as Address,
-              abi: settlementTokenAbi,
-              functionName: "balanceOf",
-              args: [address as Address]
-            }));
-            return [token, value] as const;
-          })
-        );
-        setWalletTokenBalances(Object.fromEntries(balances));
-      } else {
-        setWalletTokenBalances({});
-      }
-    } catch {
-      setWalletBalance(0n);
-      setWalletTokenBalances({});
-    }
-  }, [account, contractVersion, defaultSettlementToken]);
-
+  // Close menus when wallet disconnects
   useEffect(() => {
     if (!account) {
-      setWalletBalance(0n);
-      return;
+      setNotificationMenuOpen(false);
+      setSelectedProfileAddress("");
     }
-
-    registerUser(account);
-    void refreshWalletBalance(account);
-  }, [account, refreshWalletBalance, registerUser]);
-
-  useEffect(() => {
-    if (!isStablecoinContractVersion(contractVersion) || !account || !isAddress(account)) {
-      setPendingWithdrawalsByToken({});
-      return;
-    }
-    const tokens = Array.from(
-      new Set(
-        markets
-          .map((market) => market.settlementToken)
-          .filter((token): token is string => Boolean(token && isAddress(token)))
-      )
-    );
-    if (tokens.length === 0 && isAddress(defaultSettlementToken)) tokens.push(defaultSettlementToken);
-    Promise.all(
-      tokens.map(async (token) => {
-        const amount = await withRpcRetry(() => getPublicClient().readContract({
-          address: contractAddress,
-          abi: stablecoinMarketAbi(contractVersion),
-          functionName: "pendingWithdrawals",
-          args: [token as Address, account as Address]
-        }));
-        return [token.toLowerCase(), amount] as const;
-      })
-    )
-      .then((rows) => setPendingWithdrawalsByToken(Object.fromEntries(rows)))
-      .catch(() => setPendingWithdrawalsByToken({}));
-  }, [account, contractAddress, contractVersion, defaultSettlementToken, markets]);
-
-  const connectWallet = useCallback(async (provider?: EthereumProvider | null) => {
-    setNotice("");
-    setConnecting(true);
-    const providerToUse = provider ?? selectedWalletProvider ?? window.ethereum ?? null;
-    const injected = getInjectedProvider(providerToUse);
-    const walletClient = getWalletClient(providerToUse);
-    const addresses = await walletClient.requestAddresses();
-    await switchToArc(providerToUse);
-    const chainId = await walletClient.getChainId();
-    if (BigInt(chainId) !== ARC_CHAIN_ID_DECIMAL) {
-      throw new Error("Wallet is not on Arc Testnet.");
-    }
-    if (!addresses[0]) {
-      throw new Error("No wallet account returned.");
-    }
-    setAccount(addresses[0]);
-    registerUser(addresses[0]);
-    void refreshWalletBalance(addresses[0]);
-    setSelectedWalletProvider(providerToUse);
-    setIsArcNetwork(true);
-    window.localStorage.setItem(WALLET_CONNECTED_KEY, "true");
-    window.localStorage.removeItem(WALLET_DISCONNECTED_KEY);
-    setNotice("Wallet connected on Arc Testnet.");
-    setConnecting(false);
-  }, [registerUser, refreshWalletBalance, selectedWalletProvider, switchToArc]);
-
-  const handleConnectWallet = useCallback(async (provider?: EthereumProvider | null) => {
-    try {
-      await connectWallet(provider);
-      setWalletModalOpen(false);
-    } catch (error) {
-      setConnecting(false);
-      setNotice(walletConnectionErrorMessage("Connect failed", error));
-    }
-  }, [connectWallet]);
-
-  const handleWalletConnect = useCallback(async () => {
-    try {
-      setNotice("");
-      setConnecting(true);
-      const provider = await getWalletConnectProvider();
-      await connectWallet(provider);
-      setWalletModalOpen(false);
-    } catch (error) {
-      setConnecting(false);
-      setNotice(walletConnectionErrorMessage("WalletConnect failed", error));
-    }
-  }, [connectWallet]);
+  }, [account]);
 
   const openMobileWallet = useCallback((url: string) => {
     window.location.href = url;
@@ -2730,24 +2545,6 @@ export default function App() {
     setWalletMenuOpen(false);
     setNotificationMenuOpen(false);
   }, [account, setNotice]);
-
-  const disconnectWallet = useCallback(async () => {
-    const providerToDisconnect = selectedWalletProvider;
-    try {
-      await providerToDisconnect?.disconnect?.();
-    } catch {
-      // Injected wallets usually do not expose disconnect; local session state is still cleared below.
-    }
-    setAccount("");
-    setWalletBalance(0n);
-    setSelectedWalletProvider(null);
-    setWalletMenuOpen(false);
-    setNotificationMenuOpen(false);
-    setSelectedProfileAddress("");
-    window.localStorage.removeItem(WALLET_CONNECTED_KEY);
-    window.localStorage.setItem(WALLET_DISCONNECTED_KEY, "true");
-    setNotice("Wallet disconnected in AuraPredict.");
-  }, [selectedWalletProvider]);
 
   const dismissResultNotification = useCallback((market: MarketView) => {
     if (!account) return;
@@ -6432,7 +6229,6 @@ export default function App() {
         const remembered = window.localStorage.getItem(WALLET_CONNECTED_KEY) === "true";
         if (!remembered) {
           setAccount("");
-          setWalletBalance(0n);
           setWalletMenuOpen(false);
           return;
         }
@@ -6443,7 +6239,6 @@ export default function App() {
         window.localStorage.removeItem(WALLET_CONNECTED_KEY);
         window.localStorage.setItem(WALLET_DISCONNECTED_KEY, "true");
         setWalletMenuOpen(false);
-        setWalletBalance(0n);
         setAccount("");
       }
     };

@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "vite --host 127.0.0.1",
+    "lint": "eslint src",
     "indexer": "node indexer/server.mjs",
     "indexer:once": "node indexer/server.mjs --once",
     "indexer:export-static": "node indexer/export-static.mjs",
@@ -36,15 +37,19 @@
     "ws": "8.20.1"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@nomicfoundation/hardhat-ethers": "^3.0.8",
     "@playwright/test": "^1.60.0",
     "@types/node": "^22.10.2",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^4.3.4",
+    "eslint-plugin-react-hooks": "^7.1.1",
     "ethers": "^6.13.5",
+    "globals": "^17.6.0",
     "hardhat": "^2.22.17",
     "typescript": "^5.7.2",
+    "typescript-eslint": "^8.61.1",
     "vite": "^5.4.11"
   }
 }
