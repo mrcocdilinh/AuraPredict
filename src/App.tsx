@@ -3980,6 +3980,47 @@ export default function App() {
         const indexedRows = indexedSnapshot.markets;
         const mergedIndexedRows = applyIndexedSnapshot(indexedSnapshot, totalMarketCount);
 
+        if (detectedContractVersion === "v5") {
+          // Hydrate isDraft for markets the indexer may not have flagged.
+          // Only check markets with no trading activity (cheapest proxy for draft state).
+          const draftCandidates = mergedIndexedRows.filter(
+            (m) => !m.isDraft && m.outcome === Outcome.Unresolved && m.traderCount === 0 && m.yesPool === 0n && m.noPool === 0n
+          );
+          if (draftCandidates.length > 0) {
+            void (async () => {
+              try {
+                const draftChecks = await mapWithConcurrency(
+                  draftCandidates,
+                  MARKET_LOAD_CONCURRENCY,
+                  async (market) => {
+                    try {
+                      const summary = await withRpcRetry(() => publicClient.readContract({
+                        address: contractAddress,
+                        abi: arcPredictionMarketV5Abi,
+                        functionName: "getMarket",
+                        args: [BigInt(market.id)]
+                      }));
+                      return { id: market.id, isDraft: Number(summary[2]) === V5_MARKET_STATE.Draft };
+                    } catch {
+                      return null;
+                    }
+                  }
+                );
+                const draftIds = new Set(
+                  draftChecks.filter((r) => r?.isDraft).map((r) => r!.id)
+                );
+                if (draftIds.size > 0) {
+                  setMarkets((current) =>
+                    current.map((m) => draftIds.has(m.id) ? { ...m, isDraft: true } : m)
+                  );
+                }
+              } catch {
+                // Non-blocking.
+              }
+            })();
+          }
+        }
+
         if (!isSilentLoad && account && isAddress(account) && indexedRows.length > 0) {
           const accountForPositions = account as Address;
           void (async () => {
@@ -4122,6 +4163,7 @@ export default function App() {
                     : Outcome.Unresolved,
                 proposedAt,
                 disputeDeadline: proposedAt > 0 ? proposedAt + termsDisputeWindow : 0,
+                isDraft: state === V5_MARKET_STATE.Draft,
                 authorityReviewRequired: Boolean(v5[15]),
                 disputed: Boolean(v5[16]),
                 disputer: v5[17],
@@ -6483,6 +6525,7 @@ export default function App() {
               (!!(market.authority || resolutionAuthority) && sameAddress(market.authority || resolutionAuthority, account)));
         const canBet =
           account &&
+          !market.isDraft &&
           market.outcome === Outcome.Unresolved &&
           market.proposedAt === 0 &&
           Date.now() / 1000 < market.closeTime;
