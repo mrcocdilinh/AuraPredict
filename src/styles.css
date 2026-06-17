@@ -8376,8 +8376,11 @@ label {
 }
 
 [data-theme="dark"] body {
-  background: #050711;
-  color: #e8edf7;
+  background:
+    radial-gradient(circle at 16% 0%, rgba(49, 215, 232, 0.16), transparent 34%),
+    radial-gradient(circle at 84% 10%, rgba(67, 101, 255, 0.13), transparent 34%),
+    linear-gradient(135deg, #071624 0%, #0b1d31 44%, #17385a 100%);
+  color: #eaf6ff;
 }
 
 [data-theme="dark"] h1,
@@ -8416,30 +8419,31 @@ label {
 [data-theme="dark"] .empty-state,
 [data-theme="dark"] .site-footer,
 [data-theme="dark"] .modal-panel {
-  background: rgba(12, 17, 31, 0.96);
-  border-color: #202a3f;
-  color: #d8e1f0;
+  background: rgba(12, 29, 47, 0.82);
+  border-color: rgba(118, 174, 211, 0.23);
+  box-shadow: 0 18px 60px rgba(1, 12, 25, 0.32);
+  color: #dcecff;
 }
 
 [data-theme="dark"] .topbar {
-  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.32);
+  box-shadow: 0 18px 42px rgba(1, 12, 25, 0.38);
 }
 
 [data-theme="dark"] .brand img,
 [data-theme="dark"] .footer-brand img,
 [data-theme="dark"] .orbital-logo {
-  border-color: #26334a;
+  border-color: rgba(118, 174, 211, 0.28);
 }
 
 [data-theme="dark"] .nav-tabs {
-  background: #0b1020;
-  border-color: #202a3f;
+  background: rgba(8, 22, 38, 0.72);
+  border-color: rgba(118, 174, 211, 0.2);
 }
 
 [data-theme="dark"] .deployment-notice {
-  background: #101d2b;
-  border-color: #1f637a;
-  color: #9be8fa;
+  background: rgba(22, 58, 83, 0.52);
+  border-color: rgba(48, 213, 232, 0.36);
+  color: #b8f6ff;
 }
 
 [data-theme="dark"] .tab {
@@ -8449,17 +8453,18 @@ label {
 
 [data-theme="dark"] .tab.active,
 [data-theme="dark"] .tab:hover:not(:disabled) {
-  background: #f7f9ff;
-  color: #0b1020;
+  background: rgba(233, 247, 255, 0.95);
+  color: #09182a;
 }
 
 [data-theme="dark"] button {
-  background: #2f6bff;
-  color: #080b14;
+  background: #1b6eea;
+  color: #f6fbff;
 }
 
 [data-theme="dark"] button:hover:not(:disabled) {
-  background: #5be8ff;
+  background: #31d7e8;
+  color: #071624;
 }
 
 [data-theme="dark"] .button-link,
@@ -14024,5 +14029,70 @@ label {
     min-width: 54px;
     padding: 6px 8px;
   }
+}
+
+[data-theme="dark"] .auth-connect-modal.wallet-picker-modal {
+  background: #1f1f1f;
+  border-color: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 28px 80px rgba(0, 0, 0, 0.55);
+  color: #f5f5f5;
+}
+
+[data-theme="dark"] .auth-connect-modal.wallet-picker-modal .wallet-picker-row {
+  background: transparent;
+  border-color: transparent;
+  color: #ffffff;
+}
+
+[data-theme="dark"] .auth-connect-modal.wallet-picker-modal .wallet-picker-row:hover:not(:disabled),
+[data-theme="dark"] .auth-connect-modal.wallet-picker-modal .wallet-picker-row[aria-expanded="true"] {
+  background: rgba(255, 255, 255, 0.055);
+  color: #ffffff;
+}
+
+[data-theme="dark"] .auth-connect-modal.wallet-picker-modal .wallet-picker-row:disabled {
+  background: transparent;
+  color: rgba(255, 255, 255, 0.42);
+}
+
+[data-theme="dark"] .auth-connect-modal.wallet-picker-modal .wallet-search-row {
+  background: rgba(255, 255, 255, 0.035);
+}
+
+[data-theme="dark"] .auth-connect-modal.wallet-picker-modal .wallet-help-button,
+[data-theme="dark"] .auth-connect-modal.wallet-picker-modal .wallet-picker-close {
+  background: transparent;
+  border-color: rgba(255, 255, 255, 0.14);
+  color: #ffffff;
+}
+
+[data-theme="dark"] .auth-connect-modal.wallet-picker-modal .wallet-help-button:hover,
+[data-theme="dark"] .auth-connect-modal.wallet-picker-modal .wallet-picker-close:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #ffffff;
+}
+
+[data-theme="dark"] .auth-connect-modal.wallet-picker-modal .wallet-picker-copy small {
+  color: #a5a5a5;
+}
+
+[data-theme="dark"] .auth-connect-modal.wallet-picker-modal .wallet-picker-tag {
+  background: rgba(255, 255, 255, 0.08);
+  color: #8f8f8f;
+}
+
+[data-theme="dark"] .auth-connect-modal.wallet-picker-modal .wallet-picker-tag.success {
+  background: rgba(27, 189, 114, 0.2);
+  color: #27d68b;
+}
+
+[data-theme="dark"] .auth-connect-modal.wallet-picker-modal .wallet-picker-tag.info {
+  background: rgba(47, 107, 255, 0.16);
+  color: #4ba2ff;
+}
+
+[data-theme="dark"] .auth-connect-modal.wallet-picker-modal .wallet-picker-footer strong {
+  background: #303030;
+  color: #dedede;
 }
 
