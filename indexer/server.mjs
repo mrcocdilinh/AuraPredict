@@ -113,7 +113,7 @@ const ORACLE_AUTO_PROPOSE_MIN_CONFIDENCE = Number(process.env.AURA_ORACLE_AUTO_P
 const ORACLE_AUTO_PROPOSE_ADAPTERS = new Set(
   String(
     process.env.AURA_ORACLE_AUTO_PROPOSE_ADAPTERS ||
-      "crypto-price,stock-yahoo-chart,macro-yahoo-chart,macro-bls-release,status-health,status-page,liquidity-rule"
+      "crypto-price,stock-yahoo-chart,macro-yahoo-chart,macro-bls-release,macro-fed-rate,macro-eia-inventory,status-health,status-page,liquidity-rule"
   )
     .split(",")
     .map((adapter) => adapter.trim())
@@ -3539,6 +3539,165 @@ function detectBlsReleaseOracleMarket(market) {
   };
 }
 
+// === FED RATE ORACLE (FRED DFEDTARU) ===
+
+const FED_RATE_FRED_URL = "https://fred.stlouisfed.org/graph/fredgraph.csv?id=DFEDTARU";
+
+function detectFedRateOracleMarket(market) {
+  const text = oracleTextForMarket(market);
+  if (!/\b(federal\s+funds|fed\s+rate|fomc|target\s+rate|upper\s+bound)\b/i.test(text)) return null;
+  const condition = priceConditionForMarket(market, structuredRuleForMarket(market));
+  if (!condition) return null;
+  return { comparator: condition.comparator, target: condition.target };
+}
+
+async function buildFedRateOracleProposal(market, config) {
+  const proposal = baseOracleProposal(market, "macro-fed-rate");
+  proposal.comparator = config.comparator;
+  proposal.targetValue = String(config.target);
+  proposal.sourceUrls = ["https://www.federalreserve.gov/monetarypolicy/openmarket.htm", FED_RATE_FRED_URL];
+
+  const resolutionTime = marketResolutionTime(market);
+  const now = Math.floor(Date.now() / 1000);
+  if (now < resolutionTime) {
+    proposal.status = "not_ready";
+    proposal.summary = "Oracle cannot evaluate this Fed rate market before the resolution timestamp.";
+    return finalizeOracleProposal(proposal);
+  }
+
+  try {
+    const response = await fetchTextWithTimeout(FED_RATE_FRED_URL);
+    if (!response.ok || !response.text) {
+      proposal.status = "needs_review";
+      proposal.confidence = 0;
+      proposal.summary = `FRED DFEDTARU returned HTTP ${response.status}. Use manual review.`;
+      return finalizeOracleProposal(proposal);
+    }
+
+    const lines = response.text.trim().split("\n").filter((line) => line && !line.startsWith("DATE"));
+    if (lines.length === 0) {
+      proposal.status = "needs_review";
+      proposal.confidence = 0;
+      proposal.summary = "FRED DFEDTARU CSV returned no data rows.";
+      return finalizeOracleProposal(proposal);
+    }
+
+    const lastLine = lines[lines.length - 1];
+    const [dateStr, valueStr] = lastLine.split(",");
+    const observed = Number(valueStr?.trim());
+    if (!Number.isFinite(observed)) {
+      proposal.status = "needs_review";
+      proposal.confidence = 0;
+      proposal.summary = "FRED DFEDTARU CSV could not be parsed.";
+      return finalizeOracleProposal(proposal);
+    }
+
+    const dataDate = Date.parse(String(dateStr || "").trim());
+    if (!Number.isFinite(dataDate) || resolutionTime * 1000 - dataDate > 45 * 24 * 60 * 60 * 1000) {
+      proposal.status = "needs_review";
+      proposal.confidence = 0;
+      proposal.summary = `FRED data as of ${dateStr} may be stale for this market's resolution time. Use manual review.`;
+      return finalizeOracleProposal(proposal);
+    }
+
+    const matched = compareObservedValue(observed, config.comparator, config.target);
+    proposal.outcome = matched ? "YES" : "NO";
+    proposal.confidence = 88;
+    proposal.observedValue = `Fed funds upper bound ${observed}% (FRED as of ${dateStr})`;
+    proposal.observedAt = nowIso();
+    proposal.summary = `FRED DFEDTARU reported federal funds upper bound at ${observed}% as of ${dateStr}. Rule target is ${config.comparator.toUpperCase()} ${config.target}%.`;
+    proposal.checks = [
+      "Used FRED DFEDTARU (upper bound of Fed funds target range).",
+      "Data freshness verified within 45 days of resolution time."
+    ];
+    return finalizeOracleProposal(proposal);
+  } catch (error) {
+    proposal.status = "needs_review";
+    proposal.confidence = 0;
+    proposal.summary = `Fed rate oracle failed: ${error instanceof Error ? error.message : String(error)}.`;
+    return finalizeOracleProposal(proposal);
+  }
+}
+
+// === EIA CRUDE OIL INVENTORY ORACLE ===
+
+function detectEiaInventoryOracleMarket(market) {
+  const text = oracleTextForMarket(market);
+  if (!/\b(eia|energy information administration)\b/i.test(text)) return null;
+  if (!/\b(crude oil|petroleum|inventory|inventories|barrels)\b/i.test(text)) return null;
+  if (!/\b(draw|build|change|million barrels|mmbbl)\b/i.test(text)) return null;
+  const condition = priceConditionForMarket(market, structuredRuleForMarket(market));
+  if (!condition) return null;
+  return { comparator: condition.comparator, target: condition.target };
+}
+
+async function buildEiaInventoryOracleProposal(market, config) {
+  const proposal = baseOracleProposal(market, "macro-eia-inventory");
+  proposal.comparator = config.comparator;
+  proposal.targetValue = String(config.target);
+  proposal.sourceUrls = ["https://www.eia.gov/petroleum/supply/weekly/", "https://www.eia.gov/dnav/pet/hist/WCRSTUS1w.htm"];
+
+  const resolutionTime = marketResolutionTime(market);
+  const now = Math.floor(Date.now() / 1000);
+  if (now < resolutionTime) {
+    proposal.status = "not_ready";
+    proposal.summary = "Oracle cannot evaluate this EIA inventory market before the resolution timestamp.";
+    return finalizeOracleProposal(proposal);
+  }
+
+  try {
+    const response = await fetchTextWithTimeout("https://www.eia.gov/dnav/pet/hist/WCRSTUS1w.htm");
+    if (!response.ok || !response.text) {
+      proposal.status = "needs_review";
+      proposal.confidence = 0;
+      proposal.summary = `EIA crude oil inventory page returned HTTP ${response.status}. Use manual review.`;
+      return finalizeOracleProposal(proposal);
+    }
+
+    const plain = stripHtml(response.text).replace(/\s+/g, " ");
+    const rows = [];
+    const rowPattern = /(\d{4}-\d{2}-\d{2})\s+([\d,]+(?:\.\d+)?)/g;
+    let match;
+    while ((match = rowPattern.exec(plain)) !== null) {
+      const val = Number(match[2].replace(/,/g, ""));
+      if (Number.isFinite(val) && val > 100) {
+        rows.push({ date: match[1], value: val });
+      }
+    }
+
+    if (rows.length < 2) {
+      proposal.status = "needs_review";
+      proposal.confidence = 0;
+      proposal.summary = "EIA crude oil inventory page could not be parsed for weekly values. Use manual review.";
+      return finalizeOracleProposal(proposal);
+    }
+
+    rows.sort((a, b) => b.date.localeCompare(a.date));
+    const latest = rows[0];
+    const previous = rows[1];
+    const change = latest.value - previous.value;
+    const drawMb = -change;
+
+    const matched = compareObservedValue(drawMb, config.comparator, config.target);
+    proposal.outcome = matched ? "YES" : "NO";
+    proposal.confidence = 72;
+    proposal.observedValue = `EIA crude inventory change: ${change >= 0 ? "+" : ""}${change.toFixed(1)}M bbl (draw: ${drawMb.toFixed(1)}M bbl) week of ${latest.date}`;
+    proposal.observedAt = nowIso();
+    proposal.summary = `EIA weekly crude oil inventory changed ${change >= 0 ? "+" : ""}${change.toFixed(1)}M bbl (${previous.value.toFixed(1)} → ${latest.value.toFixed(1)}). Draw of ${drawMb.toFixed(1)}M bbl vs rule ${config.comparator.toUpperCase()} ${config.target}M bbl.`;
+    proposal.checks = [
+      "Scraped EIA WCRSTUS1 (U.S. commercial crude oil stocks) from eia.gov.",
+      "Computed week-over-week inventory change. Positive draw = inventory decrease.",
+      "Confidence capped at 72; verify with official EIA WPSR PDF before settlement."
+    ];
+    return finalizeOracleProposal(proposal);
+  } catch (error) {
+    proposal.status = "needs_review";
+    proposal.confidence = 0;
+    proposal.summary = `EIA inventory oracle failed: ${error instanceof Error ? error.message : String(error)}.`;
+    return finalizeOracleProposal(proposal);
+  }
+}
+
 const STOCK_ORACLE_ASSETS = [
   { symbol: "TSLA", names: ["tsla", "tesla"], yahoo: "TSLA", label: "Tesla (TSLA)" },
   { symbol: "NVDA", names: ["nvda", "nvidia"], yahoo: "NVDA", label: "NVIDIA (NVDA)" },
@@ -4074,11 +4233,44 @@ async function buildCryptoOracleProposal(market, config) {
       if (Number.isFinite(observed)) {
         const matched = compareObservedValue(observed, config.comparator, config.target);
         proposal.outcome = matched ? "YES" : "NO";
-        proposal.confidence = 92;
         proposal.observedValue = `${config.symbol}/USDT close ${observed}`;
         proposal.observedAt = new Date(Number(row[0])).toISOString();
-        proposal.summary = `${config.symbol}/USDT Binance 1-minute close was ${observed}. Rule target is ${config.comparator.toUpperCase()} ${config.target}.`;
-        proposal.checks = ["Binance 1-minute kline matched the requested resolution minute.", "If the market requires another source, review manually before final settlement."];
+
+        // Dual-source cross-check: verify with CoinGecko historical price
+        let crossCheckNote = "";
+        try {
+          const cgDate = new Date(resolutionTime * 1000);
+          const cgDateStr = `${String(cgDate.getUTCDate()).padStart(2, "0")}-${String(cgDate.getUTCMonth() + 1).padStart(2, "0")}-${cgDate.getUTCFullYear()}`;
+          const cgUrl = `https://api.coingecko.com/api/v3/coins/${encodeURIComponent(config.coingecko)}/history?date=${cgDateStr}&localization=false`;
+          const { response: cgRes, body: cgBody } = await fetchJsonWithTimeout(cgUrl, { timeoutMs: 5000 });
+          const cgPrice = Number(cgBody?.market_data?.current_price?.usd);
+          if (cgRes.ok && Number.isFinite(cgPrice) && cgPrice > 0) {
+            const deviation = Math.abs(observed - cgPrice) / cgPrice;
+            if (deviation <= 0.005) {
+              proposal.confidence = 96;
+              crossCheckNote = `CoinGecko historical confirmed: ${cgPrice} (deviation ${(deviation * 100).toFixed(2)}%).`;
+            } else if (deviation <= 0.02) {
+              proposal.confidence = 85;
+              crossCheckNote = `CoinGecko historical ${cgPrice} differs ${(deviation * 100).toFixed(2)}% from Binance — within tolerance.`;
+            } else {
+              proposal.confidence = 60;
+              crossCheckNote = `CoinGecko historical ${cgPrice} differs ${(deviation * 100).toFixed(2)}% from Binance — sources disagree, use manual review.`;
+            }
+          } else {
+            proposal.confidence = 92;
+            crossCheckNote = "CoinGecko historical cross-check unavailable; using Binance only.";
+          }
+        } catch {
+          proposal.confidence = 92;
+          crossCheckNote = "CoinGecko cross-check failed; using Binance only.";
+        }
+
+        proposal.summary = `${config.symbol}/USDT Binance 1-minute close was ${observed}. Rule target is ${config.comparator.toUpperCase()} ${config.target}. ${crossCheckNote}`;
+        proposal.checks = [
+          "Binance 1-minute kline matched the requested resolution minute.",
+          crossCheckNote,
+          "If the market requires another source, review manually before final settlement."
+        ].filter(Boolean);
         return finalizeOracleProposal(proposal);
       }
     }
@@ -4574,6 +4766,12 @@ async function buildOracleProposal(marketId, options = {}) {
 
   const blsReleaseConfig = detectBlsReleaseOracleMarket(market);
   if (blsReleaseConfig) return buildBlsReleaseOracleProposal(market, blsReleaseConfig);
+
+  const fedRateConfig = detectFedRateOracleMarket(market);
+  if (fedRateConfig) return buildFedRateOracleProposal(market, fedRateConfig);
+
+  const eiaInventoryConfig = detectEiaInventoryOracleMarket(market);
+  if (eiaInventoryConfig) return buildEiaInventoryOracleProposal(market, eiaInventoryConfig);
 
   const cryptoConfig = detectCryptoOracleMarket(market);
   if (cryptoConfig) return buildCryptoOracleProposal(market, cryptoConfig);
