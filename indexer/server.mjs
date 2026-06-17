@@ -69,6 +69,7 @@ const GEMINI_API_KEYS = String(process.env.GEMINI_API_KEYS || "")
   .map((key) => key.trim())
   .filter(Boolean);
 const OPENAI_API_KEY = String(process.env.OPENAI_API_KEY || "").trim();
+const OPENAI_BASE_URL = String(process.env.OPENAI_BASE_URL || "https://api.openai.com/v1").trim().replace(/\/$/, "");
 const AI_MODEL = String(process.env.AI_MODEL || "gemini-2.5-flash").trim();
 const OPENAI_MODEL = String(process.env.OPENAI_MODEL || "gpt-4o-mini").trim();
 const RESOLUTION_ADMIN_TOKEN = String(process.env.AURA_RESOLUTION_ADMIN_TOKEN || "").trim();
@@ -4911,7 +4912,7 @@ async function callOpenAiJson(systemInstruction, prompt) {
     });
   }
 
-  const response = await fetch("https://api.openai.com/v1/chat/completions", {
+  const response = await fetch(`${OPENAI_BASE_URL}/chat/completions`, {
     method: "POST",
     headers: {
       "content-type": "application/json",
@@ -5010,6 +5011,83 @@ function marketDraftPrompt(body) {
       "Do not raise duplicateRisk just because two markets share a metric such as 10K users, active addresses, volume, or the same category.",
       "Broad-scope markets such as 'any Arc dApp' are not duplicates of a named project market unless the named project already satisfies the same exact broad market outcome."
     ].join("\n")
+  };
+}
+
+function normalizeDraftCategory(value, fallback = "Other") {
+  const category = cleanText(value, 40);
+  const allowed = new Set(["Crypto", "Macro", "Sports", "Politics", "Arc", "AI", "Other"]);
+  if (allowed.has(category)) return category;
+  const normalized = category.toLowerCase();
+  if (normalized.includes("crypto")) return "Crypto";
+  if (normalized.includes("sport") || normalized.includes("football") || normalized.includes("soccer")) return "Sports";
+  if (normalized.includes("macro") || normalized.includes("stock") || normalized.includes("finance")) return "Macro";
+  if (normalized.includes("politic") || normalized.includes("election")) return "Politics";
+  if (normalized.includes("arc")) return "Arc";
+  if (normalized.includes("ai")) return "AI";
+  return allowed.has(fallback) ? fallback : "Other";
+}
+
+function normalizeDraftCloseTime(value) {
+  const raw = cleanText(value, 80);
+  const match = raw.match(/^(\d{4}-\d{2}-\d{2})[T\s](\d{2}:\d{2})/);
+  if (match) return `${match[1]}T${match[2]}`;
+  const parsed = Date.parse(raw);
+  if (Number.isFinite(parsed)) return new Date(parsed).toISOString().slice(0, 16);
+  return "";
+}
+
+function defaultDraftSources(category, idea) {
+  const text = `${category} ${idea}`.toLowerCase();
+  if (category === "Crypto") {
+    if (text.includes("btc") || text.includes("bitcoin")) return ["https://www.binance.com/en/trade/BTC_USDT", "https://coinmarketcap.com/currencies/bitcoin/"];
+    if (text.includes("eth") || text.includes("ethereum")) return ["https://www.binance.com/en/trade/ETH_USDT", "https://coinmarketcap.com/currencies/ethereum/"];
+    if (text.includes("sol") || text.includes("solana")) return ["https://www.binance.com/en/trade/SOL_USDT", "https://coinmarketcap.com/currencies/solana/"];
+    return ["https://www.binance.com/en/markets", "https://coinmarketcap.com/"];
+  }
+  if (category === "Sports") return ["https://www.fifa.com/", "https://www.espn.com/"];
+  if (category === "Macro") return ["https://fred.stlouisfed.org/", "https://www.bls.gov/"];
+  if (category === "Politics") return ["Official election authority or government source", "Major wire-service result page"];
+  if (category === "Arc") return ["https://docs.arc.network/", "https://testnet.arcscan.app/"];
+  if (category === "AI") return ["Official company blog or status page", "Primary product announcement page"];
+  return ["Official primary source URL required"];
+}
+
+function normalizeMarketDraft(rawDraft, body, similarMarkets, options = {}) {
+  const idea = cleanText(body.idea || body.question, 900);
+  const fallbackCategory = normalizeDraftCategory(body.category, "Other");
+  const category = normalizeDraftCategory(rawDraft?.category, fallbackCategory);
+  const closeTime = normalizeDraftCloseTime(rawDraft?.closeTime) || normalizeDraftCloseTime(body.closeTime);
+  const question = cleanText(rawDraft?.question, 180) || idea;
+  const rawSources = Array.isArray(rawDraft?.sources) ? rawDraft.sources : [];
+  const sources = rawSources.map((source) => cleanText(source, 180)).filter(Boolean).slice(0, 5);
+  const riskFlags = Array.isArray(rawDraft?.riskFlags)
+    ? rawDraft.riskFlags.map((flag) => cleanText(flag, 80)).filter(Boolean).slice(0, 8)
+    : [];
+  if (options.fallbackReason) riskFlags.unshift("AI provider fallback");
+  if (sources.length === 0) riskFlags.push("source verification required");
+
+  const resolutionCriteria =
+    cleanText(rawDraft?.resolutionCriteria, 1200) ||
+    `Resolve YES if the official primary source confirms the event described in the question by ${closeTime || "the configured resolution time"}. Resolve NO if the condition is not met by that time. Resolve CANCEL only if the official source is unavailable, contradictory, or the market cannot be fairly resolved.`;
+
+  return {
+    question,
+    category,
+    closeTime,
+    resolutionCriteria,
+    sources: sources.length ? sources : defaultDraftSources(category, idea),
+    clarityScore: Math.max(0, Math.min(100, Number(rawDraft?.clarityScore || (options.fallbackReason ? 62 : 75)))),
+    duplicateRisk: ["LOW", "MEDIUM", "HIGH"].includes(rawDraft?.duplicateRisk)
+      ? rawDraft.duplicateRisk
+      : duplicateRiskFor(similarMarkets),
+    similarMarkets,
+    riskFlags,
+    creatorNote:
+      cleanText(rawDraft?.creatorNote, 220) ||
+      (options.fallbackReason
+        ? "Aura provider is currently unavailable, so this is a conservative fallback draft. Review source, date, and rule before launch."
+        : "Review source, date, and rule before launch.")
   };
 }
 
@@ -5707,15 +5785,19 @@ async function route(req, res) {
       if (segments[2] === "market-draft") {
         const { idea, similarMarkets, prompt } = marketDraftPrompt(body);
         if (idea.length < 4) return json(res, 400, { error: "Market idea is too short." });
-        const draft = await callAiJson(systemInstruction, prompt);
+        let draft = null;
+        let fallbackReason = "";
+        try {
+          draft = await callAiJson(systemInstruction, prompt);
+        } catch (error) {
+          fallbackReason = error instanceof Error ? error.message : String(error);
+        }
+        const normalizedDraft = normalizeMarketDraft(draft?.json, body, similarMarkets, { fallbackReason });
         json(res, 200, {
-          draft: {
-            ...draft.json,
-            duplicateRisk: draft.json?.duplicateRisk || duplicateRiskFor(similarMarkets),
-            similarMarkets
-          },
-          provider: draft.provider,
-          model: draft.model,
+          draft: normalizedDraft,
+          provider: draft?.provider || "local-fallback",
+          model: draft?.model || "deterministic-draft",
+          fallbackReason,
           updatedAt: nowIso()
         });
         return;
