@@ -7271,9 +7271,20 @@ label {
   gap: 4px;
   justify-items: start;
   min-height: auto;
+  outline: none;
   padding: 9px;
   text-align: left;
   width: 100%;
+}
+
+.similar-market-row:hover {
+  background: #f4f7fc;
+  border-color: #c5d0e6;
+}
+
+.similar-market-row:focus-visible {
+  border-color: #2f6bff;
+  box-shadow: 0 0 0 2px #2f6bff33;
 }
 
 .similar-market-row strong {
@@ -9437,9 +9448,19 @@ label {
   color: #d8e1f0;
 }
 
+[data-theme="dark"] .similar-market-row:hover {
+  background: #111827;
+  border-color: #2d3a55;
+}
+
+[data-theme="dark"] .similar-market-row:focus-visible {
+  border-color: #4d8aff;
+  box-shadow: 0 0 0 2px #4d8aff33;
+}
+
 [data-theme="dark"] .owner-report-row {
-  background: #0b1020;
-  border-color: #202a3f;
+  background: #0d1526;
+  border-color: #1e2d45;
 }
 
 [data-theme="dark"] .owner-report-row .similar-market-row {
