@@ -37,7 +37,7 @@ export function readCachedMarkets() {
 
 export function writeCachedMarkets(markets: MarketView[]) {
   try {
-    const cachedRows: CachedMarketView[] = markets.slice(0, 120).map((market) => ({
+    const cachedRows: CachedMarketView[] = markets.slice(0, 500).map((market) => ({
       id: market.id,
       question: market.question,
       category: market.category,

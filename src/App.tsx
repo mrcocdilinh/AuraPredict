@@ -3379,15 +3379,26 @@ export default function App() {
     setAiMarketDraft(null);
     setDuplicateAcknowledged(false);
     try {
-      const response = await postIndexerJson<{ draft: AiMarketDraft }>("/api/ai/market-draft", {
+      const response = await postIndexerJsonWithStatus<{
+        draft?: AiMarketDraft;
+        error?: string;
+        provider?: string;
+        fallbackReason?: string;
+      }>("/api/ai/market-draft", {
         idea,
         category: createForm.category,
         closeTime: inferKnownEventDeadlineFromText(idea) || createForm.closeTime
       });
-      if (!response?.draft) throw new Error("Aura Agent did not return a draft.");
-      setAiMarketDraft(response.draft);
+      if (!response.ok || !response.data?.draft) {
+        throw new Error(response.data?.error || `Aura Agent did not return a draft${response.status ? ` (HTTP ${response.status})` : ""}.`);
+      }
+      setAiMarketDraft(response.data.draft);
       setAuraCreateStatus("ready");
-      setNotice("Aura Agent drafted clearer market terms.");
+      setNotice(
+        response.data.provider === "local-fallback"
+          ? "Aura drafted fallback market terms. Review source, date, and rule before launch."
+          : "Aura Agent drafted clearer market terms."
+      );
     } catch (error) {
       setAuraCreateStatus("failed");
       setNotice(`Aura Agent unavailable: ${compactErrorMessage(error)}. You can launch market manually.`);
@@ -4392,67 +4403,37 @@ export default function App() {
       }
 
       let sortedRows = loadedRows.sort((a, b) => b.id - a.id);
-      setMarkets((current) =>
-        sortedRows.map((market) => {
-          const currentMarket = current.find((item) => item.id === market.id);
-          if (!currentMarket) return market;
-          const shouldPreserveLocalProposal =
-            currentMarket.outcome === Outcome.Unresolved &&
-            market.outcome === Outcome.Unresolved &&
-            currentMarket.proposedAt > market.proposedAt;
-          const shouldPreserveLocalResolution =
-            currentMarket.outcome !== Outcome.Unresolved && market.outcome === Outcome.Unresolved;
-
-          return {
-            ...market,
-            ...(shouldPreserveLocalProposal || shouldPreserveLocalResolution
-              ? {
-                  proposedOutcome: currentMarket.proposedOutcome,
-                  proposedAt: currentMarket.proposedAt,
-                  disputeDeadline: currentMarket.disputeDeadline,
-                  disputed: currentMarket.disputed,
-                  disputer: currentMarket.disputer,
-                  outcome: currentMarket.outcome
-                }
-              : {}),
-            yesPosition: currentMarket.yesPosition,
-            noPosition: currentMarket.noPosition,
-            claimed: currentMarket.claimed,
-            potentialPayout: currentMarket.potentialPayout
-          };
-        })
-      );
+      setMarkets((current) => mergeMarketRows(sortedRows, current, totalMarketCount));
       setLastDataRefresh(new Date());
       writeCachedMarkets(sortedRows);
       if (!isSilentLoad) setLoading(false);
 
       let projectCreatorAddresses = new Set<string>();
-      const projectRows = await mapWithConcurrency(
-        Array.from({ length: totalMarketCount }, (_, id) => id),
-        MARKET_LOAD_CONCURRENCY,
-        async (id) => readMarketById(id, false)
-      );
-      const projectMarkets = projectRows.flatMap((row) => row ? [row.market as MarketView] : []);
-      if (projectMarkets.length >= sortedRows.length) {
-        sortedRows = projectMarkets.sort((a, b) => b.id - a.id);
-        setMarketLoadLimit((current) => Math.max(current, sortedRows.length));
-        setMarkets((current) =>
-          sortedRows.map((market) => {
-            const currentMarket = current.find((item) => item.id === market.id);
-            return currentMarket
-              ? {
-                  ...market,
-                  yesPosition: currentMarket.yesPosition,
-                  noPosition: currentMarket.noPosition,
-                  claimed: currentMarket.claimed,
-                  potentialPayout: currentMarket.potentialPayout
-                }
-              : market;
-          })
+      // Skip the full project scan when the display pass already loaded all markets.
+      // With MARKET_INITIAL_LOAD = 9999, latestMarketStart is always 0, so the display
+      // pass covers every market ID. A second identical RPC pass would just double the
+      // rate-limit pressure without adding new data.
+      let projectMarkets: MarketView[];
+      if (loadedRows.length >= totalMarketCount) {
+        projectMarkets = sortedRows;
+      } else {
+        const projectRows = await mapWithConcurrency(
+          Array.from({ length: totalMarketCount }, (_, id) => id),
+          MARKET_LOAD_CONCURRENCY,
+          async (id) => readMarketById(id, false)
         );
-        writeCachedMarkets(sortedRows);
+        projectMarkets = projectRows.flatMap((row) => row ? [row.market as MarketView] : []);
+        if (projectMarkets.length >= sortedRows.length) {
+          sortedRows = projectMarkets.sort((a, b) => b.id - a.id);
+          setMarketLoadLimit((current) => Math.max(current, sortedRows.length));
+          setMarkets((current) => mergeMarketRows(sortedRows, current, totalMarketCount));
+          writeCachedMarkets(sortedRows);
+        }
       }
-      if (projectMarkets.length > 0 || totalMarketCount === 0) {
+      // Only update project stats from RPC data when we have a complete picture.
+      // If the RPC only loaded a fraction of markets, keep the indexer's accurate stats.
+      const hasGoodIndexerStats = Boolean(prefetchedIndexedSnapshot?.stats);
+      if ((projectMarkets.length >= totalMarketCount || (!hasGoodIndexerStats && projectMarkets.length > 0)) || totalMarketCount === 0) {
         const statsNow = Math.floor(Date.now() / 1000);
         const projectTotalVolume = projectMarkets.reduce((sum, market) => sum + marketVolume(market), 0n);
         const projectLiveMarkets = projectMarkets.filter(

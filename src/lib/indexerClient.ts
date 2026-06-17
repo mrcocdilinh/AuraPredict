@@ -81,7 +81,7 @@ export async function loadIndexedSnapshot(account?: string): Promise<IndexedSnap
   const accountActivityPath =
     account && isAddress(account) ? `/api/activity?limit=${walletActivityLimit}&user=${account}` : "";
   const [marketsResponse, activityResponse, accountActivityResponse, statsResponse, healthResponse] = await Promise.all([
-    fetchIndexerJson<{ markets: IndexedMarket[]; total: number }>("/api/markets"),
+    fetchIndexerJson<{ markets: IndexedMarket[]; total: number }>("/api/markets?limit=9999"),
     fetchIndexerJson<{ activities: IndexedActivity[] }>(`/api/activity?limit=${activityLimit}`),
     accountActivityPath
       ? fetchIndexerJson<{ activities: IndexedActivity[] }>(accountActivityPath)
