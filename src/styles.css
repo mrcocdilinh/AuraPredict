@@ -8388,8 +8388,8 @@ label {
 
 [data-theme="dark"] body {
   background:
-    radial-gradient(circle at 16% 0%, rgba(49, 215, 232, 0.16), transparent 34%),
-    radial-gradient(circle at 84% 10%, rgba(67, 101, 255, 0.13), transparent 34%),
+    radial-gradient(circle at 16% 0%, rgba(67, 101, 255, 0.14), transparent 34%),
+    radial-gradient(circle at 84% 10%, rgba(47, 107, 255, 0.13), transparent 34%),
     linear-gradient(135deg, #071624 0%, #0b1d31 44%, #17385a 100%);
   color: #eaf6ff;
 }
@@ -8452,9 +8452,9 @@ label {
 }
 
 [data-theme="dark"] .deployment-notice {
-  background: rgba(22, 58, 83, 0.52);
-  border-color: rgba(48, 213, 232, 0.36);
-  color: #b8f6ff;
+  background: rgba(22, 38, 83, 0.52);
+  border-color: rgba(47, 107, 255, 0.36);
+  color: #a8c4ff;
 }
 
 [data-theme="dark"] .tab {
@@ -8474,8 +8474,8 @@ label {
 }
 
 [data-theme="dark"] button:hover:not(:disabled) {
-  background: #31d7e8;
-  color: #071624;
+  background: #4d8aff;
+  color: #06111e;
 }
 
 [data-theme="dark"] .button-link,
@@ -8589,7 +8589,7 @@ label {
 }
 
 [data-theme="dark"] .hero-launch-button:hover:not(:disabled) {
-  background: linear-gradient(135deg, #5be8ff, #4fd2ff);
+  background: linear-gradient(135deg, #5b8cff, #3d6fff);
   color: #06111e;
 }
 
