@@ -5299,15 +5299,12 @@ async function buildResolutionReceipt(marketId, options = {}) {
     "Return compact JSON only."
   ].join(" ");
 
-  const reviews = [];
-  for (const role of roles) {
-    const review = await callAiJson(systemInstruction, resolutionReviewerPrompt(market, evidenceRows, role));
-    reviews.push({
-      ...review.json,
-      provider: review.provider,
-      model: review.model
-    });
-  }
+  const reviews = await Promise.all(
+    roles.map(async (role) => {
+      const review = await callAiJson(systemInstruction, resolutionReviewerPrompt(market, evidenceRows, role));
+      return { ...review.json, provider: review.provider, model: review.model };
+    })
+  );
 
   const consensus = consensusFromReviews(reviews);
   const reviewProviderSummary = Array.from(new Set(reviews.map((review) => `${review.provider}:${review.model}`))).join(", ");
