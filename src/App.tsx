@@ -3515,6 +3515,40 @@ function ListViewIcon() {
   );
 }
 
+function MobileMarketTabIcon({ tabKey }: { tabKey: "overview" | "trade" | "resolve" | "details" }) {
+  if (tabKey === "overview") {
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M3 3v18h18" />
+        <path d="m19 9-5 5-4-4-4 4" />
+      </svg>
+    );
+  }
+  if (tabKey === "trade") {
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <circle cx="12" cy="12" r="9" />
+        <path d="M12 7v5l3 3" />
+      </svg>
+    );
+  }
+  if (tabKey === "resolve") {
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M12 3 5 6v5c0 4.5 2.8 8 7 10 4.2-2 7-5.5 7-10V6l-7-3Z" />
+        <path d="m9 12 2 2 4-5" />
+      </svg>
+    );
+  }
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 8v4" />
+      <circle cx="12" cy="16" r="0.5" fill="currentColor" />
+    </svg>
+  );
+}
+
 function MobileNavIcon({ icon }: { icon: "markets" | "hot" | "alerts" | "profile" | "owner" }) {
   if (icon === "markets") {
     return (
@@ -11526,6 +11560,35 @@ export default function App() {
             </button>
           </div>
 
+          {/* Mobile compact odds strip */}
+          <div className="mobile-odds-strip">
+            <button
+              className={`mobile-odds-yes${activeMobileMarketTab === "trade" && selectedTradeSides[selectedMarket.id] !== Outcome.No ? " active" : ""}`}
+              onClick={() => {
+                setSelectedTradeSides((cur) => ({ ...cur, [selectedMarket.id]: Outcome.Yes }));
+                setMobileMarketTab("trade");
+              }}
+              type="button"
+            >
+              <span>YES</span>
+              <strong>{selectedMarketYesPercent.toFixed(0)}%</strong>
+            </button>
+            <div className="mobile-odds-bar">
+              <div className="mobile-odds-bar-yes" style={{ width: `${selectedMarketYesPercent}%` }} />
+            </div>
+            <button
+              className={`mobile-odds-no${activeMobileMarketTab === "trade" && selectedTradeSides[selectedMarket.id] === Outcome.No ? " active" : ""}`}
+              onClick={() => {
+                setSelectedTradeSides((cur) => ({ ...cur, [selectedMarket.id]: Outcome.No }));
+                setMobileMarketTab("trade");
+              }}
+              type="button"
+            >
+              <strong>{selectedMarketNoPercent.toFixed(0)}%</strong>
+              <span>NO</span>
+            </button>
+          </div>
+
           <aside className="detail-summary-card">
             <div>
               <span>Rating</span>
@@ -11554,7 +11617,7 @@ export default function App() {
           </aside>
         </section>
 
-        <nav className="mobile-market-tabs" aria-label="Market sections">
+        <nav className="mobile-market-tabs-bottom" aria-label="Market sections">
           {mobileDetailTabs.map((tab) => (
             <button
               aria-current={activeMobileMarketTab === tab.key ? "page" : undefined}
@@ -11563,11 +11626,11 @@ export default function App() {
               onClick={() => setMobileMarketTab(tab.key)}
               type="button"
             >
+              <MobileMarketTabIcon tabKey={tab.key} />
               <span>
                 {tab.label}
                 {typeof tab.count === "number" && <b>{tab.count}</b>}
               </span>
-              <small>{tab.detail}</small>
             </button>
           ))}
         </nav>
@@ -12811,7 +12874,7 @@ export default function App() {
       : "";
 
   return (
-    <main className="app-shell" id="top">
+    <main className={`app-shell${view === "market" && selectedMarketId !== null ? " has-market-detail" : ""}`} id="top">
       <AppUpdateNotice />
       <nav className="topbar">
         <a
