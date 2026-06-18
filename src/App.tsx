@@ -8887,17 +8887,6 @@ export default function App() {
             >
               Aura AI
             </button>
-            <button
-              className={view === "security" ? "tab active" : "tab"}
-              onClick={() => {
-                setSelectedMarketId(null);
-                setSelectedProfileAddress("");
-                updateMarketRoute(null);
-                setView("security");
-              }}
-            >
-              Security
-            </button>
             {canReviewAsOwner && (
               <button
                 className={view === "owner" ? "tab active" : "tab"}
@@ -9268,6 +9257,17 @@ export default function App() {
                     </div>
                     <FundOnArcActions compact targetSymbol={defaultSettlementSymbol} onUnifiedBalance={openUnifiedBalanceModal} />
                     <button onClick={openProfile}>View Profile</button>
+                    <button
+                      onClick={() => {
+                        setWalletMenuOpen(false);
+                        setSelectedMarketId(null);
+                        setSelectedProfileAddress("");
+                        updateMarketRoute(null);
+                        setView("security");
+                      }}
+                    >
+                      Security &amp; audit
+                    </button>
                     <button onClick={disconnectWallet}>Disconnect</button>
                   </div>
                 )}

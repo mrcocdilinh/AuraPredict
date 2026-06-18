@@ -1118,6 +1118,7 @@ h3 {
   min-height: 34px;
   padding: 0 13px;
   text-decoration: none;
+  white-space: nowrap;
 }
 
 .nav-badge {
