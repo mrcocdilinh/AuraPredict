@@ -25,8 +25,9 @@ export const appKitModal = createAppKit({
     icons: ["https://app.aurapredict.xyz/aurapredict-logo-192.png"]
   },
   features: {
-    email: false,
-    socials: false,
+    email: true,
+    socials: ["google", "apple"],
+    emailShowWallets: true,
     onramp: false,
     swaps: false,
     analytics: false

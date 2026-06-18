@@ -55,6 +55,17 @@ export function useWalletState({
 
   const switchToArc = useCallback(async (provider?: EthereumProvider | null) => {
     const injected = getInjectedProvider(provider ?? selectedWalletProvider);
+    // Already on Arc? Skip the switch entirely. Embedded wallets (email/social)
+    // are pinned to Arc by AppKit and may not implement wallet_switchEthereumChain.
+    try {
+      const currentChainId = await getWalletClient(provider ?? selectedWalletProvider).getChainId();
+      if (BigInt(currentChainId) === ARC_CHAIN_ID_DECIMAL) {
+        setIsArcNetwork(true);
+        return;
+      }
+    } catch {
+      // fall through to the explicit switch/add flow below
+    }
     const switchChain = async () => {
       const chainIds = [arcTestnetParams.chainId, arcTestnetParams.chainId.toLowerCase()];
       let lastError: unknown;
@@ -171,8 +182,19 @@ export function useWalletState({
     const providerToUse = provider ?? selectedWalletProvider ?? window.ethereum ?? null;
     const walletClient = getWalletClient(providerToUse);
     const addresses = await walletClient.requestAddresses();
-    await switchToArc(providerToUse);
-    const chainId = await walletClient.getChainId();
+    // Embedded wallets (email/social via AppKit) are already pinned to Arc and
+    // may not implement wallet_switchEthereumChain. Only attempt a switch when
+    // the wallet isn't already on Arc, and tolerate a failed switch as long as
+    // the final chain id checks out.
+    let chainId = await walletClient.getChainId();
+    if (BigInt(chainId) !== ARC_CHAIN_ID_DECIMAL) {
+      try {
+        await switchToArc(providerToUse);
+      } catch {
+        // re-checked below; injected wallets that genuinely fail will throw there
+      }
+      chainId = await walletClient.getChainId();
+    }
     if (BigInt(chainId) !== ARC_CHAIN_ID_DECIMAL) {
       throw new Error("Wallet is not on Arc Testnet.");
     }
