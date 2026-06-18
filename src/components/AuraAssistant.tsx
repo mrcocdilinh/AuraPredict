@@ -111,6 +111,7 @@ export function AuraAssistant({
 
         {messages.map((message, index) => (
           <div key={index} className={`assistant-bubble ${message.role}`}>
+            <span className="assistant-bubble-role">{message.role === "user" ? "You" : "✦ Aura AI"}</span>
             <div className="assistant-bubble-text">{message.content}</div>
             {message.actions && message.actions.length > 0 && (
               <div className="assistant-actions">

@@ -3045,6 +3045,23 @@ h3 {
   align-self: flex-start;
 }
 
+.assistant-bubble-role {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 0 4px;
+  opacity: 0.7;
+}
+
+.assistant-bubble.user .assistant-bubble-role {
+  color: #2f6bff;
+}
+
+.assistant-bubble.assistant .assistant-bubble-role {
+  color: #6b7a99;
+}
+
 .assistant-bubble-text {
   border-radius: 14px;
   font-size: 14px;
@@ -3061,8 +3078,9 @@ h3 {
 }
 
 .assistant-bubble.assistant .assistant-bubble-text {
-  background: #fff;
-  border: 1px solid #e2e8f4;
+  background: #eef3ff;
+  border: 1px solid #d0dbf5;
+  border-left: 3px solid #7c9eff;
   color: #1f2a40;
   border-bottom-left-radius: 4px;
 }
@@ -3210,13 +3228,27 @@ h3 {
 }
 
 [data-theme="dark"] .assistant-suggestions button,
-[data-theme="dark"] .assistant-bubble.assistant .assistant-bubble-text,
 [data-theme="dark"] .assistant-action-card,
 [data-theme="dark"] .assistant-typing,
 [data-theme="dark"] .assistant-input-row input {
   background: rgba(12, 17, 31, 0.96);
   border-color: #202a3f;
   color: #d8e1f0;
+}
+
+[data-theme="dark"] .assistant-bubble.assistant .assistant-bubble-text {
+  background: rgba(20, 28, 52, 0.97);
+  border-color: #2a3a60;
+  border-left: 3px solid #4a7aff;
+  color: #d8e1f0;
+}
+
+[data-theme="dark"] .assistant-bubble.user .assistant-bubble-role {
+  color: #6b9dff;
+}
+
+[data-theme="dark"] .assistant-bubble.assistant .assistant-bubble-role {
+  color: #7a8fbb;
 }
 
 [data-theme="dark"] .assistant-action-label {
