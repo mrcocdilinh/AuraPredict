@@ -459,7 +459,7 @@ test("market detail exposes stake, resolution, dispute, finalize and claim surfa
   await expect(page.getByText(/Aura AI Insight/i)).toBeVisible();
   await expect(page.getByText(/Public oracle receipt/i)).toBeVisible();
   await expect(page.getByText(/Connect wallet to interact/i)).toBeVisible();
-  await expect(page.getByRole("button", { name: /Connect Wallet/i }).first()).toBeVisible();
+  await expect(page.getByRole("button", { name: /Sign in/i }).first()).toBeVisible();
   await page.getByRole("tab", { name: /Activity/i }).click();
   await expect(page.getByText(/Player history/i)).toBeVisible();
   await page.getByRole("tab", { name: /Top Holders/i }).click();
