@@ -512,6 +512,14 @@ async function loadState() {
       state = { ...emptyState(), ...saved };
       recomputeTraderCounts();
       indexerRuntimeState();
+      // Clear stale "unsupported" oracle proposals so the sweep re-evaluates them after code updates.
+      const unsupportedKeys = Object.keys(state.oracles || {}).filter(
+        (k) => String(state.oracles[k]?.status || "") === "unsupported"
+      );
+      if (unsupportedKeys.length > 0) {
+        for (const k of unsupportedKeys) delete state.oracles[k];
+        console.log(`[indexer] Cleared ${unsupportedKeys.length} stale "unsupported" oracle proposals on startup.`);
+      }
       // Backfill V5 markets missing closeTime
       if (isV5Contract()) {
         const missing = Object.values(state.markets).filter((m) => !m.closeTime || m.closeTime === 0);
@@ -4993,7 +5001,7 @@ async function runAutoOracleSweep() {
       if (!proposal) return true;
       if (oracleProposalNeedsRuleRefresh(proposal, market)) return true;
       if (proposal.autoProposeError) return false;
-      return ["not_ready", "ready", "error", "unsupported"].includes(String(proposal.status || ""));
+      return ["not_ready", "ready", "error"].includes(String(proposal.status || ""));
     })
     .slice(0, 5);
 
@@ -6136,10 +6144,7 @@ async function route(req, res) {
       if (req.method === "GET" && segments.length === 3) {
         let proposal = oracleState()[String(marketId)] ?? null;
         const market = state.markets[String(marketId)];
-        const shouldClear = proposal && market && (
-          oracleProposalNeedsRuleRefresh(proposal, market) ||
-          String(proposal.status || "") === "unsupported"
-        );
+        const shouldClear = proposal && market && oracleProposalNeedsRuleRefresh(proposal, market);
         if (shouldClear) {
           delete oracleState()[String(marketId)];
           await saveState();
