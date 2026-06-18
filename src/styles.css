@@ -7280,6 +7280,87 @@ label {
   padding: 8px;
 }
 
+.draft-approval-row {
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid #dfe6f1;
+  border-radius: 10px;
+  display: flex;
+  gap: 12px;
+  padding: 12px 14px;
+}
+
+.draft-approval-info {
+  align-items: flex-start;
+  background: none;
+  border: none;
+  box-shadow: none;
+  color: #172033;
+  cursor: pointer;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 4px;
+  min-height: auto;
+  outline: none;
+  padding: 0;
+  text-align: left;
+}
+
+.draft-approval-info:hover strong {
+  color: #2563eb;
+}
+
+.draft-approval-info strong {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.draft-approval-info small {
+  color: #667085;
+  font-size: 12px;
+}
+
+.draft-approval-actions {
+  display: flex;
+  flex-shrink: 0;
+  gap: 8px;
+}
+
+.draft-approve-btn,
+.draft-reject-btn {
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  min-height: 34px;
+  padding: 0 16px;
+  transition: background 0.15s, color 0.15s;
+}
+
+.draft-approve-btn {
+  background: #16a34a;
+  border: 1px solid #16a34a;
+  color: #ffffff;
+}
+
+.draft-approve-btn:hover:not(:disabled) {
+  background: #15803d;
+}
+
+.draft-reject-btn {
+  background: transparent;
+  border: 1px solid #e2e8f0;
+  color: #64748b;
+}
+
+.draft-reject-btn:hover:not(:disabled) {
+  background: #fff1f2;
+  border-color: #e11d48;
+  color: #e11d48;
+}
+
 .owner-report-row .similar-market-row {
   border: 0;
   padding: 0;
@@ -9494,6 +9575,30 @@ label {
 
 [data-theme="dark"] .owner-report-row .similar-market-row {
   background: transparent;
+}
+
+[data-theme="dark"] .draft-approval-row {
+  background: #0d1526;
+  border-color: #1e2d45;
+}
+
+[data-theme="dark"] .draft-approval-info {
+  color: #dcecff;
+}
+
+[data-theme="dark"] .draft-approval-info small {
+  color: #7a99bb;
+}
+
+[data-theme="dark"] .draft-reject-btn {
+  border-color: #2a3a52;
+  color: #8aabcc;
+}
+
+[data-theme="dark"] .draft-reject-btn:hover:not(:disabled) {
+  background: #2a0d13;
+  border-color: #e11d48;
+  color: #fb7185;
 }
 
 [data-theme="dark"] .profile-history-toolbar button.active {

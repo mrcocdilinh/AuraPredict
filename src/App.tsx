@@ -9692,14 +9692,14 @@ export default function App() {
                       <div className="oracle-reputation-list">
                         {draftMarkets.length === 0 && <span>No draft markets pending approval.</span>}
                         {draftMarkets.map((market) => (
-                          <article className="owner-report-row" key={`draft-${market.id}`}>
-                            <button className="similar-market-row" onClick={() => openMarket(market.id)} type="button">
+                          <article className="draft-approval-row" key={`draft-${market.id}`}>
+                            <button className="draft-approval-info" onClick={() => openMarket(market.id)} type="button">
                               <strong>#{market.id} {shortQuestion(market.question)}</strong>
-                              <small>By {displayNameForAddress(market.creator)} / closes {closeDate(market.closeTime)}</small>
+                              <small>By {displayNameForAddress(market.creator)} · closes {closeDate(market.closeTime)}</small>
                             </button>
-                            <div className="market-report-actions">
+                            <div className="draft-approval-actions">
                               <button
-                                className="secondary"
+                                className="draft-approve-btn"
                                 disabled={transactionPending}
                                 onClick={() => void approveDraftMarket(market.id)}
                                 type="button"
@@ -9707,7 +9707,7 @@ export default function App() {
                                 Approve
                               </button>
                               <button
-                                className="secondary"
+                                className="draft-reject-btn"
                                 disabled={transactionPending}
                                 onClick={() => void rejectDraftMarket(market.id)}
                                 type="button"
