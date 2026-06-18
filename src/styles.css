@@ -3261,8 +3261,9 @@ h3 {
 
 [data-theme="dark"] .assistant-action-card:hover:not(:disabled),
 [data-theme="dark"] .assistant-suggestions button:hover:not(:disabled) {
-  background: rgba(18, 26, 44, 0.96);
-  border-color: #2f6bff;
+  background: rgba(47, 107, 255, 0.18);
+  border-color: #4a82ff;
+  color: #e8f0ff;
 }
 
 .leaderboard-controls {
@@ -3274,13 +3275,13 @@ h3 {
 
 .leaderboard-control-group {
   align-content: start;
-  background: rgba(248, 250, 252, 0.78);
-  border: 1px solid #dfe6f1;
-  border-radius: 8px;
+  background: transparent;
+  border: none;
+  border-radius: 0;
   display: grid;
-  gap: 8px;
-  min-height: 94px;
-  padding: 10px;
+  gap: 6px;
+  min-height: unset;
+  padding: 4px 2px;
 }
 
 .leaderboard-control-group > span {
@@ -8383,8 +8384,8 @@ label {
 
 .profile-rank-grid {
   display: grid;
-  gap: 12px;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .profile-stat-card,
@@ -8399,9 +8400,9 @@ label {
 .profile-stat-card,
 .profile-rank-grid article {
   display: grid;
-  gap: 8px;
+  gap: 6px;
   min-width: 0;
-  padding: 15px;
+  padding: 12px 14px;
 }
 
 .profile-stat-card span,
@@ -8416,7 +8417,7 @@ label {
 .profile-stat-card strong,
 .profile-rank-grid strong {
   color: #101827;
-  font-size: 1.4rem;
+  font-size: 1.25rem;
   line-height: 1.1;
   overflow-wrap: anywhere;
 }
@@ -9583,8 +9584,12 @@ label {
 }
 
 [data-theme="dark"] .leaderboard-row {
-  border-color: #202a3f;
+  border-color: #1a2438;
   color: #c7d1e4;
+}
+
+[data-theme="dark"] .leaderboard-row:not(.leaderboard-head):nth-child(even) {
+  background: rgba(255, 255, 255, 0.025);
 }
 
 [data-theme="dark"] .leaderboard-controls .category-pill {
@@ -9594,8 +9599,8 @@ label {
 }
 
 [data-theme="dark"] .leaderboard-control-group {
-  background: rgba(15, 23, 42, 0.72);
-  border-color: #22314a;
+  background: transparent;
+  border-color: transparent;
 }
 
 [data-theme="dark"] .leaderboard-control-group > span {
