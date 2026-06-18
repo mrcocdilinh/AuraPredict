@@ -9419,6 +9419,29 @@ export default function App() {
       </section>
 
       {view === "markets" && (
+        <div className="mobile-market-header">
+          <div className="mobile-market-header-top">
+            <h2>Prediction <span>Markets</span></h2>
+            <span className="mobile-live-pill">{liveMarkets} live</span>
+          </div>
+          <div className="mobile-stats-strip">
+            <div className="mobile-stat-chip">
+              <span>Volume</span>
+              <strong>{totalVolumeByTokenText}</strong>
+            </div>
+            <div className="mobile-stat-chip">
+              <span>Players</span>
+              <strong>{statsSummary.knownPlayers}</strong>
+            </div>
+            <div className="mobile-stat-chip">
+              <span>Markets</span>
+              <strong>{statsSummary.totalMarkets}</strong>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {view === "markets" && (
         <section className="hero-band">
           <div className="hero-copy">
             <p className="network-kicker">
@@ -9546,7 +9569,7 @@ export default function App() {
                   <button className="secondary" onClick={backToMarkets} type="button">
                     Back to markets
                   </button>
-                  <button className="secondary" onClick={loadMarkets} disabled={loading || !hasContract}>
+                  <button className="secondary refresh-action" onClick={loadMarkets} disabled={loading || !hasContract}>
                     {loading ? "Refreshing..." : "Refresh"}
                   </button>
                   {view !== "market" && hasMoreMarkets && (
@@ -9557,7 +9580,7 @@ export default function App() {
                 </>
               ) : (
                 <>
-                  <button className="secondary" onClick={loadMarkets} disabled={loading || !hasContract}>
+                  <button className="secondary refresh-action" onClick={loadMarkets} disabled={loading || !hasContract}>
                     {loading ? "Refreshing..." : "Refresh"}
                   </button>
                   {view !== "ended" && view !== "leaderboard" && view !== "profile" && <button className="create-market-action" onClick={openCreateMarket}>Create Market</button>}
