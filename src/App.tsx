@@ -209,6 +209,7 @@ import {
 import { LandingPage } from "./components/LandingPage";
 import { AppUpdateNotice } from "./components/AppUpdateNotice";
 import { AuraAssistant, type AssistantMarketContext } from "./components/AuraAssistant";
+import { AuraFloatingChat } from "./components/AuraFloatingChat";
 import {
   indexedMarketToView,
   normalizeCategory,
@@ -12162,6 +12163,15 @@ export default function App() {
             </div>
           </section>
         </div>
+      )}
+      {view !== "assistant" && (
+        <AuraFloatingChat
+          account={account}
+          markets={assistantMarkets}
+          onAction={handleAssistantAction}
+          onConnect={openWalletModal}
+          busy={transactionPending}
+        />
       )}
     </main>
   );
