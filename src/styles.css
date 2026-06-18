@@ -9578,38 +9578,90 @@ label {
 }
 
 .owner-cancel-market-btn {
-  background: transparent;
-  border: 1px solid rgba(220, 38, 38, 0.35);
+  background: rgba(220, 38, 38, 0.06);
+  border: 1.5px solid rgba(220, 38, 38, 0.4);
   border-radius: 8px;
-  color: #dc2626;
+  color: #b91c1c;
   cursor: pointer;
   font-size: 13px;
-  font-weight: 500;
-  margin-top: 8px;
-  min-height: 36px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  margin-top: 10px;
+  min-height: 38px;
   padding: 0 16px;
-  transition: background 0.15s, border-color 0.15s;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
   width: 100%;
 }
 
 .owner-cancel-market-btn:hover:not(:disabled) {
-  background: rgba(220, 38, 38, 0.07);
+  background: rgba(220, 38, 38, 0.13);
   border-color: #dc2626;
+  color: #dc2626;
 }
 
 .owner-cancel-market-btn:disabled {
-  opacity: 0.45;
+  opacity: 0.4;
 }
 
 [data-theme="dark"] .owner-cancel-market-btn {
-  border-color: rgba(248, 113, 113, 0.45);
-  color: #f87171;
+  background: rgba(239, 68, 68, 0.1);
+  border-color: rgba(248, 113, 113, 0.55);
+  color: #fca5a5;
 }
 
 [data-theme="dark"] .owner-cancel-market-btn:hover:not(:disabled) {
-  background: rgba(220, 38, 38, 0.22);
+  background: rgba(239, 68, 68, 0.22);
   border-color: #f87171;
-  color: #fca5a5;
+  color: #fecaca;
+}
+
+.cancel-market-modal {
+  max-width: 460px;
+}
+
+.cancel-market-modal-desc {
+  background: rgba(220, 38, 38, 0.06);
+  border: 1px solid rgba(220, 38, 38, 0.18);
+  border-radius: 8px;
+  color: var(--text-secondary);
+  font-size: 13.5px;
+  line-height: 1.55;
+  margin: 4px 0 14px;
+  padding: 10px 14px;
+}
+
+[data-theme="dark"] .cancel-market-modal-desc {
+  background: rgba(239, 68, 68, 0.08);
+  border-color: rgba(248, 113, 113, 0.2);
+}
+
+.cancel-market-confirm-btn {
+  background: #c0392b;
+  border: none;
+  border-radius: 8px;
+  color: #fff;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  min-height: 40px;
+  padding: 0 20px;
+  transition: background 0.15s;
+}
+
+.cancel-market-confirm-btn:hover:not(:disabled) {
+  background: #a93226;
+}
+
+.cancel-market-confirm-btn:disabled {
+  opacity: 0.5;
+}
+
+[data-theme="dark"] .cancel-market-confirm-btn {
+  background: #dc2626;
+}
+
+[data-theme="dark"] .cancel-market-confirm-btn:hover:not(:disabled) {
+  background: #ef4444;
 }
 
 [data-theme="dark"] .draft-approval-row {

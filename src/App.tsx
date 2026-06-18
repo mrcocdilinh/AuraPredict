@@ -12055,36 +12055,50 @@ export default function App() {
 
       {rejectMarketModal && (
         <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Cancel market">
-          <section className="modal-panel" style={{ maxWidth: 480 }}>
+          <section className="modal-panel cancel-market-modal">
             <div className="modal-header">
               <div>
-                <span className="section-label">Owner action</span>
-                <h2>{rejectMarketModal.isDraft ? "Reject draft market" : "Cancel live market"} #{rejectMarketModal.marketId}</h2>
+                <span className="section-label" style={{ color: "#e74c3c" }}>
+                  {rejectMarketModal.isDraft ? "Owner — Reject draft" : "Owner — Cancel market"}
+                </span>
+                <h2 style={{ marginTop: 2 }}>
+                  {rejectMarketModal.isDraft ? "Reject draft" : "Cancel live market"}{" "}
+                  <span style={{ color: "var(--text-secondary)", fontWeight: 400 }}>#{rejectMarketModal.marketId}</span>
+                </h2>
               </div>
-              <button className="icon-button" type="button" onClick={() => setRejectMarketModal(null)}>X</button>
+              <button className="icon-button" type="button" onClick={() => setRejectMarketModal(null)} aria-label="Close">✕</button>
             </div>
-            <p style={{ fontSize: 14, color: "var(--text-secondary)" }}>
+            <p className="cancel-market-modal-desc">
               {rejectMarketModal.isDraft
                 ? "The creator's bond will be returned. Provide a reason so the creator understands why the draft was rejected."
-                : "This will cancel the market and refund all participants. Bond will be returned to creator."}
+                : "This will cancel the market and refund all participants. The creator's bond will be returned."}
             </p>
             <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              <span className="field-label">Reason <span style={{ color: "var(--text-secondary)", fontWeight: 400 }}>(optional)</span></span>
+              <span className="field-label">
+                Reason{" "}
+                <span style={{ color: "var(--text-secondary)", fontWeight: 400 }}>(optional)</span>
+              </span>
               <textarea
                 className="create-textarea"
-                placeholder={rejectMarketModal.isDraft ? "e.g. Duplicate market, ambiguous question…" : "e.g. Source unavailable, question cannot be resolved…"}
+                placeholder={
+                  rejectMarketModal.isDraft
+                    ? "e.g. Duplicate market, ambiguous question…"
+                    : "e.g. Source unavailable, question cannot be resolved…"
+                }
                 rows={3}
                 value={rejectMarketReason}
                 onChange={(e) => setRejectMarketReason(e.target.value)}
               />
             </label>
-            <div className="modal-actions" style={{ marginTop: 12 }}>
-              <button className="secondary" type="button" onClick={() => setRejectMarketModal(null)}>Cancel</button>
+            <div className="modal-actions" style={{ marginTop: 16 }}>
+              <button className="secondary" type="button" onClick={() => setRejectMarketModal(null)}>
+                Close
+              </button>
               <button
+                className="cancel-market-confirm-btn"
                 disabled={transactionPending}
                 type="button"
                 onClick={() => void confirmRejectMarket()}
-                style={{ background: "#c0392b", color: "#fff", border: "none" }}
               >
                 {rejectMarketModal.isDraft ? "Reject draft" : "Cancel market"}
               </button>
