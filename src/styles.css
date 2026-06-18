@@ -3022,7 +3022,8 @@ h3 {
   transition: border-color 0.15s ease, transform 0.1s ease;
 }
 
-.assistant-suggestions button:hover {
+.assistant-suggestions button:hover:not(:disabled) {
+  background: #fff;
   border-color: #2f6bff;
   transform: translateY(-1px);
 }
@@ -3087,7 +3088,10 @@ h3 {
 }
 
 .assistant-action-card:hover:not(:disabled) {
+  background: #fff;
+  border-color: #2f6bff;
   box-shadow: 0 6px 18px rgba(47, 107, 255, 0.16);
+  transform: none;
 }
 
 .assistant-action-card:disabled {
@@ -3220,6 +3224,12 @@ h3 {
 
 [data-theme="dark"] .assistant-action-question {
   color: #c2cee2;
+}
+
+[data-theme="dark"] .assistant-action-card:hover:not(:disabled),
+[data-theme="dark"] .assistant-suggestions button:hover:not(:disabled) {
+  background: rgba(18, 26, 44, 0.96);
+  border-color: #2f6bff;
 }
 
 .leaderboard-controls {
