@@ -7298,25 +7298,6 @@ export default function App() {
             )}
           </div>
         )}
-        {isProtocolOwner && !selectedMarket.isDraft && selectedMarket.outcome === Outcome.Unresolved && (
-          <div className="draft-market-notice" style={{ borderColor: "#c0392b33", background: "#fff5f5" }}>
-            <div>
-              <strong>Owner: Cancel this market</strong>
-              <span>You can cancel this market at any time. All participants will be refunded.</span>
-            </div>
-            <div className="draft-market-actions">
-              <button
-                className="secondary"
-                disabled={transactionPending}
-                onClick={() => void cancelLiveMarket(selectedMarket.id)}
-                type="button"
-                style={{ color: "#c0392b", borderColor: "#c0392b" }}
-              >
-                Cancel market
-              </button>
-            </div>
-          </div>
-        )}
         <section className="market-detail-hero">
           <div className={`detail-question-panel ${selectedMarketImageVariant}`}>
             <img src={selectedMarketImage} alt="" />
@@ -8073,6 +8054,16 @@ export default function App() {
               <div className="position-chip">
                 Your position: YES {formatMarketAmount(selectedMarket.yesPosition, selectedMarket)} / NO {formatMarketAmount(selectedMarket.noPosition, selectedMarket)} {marketSymbol(selectedMarket)}
               </div>
+            )}
+            {isProtocolOwner && !selectedMarket.isDraft && selectedMarket.outcome === Outcome.Unresolved && (
+              <button
+                className="owner-cancel-market-btn"
+                disabled={transactionPending}
+                onClick={() => void cancelLiveMarket(selectedMarket.id)}
+                type="button"
+              >
+                Cancel market
+              </button>
             )}
           </aside>
           ) : (
