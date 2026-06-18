@@ -512,6 +512,23 @@ async function loadState() {
       state = { ...emptyState(), ...saved };
       recomputeTraderCounts();
       indexerRuntimeState();
+      // Backfill V5 markets missing closeTime
+      if (isV5Contract()) {
+        const missing = Object.values(state.markets).filter((m) => !m.closeTime || m.closeTime === 0);
+        if (missing.length > 0) {
+          console.log(`[indexer] Backfilling ${missing.length} V5 markets missing closeTime...`);
+          for (const m of missing) {
+            try {
+              const data = await readMarketData(m.id);
+              Object.assign(m, data, { id: m.id });
+            } catch (e) {
+              console.warn(`[indexer] Backfill market ${m.id} failed: ${e?.message}`);
+            }
+          }
+          await saveState();
+          console.log("[indexer] Backfill complete.");
+        }
+      }
     }
   } catch {
     state = emptyState();
@@ -825,9 +842,17 @@ async function processEvent(eventName, log) {
   }
 
   if (eventName === "MarketApproved") {
-    const market = ensureMarket(Number(args.marketId ?? 0n));
+    const marketId = Number(args.marketId ?? 0n);
+    const market = ensureMarket(marketId);
     market.isDraft = false;
     market.updatedTxHash = txHash;
+    // Fetch full market data to populate closeTime, resolutionTime, question, etc.
+    try {
+      const data = await readMarketData(marketId);
+      Object.assign(market, data, { id: marketId, isDraft: false, updatedTxHash: txHash });
+    } catch (err) {
+      console.warn(`[indexer] MarketApproved: failed to enrich market ${marketId}: ${err?.message}`);
+    }
     return;
   }
 
