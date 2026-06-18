@@ -492,12 +492,25 @@ function syncErrorMessage(error) {
   return [message, details, url].filter(Boolean).join(" | ").slice(0, 1000);
 }
 
+function recomputeTraderCounts() {
+  const traderSets = {};
+  for (const trade of state.trades) {
+    const key = String(trade.marketId);
+    if (!traderSets[key]) traderSets[key] = new Set();
+    traderSets[key].add(trade.user);
+  }
+  for (const [id, market] of Object.entries(state.markets)) {
+    market.traderCount = traderSets[id]?.size ?? 0;
+  }
+}
+
 async function loadState() {
   try {
     const raw = await readFile(DATA_FILE, "utf8");
     const saved = JSON.parse(raw);
     if (saved.contractAddress?.toLowerCase() === CONTRACT_ADDRESS.toLowerCase()) {
       state = { ...emptyState(), ...saved };
+      recomputeTraderCounts();
       indexerRuntimeState();
     }
   } catch {
@@ -670,10 +683,13 @@ async function processEvent(eventName, log) {
 
     const id = `${txHash}-${logIndex}`;
     if (!state.trades.some((trade) => trade.id === id)) {
+      const trader = args.user ?? ZERO_ADDRESS;
+      const isNewTrader = !state.trades.some((t) => t.marketId === marketId && t.user === trader);
+      if (isNewTrader) market.traderCount = (market.traderCount || 0) + 1;
       state.trades.push({
         id,
         marketId,
-        user: args.user ?? ZERO_ADDRESS,
+        user: trader,
         side: v5OutcomeToLegacy(outcomeId),
         outcomeId,
         amount: toAmount(amount),
