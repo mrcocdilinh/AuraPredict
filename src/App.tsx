@@ -12164,7 +12164,7 @@ export default function App() {
           </section>
         </div>
       )}
-      {view !== "assistant" && (
+      {view !== "assistant" && !!account && (
         <AuraFloatingChat
           account={account}
           markets={assistantMarkets}
