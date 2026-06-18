@@ -11550,6 +11550,15 @@ export default function App() {
                 Click <strong>Apply suggestion</strong> above to fill the form, then review before launching.
               </p>
             )}
+            {hasBlockingMarketRisk && createForm.resolutionSource.trim().length > 0 && (
+              <div className="form-hint-apply-draft">
+                {createRiskFlags.filter((f) => f.severity === "bad").map((f) => (
+                  <p key={f.label} style={{ margin: "2px 0" }}>
+                    <strong>{f.label}:</strong> {f.detail}
+                  </p>
+                ))}
+              </div>
+            )}
             <div className="modal-actions">
               <button className="secondary" type="button" onClick={() => setCreateModalOpen(false)}>
                 Cancel
