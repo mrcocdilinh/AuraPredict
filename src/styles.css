@@ -14017,7 +14017,8 @@ label {
 }
 
 .mobile-bottom-nav,
-.mobile-market-tabs {
+.mobile-market-tabs,
+.mobile-market-header {
   display: none;
 }
 
