@@ -25,9 +25,13 @@ export const appKitModal = createAppKit({
     icons: ["https://app.aurapredict.xyz/aurapredict-logo-192.png"]
   },
   features: {
-    email: true,
-    socials: ["google", "apple"],
-    emailShowWallets: true,
+    // Reown's embedded email/social wallet runs on secure.walletconnect.org and
+    // only supports Reown's curated chain list. Arc Testnet (5042002) is a custom
+    // chain it cannot initialize, so login hangs at "completing the process".
+    // Keep these off until email login is implemented via Circle User-Controlled
+    // Wallets, which allows a custom RPC/chain.
+    email: false,
+    socials: false,
     onramp: false,
     swaps: false,
     analytics: false
