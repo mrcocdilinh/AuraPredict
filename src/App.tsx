@@ -7560,11 +7560,6 @@ export default function App() {
               {chartFocusPoint && (
                 <>
                   <span className={`chart-crosshair ${chartPointerActive ? "is-active" : "is-idle"}`} style={{ left: `${chartFocusPoint.x}%` }} />
-                  {chartPointerActive && (
-                    <span className="chart-date-label" style={{ left: `${chartFocusPoint.x}%` }}>
-                      {chartTimeLabel(chartFocusPoint.timestamp, true)}
-                    </span>
-                  )}
                   <span
                     className={`chart-hover-dot yes ${chartPointerActive ? "is-active" : "is-idle"}`}
                     style={{ left: `${chartFocusPoint.x}%`, top: `${(chartFocusYesY / 58) * 100}%` }}
@@ -7574,20 +7569,22 @@ export default function App() {
                     style={{ left: `${chartFocusPoint.x}%`, top: `${(chartFocusNoY / 58) * 100}%` }}
                   />
                   {chartPointerActive && (
-                    <>
-                      <div
-                        className={`chart-tooltip chart-outcome-tooltip yes is-${chartTooltipSide}`}
-                        style={{ left: `${chartTooltipLeft}%`, top: `${(chartFocusYesY / 58) * 100}%` }}
-                      >
-                        <strong className="tooltip-yes">YES {chartFocusPoint.yesPercent.toFixed(1)}%</strong>
+                    <div
+                      className={`chart-tooltip chart-unified-tooltip is-${chartTooltipSide}`}
+                      style={{ left: `${chartTooltipLeft}%` }}
+                    >
+                      <span className="chart-unified-time">{chartTimeLabel(chartFocusPoint.timestamp, true)}</span>
+                      <div className="chart-unified-row">
+                        <span className="chart-unified-dot yes" />
+                        <span className="chart-unified-label">YES</span>
+                        <strong className="tooltip-yes">{chartFocusPoint.yesPercent.toFixed(1)}%</strong>
                       </div>
-                      <div
-                        className={`chart-tooltip chart-outcome-tooltip no is-${chartTooltipSide}`}
-                        style={{ left: `${chartTooltipLeft}%`, top: `${(chartFocusNoY / 58) * 100}%` }}
-                      >
-                        <strong className="tooltip-no">NO {chartFocusPoint.noPercent.toFixed(1)}%</strong>
+                      <div className="chart-unified-row">
+                        <span className="chart-unified-dot no" />
+                        <span className="chart-unified-label">NO</span>
+                        <strong className="tooltip-no">{chartFocusPoint.noPercent.toFixed(1)}%</strong>
                       </div>
-                    </>
+                    </div>
                   )}
                 </>
               )}
