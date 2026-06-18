@@ -24,11 +24,13 @@ export function AuraAssistant({
   account,
   markets,
   onAction,
+  onConnect,
   busy
 }: {
   account: string;
   markets: AssistantMarketContext[];
   onAction: (action: AssistantAction) => void;
+  onConnect: () => void;
   busy?: boolean;
 }) {
   const [messages, setMessages] = useState<AssistantMessage[]>([]);
@@ -45,7 +47,7 @@ export function AuraAssistant({
   const send = useCallback(
     async (text: string) => {
       const trimmed = text.trim();
-      if (!trimmed || loading) return;
+      if (!trimmed || loading || !account) return;
       const nextHistory: AssistantMessage[] = [...messages, { role: "user", content: trimmed }];
       setMessages(nextHistory);
       setInput("");
@@ -80,7 +82,7 @@ export function AuraAssistant({
         setLoading(false);
       }
     },
-    [loading, markets, messages]
+    [account, loading, markets, messages]
   );
 
   return (
@@ -95,6 +97,19 @@ export function AuraAssistant({
         </div>
       </div>
 
+      {!account ? (
+        <div className="assistant-thread">
+          <div className="assistant-empty">
+            <p>Connect your wallet to chat with Aura AI.</p>
+            <div className="assistant-suggestions">
+              <button type="button" onClick={onConnect}>
+                Connect wallet
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : (
+      <>
       <div className="assistant-thread" ref={scrollRef}>
         {messages.length === 0 && (
           <div className="assistant-empty">
@@ -170,6 +185,8 @@ export function AuraAssistant({
           Send
         </button>
       </form>
+      </>
+      )}
     </section>
   );
 }

@@ -6213,6 +6213,7 @@ async function route(req, res) {
         "Only reference markets from that list. NEVER invent a market id. If nothing matches the user's intent, say so and ask a clarifying question.",
         "When the user wants to bet, find the best-matching market and propose a 'bet' action with the correct side (YES/NO) and amount they mentioned. If amount is missing, ask for it or omit the amount.",
         "When the user wants to claim, propose a 'claim' action. To open/inspect a market, propose a 'view' action.",
+        "CLAIM RULE: If the user asks about claiming, winnings, rewards, payouts, prizes or refunds in ANY language (e.g. Vietnamese 'phần thưởng', 'tiền thắng', 'nhận thưởng', 'rút'), and the markets list contains one or more markets with claimable=true, you MUST propose a 'claim' action for each claimable market and list them. Do NOT ask the user for a market id when claimable markets already exist. Only if there are zero claimable markets, tell them they have nothing to claim right now.",
         "Respond with STRICT JSON only, shape: {\"reply\": string, \"actions\": [{\"type\": \"bet\"|\"claim\"|\"view\", \"marketId\": number, \"side\"?: \"YES\"|\"NO\", \"amount\"?: string, \"label\": string}]}.",
         "Keep 'reply' concise and friendly. 'label' is short button text in the user's language. Provide actions only when you are confident about the market id; otherwise return an empty actions array.",
         `Markets JSON: ${JSON.stringify(marketContext)}`

@@ -11035,6 +11035,7 @@ export default function App() {
               account={account}
               markets={assistantMarkets}
               onAction={handleAssistantAction}
+              onConnect={openWalletModal}
               busy={transactionPending}
             />
           ) : view === "security" ? (
