@@ -5558,6 +5558,39 @@ export default function App() {
       /^0x[a-fA-F0-9]{130}$/.test(aiReceipt.attestation);
     setMarketActionPending("resolve", marketId, true);
     try {
+      if (contractVersion === "v5" && market) {
+        const token = (market.settlementToken || defaultSettlementToken) as Address;
+        const assetCfg = await withRpcRetry(() => getPublicClient().readContract({
+          address: contractAddress,
+          abi: arcPredictionMarketV5Abi,
+          functionName: "assetConfigs",
+          args: [token]
+        })) as readonly [boolean, string, number, bigint, bigint, bigint, bigint, bigint, bigint, bigint, bigint];
+        // tuple: [enabled, symbol, decimals, minStake, creatorBond, resolverBond, disputeBond, ...]
+        const resolverBond = assetCfg?.[5] ?? 0n;
+        if (resolverBond > 0n) {
+          const allowance = await withRpcRetry(() => getPublicClient().readContract({
+            address: token,
+            abi: settlementTokenAbi,
+            functionName: "allowance",
+            args: [account as Address, contractAddress]
+          })) as bigint;
+          if (allowance < resolverBond) {
+            const approved = await runTransaction(
+              () => walletClient.writeContract({
+                account: account as Address,
+                chain: arcTestnet,
+                address: token,
+                abi: settlementTokenAbi,
+                functionName: "approve",
+                args: [contractAddress, resolverBond]
+              }),
+              `Approving ${formatMarketAmount(resolverBond, market)} ${marketSymbol(market)} resolver bond...`
+            );
+            if (!approved) { setMarketActionPending("resolve", marketId, false); return; }
+          }
+        }
+      }
       const success = await runTransaction(
         () =>
           contractVersion === "v5"
