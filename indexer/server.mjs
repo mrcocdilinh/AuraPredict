@@ -6047,7 +6047,7 @@ async function route(req, res) {
           json(res, 409, { error: "Market is finalized. Saved Aura analysis is read-only; new AI reviews are disabled." });
           return;
         }
-        if (storedMarket && isV4Contract()) {
+        if (storedMarket && (isV4Contract() || isV5Contract())) {
           const receipt = await buildResolutionReceipt(marketId, {
             force: false,
             evidence: Array.isArray(body.evidence) ? body.evidence : undefined
