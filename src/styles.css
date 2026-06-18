@@ -7559,10 +7559,10 @@ label {
 .wallet-history-search,
 .ended-search {
   align-items: center;
-  background: #f8fbff;
-  border: 1px solid #19b9e633;
+  background: #ffffff;
+  border: 1.5px solid #c8d6e8;
   border-radius: 10px;
-  box-shadow: inset 0 0 0 1px #ffffff66;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
   display: flex;
   flex: 1 1 320px;
   gap: 10px;
@@ -9476,9 +9476,9 @@ label {
 
 [data-theme="dark"] .wallet-history-search,
 [data-theme="dark"] .ended-search {
-  background: #0b1020;
-  border-color: #225c71;
-  box-shadow: inset 0 0 0 1px #19b9e622;
+  background: #111d30;
+  border-color: #3a5a7a;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.25);
 }
 
 [data-theme="dark"] .wallet-history-search input,
