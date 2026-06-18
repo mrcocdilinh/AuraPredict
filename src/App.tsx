@@ -9283,6 +9283,7 @@ export default function App() {
                     <FundOnArcActions compact targetSymbol={defaultSettlementSymbol} onUnifiedBalance={openUnifiedBalanceModal} />
                     <button onClick={openProfile}>View Profile</button>
                     <button
+                      className="wallet-security-btn"
                       onClick={() => {
                         setWalletMenuOpen(false);
                         setSelectedMarketId(null);
@@ -9559,7 +9560,7 @@ export default function App() {
                   <button className="secondary" onClick={loadMarkets} disabled={loading || !hasContract}>
                     {loading ? "Refreshing..." : "Refresh"}
                   </button>
-                  {view !== "ended" && view !== "leaderboard" && view !== "profile" && <button onClick={openCreateMarket}>Create Market</button>}
+                  {view !== "ended" && view !== "leaderboard" && view !== "profile" && <button className="create-market-action" onClick={openCreateMarket}>Create Market</button>}
                   {view !== "leaderboard" && view !== "profile" && hasMoreMarkets && (
                     <button className="secondary" onClick={() => loadMoreMarkets(false)} disabled={loading || !hasContract} type="button">
                       Load more

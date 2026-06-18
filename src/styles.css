@@ -14663,6 +14663,29 @@ label {
     grid-template-columns: repeat(4, 1fr);
   }
 
+  /* ── Wallet dropdown: compact, not full-screen ── */
+  .wallet-dropdown {
+    left: auto;
+    right: 0;
+    width: min(270px, calc(100vw - 20px));
+  }
+
+  /* Hide EURC row + Security & audit in wallet dropdown on mobile */
+  .wallet-dropdown .wallet-balance-row:nth-of-type(2),
+  .wallet-dropdown .wallet-security-btn {
+    display: none;
+  }
+
+  /* ── Hide Create Market button (hero has Launch Market) ── */
+  .create-market-action {
+    display: none;
+  }
+
+  /* ── Hide side-rail (Market stats, Protocol) on mobile ── */
+  .side-rail {
+    display: none;
+  }
+
   /* ── Hide hero hot-markets carousel on mobile ── */
   .hero-hot-panel {
     display: none;
