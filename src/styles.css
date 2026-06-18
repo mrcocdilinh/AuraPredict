@@ -13996,6 +13996,24 @@ label {
     color: #2f6bff;
   }
 
+  .mobile-bottom-nav .mobile-nav-cta {
+    border-top-color: transparent;
+  }
+
+  .mobile-bottom-nav .mobile-nav-cta.active {
+    color: #2f6bff;
+  }
+
+  .mobile-bottom-nav .mobile-nav-cta svg {
+    background: linear-gradient(135deg, #2f6bff, #7f5cff);
+    border-radius: 13px;
+    box-shadow: 0 6px 16px rgba(47, 107, 255, 0.45);
+    height: 34px;
+    padding: 6px;
+    stroke: #fff;
+    width: 34px;
+  }
+
   .mobile-bottom-nav svg {
     fill: none;
     height: 22px;

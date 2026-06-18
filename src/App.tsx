@@ -9301,6 +9301,20 @@ export default function App() {
           <span>Hot</span>
         </button>
         <button
+          aria-current={view === "assistant" ? "page" : undefined}
+          className={`mobile-nav-cta${view === "assistant" ? " active" : ""}`}
+          onClick={() => {
+            setSelectedMarketId(null);
+            setSelectedProfileAddress("");
+            updateMarketRoute(null);
+            setView("assistant");
+          }}
+          type="button"
+        >
+          <MobileNavIcon icon="assistant" />
+          <span>Ask Aura</span>
+        </button>
+        <button
           aria-current={view === "notifications" ? "page" : undefined}
           className={view === "notifications" ? "active" : ""}
           onClick={account ? openNotifications : openWalletModal}
@@ -9318,23 +9332,6 @@ export default function App() {
         >
           <MobileNavIcon icon="profile" />
           <span>Profile</span>
-        </button>
-        <button
-          aria-current={view === "owner" || view === "security" ? "page" : undefined}
-          className={view === "owner" || view === "security" ? "active" : ""}
-          onClick={() => {
-            setSelectedMarketId(null);
-            setSelectedProfileAddress("");
-            updateMarketRoute(null);
-            setView(canReviewAsOwner ? "owner" : "security");
-          }}
-          type="button"
-        >
-          <MobileNavIcon icon="owner" />
-          <span>
-            {canReviewAsOwner ? (isProtocolOwner ? "Owner" : "Review") : "Safety"}
-            {draftMarkets.length > 0 && <span className="nav-badge">{draftMarkets.length}</span>}
-          </span>
         </button>
       </nav>
 
