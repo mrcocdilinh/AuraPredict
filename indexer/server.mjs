@@ -5081,6 +5081,7 @@ class AiProviderError extends Error {
     this.provider = options.provider || "unknown";
     this.status = options.status || 0;
     this.retryable = Boolean(options.retryable);
+    this.retryAfterMs = Number(options.retryAfterMs) || 0;
   }
 }
 
@@ -5243,34 +5244,76 @@ async function callOpenAiCompatibleChat({ apiKey, baseUrl, model, messages }) {
   const body = await response.json().catch(() => ({}));
   if (!response.ok) {
     const message = body?.error?.message || `Chat request failed with status ${response.status}.`;
+    const retryAfterHeader = Number(response.headers.get("retry-after"));
     throw new AiProviderError(message, {
       provider: "groq",
       status: response.status,
-      retryable: response.status === 429 || response.status >= 500
+      retryable: response.status === 429 || response.status >= 500,
+      retryAfterMs: Number.isFinite(retryAfterHeader) && retryAfterHeader > 0 ? retryAfterHeader * 1000 : 0
     });
   }
   const text = body?.choices?.[0]?.message?.content || "";
   return { json: extractJsonObject(text), model };
 }
 
+// Flatten an OpenAI-style messages array into Gemini's (systemInstruction,
+// prompt) shape so the assistant chat can fall back to Gemini, which has its
+// own multi-key rotation and is resilient to single-key rate limits.
+async function callGeminiChat(messages) {
+  const systemInstruction = messages.find((m) => m.role === "system")?.content || "";
+  const turns = messages
+    .filter((m) => m.role !== "system")
+    .map((m) => `${m.role === "assistant" ? "Assistant" : "User"}: ${m.content}`)
+    .join("\n");
+  const result = await callGeminiJson(systemInstruction, turns);
+  return { json: result.json, model: result.model };
+}
+
+const ASSISTANT_MAX_RETRY_WAIT_MS = 3500;
+
 async function callAssistantChat(messages) {
+  // Provider order: Groq (fast) → Gemini (multi-key, rate-limit resilient) →
+  // OpenAI. Each provider gets one retry on a transient (429/5xx) error.
   const attempts = [];
-  if (GROQ_API_KEY) attempts.push({ provider: "groq", apiKey: GROQ_API_KEY, baseUrl: GROQ_BASE_URL, model: GROQ_MODEL });
-  if (OPENAI_API_KEY) attempts.push({ provider: "openai", apiKey: OPENAI_API_KEY, baseUrl: OPENAI_BASE_URL, model: OPENAI_MODEL });
-  if (attempts.length === 0) {
-    throw new Error("Aura AI assistant is not configured. Set GROQ_API_KEY (recommended) or OPENAI_API_KEY.");
+  if (GROQ_API_KEY) {
+    attempts.push({
+      provider: "groq",
+      run: () => callOpenAiCompatibleChat({ apiKey: GROQ_API_KEY, baseUrl: GROQ_BASE_URL, model: GROQ_MODEL, messages })
+    });
   }
+  if (configuredGeminiKeys().length > 0) {
+    attempts.push({ provider: "gemini", run: () => callGeminiChat(messages) });
+  }
+  if (OPENAI_API_KEY) {
+    attempts.push({
+      provider: "openai",
+      run: () => callOpenAiCompatibleChat({ apiKey: OPENAI_API_KEY, baseUrl: OPENAI_BASE_URL, model: OPENAI_MODEL, messages })
+    });
+  }
+  if (attempts.length === 0) {
+    throw new Error("Aura AI assistant is not configured. Set GROQ_API_KEY (recommended), GEMINI_API_KEY, or OPENAI_API_KEY.");
+  }
+
   let lastError = null;
-  for (let index = 0; index < attempts.length; index += 1) {
-    const attempt = attempts[index];
-    try {
-      const result = await callOpenAiCompatibleChat({ ...attempt, messages });
-      return { ...result, provider: attempt.provider };
-    } catch (error) {
-      lastError = error;
-      const retryable = error instanceof AiProviderError ? error.retryable : false;
-      if (!retryable && index < attempts.length - 1) continue;
-      if (index === attempts.length - 1) break;
+  for (const attempt of attempts) {
+    for (let tryNo = 0; tryNo < 2; tryNo += 1) {
+      try {
+        const result = await attempt.run();
+        return { ...result, provider: attempt.provider };
+      } catch (error) {
+        lastError = error;
+        const retryable = error instanceof AiProviderError ? error.retryable : false;
+        // Retry the same provider once on a transient error, honoring
+        // retry-after (capped) so a brief Groq rate-limit self-heals.
+        if (retryable && tryNo === 0) {
+          const waitMs = Math.min(error.retryAfterMs || 600, ASSISTANT_MAX_RETRY_WAIT_MS);
+          console.warn(`[assistant] ${attempt.provider} transient error (${error.status || "?"}); retrying in ${waitMs}ms`);
+          await sleep(waitMs);
+          continue;
+        }
+        console.warn(`[assistant] ${attempt.provider} failed: ${error instanceof Error ? error.message : String(error)}`);
+        break; // move to next provider
+      }
     }
   }
   throw lastError instanceof Error ? lastError : new Error(String(lastError));
@@ -6198,7 +6241,7 @@ async function route(req, res) {
       // Groq free tier caps tokens-per-minute, so we cannot send every market.
       // Rank by relevance to the user's latest message, then keep a small slice.
       // Markets the user named by id, plus claimable ones, are always included.
-      const MAX_CONTEXT_MARKETS = 45;
+      const MAX_CONTEXT_MARKETS = 30;
       const ASSISTANT_STOPWORDS = new Set([
         "the", "and", "for", "bet", "usd", "usdc", "market", "markets", "will", "yes", "place",
         "claim", "win", "winnings", "with", "that", "this", "what", "which", "are", "can", "you",
@@ -6263,6 +6306,7 @@ async function route(req, res) {
         chat = await callAssistantChat([{ role: "system", content: systemInstruction }, ...history]);
       } catch (error) {
         fallbackReason = error instanceof Error ? error.message : String(error);
+        console.error(`[assistant] all providers failed: ${fallbackReason}`);
       }
 
       const marketIds = new Set(marketContext.map((market) => market.id));
