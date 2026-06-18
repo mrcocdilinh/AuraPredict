@@ -22,13 +22,19 @@ function saveHistory(messages: AssistantMessage[]) {
   }
 }
 
+type MarketCtx = {
+  id: number; question: string; category: string; status: string;
+  yesPercent: number; noPercent: number; closeIso: string; outcome: string;
+  claimable: boolean; myYes?: number; myNo?: number; myPayout?: number;
+};
+
 export function useAuraChat({
   account,
   markets,
   onAction
 }: {
   account: string;
-  markets: { id: number; question: string; category: string; status: string; yesPercent: number; noPercent: number; closeIso: string; outcome: string; claimable: boolean; myYes?: number; myNo?: number; myPayout?: number }[];
+  markets: MarketCtx[];
   onAction: (action: AssistantAction) => void;
 }) {
   const [messages, setMessages] = useState<AssistantMessage[]>(loadHistory);
@@ -50,12 +56,33 @@ export function useAuraChat({
       setInput("");
       setLoading(true);
       try {
+        const participated = markets.filter((m) => m.myYes || m.myNo);
+        const claimable = markets.filter((m) => m.claimable);
+        const userStats = account ? {
+          wallet: account,
+          participatedMarkets: participated.length,
+          claimableMarkets: claimable.length,
+          totalClaimableUsdc: Math.round(claimable.reduce((s, m) => s + (m.myPayout ?? 0), 0) * 100) / 100,
+          positions: participated.map((m) => ({
+            marketId: m.id,
+            question: m.question,
+            myYes: m.myYes,
+            myNo: m.myNo,
+            myPayout: m.myPayout,
+            status: m.status,
+            outcome: m.outcome,
+            claimable: m.claimable
+          }))
+        } : null;
+
         const response = await fetch(`${INDEXER_URL}/api/assistant/chat`, {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({
             messages: nextHistory.map((m) => ({ role: m.role, content: m.content })),
-            markets
+            markets,
+            account: account || null,
+            userStats
           })
         });
         const data = (await response.json().catch(() => ({}))) as {
