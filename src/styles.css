@@ -2910,7 +2910,7 @@ h3 {
 
 .leaderboard-panel {
   display: grid;
-  gap: 14px;
+  gap: 10px;
 }
 
 .security-page {
@@ -3222,9 +3222,23 @@ h3 {
   color: #9aa7bd;
 }
 
+[data-theme="dark"] .assistant-input-row {
+  border-top: 1px solid #2d3f5e;
+  padding-top: 2px;
+}
+
+[data-theme="dark"] .assistant-input-row input:focus {
+  border-color: #2f6bff;
+  box-shadow: 0 0 0 2px rgba(47, 107, 255, 0.18);
+}
+
+[data-theme="dark"] .assistant-input-row button:hover:not(:disabled) {
+  background: #1e54e8;
+}
+
 [data-theme="dark"] .assistant-thread {
-  background: rgba(8, 12, 22, 0.6);
-  border-color: #202a3f;
+  background: rgba(5, 8, 18, 0.75);
+  border-color: #2d3f5e;
 }
 
 [data-theme="dark"] .assistant-suggestions button,
@@ -3232,7 +3246,7 @@ h3 {
 [data-theme="dark"] .assistant-typing,
 [data-theme="dark"] .assistant-input-row input {
   background: rgba(12, 17, 31, 0.96);
-  border-color: #202a3f;
+  border-color: #2d3f5e;
   color: #d8e1f0;
 }
 
@@ -3337,9 +3351,9 @@ h3 {
   border: 1px solid #dfe6f1;
   border-radius: 10px;
   display: grid;
-  gap: 10px;
-  grid-template-columns: minmax(160px, 0.75fr) minmax(260px, 1fr) minmax(160px, 0.75fr);
-  padding: 10px;
+  gap: 8px;
+  grid-template-columns: minmax(140px, 0.75fr) minmax(220px, 1fr) minmax(140px, 0.75fr);
+  padding: 8px 10px;
 }
 
 .leaderboard-select-filter,
@@ -3408,6 +3422,7 @@ h3 {
   border-radius: 8px;
   display: grid;
   overflow: hidden;
+  overflow-x: auto;
 }
 
 .leaderboard-row {
@@ -3415,10 +3430,10 @@ h3 {
   border-bottom: 1px solid #eef2f7;
   color: #45546c;
   display: grid;
-  gap: 10px;
-  grid-template-columns: 60px minmax(120px, 1fr) minmax(110px, 0.75fr) minmax(100px, 0.65fr) minmax(110px, 0.75fr) minmax(110px, 0.75fr);
+  gap: 8px;
+  grid-template-columns: 52px minmax(120px, 1fr) minmax(110px, 0.75fr) minmax(100px, 0.65fr) minmax(110px, 0.75fr) minmax(110px, 0.75fr);
   min-width: 0;
-  padding: 13px 14px;
+  padding: 10px 14px;
 }
 
 .leaderboard-row:last-child {
@@ -3439,7 +3454,7 @@ h3 {
 
 .leaderboard-wallet {
   display: grid;
-  gap: 6px;
+  gap: 4px;
   min-width: 0;
 }
 
@@ -3457,10 +3472,10 @@ h3 {
   border-radius: 999px;
   color: #536178;
   display: inline-flex;
-  font-size: 0.66rem;
+  font-size: 0.63rem;
   font-weight: 900;
-  min-height: 22px;
-  padding: 3px 8px;
+  min-height: 20px;
+  padding: 2px 7px;
   white-space: nowrap;
 }
 
@@ -3500,8 +3515,8 @@ h3 {
   border-radius: 8px;
   color: #172033;
   display: grid;
-  gap: 12px;
-  padding: 15px;
+  gap: 10px;
+  padding: 12px 14px;
 }
 
 .aura-formula-card {
@@ -8532,7 +8547,7 @@ label {
 
 .aura-breakdown-grid {
   display: grid;
-  gap: 10px;
+  gap: 8px;
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
@@ -8541,8 +8556,8 @@ label {
   border: 1px solid #e5ebf4;
   border-radius: 8px;
   display: grid;
-  gap: 4px;
-  padding: 10px;
+  gap: 3px;
+  padding: 8px 10px;
 }
 
 .aura-breakdown-grid span,
@@ -8664,9 +8679,9 @@ label {
   background: #ffffff;
   border: 1px solid #dfe6f1;
   display: grid;
-  gap: 12px;
+  gap: 8px;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  padding: 14px;
+  padding: 10px 12px;
 }
 
 .history-card {
