@@ -180,7 +180,18 @@ export function MobileMarketTabIcon({ tabKey }: { tabKey: "overview" | "trade" |
   );
 }
 
-export function MobileNavIcon({ icon }: { icon: "markets" | "hot" | "alerts" | "profile" | "owner" | "assistant" }) {
+export function MobileNavIcon({ icon }: { icon: "markets" | "hot" | "leaderboard" | "alerts" | "profile" | "owner" | "assistant" }) {
+  if (icon === "leaderboard") {
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M4 20h16" />
+        <rect x="5" y="11" width="4" height="7" />
+        <rect x="10" y="6" width="4" height="12" />
+        <rect x="15" y="13" width="4" height="5" />
+      </svg>
+    );
+  }
+
   if (icon === "assistant") {
     return (
       <svg viewBox="0 0 24 24" aria-hidden="true">

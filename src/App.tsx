@@ -9304,13 +9304,18 @@ export default function App() {
           <span>Markets</span>
         </button>
         <button
-          aria-current={view === "collection" && collectionView === "hot" ? "page" : undefined}
-          className={view === "collection" && collectionView === "hot" ? "active" : ""}
-          onClick={() => openCollection("hot")}
+          aria-current={view === "leaderboard" ? "page" : undefined}
+          className={view === "leaderboard" ? "active" : ""}
+          onClick={() => {
+            setSelectedMarketId(null);
+            setSelectedProfileAddress("");
+            updateMarketRoute(null);
+            setView("leaderboard");
+          }}
           type="button"
         >
-          <MobileNavIcon icon="hot" />
-          <span>Hot</span>
+          <MobileNavIcon icon="leaderboard" />
+          <span>Leaderboard</span>
         </button>
         <button
           aria-current={view === "assistant" ? "page" : undefined}
