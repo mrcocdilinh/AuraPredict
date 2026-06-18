@@ -474,7 +474,7 @@ export function sourceConfidenceFlag(category: string | undefined, source: strin
     return {
       label: "Source weak",
       detail: "Sports markets need a fixture, score, standings, schedule, or article URL, not a generic homepage.",
-      severity: "bad"
+      severity: "warn"
     };
   }
 
@@ -490,7 +490,7 @@ export function sourceConfidenceFlag(category: string | undefined, source: strin
     return {
       label: "Source weak",
       detail: "Stock markets need an exact quote, release, filing, or calendar URL, not a generic finance homepage.",
-      severity: "bad"
+      severity: "warn"
     };
   }
 
@@ -506,7 +506,7 @@ export function sourceConfidenceFlag(category: string | undefined, source: strin
     return {
       label: "Source weak",
       detail: "Crypto markets need an exact pair or price page, not a generic homepage.",
-      severity: "bad"
+      severity: "warn"
     };
   }
 
