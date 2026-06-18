@@ -2531,6 +2531,14 @@ export default function App() {
     void appKitModal.open();
   }, []);
 
+  const handleDisconnect = useCallback(() => {
+    setWalletMenuOpen(false);
+    // Disconnect AppKit first so isConnected flips to false; otherwise the
+    // bridge effect immediately reconnects after we clear our local account.
+    void appKitModal.disconnect();
+    void disconnectWallet();
+  }, [disconnectWallet]);
+
   const openProfile = useCallback(() => {
     if (!account) {
       setNotice("Connect wallet before opening your profile.");
@@ -9272,7 +9280,7 @@ export default function App() {
                     >
                       Security &amp; audit
                     </button>
-                    <button onClick={disconnectWallet}>Disconnect</button>
+                    <button onClick={handleDisconnect}>Disconnect</button>
                   </div>
                 )}
               </div>
