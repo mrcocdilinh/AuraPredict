@@ -35,6 +35,7 @@ export function AuraAssistant({
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement | null>(null);
+  const marketById = new Map(markets.map((market) => [market.id, market]));
 
   useEffect(() => {
     const node = scrollRef.current;
@@ -113,22 +114,28 @@ export function AuraAssistant({
             <div className="assistant-bubble-text">{message.content}</div>
             {message.actions && message.actions.length > 0 && (
               <div className="assistant-actions">
-                {message.actions.map((action, actionIndex) => (
-                  <button
-                    key={actionIndex}
-                    type="button"
-                    className={`assistant-action-card ${action.type}`}
-                    disabled={busy || (action.type !== "view" && !account)}
-                    onClick={() => onAction(action)}
-                  >
-                    <span className="assistant-action-label">{action.label}</span>
-                    <span className="assistant-action-meta">
-                      Market #{action.marketId}
-                      {action.side ? ` · ${action.side}` : ""}
-                      {action.amount ? ` · ${action.amount} USDC` : ""}
-                    </span>
-                  </button>
-                ))}
+                {message.actions.map((action, actionIndex) => {
+                  const market = marketById.get(action.marketId);
+                  return (
+                    <button
+                      key={actionIndex}
+                      type="button"
+                      className={`assistant-action-card ${action.type}`}
+                      disabled={busy || (action.type !== "view" && !account)}
+                      onClick={() => onAction(action)}
+                    >
+                      <span className="assistant-action-label">{action.label}</span>
+                      {market && <span className="assistant-action-question">{market.question}</span>}
+                      <span className="assistant-action-meta">
+                        Market #{action.marketId}
+                        {action.side ? ` · ${action.side}` : ""}
+                        {action.amount ? ` · ${action.amount} USDC` : ""}
+                        {market ? ` · YES ${market.yesPercent}% / NO ${market.noPercent}%` : ""}
+                        {market && market.status !== "live" ? ` · ${market.status}` : ""}
+                      </span>
+                    </button>
+                  );
+                })}
               </div>
             )}
           </div>

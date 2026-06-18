@@ -3109,6 +3109,12 @@ h3 {
   font-weight: 600;
 }
 
+.assistant-action-question {
+  color: #2f3b52;
+  font-size: 13px;
+  line-height: 1.35;
+}
+
 .assistant-action-meta {
   color: #667085;
   font-size: 12px;
@@ -3210,6 +3216,10 @@ h3 {
 
 [data-theme="dark"] .assistant-action-label {
   color: #f7f9ff;
+}
+
+[data-theme="dark"] .assistant-action-question {
+  color: #c2cee2;
 }
 
 .leaderboard-controls {
