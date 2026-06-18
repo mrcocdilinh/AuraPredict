@@ -10,11 +10,17 @@ function packageChunkName(id: string) {
 
 export default defineConfig({
   plugins: [react()],
+  optimizeDeps: {
+    include: ["@base-org/account", "@coinbase/wallet-sdk"]
+  },
   build: {
     rollupOptions: {
       output: {
         manualChunks(id) {
           if (!id.includes("node_modules")) return;
+          if (id.includes("@base-org/account") || id.includes("@coinbase/wallet-sdk")) {
+            return "vendor--coinbase-base";
+          }
           if (
             id.includes("@circle-fin") ||
             id.includes("@walletconnect") ||
