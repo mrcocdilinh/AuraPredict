@@ -9423,6 +9423,14 @@ export default function App() {
           <div className="mobile-market-header-top">
             <h2>Prediction <span>Markets</span></h2>
             <span className="mobile-live-pill">{liveMarkets} live</span>
+            <button
+              className="button-link mobile-launch-btn"
+              onClick={account ? openCreateMarket : openWalletModal}
+              disabled={connecting}
+              type="button"
+            >
+              + Launch
+            </button>
           </div>
           <div className="mobile-stats-strip">
             <div className="mobile-stat-chip">

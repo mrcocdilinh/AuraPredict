@@ -14047,6 +14047,21 @@ label {
   color: #9f1239;
 }
 
+/* Trade YES/NO inactive state — light mode: bolder border + tinted bg */
+[data-theme="light"] .trade-side-buttons .yes-button:not(.active) {
+  background: #d1fae5;
+  border: 2px solid #10b981;
+  color: #065f46;
+  font-weight: 700;
+}
+
+[data-theme="light"] .trade-side-buttons .no-button:not(.active) {
+  background: #ffe4e6;
+  border: 2px solid #ef4444;
+  color: #9f1239;
+  font-weight: 700;
+}
+
 @media (max-width: 720px) {
   .app-shell {
     padding-bottom: calc(92px + env(safe-area-inset-bottom));
@@ -14777,6 +14792,18 @@ label {
     background: linear-gradient(90deg, #2f6bff, #19d99a);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
+  }
+
+  .mobile-launch-btn {
+    background: linear-gradient(135deg, #2f6bff, #7f5cff);
+    border: none;
+    border-radius: 8px;
+    box-shadow: 0 4px 14px rgba(47, 107, 255, 0.4);
+    color: #fff;
+    font-size: 0.75rem;
+    font-weight: 700;
+    padding: 6px 12px;
+    white-space: nowrap;
   }
 
   .mobile-live-pill {
