@@ -1,4 +1,4 @@
-import { MARKET_CACHE_KEY } from "../constants";
+import { MARKET_CACHE_KEY, CONTRACT_ADDRESS } from "../constants";
 import type { MarketView, CachedMarketView } from "../types";
 
 export function readJsonStorage<T>(key: string, fallback: T) {
@@ -14,9 +14,14 @@ export function claimedMarketKey(account: string, marketId: number) {
   return `${account.toLowerCase()}:${marketId}`;
 }
 
+function marketCacheKey() {
+  const suffix = CONTRACT_ADDRESS ? `:${CONTRACT_ADDRESS.toLowerCase().slice(2, 10)}` : "";
+  return `${MARKET_CACHE_KEY}${suffix}`;
+}
+
 export function readCachedMarkets() {
   try {
-    const rows = JSON.parse(window.localStorage.getItem(MARKET_CACHE_KEY) || "[]") as CachedMarketView[];
+    const rows = JSON.parse(window.localStorage.getItem(marketCacheKey()) || "[]") as CachedMarketView[];
     return rows
       .map((market) => ({
         ...market,
@@ -70,7 +75,7 @@ export function writeCachedMarkets(markets: MarketView[]) {
       outcome: market.outcome,
       claimed: false
     }));
-    window.localStorage.setItem(MARKET_CACHE_KEY, JSON.stringify(cachedRows));
+    window.localStorage.setItem(marketCacheKey(), JSON.stringify(cachedRows));
   } catch {
     // Cache is a best-effort UX optimization.
   }
