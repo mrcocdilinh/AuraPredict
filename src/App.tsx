@@ -427,6 +427,7 @@ export default function App() {
   const [accumulatedProtocolFees, setAccumulatedProtocolFees] = useState<bigint>(0n);
   const [protocolFeesByToken, setProtocolFeesByToken] = useState<Record<string, bigint>>({});
   const [markets, setMarkets] = useState<MarketView[]>(() => readCachedMarkets());
+  const [ownerDraftMarkets, setOwnerDraftMarkets] = useState<MarketView[]>([]);
   const [activities, setActivities] = useState<ActivityItem[]>([]);
   const [knownMarketCount, setKnownMarketCount] = useState(() => readCachedMarkets().length);
   const [dataSource, setDataSource] = useState<"cache" | "indexer" | "rpc">("cache");
@@ -571,6 +572,8 @@ export default function App() {
   const [evidenceDrafts, setEvidenceDrafts] = useState<Record<number, EvidenceDraft>>({});
   const [reportDrafts, setReportDrafts] = useState<Record<number, { reason: string; url: string }>>({});
   const [aiBusy, setAiBusy] = useState(false);
+  const [rejectMarketModal, setRejectMarketModal] = useState<{ marketId: number; isDraft: boolean } | null>(null);
+  const [rejectMarketReason, setRejectMarketReason] = useState("");
   const [aiMarketDraft, setAiMarketDraft] = useState<AiMarketDraft | null>(null);
   const [auraCreateStatus, setAuraCreateStatus] = useState<"idle" | "ready" | "failed">("idle");
   const [duplicateAcknowledged, setDuplicateAcknowledged] = useState(false);
@@ -1697,9 +1700,7 @@ export default function App() {
     },
     [aiResolutionReceipts, aiResolutionReports, marketRiskFlagsFor, nowSeconds, oracleProposals, ownerReviewReasonFor, resolutionUnlockTime]
   );
-  const draftMarkets = isProtocolOwner
-    ? markets.filter((market) => market.isDraft).sort((a, b) => b.id - a.id)
-    : [];
+  const draftMarkets = isProtocolOwner ? ownerDraftMarkets : [];
   const ownerOpenReports = Object.values(marketReports)
     .flat()
     .filter((report) => report.status === "open")
@@ -6250,9 +6251,23 @@ export default function App() {
   };
 
   const rejectDraftMarket = async (marketId: number) => {
+    setRejectMarketModal({ marketId, isDraft: true });
+    setRejectMarketReason("");
+  };
+
+  const cancelLiveMarket = async (marketId: number) => {
+    setRejectMarketModal({ marketId, isDraft: false });
+    setRejectMarketReason("");
+  };
+
+  const confirmRejectMarket = async () => {
+    if (!rejectMarketModal) return;
+    const { marketId, isDraft } = rejectMarketModal;
     if (!account || !isAddress(account)) throw new Error("Connect owner wallet first.");
-    if (!owner || !sameAddress(account, owner)) throw new Error("Only the protocol owner can reject draft markets.");
-    if (contractVersion !== "v5") throw new Error("Draft rejection is only supported on V5 contracts.");
+    if (!owner || !sameAddress(account, owner)) throw new Error("Only the protocol owner can cancel markets.");
+    if (contractVersion !== "v5") throw new Error("Only supported on V5 contracts.");
+    const reason = rejectMarketReason.trim() || (isDraft ? "Owner rejected draft market." : "Owner cancelled market.");
+    setRejectMarketModal(null);
     await switchToArc();
     const walletClient = getActiveWalletClient();
     const completed = await runTransaction(
@@ -6263,13 +6278,17 @@ export default function App() {
           address: contractAddress,
           abi: arcPredictionMarketV5Abi,
           functionName: "rejectMarket",
-          args: [BigInt(marketId), false, keccak256(stringToHex("Owner rejected draft market."))]
+          args: [BigInt(marketId), false, keccak256(stringToHex(reason))]
         }),
-      `Rejecting draft market #${marketId}...`
+      `${isDraft ? "Rejecting" : "Cancelling"} market #${marketId}...`
     );
     if (completed) {
+      const stored = JSON.parse(localStorage.getItem("aurapredict.marketRejections") || "{}");
+      stored[String(marketId)] = { reason, by: account, at: new Date().toISOString(), isDraft };
+      localStorage.setItem("aurapredict.marketRejections", JSON.stringify(stored));
+      setOwnerDraftMarkets((current) => current.filter((m) => m.id !== marketId));
       setMarkets((current) => current.filter((m) => m.id !== marketId));
-      setNotice(`Market #${marketId} rejected.`);
+      setNotice(`Market #${marketId} ${isDraft ? "rejected" : "cancelled"}. Reason stored.`);
     }
   };
 
@@ -6458,6 +6477,17 @@ export default function App() {
       if (refreshInterval) window.clearInterval(refreshInterval);
     };
   }, [loadMarkets]);
+
+  useEffect(() => {
+    if (!isProtocolOwner) { setOwnerDraftMarkets([]); return; }
+    const load = () =>
+      fetchIndexerJson<{ markets: MarketView[] }>("/api/markets/drafts").then((r) => {
+        if (r?.markets) setOwnerDraftMarkets(r.markets.sort((a, b) => b.id - a.id));
+      }).catch(() => {});
+    load();
+    const interval = window.setInterval(load, 30_000);
+    return () => window.clearInterval(interval);
+  }, [isProtocolOwner]);
 
   const renderMarketCards = (
     items: MarketView[],
@@ -7266,6 +7296,25 @@ export default function App() {
                 </button>
               </div>
             )}
+          </div>
+        )}
+        {isProtocolOwner && !selectedMarket.isDraft && selectedMarket.outcome === Outcome.Unresolved && (
+          <div className="draft-market-notice" style={{ borderColor: "#c0392b33", background: "#fff5f5" }}>
+            <div>
+              <strong>Owner: Cancel this market</strong>
+              <span>You can cancel this market at any time. All participants will be refunded.</span>
+            </div>
+            <div className="draft-market-actions">
+              <button
+                className="secondary"
+                disabled={transactionPending}
+                onClick={() => void cancelLiveMarket(selectedMarket.id)}
+                type="button"
+                style={{ color: "#c0392b", borderColor: "#c0392b" }}
+              >
+                Cancel market
+              </button>
+            </div>
           </div>
         )}
         <section className="market-detail-hero">
@@ -8762,6 +8811,7 @@ export default function App() {
                 }}
               >
                 {isProtocolOwner ? "Owner" : "Review"}
+                {draftMarkets.length > 0 && <span className="nav-badge">{draftMarkets.length}</span>}
               </button>
             )}
           </div>
@@ -9183,7 +9233,10 @@ export default function App() {
           type="button"
         >
           <MobileNavIcon icon="owner" />
-          <span>{canReviewAsOwner ? (isProtocolOwner ? "Owner" : "Review") : "Safety"}</span>
+          <span>
+            {canReviewAsOwner ? (isProtocolOwner ? "Owner" : "Review") : "Safety"}
+            {draftMarkets.length > 0 && <span className="nav-badge">{draftMarkets.length}</span>}
+          </span>
         </button>
       </nav>
 
@@ -12008,6 +12061,46 @@ export default function App() {
           </a>
         </section>
       </footer>
+
+      {rejectMarketModal && (
+        <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Cancel market">
+          <section className="modal-panel" style={{ maxWidth: 480 }}>
+            <div className="modal-header">
+              <div>
+                <span className="section-label">Owner action</span>
+                <h2>{rejectMarketModal.isDraft ? "Reject draft market" : "Cancel live market"} #{rejectMarketModal.marketId}</h2>
+              </div>
+              <button className="icon-button" type="button" onClick={() => setRejectMarketModal(null)}>X</button>
+            </div>
+            <p style={{ fontSize: 14, color: "var(--text-secondary)" }}>
+              {rejectMarketModal.isDraft
+                ? "The creator's bond will be returned. Provide a reason so the creator understands why the draft was rejected."
+                : "This will cancel the market and refund all participants. Bond will be returned to creator."}
+            </p>
+            <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              <span className="field-label">Reason <span style={{ color: "var(--text-secondary)", fontWeight: 400 }}>(optional)</span></span>
+              <textarea
+                className="create-textarea"
+                placeholder={rejectMarketModal.isDraft ? "e.g. Duplicate market, ambiguous question…" : "e.g. Source unavailable, question cannot be resolved…"}
+                rows={3}
+                value={rejectMarketReason}
+                onChange={(e) => setRejectMarketReason(e.target.value)}
+              />
+            </label>
+            <div className="modal-actions" style={{ marginTop: 12 }}>
+              <button className="secondary" type="button" onClick={() => setRejectMarketModal(null)}>Cancel</button>
+              <button
+                disabled={transactionPending}
+                type="button"
+                onClick={() => void confirmRejectMarket()}
+                style={{ background: "#c0392b", color: "#fff", border: "none" }}
+              >
+                {rejectMarketModal.isDraft ? "Reject draft" : "Cancel market"}
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
     </main>
   );
 }

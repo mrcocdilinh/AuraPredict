@@ -6377,6 +6377,12 @@ async function route(req, res) {
       return;
     }
 
+    if (url.pathname === "/api/markets/drafts") {
+      const drafts = Object.values(state.markets).filter((m) => m.isDraft).sort((a, b) => b.id - a.id);
+      json(res, 200, { markets: drafts, total: drafts.length, updatedAt: state.updatedAt });
+      return;
+    }
+
     if (url.pathname === "/api/markets") {
       const limit = Number(url.searchParams.get("limit") || 0);
       const markets = Object.values(state.markets).filter((m) => !m.isDraft).sort((a, b) => b.id - a.id);
