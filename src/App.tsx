@@ -3037,7 +3037,8 @@ export default function App() {
       const result = await kit.unifiedBalance.spend(params as never);
       const tx = unifiedBalanceTxFromResult("Spend to Arc", result);
       setUnifiedBalanceLastTx(tx);
-      setUnifiedBalanceFees(flattenUnifiedBalanceFees(result));
+      const resultFees = flattenUnifiedBalanceFees(result);
+      if (resultFees.length > 0) setUnifiedBalanceFees(resultFees);
       addUnifiedBalanceLog(`Spend to Arc confirmed${tx.txHash ? `: ${shortHash(tx.txHash)}` : "."}`);
       setNotice(`Unified Balance spend complete. ${amount} USDC was minted to Arc Testnet.`, tx.txHash as Hash | undefined);
       await switchToArc();
@@ -3079,14 +3080,14 @@ export default function App() {
       let summary = await refreshUnifiedBalance();
       let confirmed = unifiedBalanceGatewayAmount(summary, unifiedBalanceSourceChain, "confirmedBalance");
       let pending = unifiedBalanceGatewayAmount(summary, unifiedBalanceSourceChain, "pendingBalance");
-      const { kit, Blockchain, adapter } = await createUnifiedBalanceRuntime(getInjectedProvider(selectedWalletProvider));
 
       if (confirmed < required && confirmed + pending < required) {
         await switchToUnifiedBalanceSourceChain(unifiedBalanceSourceChain);
+        const { kit: depositKit, adapter: depositAdapter } = await createUnifiedBalanceRuntime(getInjectedProvider(selectedWalletProvider));
         addUnifiedBalanceLog(`Depositing ${amount} USDC before Arc spend.`);
         setNotice(`Step 1/2: confirm Gateway deposit of ${amount} USDC from ${unifiedBalanceChainLabel(unifiedBalanceSourceChain)}.`);
-        const deposit = await kit.unifiedBalance.deposit({
-          from: { adapter, chain: unifiedBalanceSourceChain },
+        const deposit = await depositKit.unifiedBalance.deposit({
+          from: { adapter: depositAdapter, chain: unifiedBalanceSourceChain },
           amount,
           token: "USDC",
           allowanceStrategy: "authorize"
@@ -3118,13 +3119,15 @@ export default function App() {
       }
 
       await switchToUnifiedBalanceSourceChain(unifiedBalanceSourceChain);
+      const { kit, Blockchain, adapter } = await createUnifiedBalanceRuntime(getInjectedProvider(selectedWalletProvider));
       setNotice(`Step 2/2: confirm Unified Balance spend of ${amount} USDC to Arc Testnet.`);
       const spend = await kit.unifiedBalance.spend(
         createUnifiedBalanceSpendParams(adapter, Blockchain as Record<string, unknown>, unifiedBalanceSourceChain, amount, account) as never
       );
       const spendTx = unifiedBalanceTxFromResult("Spend to Arc", spend);
       setUnifiedBalanceLastTx(spendTx);
-      setUnifiedBalanceFees(flattenUnifiedBalanceFees(spend));
+      const spendFees = flattenUnifiedBalanceFees(spend);
+      if (spendFees.length > 0) setUnifiedBalanceFees(spendFees);
       addUnifiedBalanceLog(`Spend to Arc confirmed${spendTx.txHash ? `: ${shortHash(spendTx.txHash)}` : "."}`);
       setNotice(`Unified Balance funding complete. ${amount} USDC is on Arc Testnet.`, spendTx.txHash as Hash | undefined);
       await switchToArc();
