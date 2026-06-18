@@ -483,7 +483,7 @@ export default function App() {
     setNotice: setNoticeText
   });
 
-  useAppKitBridge({ account, connectWallet, disconnectWallet });
+  const { isReconnecting } = useAppKitBridge({ account, connectWallet, disconnectWallet });
   const [noticeTxHash, setNoticeTxHash] = useState<Hash | "">("");
   const [transactionPending, setTransactionPending] = useState(false);
   const [pendingMarketActions, setPendingMarketActions] = useState<Record<string, boolean>>({});
@@ -8196,8 +8196,8 @@ export default function App() {
                   <strong>{selectedMarketNoPercent.toFixed(1)}%</strong>
                 </div>
               </div>
-              <button onClick={openWalletModal} disabled={connecting} type="button">
-                {connecting ? "Connecting..." : "Sign in"}
+              <button onClick={openWalletModal} disabled={connecting || isReconnecting} type="button">
+                {connecting || isReconnecting ? "Connecting..." : "Sign in"}
               </button>
             </aside>
           )}
@@ -9286,8 +9286,8 @@ export default function App() {
               </div>
             </>
           ) : (
-            <button onClick={openWalletModal} disabled={connecting}>
-              {connecting ? "Connecting..." : "Sign in"}
+            <button onClick={openWalletModal} disabled={connecting || isReconnecting}>
+              {connecting || isReconnecting ? "Connecting..." : "Sign in"}
             </button>
           )}
         </div>

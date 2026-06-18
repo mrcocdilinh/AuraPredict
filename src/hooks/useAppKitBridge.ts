@@ -13,7 +13,7 @@ export function useAppKitBridge({
   connectWallet: (provider: EthereumProvider) => Promise<void>;
   disconnectWallet: () => Promise<void>;
 }) {
-  const { isConnected, address } = useAppKitAccount();
+  const { isConnected, address, status } = useAppKitAccount();
   const { walletProvider } = useAppKitProvider("eip155");
 
   useEffect(() => {
@@ -27,4 +27,12 @@ export function useAppKitBridge({
       void disconnectWallet();
     }
   }, [isConnected, account, disconnectWallet]);
+
+  // True while AppKit restores a previous session after a reload but our local
+  // account isn't wired up yet — used to keep the header showing "Connecting…"
+  // instead of flickering to the Sign in button on every refresh.
+  const isReconnecting =
+    !account && (status === "connecting" || status === "reconnecting" || (isConnected && !!address));
+
+  return { isReconnecting };
 }
