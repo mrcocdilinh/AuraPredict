@@ -13396,6 +13396,18 @@ label {
     border-bottom-color: rgba(180, 206, 230, 0.6);
     box-shadow: 0 8px 28px rgba(30, 60, 100, 0.08);
   }
+
+  [data-theme="light"] .market-card.interactive-market-card .mobile-market-question {
+    color: #172033;
+  }
+
+  [data-theme="light"] .market-card.interactive-market-card .mobile-market-info {
+    color: #6a7e98;
+  }
+
+  [data-theme="light"] .mobile-yes-bar {
+    background: #dfe6f1;
+  }
 }
 
 [data-theme="light"] .hero-activity-tabs button,
@@ -13990,6 +14002,12 @@ label {
   display: none;
 }
 
+.mobile-market-question,
+.mobile-market-info,
+.mobile-market-yes {
+  display: none;
+}
+
 @media (max-width: 720px) {
   .app-shell {
     padding-bottom: calc(92px + env(safe-area-inset-bottom));
@@ -14130,9 +14148,132 @@ label {
     border-radius: 8px;
   }
 
+  /* Mobile compact horizontal card layout */
+  .market-card.interactive-market-card {
+    align-items: center;
+    column-gap: 10px;
+    display: grid;
+    grid-template-columns: 48px 1fr auto;
+    grid-template-rows: auto auto;
+    padding: 11px 12px;
+    row-gap: 0;
+  }
+
+  .market-card.interactive-market-card .compact-market-visual {
+    border-radius: 10px;
+    grid-column: 1;
+    grid-row: 1 / 3;
+    height: 48px;
+    min-height: 48px;
+    overflow: hidden;
+    width: 48px;
+  }
+
+  .market-card.interactive-market-card .compact-market-visual .compact-card-header,
+  .market-card.interactive-market-card .compact-market-visual h3 {
+    display: none;
+  }
+
+  .market-card.interactive-market-card .compact-market-visual img {
+    height: 100%;
+    object-fit: cover;
+    width: 100%;
+  }
+
+  .market-card.interactive-market-card .compact-market-visual::after {
+    display: none;
+  }
+
+  .market-card.interactive-market-card .mobile-market-question {
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    color: #dde8ff;
+    display: -webkit-box;
+    font-size: 13px;
+    font-weight: 500;
+    grid-column: 2;
+    grid-row: 1;
+    line-height: 1.35;
+    overflow: hidden;
+  }
+
+  .market-card.interactive-market-card .mobile-market-info {
+    color: #4a5a78;
+    display: block;
+    font-size: 11px;
+    grid-column: 2;
+    grid-row: 2;
+    margin-top: 3px;
+  }
+
+  .market-card.interactive-market-card .mobile-market-yes {
+    align-items: flex-end;
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+    gap: 2px;
+    grid-column: 3;
+    grid-row: 1 / 3;
+  }
+
+  .market-card.interactive-market-card .mobile-market-yes b {
+    color: #19d99a;
+    font-size: 17px;
+    font-weight: 700;
+    line-height: 1;
+  }
+
+  .market-card.interactive-market-card .mobile-market-yes small {
+    color: #19d99a;
+    font-size: 9px;
+    opacity: 0.7;
+  }
+
+  .mobile-yes-bar {
+    background: #1a2540;
+    border-radius: 999px;
+    display: block;
+    height: 3px;
+    margin-top: 3px;
+    overflow: hidden;
+    position: relative;
+    width: 44px;
+  }
+
+  .mobile-yes-bar::after {
+    background: linear-gradient(90deg, #2f6bff, #19d99a);
+    border-radius: 999px;
+    bottom: 0;
+    content: "";
+    left: 0;
+    position: absolute;
+    top: 0;
+    width: var(--yes-pct, 50%);
+  }
+
+  /* Hide desktop-only card elements on mobile */
+  .market-card.interactive-market-card .compact-odds-grid,
+  .market-card.interactive-market-card .compact-card-footer,
+  .market-card.interactive-market-card .compact-market-meta,
+  .market-card.interactive-market-card .compact-risk-row,
+  .market-card.interactive-market-card .compact-position-line {
+    display: none;
+  }
+
+  /* Action hint + personal result span full width */
+  .market-card.interactive-market-card .compact-personal-result,
+  .market-card.interactive-market-card .compact-action-hint {
+    grid-column: 1 / 4;
+    grid-row: auto;
+  }
+
   .market-card-image,
   .compact-market-visual {
     min-height: 124px;
+  }
+
+  .market-card.interactive-market-card .compact-market-visual {
+    min-height: 48px;
   }
 
   .market-detail-view {

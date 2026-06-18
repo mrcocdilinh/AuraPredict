@@ -6791,6 +6791,19 @@ export default function App() {
               </div>
               <h3>{market.question}</h3>
             </div>
+            <span className="mobile-market-question">{market.question}</span>
+            <span className="mobile-market-info">
+              {statusLabel === "Live" ? countdownText(market.closeTime, currentTime) : statusLabel}
+              {" · "}{formatMarketAmount(totalPool, market)} {marketSymbolLabel}
+            </span>
+            <span
+              className="mobile-market-yes"
+              style={{ "--yes-pct": `${Math.round(yesPercent)}%` } as React.CSSProperties}
+            >
+              <b>{Math.round(yesPercent)}%</b>
+              <small>YES</small>
+              <i className="mobile-yes-bar" />
+            </span>
             <div className="compact-odds-grid" aria-label="YES and NO market odds">
               <div className="compact-odds-tile compact-yes-tile">
                 <span>YES</span>
