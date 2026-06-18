@@ -10,7 +10,7 @@ export function parseNumericValue(value) {
 export function detectComparatorTarget(text) {
   const value = String(text || "").toLowerCase().replace(/\s+/g, " ");
   const patterns = [
-    { comparator: "gte", regex: /(?:at\s+or\s+above|at\s+least|greater than or equal(?:s)?(?: to)?|no less than|>=)\s*\$?\s*([0-9][0-9,]*(?:\.[0-9]+)?)/i },
+    { comparator: "gte", regex: /(?:at\s+or\s+above|at\s+least|greater than or equal(?:s)?(?: to)?|no less than|>=|reach(?:es)?)\s*\$?\s*([0-9][0-9,]*(?:\.[0-9]+)?)/i },
     { comparator: "gte", regex: /\$?\s*([0-9][0-9,]*(?:\.[0-9]+)?)\s*(?:usd|usdc|points?|index|per ounce)?\s*(?:or higher|or above|or more|or greater)/i },
     { comparator: "lte", regex: /(?:at\s+or\s+below|at\s+most|less than or equal(?:s)?(?: to)?|no more than|<=)\s*\$?\s*([0-9][0-9,]*(?:\.[0-9]+)?)/i },
     { comparator: "lte", regex: /\$?\s*([0-9][0-9,]*(?:\.[0-9]+)?)\s*(?:usd|usdc|points?|index|per ounce)?\s*(?:or lower|or below|or less)/i },

@@ -3510,8 +3510,9 @@ function detectCryptoOracleMarket(market) {
   }
   const text = oracleTextForMarket(market);
   const hasPriceContext =
-    /\b(price|spot|traded?|trade|close|closing|open|usd|usdt|btc\/usd|eth\/usd|btc\/usdt|eth\/usdt)\b/i.test(text) ||
-    /\/usd[t]?\b/i.test(text);
+    /\b(price|spot|traded?|trade|close|closing|open|usd|usdt|btc\/usd|eth\/usd|btc\/usdt|eth\/usdt|reach(?:es)?)\b/i.test(text) ||
+    /\/usd[t]?\b/i.test(text) ||
+    /\$\s*[0-9][0-9,]*/.test(text);
   if (!hasPriceContext) return null;
   const asset = CRYPTO_ORACLE_ASSETS.find((candidate) => candidate.names.some((name) => hasExactMarketTerm(text, name)));
   const condition = priceConditionForMarket(market, null);
