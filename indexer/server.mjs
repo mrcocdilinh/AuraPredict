@@ -6154,11 +6154,11 @@ async function route(req, res) {
         return json(res, 400, { error: "Send a user message to Aura AI." });
       }
 
-      const rawMarkets = Array.isArray(body.markets) ? body.markets.slice(0, 300) : [];
-      const marketContext = rawMarkets
+      const rawMarkets = Array.isArray(body.markets) ? body.markets.slice(0, 400) : [];
+      const allMarkets = rawMarkets
         .map((market) => ({
           id: Number(market.id),
-          question: cleanText(market.question, 200),
+          question: cleanText(market.question, 140),
           category: cleanText(market.category, 40),
           status: cleanText(market.status, 20),
           yesPercent: Number(market.yesPercent) || 0,
@@ -6168,6 +6168,41 @@ async function route(req, res) {
           claimable: market.claimable === true
         }))
         .filter((market) => Number.isInteger(market.id));
+
+      // Groq free tier caps tokens-per-minute, so we cannot send every market.
+      // Rank by relevance to the user's latest message, then keep a small slice.
+      // Markets the user named by id, plus claimable ones, are always included.
+      const MAX_CONTEXT_MARKETS = 45;
+      const ASSISTANT_STOPWORDS = new Set([
+        "the", "and", "for", "bet", "usd", "usdc", "market", "markets", "will", "yes", "place",
+        "claim", "win", "winnings", "with", "that", "this", "what", "which", "are", "can", "you",
+        "aura", "much", "how", "does", "did", "any", "all", "out", "now", "today", "live"
+      ]);
+      const lastUserText = String(history[history.length - 1].content || "").toLowerCase();
+      const terms = [...new Set(lastUserText.split(/[^a-z0-9]+/).filter((word) => word.length > 2))].filter(
+        (word) => !ASSISTANT_STOPWORDS.has(word)
+      );
+      const mentionedIds = new Set((lastUserText.match(/\d+/g) || []).map(Number));
+      const scoreMarket = (market) => {
+        const haystack = `${market.question} ${market.category}`.toLowerCase();
+        return terms.reduce((acc, term) => acc + (haystack.includes(term) ? 1 : 0), 0);
+      };
+
+      let marketContext = allMarkets;
+      if (allMarkets.length > MAX_CONTEXT_MARKETS) {
+        const ranked = [...allMarkets]
+          .map((market) => ({ market, score: scoreMarket(market) }))
+          .sort((a, b) => b.score - a.score || (a.market.status === "live" ? -1 : 1));
+        const chosen = new Map();
+        for (const market of allMarkets) {
+          if (mentionedIds.has(market.id) || market.claimable) chosen.set(market.id, market);
+        }
+        for (const { market } of ranked) {
+          if (chosen.size >= MAX_CONTEXT_MARKETS) break;
+          chosen.set(market.id, market);
+        }
+        marketContext = [...chosen.values()];
+      }
 
       const systemInstruction = [
         "You are Aura AI, the in-app assistant for AuraPredict, a prediction market dapp on Arc Testnet.",
