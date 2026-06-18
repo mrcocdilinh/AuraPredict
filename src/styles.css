@@ -8217,16 +8217,16 @@ label {
   border: 1px solid #dfe6f1;
   border-radius: 8px;
   display: grid;
-  gap: 16px;
+  gap: 12px;
   grid-template-columns: minmax(0, 1fr) auto;
-  padding: 18px;
+  padding: 14px 16px;
 }
 
 .profile-head {
   align-items: center;
   display: grid;
-  gap: 14px;
-  grid-template-columns: 64px minmax(0, 1fr);
+  gap: 12px;
+  grid-template-columns: 52px minmax(0, 1fr);
 }
 
 .profile-avatar {
@@ -8235,24 +8235,24 @@ label {
     radial-gradient(circle at 30% 25%, #72f2ff, transparent 36%),
     linear-gradient(135deg, #4b6bff, #2f6bff);
   border-radius: 999px;
-  box-shadow: 0 0 34px rgba(47, 107, 255, 0.28);
+  box-shadow: 0 0 24px rgba(47, 107, 255, 0.24);
   color: #06111e;
   display: flex;
-  font-size: 1.6rem;
+  font-size: 1.3rem;
   font-weight: 950;
-  height: 64px;
+  height: 52px;
   justify-content: center;
-  width: 64px;
+  width: 52px;
 }
 
 .profile-identity {
   display: grid;
-  gap: 8px;
+  gap: 5px;
   min-width: 0;
 }
 
 .profile-identity h2 {
-  font-size: 1.55rem;
+  font-size: 1.25rem;
   margin: 0;
   overflow-wrap: anywhere;
 }
@@ -8286,13 +8286,13 @@ label {
   align-items: center;
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 6px;
 }
 
 .profile-id-row span,
 .profile-chip-row span {
   color: #667085;
-  font-size: 0.8rem;
+  font-size: 0.76rem;
   font-weight: 760;
 }
 
@@ -8318,7 +8318,7 @@ label {
   background: #f8fafc;
   border: 1px solid #e5ebf4;
   border-radius: 999px;
-  padding: 6px 10px;
+  padding: 4px 9px;
 }
 
 .profile-badge-row {
@@ -8338,8 +8338,8 @@ label {
 .profile-public {
   box-shadow: none;
   color: #087f5b;
-  gap: 8px;
-  min-height: 38px;
+  gap: 6px;
+  min-height: 34px;
 }
 
 .profile-public:hover:not(:disabled) {
@@ -8457,7 +8457,7 @@ label {
 .profile-swap-panel {
   border-top: 1px solid #d5e8ee;
   display: grid;
-  gap: 8px;
+  gap: 6px;
   margin-top: 5px;
   padding-top: 11px;
 }
@@ -10383,11 +10383,14 @@ label {
 }
 
 [data-theme="dark"] .copy-inline-button {
-  color: #9fb7ff;
+  background: transparent;
+  color: #6a9dff;
 }
 
 [data-theme="dark"] .copy-inline-button:hover:not(:disabled) {
-  color: #d4defe;
+  background: transparent;
+  color: #a8c4ff;
+  transform: none;
 }
 
 [data-theme="dark"] .profile-chip-row span,
