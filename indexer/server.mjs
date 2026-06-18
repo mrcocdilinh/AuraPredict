@@ -513,11 +513,11 @@ async function loadState() {
       recomputeTraderCounts();
       indexerRuntimeState();
       // Clear stale "unsupported" oracle proposals so the sweep re-evaluates them after code updates.
-      const unsupportedKeys = Object.keys(state.oracles || {}).filter(
-        (k) => String(state.oracles[k]?.status || "") === "unsupported"
+      const unsupportedKeys = Object.keys(state.oracleProposals || {}).filter(
+        (k) => String(state.oracleProposals[k]?.status || "") === "unsupported"
       );
       if (unsupportedKeys.length > 0) {
-        for (const k of unsupportedKeys) delete state.oracles[k];
+        for (const k of unsupportedKeys) delete state.oracleProposals[k];
         console.log(`[indexer] Cleared ${unsupportedKeys.length} stale "unsupported" oracle proposals on startup.`);
       }
       // Backfill V5 markets missing closeTime
