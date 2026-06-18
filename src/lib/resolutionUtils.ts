@@ -466,7 +466,7 @@ export function sourceConfidenceFlag(category: string | undefined, source: strin
     return {
       label: "Source weak",
       detail: "Sports markets should use an official league/tournament source or a major fixture source.",
-      severity: strict ? "bad" : "warn"
+      severity: "warn"
     };
   }
 
@@ -482,7 +482,7 @@ export function sourceConfidenceFlag(category: string | undefined, source: strin
     return {
       label: "Source weak",
       detail: "Stock markets should use a market-data or exchange source with the exact quote/rule.",
-      severity: strict ? "bad" : "warn"
+      severity: "warn"
     };
   }
 
@@ -498,14 +498,14 @@ export function sourceConfidenceFlag(category: string | undefined, source: strin
     return {
       label: "Source weak",
       detail: "Crypto price markets should use a direct market-data source.",
-      severity: strict ? "bad" : "warn"
+      severity: "warn"
     };
   }
 
   if (strict && isCryptoMarketContext(textValue) && genericSourcePath) {
     return {
       label: "Source weak",
-      detail: "Crypto markets need an exact pair, asset, or price page so Oracle can parse the observed value.",
+      detail: "Crypto markets need an exact pair or price page, not a generic homepage.",
       severity: "bad"
     };
   }
