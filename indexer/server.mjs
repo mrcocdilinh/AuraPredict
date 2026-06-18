@@ -4993,7 +4993,7 @@ async function runAutoOracleSweep() {
       if (!proposal) return true;
       if (oracleProposalNeedsRuleRefresh(proposal, market)) return true;
       if (proposal.autoProposeError) return false;
-      return ["not_ready", "ready", "error"].includes(String(proposal.status || ""));
+      return ["not_ready", "ready", "error", "unsupported"].includes(String(proposal.status || ""));
     })
     .slice(0, 5);
 
@@ -6136,7 +6136,11 @@ async function route(req, res) {
       if (req.method === "GET" && segments.length === 3) {
         let proposal = oracleState()[String(marketId)] ?? null;
         const market = state.markets[String(marketId)];
-        if (proposal && market && oracleProposalNeedsRuleRefresh(proposal, market)) {
+        const shouldClear = proposal && market && (
+          oracleProposalNeedsRuleRefresh(proposal, market) ||
+          String(proposal.status || "") === "unsupported"
+        );
+        if (shouldClear) {
           delete oracleState()[String(marketId)];
           await saveState();
           proposal = null;
