@@ -14548,6 +14548,120 @@ label {
   .market-history-panel {
     border-radius: 8px;
   }
+
+  /* ── Hide activity ticker on mobile ── */
+  .activity-ticker {
+    display: none;
+  }
+
+  /* ── Hero: compact, hide clutter ── */
+  .detail-question-panel {
+    min-height: 130px;
+  }
+
+  /* Hide Follow/Embed on mobile hero, keep Share X + Copy link */
+  .market-share-actions button:nth-child(1),
+  .market-share-actions button:nth-child(3) {
+    display: none;
+  }
+
+  /* ── Summary card: show only 3 key stats ── */
+  .detail-summary-card {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .detail-summary-card > div:nth-child(1),
+  .detail-summary-card > div:nth-child(5),
+  .detail-summary-card > div:nth-child(6) {
+    display: none;
+  }
+
+  /* ── Trade card: reorder elements for mobile UX ── */
+  .detail-trade-card,
+  .detail-public-card {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px;
+  }
+
+  /* Hide redundant YES%/NO% rows (already in hero odds strip) */
+  .detail-trade-card .detail-outcome-row {
+    display: none;
+  }
+
+  /* Reorder: YES/NO buttons → input → shortcuts → submit → payout → balance */
+  .detail-trade-card .trade-side-buttons {
+    order: 1;
+  }
+
+  .detail-trade-card .trade-input-row {
+    order: 2;
+  }
+
+  .detail-trade-card .stake-shortcuts {
+    order: 3;
+  }
+
+  .detail-trade-card .stake-slider {
+    order: 4;
+  }
+
+  .detail-trade-card .trade-submit-button {
+    order: 5;
+  }
+
+  .detail-trade-card .payout-preview {
+    order: 6;
+  }
+
+  .detail-trade-card .position-chip {
+    order: 7;
+  }
+
+  .detail-trade-card .trade-balance-line {
+    order: 8;
+  }
+
+  .detail-trade-card .trade-fund-row {
+    order: 9;
+  }
+
+  .detail-trade-card .market-swap-panel {
+    order: 10;
+  }
+
+  /* YES/NO buttons: bigger, full width side by side */
+  .detail-trade-card .trade-side-buttons {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  .detail-trade-card .trade-side-buttons button {
+    min-height: 52px;
+    font-size: 1rem;
+    font-weight: 700;
+    border-radius: 10px;
+  }
+
+  /* Amount input: larger touch target */
+  .detail-trade-card .trade-input-row input {
+    font-size: 1.1rem;
+    min-height: 52px;
+    padding: 0 14px;
+  }
+
+  /* Submit button: more prominent */
+  .trade-submit-button {
+    font-size: 1rem;
+    min-height: 52px;
+  }
+
+  /* Stake shortcuts: 4 equal columns */
+  .detail-trade-card .stake-shortcuts {
+    grid-template-columns: repeat(4, 1fr);
+  }
 }
 
 @media (max-width: 420px) {
