@@ -14326,9 +14326,17 @@ label {
     padding: 2px 4px;
   }
 
-  /* Adjust app shell padding when market detail is shown (both nav bars) */
+  /* When market detail is open: hide main nav, drop market tabs to bottom */
   .app-shell.has-market-detail {
-    padding-bottom: calc(140px + env(safe-area-inset-bottom));
+    padding-bottom: calc(68px + env(safe-area-inset-bottom));
+  }
+
+  .app-shell.has-market-detail .mobile-bottom-nav {
+    display: none;
+  }
+
+  .app-shell.has-market-detail .mobile-market-tabs-bottom {
+    bottom: env(safe-area-inset-bottom, 0px);
   }
 
   /* Hide old sticky top tabs */
