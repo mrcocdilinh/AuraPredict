@@ -6110,6 +6110,7 @@ export default function App() {
 
   const assistantMarkets = useMemo<AssistantMarketContext[]>(() => {
     const nowSeconds = Math.floor(Date.now() / 1000);
+    const D = 1e18;
     return markets
       .filter((market) => !market.isDraft)
       .map((market) => {
@@ -6117,6 +6118,11 @@ export default function App() {
         const yesPercent = total > 0n ? Number((market.yesPool * 10000n) / total) / 100 : 50;
         const status =
           market.outcome !== Outcome.Unresolved ? "resolved" : market.closeTime > nowSeconds ? "live" : "pending";
+        const myYes = market.yesPosition > 0n ? Math.round(Number(market.yesPosition) / D * 100) / 100 : undefined;
+        const myNo  = market.noPosition  > 0n ? Math.round(Number(market.noPosition)  / D * 100) / 100 : undefined;
+        const myPayout = market.potentialPayout > 0n && !market.claimed
+          ? Math.round(Number(market.potentialPayout) / D * 100) / 100
+          : undefined;
         return {
           id: market.id,
           question: market.question,
@@ -6126,7 +6132,10 @@ export default function App() {
           noPercent: Math.round((100 - yesPercent) * 10) / 10,
           closeIso: new Date(market.closeTime * 1000).toISOString(),
           outcome: market.outcome === Outcome.Yes ? "YES" : market.outcome === Outcome.No ? "NO" : "Unresolved",
-          claimable: market.potentialPayout > 0n && !market.claimed
+          claimable: market.potentialPayout > 0n && !market.claimed,
+          ...(myYes !== undefined && { myYes }),
+          ...(myNo  !== undefined && { myNo }),
+          ...(myPayout !== undefined && { myPayout })
         };
       });
   }, [markets]);

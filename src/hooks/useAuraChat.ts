@@ -28,7 +28,7 @@ export function useAuraChat({
   onAction
 }: {
   account: string;
-  markets: { id: number; question: string; category: string; status: string; yesPercent: number; noPercent: number; closeIso: string; outcome: string; claimable: boolean }[];
+  markets: { id: number; question: string; category: string; status: string; yesPercent: number; noPercent: number; closeIso: string; outcome: string; claimable: boolean; myYes?: number; myNo?: number; myPayout?: number }[];
   onAction: (action: AssistantAction) => void;
 }) {
   const [messages, setMessages] = useState<AssistantMessage[]>(loadHistory);

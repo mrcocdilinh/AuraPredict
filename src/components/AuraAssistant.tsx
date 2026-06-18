@@ -12,6 +12,9 @@ export type AssistantMarketContext = {
   closeIso: string;
   outcome: string;
   claimable: boolean;
+  myYes?: number;       // USDC staked YES by current user
+  myNo?: number;        // USDC staked NO by current user
+  myPayout?: number;    // claimable payout in USDC
 };
 
 const SUGGESTIONS = [
