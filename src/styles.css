@@ -10813,6 +10813,41 @@ label {
   }
 }
 
+/* ─── Tablet 721–1024px ─────────────────────────────────────── */
+@media (min-width: 721px) and (max-width: 1024px) {
+  .market-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .market-grid-list .market-card {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .detail-body-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .resolution-report-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .leaderboard-row span:nth-child(5),
+  .leaderboard-row span:nth-child(6) {
+    display: none;
+  }
+
+  .tab,
+  .chart-window-tabs button,
+  .hero-window-tabs button {
+    min-height: 40px;
+  }
+
+  .market-card-image {
+    min-height: 140px;
+  }
+}
+/* ─────────────────────────────────────────────────────────────── */
+
 @media (max-width: 840px) {
   .landing-page {
     padding: 10px;
@@ -11139,7 +11174,7 @@ label {
   }
 
   .nav-tabs .tab {
-    min-height: 34px;
+    min-height: 40px;
     padding: 0 10px;
     white-space: nowrap;
   }
@@ -11176,15 +11211,18 @@ label {
 
   .topbar {
     align-items: center;
-    background: rgba(8, 11, 25, 0.96);
-    border-radius: 0 0 8px 8px;
+    background: rgba(8, 11, 25, 0.97);
+    backdrop-filter: blur(20px);
+    border-radius: 0 0 10px 10px;
     border-width: 0 0 1px;
     display: grid;
     gap: 8px;
     grid-template-columns: minmax(0, auto) minmax(132px, 1fr);
     margin: 0 -8px;
     padding: 8px 10px 10px;
-    position: static;
+    position: sticky;
+    top: 0;
+    z-index: 80;
   }
 
   .brand {
@@ -11232,8 +11270,8 @@ label {
     border-radius: 8px;
     color: #aebbd0;
     flex: 0 0 auto;
-    font-size: 0.8rem;
-    min-height: 34px;
+    font-size: 0.82rem;
+    min-height: 40px;
     padding: 0 14px;
     width: auto;
   }
@@ -11829,7 +11867,7 @@ label {
   .category-pill,
   .chart-window-tabs button,
   .hero-window-tabs button {
-    min-height: 38px;
+    min-height: 44px;
     white-space: nowrap;
   }
 
@@ -11840,7 +11878,7 @@ label {
   }
 
   .market-search input {
-    min-height: 40px;
+    min-height: 44px;
   }
 
   .wallet-panel {
@@ -12980,6 +13018,42 @@ label {
   stroke: rgba(85, 126, 164, 0.24);
 }
 
+@media (max-width: 720px) {
+  [data-theme="light"] .mobile-bottom-nav {
+    background: rgba(248, 251, 255, 0.97);
+    border-top-color: rgba(180, 206, 230, 0.7);
+    box-shadow: 0 -8px 28px rgba(30, 60, 100, 0.1);
+  }
+
+  [data-theme="light"] .mobile-bottom-nav button {
+    color: #7a94b0;
+  }
+
+  [data-theme="light"] .mobile-bottom-nav button.active {
+    color: #2f6bff;
+  }
+
+  [data-theme="light"] .mobile-market-tabs-bottom {
+    background: rgba(248, 251, 255, 0.97);
+    border-top-color: rgba(180, 206, 230, 0.7);
+    box-shadow: 0 -6px 20px rgba(30, 60, 100, 0.08);
+  }
+
+  [data-theme="light"] .mobile-market-tabs-bottom button {
+    color: #7a94b0;
+  }
+
+  [data-theme="light"] .mobile-market-tabs-bottom button.active {
+    color: #2f6bff;
+  }
+
+  [data-theme="light"] .topbar {
+    background: rgba(248, 251, 255, 0.97);
+    border-bottom-color: rgba(180, 206, 230, 0.6);
+    box-shadow: 0 8px 28px rgba(30, 60, 100, 0.08);
+  }
+}
+
 [data-theme="light"] .hero-activity-tabs button,
 [data-theme="light"] .chart-window-tabs button {
   background: #eef8ff;
@@ -13611,52 +13685,53 @@ label {
     align-items: center;
     background: transparent;
     border: 0;
-    border-radius: 8px;
+    border-radius: 10px;
+    border-top: 2px solid transparent;
     box-shadow: none;
     color: #7f8ba3;
     display: grid;
-    font-size: 0.66rem;
+    font-size: 0.74rem;
     font-weight: 900;
-    gap: 3px;
+    gap: 4px;
     justify-items: center;
     letter-spacing: 0;
-    min-height: 52px;
+    min-height: 56px;
     min-width: 0;
-    padding: 5px 2px;
+    padding: 6px 4px;
     position: relative;
+    transition: color 0.15s ease;
   }
 
   .mobile-bottom-nav button.active {
-    background:
-      radial-gradient(circle at 50% 0%, rgba(47, 107, 255, 0.18), transparent 55%),
-      rgba(47, 107, 255, 0.08);
+    border-top-color: #2f6bff;
     color: #2f6bff;
   }
 
   .mobile-bottom-nav svg {
     fill: none;
-    height: 20px;
+    height: 22px;
     stroke: currentColor;
     stroke-linecap: round;
     stroke-linejoin: round;
     stroke-width: 2;
-    width: 20px;
+    width: 22px;
   }
 
   .mobile-bottom-nav b {
     align-items: center;
     background: #2f6bff;
     border-radius: 999px;
-    color: #04101f;
+    color: #fff;
     display: inline-flex;
-    font-size: 0.6rem;
-    height: 17px;
+    font-size: 0.62rem;
+    font-weight: 900;
+    height: 18px;
     justify-content: center;
-    min-width: 17px;
+    min-width: 18px;
     padding: 0 5px;
     position: absolute;
-    right: 12px;
-    top: 4px;
+    right: 10%;
+    top: 2px;
   }
 
   .activity-ticker {
@@ -13695,7 +13770,7 @@ label {
 
   .market-card-image,
   .compact-market-visual {
-    min-height: 112px;
+    min-height: 124px;
   }
 
   .market-detail-view {
@@ -13724,9 +13799,9 @@ label {
   }
 
   .market-share-actions button {
-    font-size: 0.7rem;
-    min-height: 32px;
-    padding: 0 8px;
+    font-size: 0.74rem;
+    min-height: 40px;
+    padding: 0 10px;
   }
 
   .copy-market-button {
@@ -13822,7 +13897,7 @@ label {
 
   .mobile-market-tabs small {
     display: block;
-    font-size: 0.62rem;
+    font-size: 0.68rem;
     font-weight: 780;
     line-height: 1.1;
     overflow: hidden;
@@ -13982,13 +14057,13 @@ label {
   }
 
   .mobile-bottom-nav button {
-    font-size: 0.58rem;
-    min-height: 48px;
+    font-size: 0.66rem;
+    min-height: 50px;
   }
 
   .mobile-bottom-nav svg {
-    height: 18px;
-    width: 18px;
+    height: 20px;
+    width: 20px;
   }
 
   .mobile-market-tabs {
@@ -13996,7 +14071,7 @@ label {
   }
 
   .mobile-market-tabs small {
-    font-size: 0.56rem;
+    font-size: 0.62rem;
   }
 
   .chart-stat-strip,
@@ -14114,28 +14189,29 @@ label {
     align-items: center;
     background: transparent;
     border: 0;
-    border-radius: 10px;
+    border-radius: 12px;
     box-shadow: none;
     display: flex;
     flex-direction: column;
-    gap: 1px;
-    min-height: 56px;
-    min-width: 64px;
-    padding: 8px 10px;
+    gap: 2px;
+    min-height: 60px;
+    min-width: 68px;
+    padding: 8px 12px;
+    transition: background 0.15s ease;
   }
 
   .mobile-odds-yes span,
   .mobile-odds-no span {
-    font-size: 0.62rem;
+    font-size: 0.68rem;
     font-weight: 900;
-    letter-spacing: 0.04em;
-    opacity: 0.6;
+    letter-spacing: 0.05em;
+    opacity: 0.7;
     text-transform: uppercase;
   }
 
   .mobile-odds-yes strong,
   .mobile-odds-no strong {
-    font-size: 1.45rem;
+    font-size: 1.55rem;
     font-weight: 950;
     letter-spacing: -0.02em;
     line-height: 1;
@@ -14161,16 +14237,16 @@ label {
   }
 
   .mobile-odds-bar {
-    background: rgba(240, 92, 110, 0.35);
-    border-radius: 4px;
-    height: 6px;
+    background: rgba(240, 92, 110, 0.3);
+    border-radius: 6px;
+    height: 8px;
     overflow: hidden;
     width: 100%;
   }
 
   .mobile-odds-bar-yes {
-    background: #22d47b;
-    border-radius: 4px 0 0 4px;
+    background: linear-gradient(90deg, #22d47b, #1ab868);
+    border-radius: 6px 0 0 6px;
     height: 100%;
     transition: width 0.4s ease;
   }
@@ -14203,23 +14279,25 @@ label {
     background: transparent;
     border: 0;
     border-radius: 8px;
+    border-top: 2px solid transparent;
     box-shadow: none;
     color: #7f8ba3;
     display: flex;
     flex-direction: column;
-    font-size: 0.61rem;
+    font-size: 0.7rem;
     font-weight: 850;
-    gap: 3px;
+    gap: 4px;
     justify-content: center;
     letter-spacing: 0.01em;
-    min-height: 48px;
+    min-height: 52px;
     min-width: 0;
     padding: 4px 2px;
     position: relative;
+    transition: color 0.15s ease;
   }
 
   .mobile-market-tabs-bottom button.active {
-    background: rgba(47, 107, 255, 0.1);
+    border-top-color: #2f6bff;
     color: #2f6bff;
   }
 
@@ -14294,13 +14372,13 @@ label {
   }
 
   .mobile-market-tabs-bottom button {
-    font-size: 0.57rem;
-    min-height: 44px;
+    font-size: 0.64rem;
+    min-height: 48px;
   }
 
   .mobile-market-tabs-bottom button svg {
-    height: 18px;
-    width: 18px;
+    height: 19px;
+    width: 19px;
   }
 
   .mobile-odds-yes strong,
