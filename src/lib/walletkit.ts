@@ -21,8 +21,8 @@ export const appKitModal = createAppKit({
   metadata: {
     name: "AuraPredict",
     description: "Prediction markets on Arc Testnet",
-    url: "https://aurapredict.io",
-    icons: ["https://aurapredict.io/logo.png"]
+    url: "https://app.aurapredict.xyz",
+    icons: ["https://app.aurapredict.xyz/aurapredict-logo-192.png"]
   },
   features: {
     email: false,

@@ -60,23 +60,26 @@ export function indexedActivityToItem(activity: IndexedActivity, marketsById: Ma
 
 export function mergeMarketState(incoming: MarketView, current?: MarketView) {
   if (!current) return incoming;
+  // The indexer reads the chain authoritatively, so its outcome always wins.
+  // We only keep locally-known proposal details while both sides agree the
+  // market is still Unresolved and our proposal data is fresher (avoids a
+  // brief flicker right after the user proposes, before the indexer catches up).
+  // We must NOT preserve a local *resolved* outcome over an Unresolved indexer
+  // value — doing so permanently pins stale resolutions into the cache.
   const shouldPreserveLocalProposal =
     current.outcome === Outcome.Unresolved &&
     incoming.outcome === Outcome.Unresolved &&
     current.proposedAt > incoming.proposedAt;
-  const shouldPreserveLocalResolution =
-    current.outcome !== Outcome.Unresolved && incoming.outcome === Outcome.Unresolved;
 
   return {
     ...incoming,
-    ...(shouldPreserveLocalProposal || shouldPreserveLocalResolution
+    ...(shouldPreserveLocalProposal
       ? {
           proposedOutcome: current.proposedOutcome,
           proposedAt: current.proposedAt,
           disputeDeadline: current.disputeDeadline,
           disputed: current.disputed,
-          disputer: current.disputer,
-          outcome: current.outcome
+          disputer: current.disputer
         }
       : {}),
     yesPosition: current.yesPosition,
