@@ -758,18 +758,26 @@ export function defaultSourceByContext(category?: string, text?: string) {
   const cat = (category || "").toLowerCase();
   const content = (text || "").toLowerCase();
   if (cat === "crypto" || /\bbtc\b|\beth\b|token|price|usdt|usdc|coin|coingecko|binance|coinbase/.test(content)) {
-    return "https://www.coingecko.com";
+    if (/\bbtc\b|bitcoin/.test(content)) return "https://coinmarketcap.com/currencies/bitcoin/";
+    if (/\beth\b|ethereum/.test(content)) return "https://coinmarketcap.com/currencies/ethereum/";
+    if (/\bsol\b|solana/.test(content)) return "https://coinmarketcap.com/currencies/solana/";
+    if (/\bbnb\b/.test(content)) return "https://coinmarketcap.com/currencies/bnb/";
+    if (/\bxrp\b/.test(content)) return "https://coinmarketcap.com/currencies/xrp/";
+    if (/\bdoge\b|dogecoin/.test(content)) return "https://coinmarketcap.com/currencies/dogecoin/";
+    if (/\bavax\b|avalanche/.test(content)) return "https://coinmarketcap.com/currencies/avalanche/";
+    if (/\blink\b|chainlink/.test(content)) return "https://coinmarketcap.com/currencies/chainlink/";
+    return "https://coinmarketcap.com/";
   }
   if (cat === "sports" || /match|goal|nba|nfl|mlb|fifa|uefa|atp|wta/.test(content)) {
-    return "https://www.espn.com";
+    return "https://www.espn.com/";
   }
   if (cat === "politics" || cat === "macro" || /election|president|white house|fed|cpi|inflation|war|government|parliament/.test(content)) {
-    return "https://www.reuters.com";
+    return "https://www.reuters.com/";
   }
   if (cat === "arc" || /\barc\b|testnet|mainnet|chain/.test(content)) {
     return "https://docs.arc.io";
   }
-  return "https://www.reuters.com";
+  return "https://www.reuters.com/";
 }
 
 export function utcDateTimeInputValue(date: Date) {
