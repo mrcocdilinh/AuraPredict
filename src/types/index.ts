@@ -81,7 +81,7 @@ export type UnifiedBalanceWalletBalance = {
 
 declare global {
   interface Window {
-    ethereum?: EthereumProvider;
+    readonly ethereum?: EthereumProvider;
   }
 }
 

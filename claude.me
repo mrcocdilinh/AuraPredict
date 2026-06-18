@@ -1,0 +1,117 @@
+# AuraPredict — North Star for Development
+
+## How to Build
+
+### Prerequisites
+- Node.js 20+, npm
+- Copy `.env.example` → `.env` and fill in required keys (see Key ENV Vars below)
+
+### Daily dev
+```
+npm install          # first time
+npm run dev          # Vite dev server → http://127.0.0.1:5173
+npm run indexer      # run local indexer (separate terminal)
+```
+
+### Verify before committing
+```
+npx tsc --noEmit     # TypeScript — must be clean (zero errors)
+npx vite build       # production build — must succeed
+```
+
+### Contracts
+```
+npm run compile              # compile Hardhat contracts
+npm test                     # Hardhat unit tests
+npm run deploy:arc:v5        # deploy V5 contract to Arc Testnet
+npm run abi:v5               # regenerate ABI after contract changes
+```
+
+### Other scripts
+```
+npm run indexer:once         # one-shot indexer run (CI/staging)
+npm run oracle:backtest      # backtest oracle resolution logic
+npm run smoke:api            # smoke-test production API endpoints
+npm run test:e2e             # Playwright end-to-end tests
+```
+
+### Key ENV Vars
+| Var | What it does |
+|---|---|
+| `VITE_AURAPREDICT_V5_ADDRESS` | On-chain contract address |
+| `VITE_AURA_INDEXER_URL` | Local indexer URL (default: http://127.0.0.1:8787) |
+| `VITE_WALLETCONNECT_PROJECT_ID` | WalletConnect — required for wallet modal |
+| `VITE_MAGIC_PUBLISHABLE_KEY` | Magic.link — required for email login |
+| `GEMINI_API_KEY` / `OPENAI_API_KEY` | AI resolution oracle |
+| `PRIVATE_KEY` | Deployer wallet private key (never commit) |
+| `AURA_RESOLUTION_ADMIN_TOKEN` | Auth for resolution API |
+
+---
+
+## Stack & Tools
+
+| Layer | Tech |
+|---|---|
+| Frontend | React 18 + TypeScript (strict), Vite 5 |
+| Blockchain | Viem 2, Arc Testnet (EVM-compatible) |
+| Contracts | Hardhat + Solidity, V5 prediction market |
+| Wallet | EIP-6963 discovery, WalletConnect, Magic.link (email) |
+| Cross-chain | LI.FI SDK, Circle App Kit (USDC swaps) |
+| Indexer | Node.js custom indexer (`indexer/server.mjs`) |
+| Oracle | AI resolution (Gemini/OpenAI) + on-chain adapters |
+| Testing | Hardhat (unit), Playwright (e2e) |
+
+### Module layout (src/)
+```
+src/
+  App.tsx                  # main app (~12k lines — ongoing extraction)
+  types.ts                 # all shared TypeScript types
+  constants.ts             # all shared constants
+  contracts/               # ABIs
+  lib/
+    format.ts              # USDC formatting, address formatting
+    marketUtils.ts         # market display helpers
+    settlementUtils.ts     # V5 state, settlement, AI oracle helpers
+    resolutionUtils.ts     # resolution rule parsing, market risk flags
+    errorUtils.ts          # error helpers, chain error detection
+    swapUtils.ts           # LI.FI, Circle App Kit, unified balance
+    storage.ts             # localStorage read/write
+    chartUtils.ts          # chart helpers
+    routeUtils.ts          # URL/query param helpers
+    asyncUtils.ts          # concurrency helpers
+  hooks/
+    useWalletProviders.ts  # EIP-6963 wallet discovery
+    useCurrentTime.ts      # 1s clock
+    useTheme.ts            # dark/light theme + localStorage
+    useBodyScrollLock.ts   # modal scroll lock
+    useLocalStoragePersist.ts  # generic localStorage sync
+```
+
+---
+
+## Key Rules
+
+### From CLAUDE.md (the behavioral contract)
+
+**1. Think first, code second**
+Surface assumptions before writing. If there are multiple valid approaches, name them — don't silently pick one. If something is unclear, ask before implementing.
+
+**2. Minimum viable code**
+No extra features, no premature abstractions, no defensive code for scenarios that can't happen. If 200 lines could be 50, rewrite it.
+
+**3. Surgical edits only**
+Touch only lines required by the request. Don't clean up adjacent code, don't reformat, don't refactor things that aren't broken. Every changed line must trace to the user's request.
+
+**4. Define success before starting**
+For any non-trivial task, state: "I will do X, verified by Y." TypeScript clean + Vite build = minimum bar for any change.
+
+### Project-specific rules
+
+- **TypeScript must be clean** — `npx tsc --noEmit` zero errors before every commit
+- **Vite build must succeed** — `npx vite build` before every commit
+- **No `git add -A`** — stage specific files only; `.env` must never be committed
+- **Commit message format** — `type: short description` + Co-Authored-By footer
+- **Extracting from App.tsx** — new lib functions go in `src/lib/`, new hooks in `src/hooks/`. Remove the inline definition only after the import is wired up and TypeScript is clean
+- **V5 contract is live on Arc Testnet** — never change contract address or ABI without re-deploying and updating `VITE_AURAPREDICT_V5_ADDRESS`
+- **No comments explaining what code does** — only add a comment when the WHY is non-obvious
+- **Outcome enum** — import as value (not `import type`) when comparing `Outcome.Yes`, `Outcome.No`, etc.

@@ -347,6 +347,8 @@ import { mapWithConcurrency } from "./lib/asyncUtils";
 import { normalizeProfileUsername } from "./lib/profileUtils";
 import { stablecoinMarketAbi } from "./lib/contractUtils";
 import { useWalletState } from "./hooks/useWalletState";
+import { useAppKitBridge } from "./hooks/useAppKitBridge";
+import { appKitModal } from "./lib/walletkit";
 import {
   stablecoinSwapPairKey,
   formatSwapTolerance,
@@ -480,6 +482,8 @@ export default function App() {
     markets,
     setNotice: setNoticeText
   });
+
+  useAppKitBridge({ account, connectWallet, disconnectWallet });
   const [noticeTxHash, setNoticeTxHash] = useState<Hash | "">("");
   const [transactionPending, setTransactionPending] = useState(false);
   const [pendingMarketActions, setPendingMarketActions] = useState<Record<string, boolean>>({});
@@ -2524,7 +2528,7 @@ export default function App() {
     setWalletMenuOpen(false);
     setNotificationMenuOpen(false);
     setAuthMoreOpen(false);
-    setWalletModalOpen(true);
+    void appKitModal.open();
   }, []);
 
   const openProfile = useCallback(() => {
@@ -2915,7 +2919,7 @@ export default function App() {
   const openUnifiedBalanceModal = useCallback(() => {
     if (!account || !isAddress(account)) {
       setNotice("Connect wallet before using Unified Balance.");
-      setWalletModalOpen(true);
+      void appKitModal.open();
       return;
     }
     setWalletMenuOpen(false);
@@ -12004,129 +12008,6 @@ export default function App() {
         </div>
       )}
 
-      {walletModalOpen && (
-        <div className="modal-backdrop auth-backdrop" role="dialog" aria-modal="true" aria-label="Connect wallet">
-          <section className="modal-panel wallet-connect-modal auth-connect-modal wallet-picker-modal">
-            <header className="wallet-picker-header">
-              <button className="wallet-help-button" type="button" aria-label="Wallet help" onClick={() => window.open("https://metamask.io", "_blank")}>
-                ?
-              </button>
-              <h2>Connect Wallet</h2>
-              <button className="wallet-picker-close" type="button" onClick={() => setWalletModalOpen(false)} aria-label="Close connect wallet">
-                X
-              </button>
-            </header>
-
-            <div className="wallet-picker-list" aria-label="Wallet options">
-              {quickWalletRows.map((wallet) => (
-                <button
-                  className="wallet-picker-row"
-                  key={wallet.key}
-                  type="button"
-                  onClick={wallet.onClick}
-                  disabled={wallet.disabled}
-                >
-                  {wallet.iconSrc ? (
-                    <img className="wallet-picker-icon wallet-picker-icon-image" src={wallet.iconSrc} alt="" />
-                  ) : (
-                    <span className={`wallet-picker-icon wallet-icon-${wallet.key}`}>{wallet.icon}</span>
-                  )}
-                  <span className="wallet-picker-copy">
-                    <strong>{wallet.name}</strong>
-                    <small>{wallet.detail}</small>
-                  </span>
-                  <span className={`wallet-picker-tag ${wallet.tagTone}`}>{wallet.tag}</span>
-                  <span className="wallet-picker-chevron" aria-hidden="true">
-                    &gt;
-                  </span>
-                </button>
-              ))}
-
-              <button
-                aria-expanded={authMoreOpen}
-                className="wallet-picker-row wallet-search-row"
-                type="button"
-                onClick={() => setAuthMoreOpen((open) => !open)}
-              >
-                <span className="wallet-picker-icon wallet-icon-search">S</span>
-                <span className="wallet-picker-copy">
-                  <strong>Search Wallet</strong>
-                  <small>{extraDetectedWallets.length + WALLET_DEEP_LINKS.length}+ options</small>
-                </span>
-                <span className="wallet-picker-tag muted">160+</span>
-                <span className="wallet-picker-chevron" aria-hidden="true">
-                  &gt;
-                </span>
-              </button>
-            </div>
-
-            {authMoreOpen && (
-              <div className="auth-more-wallets wallet-picker-more">
-                {extraDetectedWallets.length > 0 && (
-                  <div>
-                    <span className="wallet-group-label">Detected wallets</span>
-                    {extraDetectedWallets.map((wallet) => (
-                      <button
-                        className="wallet-option"
-                        key={wallet.info.uuid}
-                        onClick={() => handleConnectWallet(wallet.provider)}
-                        disabled={connecting}
-                        type="button"
-                      >
-                        {wallet.info.icon ? (
-                          <img className="wallet-badge wallet-badge-image" src={wallet.info.icon} alt="" />
-                        ) : (
-                          <span className="wallet-badge">{wallet.info.name.slice(0, 1)}</span>
-                        )}
-                        <strong>{wallet.info.name}</strong>
-                        <small>Detected provider</small>
-                      </button>
-                    ))}
-                  </div>
-                )}
-                <div>
-                  <span className="wallet-group-label">Open in wallet browser</span>
-                  {WALLET_DEEP_LINKS.filter((wallet) => wallet.url).map((wallet) => (
-                    <button className="wallet-option mobile-wallet-option" key={wallet.name} type="button" onClick={() => openMobileWallet(wallet.url)}>
-                      <span className="wallet-badge">{wallet.name.slice(0, 1)}</span>
-                      <strong>{wallet.name}</strong>
-                      <small>{wallet.detail}</small>
-                    </button>
-                  ))}
-                </div>
-                <div>
-                  <span className="wallet-group-label">Recommended</span>
-                  {recommendedWallets.map((walletName) => {
-                    const detected = walletOptions.find((wallet) =>
-                      wallet.info.name.toLowerCase().includes(walletName.toLowerCase().replace(" wallet", ""))
-                    );
-
-                    return (
-                      <button
-                        className={detected ? "wallet-option" : "wallet-option disabled-wallet"}
-                        key={walletName}
-                        onClick={() => detected && handleConnectWallet(detected.provider)}
-                        disabled={connecting || !detected}
-                        type="button"
-                      >
-                        <span className="wallet-badge">{walletName.slice(0, 1)}</span>
-                        <strong>{walletName}</strong>
-                        <small>{detected ? "Detected" : "Use the wallet in-app browser"}</small>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            <div className="wallet-picker-footer">
-              <span>UX by</span>
-              <strong>AuraPredict</strong>
-
-            </div>
-          </section>
-        </div>
-      )}
 
       <footer className="site-footer">
         <section className="footer-brand">

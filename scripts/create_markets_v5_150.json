@@ -1,0 +1,2102 @@
+[
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will FIFA's official 2026 World Cup match centre list at least 3 total goals scored in matches played on 2026-06-18 UTC?",
+    "category": "Sports",
+    "resolutionSource": "https://www.fifa.com/en/tournaments/mens/worldcup/canadamexicousa2026",
+    "fallbackSource": "https://www.espn.com/soccer/scoreboard",
+    "closeTimeUtc": "2026-06-18T12:00:00Z",
+    "resolutionTimeUtc": "2026-06-19T04:00:00Z",
+    "resolutionRule": "Resolve YES if FIFA's official 2026 World Cup match centre or match report pages list matches played on 2026-06-18 UTC with a combined total of 3 or more goals after normal time plus stoppage time. Resolve NO if the listed combined total is below 3 or FIFA lists no completed World Cup matches on that UTC date. Use ESPN soccer scoreboard only if FIFA is unavailable. Resolve CANCEL only if both official and fallback sources are unavailable or internally contradictory at resolution time."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will LINK/USDT daily candle close at or above 20 USDT on Binance before the end of 2026-07-16 UTC?",
+    "category": "Crypto",
+    "resolutionSource": "https://www.binance.com/en/trade/LINK_USDT",
+    "fallbackSource": "https://www.coingecko.com/en/coins/chainlink",
+    "closeTimeUtc": "2026-07-16T23:55:00Z",
+    "resolutionTimeUtc": "2026-07-17T01:00:00Z",
+    "resolutionRule": "Resolve YES if Binance LINK/USDT daily candle for 2026-07-16 UTC closes greater than or equal to 20 USDT. Resolve NO if the observed Binance value is below 20. Use CoinGecko LINK USD market data only if Binance LINK/USDT is unavailable. Resolve CANCEL only if both sources are unavailable or do not clearly show the required UTC value."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will MicroStrategy (MSTR) official regular-market closing price be at or above 1800.00 USD on 2026-08-14?",
+    "category": "Stocks",
+    "resolutionSource": "https://finance.yahoo.com/quote/MSTR/",
+    "fallbackSource": "https://www.nasdaq.com/market-activity/stocks/mstr",
+    "closeTimeUtc": "2026-08-14T20:55:00Z",
+    "resolutionTimeUtc": "2026-08-14T22:30:00Z",
+    "resolutionRule": "Resolve YES if Yahoo Finance reports the official regular-market closing price for MicroStrategy (MSTR) on 2026-08-14 as greater than or equal to 1800.00 USD. Resolve NO if the official close is below 1800.00 USD. Use Nasdaq only if Yahoo Finance is unavailable. Ignore pre-market, after-hours, intraday, adjusted close, and analyst target prices. Resolve CANCEL only if the stock/ETF is halted for the full regular session or both sources fail to publish a clear official close by resolution time."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will NOAA report any Atlantic tropical storm named before August 15, 2026 - check 3?",
+    "category": "Weather",
+    "resolutionSource": "https://www.nhc.noaa.gov/",
+    "fallbackSource": "https://www.noaa.gov/",
+    "closeTimeUtc": "2026-08-15T23:00:00Z",
+    "resolutionTimeUtc": "2026-08-16T03:00:00Z",
+    "resolutionRule": "Resolve YES if NOAA National Hurricane Center advisories list at least one named Atlantic tropical storm or hurricane with formation date before 2026-08-15 23:00 UTC. Resolve NO if none are listed. Resolve CANCEL only if NOAA NHC is unavailable."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will XRP/USDT trade at or above 3 USDT on Binance before the end of 2026-06-30 UTC?",
+    "category": "Crypto",
+    "resolutionSource": "https://www.binance.com/en/trade/XRP_USDT",
+    "fallbackSource": "https://www.coingecko.com/en/coins/xrp",
+    "closeTimeUtc": "2026-06-30T23:55:00Z",
+    "resolutionTimeUtc": "2026-07-01T01:00:00Z",
+    "resolutionRule": "Resolve YES if Binance XRP/USDT 1-minute or daily market data shows any traded price greater than or equal to 3 USDT at any time from 00:00:00 UTC through 23:59:59 UTC on 2026-06-30. Resolve NO if the observed Binance value is below 3. Use CoinGecko XRP USD market data only if Binance XRP/USDT is unavailable. Resolve CANCEL only if both sources are unavailable or do not clearly show the required UTC value."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will Alphabet Class A (GOOGL) official regular-market closing price be at or above 200.00 USD on 2026-08-05?",
+    "category": "Stocks",
+    "resolutionSource": "https://finance.yahoo.com/quote/GOOGL/",
+    "fallbackSource": "https://www.nasdaq.com/market-activity/stocks/googl",
+    "closeTimeUtc": "2026-08-05T20:55:00Z",
+    "resolutionTimeUtc": "2026-08-05T22:30:00Z",
+    "resolutionRule": "Resolve YES if Yahoo Finance reports the official regular-market closing price for Alphabet Class A (GOOGL) on 2026-08-05 as greater than or equal to 200.00 USD. Resolve NO if the official close is below 200.00 USD. Use Nasdaq only if Yahoo Finance is unavailable. Ignore pre-market, after-hours, intraday, adjusted close, and analyst target prices. Resolve CANCEL only if the stock/ETF is halted for the full regular session or both sources fail to publish a clear official close by resolution time."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will Apple publish at least one Newsroom post mentioning iPhone before July 31, 2026 - check 3?",
+    "category": "Technology",
+    "resolutionSource": "https://www.apple.com/newsroom/",
+    "fallbackSource": "https://www.apple.com/",
+    "closeTimeUtc": "2026-07-31T23:00:00Z",
+    "resolutionTimeUtc": "2026-08-01T02:00:00Z",
+    "resolutionRule": "Resolve YES if Apple Newsroom publishes at least one post dated on or before 2026-07-31 UTC that includes the word iPhone in the title or body. Resolve NO otherwise. Resolve CANCEL only if Apple Newsroom is unavailable."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will FIFA's official 2026 World Cup match centre list at least 1 clean-sheet wins on 2026-06-27 UTC?",
+    "category": "Sports",
+    "resolutionSource": "https://www.fifa.com/en/tournaments/mens/worldcup/canadamexicousa2026",
+    "fallbackSource": "https://www.espn.com/soccer/scoreboard",
+    "closeTimeUtc": "2026-06-27T12:00:00Z",
+    "resolutionTimeUtc": "2026-06-28T04:00:00Z",
+    "resolutionRule": "Resolve YES if FIFA's official 2026 World Cup match centre or match report pages list at least 1 completed matches played on 2026-06-27 UTC where the winning team conceded zero goals. Resolve NO if fewer than 1 such matches are listed, including if no completed World Cup match exists on that UTC date. Use ESPN only if FIFA is unavailable. Resolve CANCEL only if both sources are unavailable or contradictory."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will Apple (AAPL) official regular-market closing price be at or above 220.00 USD on 2026-07-27?",
+    "category": "Stocks",
+    "resolutionSource": "https://finance.yahoo.com/quote/AAPL/",
+    "fallbackSource": "https://www.nasdaq.com/market-activity/stocks/aapl",
+    "closeTimeUtc": "2026-07-27T20:55:00Z",
+    "resolutionTimeUtc": "2026-07-27T22:30:00Z",
+    "resolutionRule": "Resolve YES if Yahoo Finance reports the official regular-market closing price for Apple (AAPL) on 2026-07-27 as greater than or equal to 220.00 USD. Resolve NO if the official close is below 220.00 USD. Use Nasdaq only if Yahoo Finance is unavailable. Ignore pre-market, after-hours, intraday, adjusted close, and analyst target prices. Resolve CANCEL only if the stock/ETF is halted for the full regular session or both sources fail to publish a clear official close by resolution time."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will Coinbase publish at least one official blog post mentioning Base before August 1, 2026 - check 2?",
+    "category": "Crypto",
+    "resolutionSource": "https://www.coinbase.com/blog",
+    "fallbackSource": "https://base.org/blog",
+    "closeTimeUtc": "2026-07-31T23:00:00Z",
+    "resolutionTimeUtc": "2026-08-01T02:00:00Z",
+    "resolutionRule": "Resolve YES if Coinbase official blog publishes at least one post dated before 2026-08-01 UTC that mentions Base in the title or body. Resolve NO otherwise. Use Base blog only if Coinbase blog is unavailable. Resolve CANCEL only if both sources are unavailable."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will FIFA's official 2026 World Cup match centre list at least 1 matches with both teams scoring on 2026-06-23 UTC?",
+    "category": "Sports",
+    "resolutionSource": "https://www.fifa.com/en/tournaments/mens/worldcup/canadamexicousa2026",
+    "fallbackSource": "https://www.espn.com/soccer/scoreboard",
+    "closeTimeUtc": "2026-06-23T12:00:00Z",
+    "resolutionTimeUtc": "2026-06-24T04:00:00Z",
+    "resolutionRule": "Resolve YES if FIFA's official 2026 World Cup match centre or match report pages list at least 1 completed matches played on 2026-06-23 UTC where each team scored at least one goal. Resolve NO if fewer than 1 such matches are listed, including if no completed World Cup match is listed for that UTC date. Use ESPN soccer scoreboard only if FIFA is unavailable. Resolve CANCEL only if both sources are unavailable or contradictory."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will Netflix (NFLX) official regular-market closing price be at or above 1050.00 USD on 2026-07-17?",
+    "category": "Stocks",
+    "resolutionSource": "https://finance.yahoo.com/quote/NFLX/",
+    "fallbackSource": "https://www.nasdaq.com/market-activity/stocks/nflx",
+    "closeTimeUtc": "2026-07-17T20:55:00Z",
+    "resolutionTimeUtc": "2026-07-17T22:30:00Z",
+    "resolutionRule": "Resolve YES if Yahoo Finance reports the official regular-market closing price for Netflix (NFLX) on 2026-07-17 as greater than or equal to 1050.00 USD. Resolve NO if the official close is below 1050.00 USD. Use Nasdaq only if Yahoo Finance is unavailable. Ignore pre-market, after-hours, intraday, adjusted close, and analyst target prices. Resolve CANCEL only if the stock/ETF is halted for the full regular session or both sources fail to publish a clear official close by resolution time."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will the White House publish at least 20 official statements or releases during July 2026 - check 2?",
+    "category": "Politics",
+    "resolutionSource": "https://www.whitehouse.gov/briefing-room/",
+    "fallbackSource": "https://www.whitehouse.gov/",
+    "closeTimeUtc": "2026-07-31T23:00:00Z",
+    "resolutionTimeUtc": "2026-08-01T03:00:00Z",
+    "resolutionRule": "Resolve YES if the White House Briefing Room lists at least 20 official posts dated from 2026-07-01 through 2026-07-31 UTC. Resolve NO if fewer than 20 are listed. Resolve CANCEL only if the source is unavailable."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will FIFA's official 2026 World Cup match centre list at least 5 matches ending in a draw after normal time on 2026-06-19 UTC?",
+    "category": "Sports",
+    "resolutionSource": "https://www.fifa.com/en/tournaments/mens/worldcup/canadamexicousa2026",
+    "fallbackSource": "https://www.espn.com/soccer/scoreboard",
+    "closeTimeUtc": "2026-06-19T12:00:00Z",
+    "resolutionTimeUtc": "2026-06-20T04:00:00Z",
+    "resolutionRule": "Resolve YES if FIFA's official 2026 World Cup match centre or match report pages list at least 5 completed matches played on 2026-06-19 UTC whose score is tied after normal time plus stoppage time. For knockout matches, use the score before extra time and penalties. Resolve NO if fewer than 5 such matches are listed, including if no completed World Cup match exists on that UTC date. Use ESPN only if FIFA is unavailable. Resolve CANCEL only if both sources are unavailable or contradictory."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will Meta Platforms (META) official regular-market closing price be at or above 640.00 USD on 2026-07-08?",
+    "category": "Stocks",
+    "resolutionSource": "https://finance.yahoo.com/quote/META/",
+    "fallbackSource": "https://www.nasdaq.com/market-activity/stocks/meta",
+    "closeTimeUtc": "2026-07-08T20:55:00Z",
+    "resolutionTimeUtc": "2026-07-08T22:30:00Z",
+    "resolutionRule": "Resolve YES if Yahoo Finance reports the official regular-market closing price for Meta Platforms (META) on 2026-07-08 as greater than or equal to 640.00 USD. Resolve NO if the official close is below 640.00 USD. Use Nasdaq only if Yahoo Finance is unavailable. Ignore pre-market, after-hours, intraday, adjusted close, and analyst target prices. Resolve CANCEL only if the stock/ETF is halted for the full regular session or both sources fail to publish a clear official close by resolution time."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will the Arc Testnet status page report any incident lasting 30 minutes or longer before July 15, 2026 - check 2?",
+    "category": "Arc",
+    "resolutionSource": "https://status.arc.network/",
+    "fallbackSource": "https://arc.network/",
+    "closeTimeUtc": "2026-07-15T23:00:00Z",
+    "resolutionTimeUtc": "2026-07-16T02:00:00Z",
+    "resolutionRule": "Resolve YES if Arc official status page lists any incident between market creation and 2026-07-15 23:00 UTC whose duration is 30 minutes or longer. Resolve NO if no such incident is listed. Resolve CANCEL only if the status page is unavailable."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will FIFA's official 2026 World Cup match centre list at least 1 clean-sheet wins on 2026-07-17 UTC?",
+    "category": "Sports",
+    "resolutionSource": "https://www.fifa.com/en/tournaments/mens/worldcup/canadamexicousa2026",
+    "fallbackSource": "https://www.espn.com/soccer/scoreboard",
+    "closeTimeUtc": "2026-07-17T12:00:00Z",
+    "resolutionTimeUtc": "2026-07-18T04:00:00Z",
+    "resolutionRule": "Resolve YES if FIFA's official 2026 World Cup match centre or match report pages list at least 1 completed matches played on 2026-07-17 UTC where the winning team conceded zero goals. Resolve NO if fewer than 1 such matches are listed, including if no completed World Cup match exists on that UTC date. Use ESPN only if FIFA is unavailable. Resolve CANCEL only if both sources are unavailable or contradictory."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will NVIDIA (NVDA) official regular-market closing price be at or above 150.00 USD on 2026-06-26?",
+    "category": "Stocks",
+    "resolutionSource": "https://finance.yahoo.com/quote/NVDA/",
+    "fallbackSource": "https://www.nasdaq.com/market-activity/stocks/nvda",
+    "closeTimeUtc": "2026-06-26T20:55:00Z",
+    "resolutionTimeUtc": "2026-06-26T22:30:00Z",
+    "resolutionRule": "Resolve YES if Yahoo Finance reports the official regular-market closing price for NVIDIA (NVDA) on 2026-06-26 as greater than or equal to 150.00 USD. Resolve NO if the official close is below 150.00 USD. Use Nasdaq only if Yahoo Finance is unavailable. Ignore pre-market, after-hours, intraday, adjusted close, and analyst target prices. Resolve CANCEL only if the stock/ETF is halted for the full regular session or both sources fail to publish a clear official close by resolution time."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will NOAA report any Atlantic tropical storm named before August 15, 2026?",
+    "category": "Weather",
+    "resolutionSource": "https://www.nhc.noaa.gov/",
+    "fallbackSource": "https://www.noaa.gov/",
+    "closeTimeUtc": "2026-08-15T23:00:00Z",
+    "resolutionTimeUtc": "2026-08-16T03:00:00Z",
+    "resolutionRule": "Resolve YES if NOAA National Hurricane Center advisories list at least one named Atlantic tropical storm or hurricane with formation date before 2026-08-15 23:00 UTC. Resolve NO if none are listed. Resolve CANCEL only if NOAA NHC is unavailable."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will FIFA's official 2026 World Cup match centre list at least 1 matches with both teams scoring on 2026-07-13 UTC?",
+    "category": "Sports",
+    "resolutionSource": "https://www.fifa.com/en/tournaments/mens/worldcup/canadamexicousa2026",
+    "fallbackSource": "https://www.espn.com/soccer/scoreboard",
+    "closeTimeUtc": "2026-07-13T12:00:00Z",
+    "resolutionTimeUtc": "2026-07-14T04:00:00Z",
+    "resolutionRule": "Resolve YES if FIFA's official 2026 World Cup match centre or match report pages list at least 1 completed matches played on 2026-07-13 UTC where each team scored at least one goal. Resolve NO if fewer than 1 such matches are listed, including if no completed World Cup match is listed for that UTC date. Use ESPN soccer scoreboard only if FIFA is unavailable. Resolve CANCEL only if both sources are unavailable or contradictory."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will SOL/USDT daily candle close at or above 150 USDT on Binance before the end of 2026-08-09 UTC?",
+    "category": "Crypto",
+    "resolutionSource": "https://www.binance.com/en/trade/SOL_USDT",
+    "fallbackSource": "https://www.coingecko.com/en/coins/solana",
+    "closeTimeUtc": "2026-08-09T23:55:00Z",
+    "resolutionTimeUtc": "2026-08-10T01:00:00Z",
+    "resolutionRule": "Resolve YES if Binance SOL/USDT daily candle for 2026-08-09 UTC closes greater than or equal to 150 USDT. Resolve NO if the observed Binance value is below 150. Use CoinGecko SOL USD market data only if Binance SOL/USDT is unavailable. Resolve CANCEL only if both sources are unavailable or do not clearly show the required UTC value."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will Apple publish at least one Newsroom post mentioning iPhone before July 31, 2026?",
+    "category": "Technology",
+    "resolutionSource": "https://www.apple.com/newsroom/",
+    "fallbackSource": "https://www.apple.com/",
+    "closeTimeUtc": "2026-07-31T23:00:00Z",
+    "resolutionTimeUtc": "2026-08-01T02:00:00Z",
+    "resolutionRule": "Resolve YES if Apple Newsroom publishes at least one post dated on or before 2026-07-31 UTC that includes the word iPhone in the title or body. Resolve NO otherwise. Resolve CANCEL only if Apple Newsroom is unavailable."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will FIFA's official 2026 World Cup match centre list at least 5 matches ending in a draw after normal time on 2026-07-09 UTC?",
+    "category": "Sports",
+    "resolutionSource": "https://www.fifa.com/en/tournaments/mens/worldcup/canadamexicousa2026",
+    "fallbackSource": "https://www.espn.com/soccer/scoreboard",
+    "closeTimeUtc": "2026-07-09T12:00:00Z",
+    "resolutionTimeUtc": "2026-07-10T04:00:00Z",
+    "resolutionRule": "Resolve YES if FIFA's official 2026 World Cup match centre or match report pages list at least 5 completed matches played on 2026-07-09 UTC whose score is tied after normal time plus stoppage time. For knockout matches, use the score before extra time and penalties. Resolve NO if fewer than 5 such matches are listed, including if no completed World Cup match exists on that UTC date. Use ESPN only if FIFA is unavailable. Resolve CANCEL only if both sources are unavailable or contradictory."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will UNI/USDT daily candle close at or above 15 USDT on Binance before the end of 2026-07-24 UTC?",
+    "category": "Crypto",
+    "resolutionSource": "https://www.binance.com/en/trade/UNI_USDT",
+    "fallbackSource": "https://www.coingecko.com/en/coins/uniswap",
+    "closeTimeUtc": "2026-07-24T23:55:00Z",
+    "resolutionTimeUtc": "2026-07-25T01:00:00Z",
+    "resolutionRule": "Resolve YES if Binance UNI/USDT daily candle for 2026-07-24 UTC closes greater than or equal to 15 USDT. Resolve NO if the observed Binance value is below 15. Use CoinGecko UNI USD market data only if Binance UNI/USDT is unavailable. Resolve CANCEL only if both sources are unavailable or do not clearly show the required UTC value."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will the U.S. BEA advance estimate report Q2 2026 real GDP annualized growth at or above 1.5% - check 4?",
+    "category": "Macro",
+    "resolutionSource": "https://www.bea.gov/data/gdp/gross-domestic-product",
+    "fallbackSource": "https://fred.stlouisfed.org/series/A191RL1Q225SBEA",
+    "closeTimeUtc": "2026-07-30T12:25:00Z",
+    "resolutionTimeUtc": "2026-07-30T15:00:00Z",
+    "resolutionRule": "Resolve YES if the first BEA advance estimate for Q2 2026 real GDP reports annualized growth greater than or equal to 1.5%. Resolve NO if it is below 1.5%. Use FRED only if BEA is unavailable. Resolve CANCEL only if no official advance estimate is published by resolution time."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will FIFA's official 2026 World Cup match centre list at least 1 clean-sheet wins on 2026-07-05 UTC?",
+    "category": "Sports",
+    "resolutionSource": "https://www.fifa.com/en/tournaments/mens/worldcup/canadamexicousa2026",
+    "fallbackSource": "https://www.espn.com/soccer/scoreboard",
+    "closeTimeUtc": "2026-07-05T12:00:00Z",
+    "resolutionTimeUtc": "2026-07-06T04:00:00Z",
+    "resolutionRule": "Resolve YES if FIFA's official 2026 World Cup match centre or match report pages list at least 1 completed matches played on 2026-07-05 UTC where the winning team conceded zero goals. Resolve NO if fewer than 1 such matches are listed, including if no completed World Cup match exists on that UTC date. Use ESPN only if FIFA is unavailable. Resolve CANCEL only if both sources are unavailable or contradictory."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will BNB/USDT trade at or above 950 USDT on Binance before the end of 2026-07-08 UTC?",
+    "category": "Crypto",
+    "resolutionSource": "https://www.binance.com/en/trade/BNB_USDT",
+    "fallbackSource": "https://www.coingecko.com/en/coins/bnb",
+    "closeTimeUtc": "2026-07-08T23:55:00Z",
+    "resolutionTimeUtc": "2026-07-09T01:00:00Z",
+    "resolutionRule": "Resolve YES if Binance BNB/USDT 1-minute or daily market data shows any traded price greater than or equal to 950 USDT at any time from 00:00:00 UTC through 23:59:59 UTC on 2026-07-08. Resolve NO if the observed Binance value is below 950. Use CoinGecko BNB USD market data only if Binance BNB/USDT is unavailable. Resolve CANCEL only if both sources are unavailable or do not clearly show the required UTC value."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will the U.S. EIA weekly commercial crude oil inventory change report a draw of at least 2.0 million barrels for the week released on July 8, 2026 - check 3?",
+    "category": "Macro",
+    "resolutionSource": "https://www.eia.gov/petroleum/supply/weekly/",
+    "fallbackSource": "https://www.eia.gov/",
+    "closeTimeUtc": "2026-07-08T14:25:00Z",
+    "resolutionTimeUtc": "2026-07-08T17:00:00Z",
+    "resolutionRule": "Resolve YES if EIA weekly petroleum status report released on July 8, 2026 reports U.S. commercial crude oil inventories excluding SPR decreased by 2.0 million barrels or more from the prior week. Resolve NO otherwise. Resolve CANCEL only if EIA does not publish the weekly report by resolution time."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will FIFA's official 2026 World Cup match centre list at least 1 matches with both teams scoring on 2026-07-01 UTC?",
+    "category": "Sports",
+    "resolutionSource": "https://www.fifa.com/en/tournaments/mens/worldcup/canadamexicousa2026",
+    "fallbackSource": "https://www.espn.com/soccer/scoreboard",
+    "closeTimeUtc": "2026-07-01T12:00:00Z",
+    "resolutionTimeUtc": "2026-07-02T04:00:00Z",
+    "resolutionRule": "Resolve YES if FIFA's official 2026 World Cup match centre or match report pages list at least 1 completed matches played on 2026-07-01 UTC where each team scored at least one goal. Resolve NO if fewer than 1 such matches are listed, including if no completed World Cup match is listed for that UTC date. Use ESPN soccer scoreboard only if FIFA is unavailable. Resolve CANCEL only if both sources are unavailable or contradictory."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will BTC/USDT daily candle close at or above 95000 USDT on Binance before the end of 2026-06-23 UTC?",
+    "category": "Crypto",
+    "resolutionSource": "https://www.binance.com/en/trade/BTC_USDT",
+    "fallbackSource": "https://www.coingecko.com/en/coins/bitcoin",
+    "closeTimeUtc": "2026-06-23T23:55:00Z",
+    "resolutionTimeUtc": "2026-06-24T01:00:00Z",
+    "resolutionRule": "Resolve YES if Binance BTC/USDT daily candle for 2026-06-23 UTC closes greater than or equal to 95000 USDT. Resolve NO if the observed Binance value is below 95000. Use CoinGecko BTC USD market data only if Binance BTC/USDT is unavailable. Resolve CANCEL only if both sources are unavailable or do not clearly show the required UTC value."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will the U.S. Treasury 10-year constant maturity yield close at or above 4.50% on July 31, 2026 - check 2?",
+    "category": "Macro",
+    "resolutionSource": "https://home.treasury.gov/resource-center/data-chart-center/interest-rates/TextView",
+    "fallbackSource": "https://fred.stlouisfed.org/series/DGS10",
+    "closeTimeUtc": "2026-07-31T20:00:00Z",
+    "resolutionTimeUtc": "2026-08-01T02:00:00Z",
+    "resolutionRule": "Resolve YES if U.S. Treasury daily treasury rates list the 10-year Treasury constant maturity rate for July 31, 2026 as greater than or equal to 4.50%. Resolve NO if below 4.50%. Use FRED DGS10 only if Treasury is unavailable. Resolve CANCEL only if neither source publishes a value for that date by resolution time."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will FIFA's official 2026 World Cup match centre list at least 5 matches ending in a draw after normal time on 2026-06-27 UTC?",
+    "category": "Sports",
+    "resolutionSource": "https://www.fifa.com/en/tournaments/mens/worldcup/canadamexicousa2026",
+    "fallbackSource": "https://www.espn.com/soccer/scoreboard",
+    "closeTimeUtc": "2026-06-27T12:00:00Z",
+    "resolutionTimeUtc": "2026-06-28T04:00:00Z",
+    "resolutionRule": "Resolve YES if FIFA's official 2026 World Cup match centre or match report pages list at least 5 completed matches played on 2026-06-27 UTC whose score is tied after normal time plus stoppage time. For knockout matches, use the score before extra time and penalties. Resolve NO if fewer than 5 such matches are listed, including if no completed World Cup match exists on that UTC date. Use ESPN only if FIFA is unavailable. Resolve CANCEL only if both sources are unavailable or contradictory."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will ADA/USDT daily candle close at or above 0.6 USDT on Binance before the end of 2026-08-21 UTC?",
+    "category": "Crypto",
+    "resolutionSource": "https://www.binance.com/en/trade/ADA_USDT",
+    "fallbackSource": "https://www.coingecko.com/en/coins/cardano",
+    "closeTimeUtc": "2026-08-21T23:55:00Z",
+    "resolutionTimeUtc": "2026-08-22T01:00:00Z",
+    "resolutionRule": "Resolve YES if Binance ADA/USDT daily candle for 2026-08-21 UTC closes greater than or equal to 0.6 USDT. Resolve NO if the observed Binance value is below 0.6. Use CoinGecko ADA USD market data only if Binance ADA/USDT is unavailable. Resolve CANCEL only if both sources are unavailable or do not clearly show the required UTC value."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will the U.S. BLS CPI-U all-items year-over-year change for June 2026 be at or above 3.0% - check 2?",
+    "category": "Macro",
+    "resolutionSource": "https://www.bls.gov/cpi/",
+    "fallbackSource": "https://fred.stlouisfed.org/series/CPIAUCSL",
+    "closeTimeUtc": "2026-07-15T12:25:00Z",
+    "resolutionTimeUtc": "2026-07-15T14:30:00Z",
+    "resolutionRule": "Resolve YES if the first official BLS CPI release for June 2026 reports CPI-U all-items year-over-year percent change greater than or equal to 3.0%. Resolve NO if it is below 3.0%. Use FRED CPIAUCSL only if the BLS release is unavailable. Resolve CANCEL only if no official June 2026 CPI value is published by resolution time."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will FIFA's official 2026 World Cup match centre list at least 1 clean-sheet wins on 2026-06-23 UTC?",
+    "category": "Sports",
+    "resolutionSource": "https://www.fifa.com/en/tournaments/mens/worldcup/canadamexicousa2026",
+    "fallbackSource": "https://www.espn.com/soccer/scoreboard",
+    "closeTimeUtc": "2026-06-23T12:00:00Z",
+    "resolutionTimeUtc": "2026-06-24T04:00:00Z",
+    "resolutionRule": "Resolve YES if FIFA's official 2026 World Cup match centre or match report pages list at least 1 completed matches played on 2026-06-23 UTC where the winning team conceded zero goals. Resolve NO if fewer than 1 such matches are listed, including if no completed World Cup match exists on that UTC date. Use ESPN only if FIFA is unavailable. Resolve CANCEL only if both sources are unavailable or contradictory."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will SOL/USDT trade at or above 150 USDT on Binance before the end of 2026-08-05 UTC?",
+    "category": "Crypto",
+    "resolutionSource": "https://www.binance.com/en/trade/SOL_USDT",
+    "fallbackSource": "https://www.coingecko.com/en/coins/solana",
+    "closeTimeUtc": "2026-08-05T23:55:00Z",
+    "resolutionTimeUtc": "2026-08-06T01:00:00Z",
+    "resolutionRule": "Resolve YES if Binance SOL/USDT 1-minute or daily market data shows any traded price greater than or equal to 150 USDT at any time from 00:00:00 UTC through 23:59:59 UTC on 2026-08-05. Resolve NO if the observed Binance value is below 150. Use CoinGecko SOL USD market data only if Binance SOL/USDT is unavailable. Resolve CANCEL only if both sources are unavailable or do not clearly show the required UTC value."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will the U.S. BLS unemployment rate for June 2026 be at or below 4.5%?",
+    "category": "Macro",
+    "resolutionSource": "https://www.bls.gov/news.release/empsit.toc.htm",
+    "fallbackSource": "https://fred.stlouisfed.org/series/UNRATE",
+    "closeTimeUtc": "2026-07-02T12:25:00Z",
+    "resolutionTimeUtc": "2026-07-02T14:30:00Z",
+    "resolutionRule": "Resolve YES if the first official BLS Employment Situation release for June 2026 reports the unemployment rate less than or equal to 4.5%. Resolve NO if it is above 4.5%. Use FRED UNRATE only if BLS is unavailable. Resolve CANCEL only if no official June 2026 unemployment value is published by resolution time."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will FIFA's official 2026 World Cup match centre list at least 1 matches with both teams scoring on 2026-06-19 UTC?",
+    "category": "Sports",
+    "resolutionSource": "https://www.fifa.com/en/tournaments/mens/worldcup/canadamexicousa2026",
+    "fallbackSource": "https://www.espn.com/soccer/scoreboard",
+    "closeTimeUtc": "2026-06-19T12:00:00Z",
+    "resolutionTimeUtc": "2026-06-20T04:00:00Z",
+    "resolutionRule": "Resolve YES if FIFA's official 2026 World Cup match centre or match report pages list at least 1 completed matches played on 2026-06-19 UTC where each team scored at least one goal. Resolve NO if fewer than 1 such matches are listed, including if no completed World Cup match is listed for that UTC date. Use ESPN soccer scoreboard only if FIFA is unavailable. Resolve CANCEL only if both sources are unavailable or contradictory."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will UNI/USDT daily candle close at or above 15 USDT on Binance before the end of 2026-07-20 UTC?",
+    "category": "Crypto",
+    "resolutionSource": "https://www.binance.com/en/trade/UNI_USDT",
+    "fallbackSource": "https://www.coingecko.com/en/coins/uniswap",
+    "closeTimeUtc": "2026-07-20T23:55:00Z",
+    "resolutionTimeUtc": "2026-07-21T01:00:00Z",
+    "resolutionRule": "Resolve YES if Binance UNI/USDT daily candle for 2026-07-20 UTC closes greater than or equal to 15 USDT. Resolve NO if the observed Binance value is below 15. Use CoinGecko UNI USD market data only if Binance UNI/USDT is unavailable. Resolve CANCEL only if both sources are unavailable or do not clearly show the required UTC value."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will Advanced Micro Devices (AMD) official regular-market closing price be at or above 210.00 USD on 2026-08-17?",
+    "category": "Stocks",
+    "resolutionSource": "https://finance.yahoo.com/quote/AMD/",
+    "fallbackSource": "https://www.nasdaq.com/market-activity/stocks/amd",
+    "closeTimeUtc": "2026-08-17T20:55:00Z",
+    "resolutionTimeUtc": "2026-08-17T22:30:00Z",
+    "resolutionRule": "Resolve YES if Yahoo Finance reports the official regular-market closing price for Advanced Micro Devices (AMD) on 2026-08-17 as greater than or equal to 210.00 USD. Resolve NO if the official close is below 210.00 USD. Use Nasdaq only if Yahoo Finance is unavailable. Ignore pre-market, after-hours, intraday, adjusted close, and analyst target prices. Resolve CANCEL only if the stock/ETF is halted for the full regular session or both sources fail to publish a clear official close by resolution time."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will GitHub status report any incident affecting Actions before July 31, 2026 - check 3?",
+    "category": "Technology",
+    "resolutionSource": "https://www.githubstatus.com/",
+    "fallbackSource": "https://github.blog/changelog/",
+    "closeTimeUtc": "2026-07-31T23:00:00Z",
+    "resolutionTimeUtc": "2026-08-01T02:00:00Z",
+    "resolutionRule": "Resolve YES if GitHub Status lists at least one incident between market creation and 2026-07-31 23:00 UTC whose affected component includes Actions. Resolve NO if no such incident is listed. Resolve CANCEL only if GitHub Status is unavailable."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will BNB/USDT daily candle close at or above 950 USDT on Binance before the end of 2026-07-04 UTC?",
+    "category": "Crypto",
+    "resolutionSource": "https://www.binance.com/en/trade/BNB_USDT",
+    "fallbackSource": "https://www.coingecko.com/en/coins/bnb",
+    "closeTimeUtc": "2026-07-04T23:55:00Z",
+    "resolutionTimeUtc": "2026-07-05T01:00:00Z",
+    "resolutionRule": "Resolve YES if Binance BNB/USDT daily candle for 2026-07-04 UTC closes greater than or equal to 950 USDT. Resolve NO if the observed Binance value is below 950. Use CoinGecko BNB USD market data only if Binance BNB/USDT is unavailable. Resolve CANCEL only if both sources are unavailable or do not clearly show the required UTC value."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will Amazon (AMZN) official regular-market closing price be at or above 240.00 USD on 2026-08-07?",
+    "category": "Stocks",
+    "resolutionSource": "https://finance.yahoo.com/quote/AMZN/",
+    "fallbackSource": "https://www.nasdaq.com/market-activity/stocks/amzn",
+    "closeTimeUtc": "2026-08-07T20:55:00Z",
+    "resolutionTimeUtc": "2026-08-07T22:30:00Z",
+    "resolutionRule": "Resolve YES if Yahoo Finance reports the official regular-market closing price for Amazon (AMZN) on 2026-08-07 as greater than or equal to 240.00 USD. Resolve NO if the official close is below 240.00 USD. Use Nasdaq only if Yahoo Finance is unavailable. Ignore pre-market, after-hours, intraday, adjusted close, and analyst target prices. Resolve CANCEL only if the stock/ETF is halted for the full regular session or both sources fail to publish a clear official close by resolution time."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will the Federal Reserve leave the target federal funds rate upper bound at or above 4.00% after its July 2026 FOMC decision - check 3?",
+    "category": "Macro",
+    "resolutionSource": "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm",
+    "fallbackSource": "https://www.federalreserve.gov/monetarypolicy/openmarket.htm",
+    "closeTimeUtc": "2026-07-29T18:00:00Z",
+    "resolutionTimeUtc": "2026-07-29T21:00:00Z",
+    "resolutionRule": "Resolve YES if the Federal Reserve FOMC statement or implementation note after the July 2026 scheduled meeting states the target federal funds rate upper bound is greater than or equal to 4.00%. Resolve NO if below 4.00%. Resolve CANCEL only if no July 2026 FOMC decision is published by resolution time."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will BTC/USDT trade at or above 95000 USDT on Binance before the end of 2026-06-20 UTC?",
+    "category": "Crypto",
+    "resolutionSource": "https://www.binance.com/en/trade/BTC_USDT",
+    "fallbackSource": "https://www.coingecko.com/en/coins/bitcoin",
+    "closeTimeUtc": "2026-06-20T23:55:00Z",
+    "resolutionTimeUtc": "2026-06-21T01:00:00Z",
+    "resolutionRule": "Resolve YES if Binance BTC/USDT 1-minute or daily market data shows any traded price greater than or equal to 95000 USDT at any time from 00:00:00 UTC through 23:59:59 UTC on 2026-06-20. Resolve NO if the observed Binance value is below 95000. Use CoinGecko BTC USD market data only if Binance BTC/USDT is unavailable. Resolve CANCEL only if both sources are unavailable or do not clearly show the required UTC value."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will Tesla (TSLA) official regular-market closing price be at or above 260.00 USD on 2026-07-29?",
+    "category": "Stocks",
+    "resolutionSource": "https://finance.yahoo.com/quote/TSLA/",
+    "fallbackSource": "https://www.nasdaq.com/market-activity/stocks/tsla",
+    "closeTimeUtc": "2026-07-29T20:55:00Z",
+    "resolutionTimeUtc": "2026-07-29T22:30:00Z",
+    "resolutionRule": "Resolve YES if Yahoo Finance reports the official regular-market closing price for Tesla (TSLA) on 2026-07-29 as greater than or equal to 260.00 USD. Resolve NO if the official close is below 260.00 USD. Use Nasdaq only if Yahoo Finance is unavailable. Ignore pre-market, after-hours, intraday, adjusted close, and analyst target prices. Resolve CANCEL only if the stock/ETF is halted for the full regular session or both sources fail to publish a clear official close by resolution time."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will Circle publish at least one official Arc-related blog post between June 18 and June 30, 2026 - check 3?",
+    "category": "Arc",
+    "resolutionSource": "https://www.circle.com/blog",
+    "fallbackSource": "https://www.circle.com/",
+    "closeTimeUtc": "2026-06-30T23:00:00Z",
+    "resolutionTimeUtc": "2026-07-01T02:00:00Z",
+    "resolutionRule": "Resolve YES if Circle official blog publishes at least one post dated from 2026-06-18 through 2026-06-30 UTC that explicitly mentions Arc blockchain or Arc testnet. Resolve NO if no such post exists. Resolve CANCEL only if Circle blog is unavailable at resolution time."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will FIFA's official 2026 World Cup match centre list any match on 2026-06-24 UTC with a winning margin of at least 2 goals?",
+    "category": "Sports",
+    "resolutionSource": "https://www.fifa.com/en/tournaments/mens/worldcup/canadamexicousa2026",
+    "fallbackSource": "https://www.espn.com/soccer/scoreboard",
+    "closeTimeUtc": "2026-06-24T12:00:00Z",
+    "resolutionTimeUtc": "2026-06-25T04:00:00Z",
+    "resolutionRule": "Resolve YES if FIFA's official 2026 World Cup match centre or match report pages list at least one completed match played on 2026-06-24 UTC where the final score after normal time plus stoppage time has a winning margin of at least 2 goals. Resolve NO if no such completed match is listed, including if no World Cup match is completed on that UTC date. Use ESPN only if FIFA is unavailable. Resolve CANCEL only if both sources are unavailable or contradictory."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will SPDR S&P 500 ETF Trust (SPY) official regular-market closing price be at or above 650.00 USD on 2026-07-20?",
+    "category": "Stocks",
+    "resolutionSource": "https://finance.yahoo.com/quote/SPY/",
+    "fallbackSource": "https://www.nasdaq.com/market-activity/stocks/spy",
+    "closeTimeUtc": "2026-07-20T20:55:00Z",
+    "resolutionTimeUtc": "2026-07-20T22:30:00Z",
+    "resolutionRule": "Resolve YES if Yahoo Finance reports the official regular-market closing price for SPDR S&P 500 ETF Trust (SPY) on 2026-07-20 as greater than or equal to 650.00 USD. Resolve NO if the official close is below 650.00 USD. Use Nasdaq only if Yahoo Finance is unavailable. Ignore pre-market, after-hours, intraday, adjusted close, and analyst target prices. Resolve CANCEL only if the stock/ETF is halted for the full regular session or both sources fail to publish a clear official close by resolution time."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will Congress.gov list at least one bill enacted into law in July 2026 - check 2?",
+    "category": "Politics",
+    "resolutionSource": "https://www.congress.gov/",
+    "fallbackSource": "https://www.govinfo.gov/",
+    "closeTimeUtc": "2026-07-31T23:00:00Z",
+    "resolutionTimeUtc": "2026-08-02T03:00:00Z",
+    "resolutionRule": "Resolve YES if Congress.gov lists at least one bill with latest action enacted into public law dated from 2026-07-01 through 2026-07-31 UTC. Resolve NO if none are listed. Use GovInfo only if Congress.gov is unavailable. Resolve CANCEL only if both sources are unavailable."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will ESPN's 2026 World Cup scoreboard list at least 14 yellow cards across matches on 2026-06-20 UTC?",
+    "category": "Sports",
+    "resolutionSource": "https://www.espn.com/soccer/scoreboard",
+    "fallbackSource": "https://www.fifa.com/en/tournaments/mens/worldcup/canadamexicousa2026",
+    "closeTimeUtc": "2026-06-20T12:00:00Z",
+    "resolutionTimeUtc": "2026-06-21T05:00:00Z",
+    "resolutionRule": "Resolve YES if ESPN's soccer scoreboard or match box scores for the 2026 FIFA World Cup list 14 or more total yellow cards across completed matches played on 2026-06-20 UTC. Resolve NO if the total is below 14 or no completed World Cup match is listed for that UTC date. Use FIFA match reports only if ESPN is unavailable. Resolve CANCEL only if both sources are unavailable or contradictory."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will Coinbase Global (COIN) official regular-market closing price be at or above 300.00 USD on 2026-07-10?",
+    "category": "Stocks",
+    "resolutionSource": "https://finance.yahoo.com/quote/COIN/",
+    "fallbackSource": "https://www.nasdaq.com/market-activity/stocks/coin",
+    "closeTimeUtc": "2026-07-10T20:55:00Z",
+    "resolutionTimeUtc": "2026-07-10T22:30:00Z",
+    "resolutionRule": "Resolve YES if Yahoo Finance reports the official regular-market closing price for Coinbase Global (COIN) on 2026-07-10 as greater than or equal to 300.00 USD. Resolve NO if the official close is below 300.00 USD. Use Nasdaq only if Yahoo Finance is unavailable. Ignore pre-market, after-hours, intraday, adjusted close, and analyst target prices. Resolve CANCEL only if the stock/ETF is halted for the full regular session or both sources fail to publish a clear official close by resolution time."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will OpenAI publish a new official model or API announcement on its blog before August 1, 2026 - check 2?",
+    "category": "Technology",
+    "resolutionSource": "https://openai.com/news/",
+    "fallbackSource": "https://openai.com/blog/",
+    "closeTimeUtc": "2026-07-31T23:00:00Z",
+    "resolutionTimeUtc": "2026-08-01T02:00:00Z",
+    "resolutionRule": "Resolve YES if OpenAI official news/blog publishes at least one post dated before 2026-08-01 UTC announcing a new model or API capability. Resolve NO otherwise. Resolve CANCEL only if official OpenAI pages are unavailable."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will FIFA's official 2026 World Cup match centre list at least 9 total goals scored in matches played on 2026-07-18 UTC?",
+    "category": "Sports",
+    "resolutionSource": "https://www.fifa.com/en/tournaments/mens/worldcup/canadamexicousa2026",
+    "fallbackSource": "https://www.espn.com/soccer/scoreboard",
+    "closeTimeUtc": "2026-07-18T12:00:00Z",
+    "resolutionTimeUtc": "2026-07-19T04:00:00Z",
+    "resolutionRule": "Resolve YES if FIFA's official 2026 World Cup match centre or match report pages list matches played on 2026-07-18 UTC with a combined total of 9 or more goals after normal time plus stoppage time. Resolve NO if the listed combined total is below 9 or FIFA lists no completed World Cup matches on that UTC date. Use ESPN soccer scoreboard only if FIFA is unavailable. Resolve CANCEL only if both official and fallback sources are unavailable or internally contradictory at resolution time."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will Microsoft (MSFT) official regular-market closing price be at or above 540.00 USD on 2026-06-29?",
+    "category": "Stocks",
+    "resolutionSource": "https://finance.yahoo.com/quote/MSFT/",
+    "fallbackSource": "https://www.nasdaq.com/market-activity/stocks/msft",
+    "closeTimeUtc": "2026-06-29T20:55:00Z",
+    "resolutionTimeUtc": "2026-06-29T22:30:00Z",
+    "resolutionRule": "Resolve YES if Yahoo Finance reports the official regular-market closing price for Microsoft (MSFT) on 2026-06-29 as greater than or equal to 540.00 USD. Resolve NO if the official close is below 540.00 USD. Use Nasdaq only if Yahoo Finance is unavailable. Ignore pre-market, after-hours, intraday, adjusted close, and analyst target prices. Resolve CANCEL only if the stock/ETF is halted for the full regular session or both sources fail to publish a clear official close by resolution time."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will GitHub status report any incident affecting Actions before July 31, 2026?",
+    "category": "Technology",
+    "resolutionSource": "https://www.githubstatus.com/",
+    "fallbackSource": "https://github.blog/changelog/",
+    "closeTimeUtc": "2026-07-31T23:00:00Z",
+    "resolutionTimeUtc": "2026-08-01T02:00:00Z",
+    "resolutionRule": "Resolve YES if GitHub Status lists at least one incident between market creation and 2026-07-31 23:00 UTC whose affected component includes Actions. Resolve NO if no such incident is listed. Resolve CANCEL only if GitHub Status is unavailable."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will FIFA's official 2026 World Cup match centre list any match on 2026-07-14 UTC with a winning margin of at least 2 goals?",
+    "category": "Sports",
+    "resolutionSource": "https://www.fifa.com/en/tournaments/mens/worldcup/canadamexicousa2026",
+    "fallbackSource": "https://www.espn.com/soccer/scoreboard",
+    "closeTimeUtc": "2026-07-14T12:00:00Z",
+    "resolutionTimeUtc": "2026-07-15T04:00:00Z",
+    "resolutionRule": "Resolve YES if FIFA's official 2026 World Cup match centre or match report pages list at least one completed match played on 2026-07-14 UTC where the final score after normal time plus stoppage time has a winning margin of at least 2 goals. Resolve NO if no such completed match is listed, including if no World Cup match is completed on that UTC date. Use ESPN only if FIFA is unavailable. Resolve CANCEL only if both sources are unavailable or contradictory."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will XRP/USDT trade at or above 3 USDT on Binance before the end of 2026-08-13 UTC?",
+    "category": "Crypto",
+    "resolutionSource": "https://www.binance.com/en/trade/XRP_USDT",
+    "fallbackSource": "https://www.coingecko.com/en/coins/xrp",
+    "closeTimeUtc": "2026-08-13T23:55:00Z",
+    "resolutionTimeUtc": "2026-08-14T01:00:00Z",
+    "resolutionRule": "Resolve YES if Binance XRP/USDT 1-minute or daily market data shows any traded price greater than or equal to 3 USDT at any time from 00:00:00 UTC through 23:59:59 UTC on 2026-08-13. Resolve NO if the observed Binance value is below 3. Use CoinGecko XRP USD market data only if Binance XRP/USDT is unavailable. Resolve CANCEL only if both sources are unavailable or do not clearly show the required UTC value."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will the Federal Reserve leave the target federal funds rate upper bound at or above 4.00% after its July 2026 FOMC decision?",
+    "category": "Macro",
+    "resolutionSource": "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm",
+    "fallbackSource": "https://www.federalreserve.gov/monetarypolicy/openmarket.htm",
+    "closeTimeUtc": "2026-07-29T18:00:00Z",
+    "resolutionTimeUtc": "2026-07-29T21:00:00Z",
+    "resolutionRule": "Resolve YES if the Federal Reserve FOMC statement or implementation note after the July 2026 scheduled meeting states the target federal funds rate upper bound is greater than or equal to 4.00%. Resolve NO if below 4.00%. Resolve CANCEL only if no July 2026 FOMC decision is published by resolution time."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will ESPN's 2026 World Cup scoreboard list at least 14 yellow cards across matches on 2026-07-10 UTC?",
+    "category": "Sports",
+    "resolutionSource": "https://www.espn.com/soccer/scoreboard",
+    "fallbackSource": "https://www.fifa.com/en/tournaments/mens/worldcup/canadamexicousa2026",
+    "closeTimeUtc": "2026-07-10T12:00:00Z",
+    "resolutionTimeUtc": "2026-07-11T05:00:00Z",
+    "resolutionRule": "Resolve YES if ESPN's soccer scoreboard or match box scores for the 2026 FIFA World Cup list 14 or more total yellow cards across completed matches played on 2026-07-10 UTC. Resolve NO if the total is below 14 or no completed World Cup match is listed for that UTC date. Use FIFA match reports only if ESPN is unavailable. Resolve CANCEL only if both sources are unavailable or contradictory."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will AVAX/USDT daily candle close at or above 45 USDT on Binance before the end of 2026-07-28 UTC?",
+    "category": "Crypto",
+    "resolutionSource": "https://www.binance.com/en/trade/AVAX_USDT",
+    "fallbackSource": "https://www.coingecko.com/en/coins/avalanche",
+    "closeTimeUtc": "2026-07-28T23:55:00Z",
+    "resolutionTimeUtc": "2026-07-29T01:00:00Z",
+    "resolutionRule": "Resolve YES if Binance AVAX/USDT daily candle for 2026-07-28 UTC closes greater than or equal to 45 USDT. Resolve NO if the observed Binance value is below 45. Use CoinGecko AVAX USD market data only if Binance AVAX/USDT is unavailable. Resolve CANCEL only if both sources are unavailable or do not clearly show the required UTC value."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will Circle publish at least one official Arc-related blog post between June 18 and June 30, 2026?",
+    "category": "Arc",
+    "resolutionSource": "https://www.circle.com/blog",
+    "fallbackSource": "https://www.circle.com/",
+    "closeTimeUtc": "2026-06-30T23:00:00Z",
+    "resolutionTimeUtc": "2026-07-01T02:00:00Z",
+    "resolutionRule": "Resolve YES if Circle official blog publishes at least one post dated from 2026-06-18 through 2026-06-30 UTC that explicitly mentions Arc blockchain or Arc testnet. Resolve NO if no such post exists. Resolve CANCEL only if Circle blog is unavailable at resolution time."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will FIFA's official 2026 World Cup match centre list at least 9 total goals scored in matches played on 2026-07-06 UTC?",
+    "category": "Sports",
+    "resolutionSource": "https://www.fifa.com/en/tournaments/mens/worldcup/canadamexicousa2026",
+    "fallbackSource": "https://www.espn.com/soccer/scoreboard",
+    "closeTimeUtc": "2026-07-06T12:00:00Z",
+    "resolutionTimeUtc": "2026-07-07T04:00:00Z",
+    "resolutionRule": "Resolve YES if FIFA's official 2026 World Cup match centre or match report pages list matches played on 2026-07-06 UTC with a combined total of 9 or more goals after normal time plus stoppage time. Resolve NO if the listed combined total is below 9 or FIFA lists no completed World Cup matches on that UTC date. Use ESPN soccer scoreboard only if FIFA is unavailable. Resolve CANCEL only if both official and fallback sources are unavailable or internally contradictory at resolution time."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will DOGE/USDT daily candle close at or above 0.12 USDT on Binance before the end of 2026-07-12 UTC?",
+    "category": "Crypto",
+    "resolutionSource": "https://www.binance.com/en/trade/DOGE_USDT",
+    "fallbackSource": "https://www.coingecko.com/en/coins/dogecoin",
+    "closeTimeUtc": "2026-07-12T23:55:00Z",
+    "resolutionTimeUtc": "2026-07-13T01:00:00Z",
+    "resolutionRule": "Resolve YES if Binance DOGE/USDT daily candle for 2026-07-12 UTC closes greater than or equal to 0.12 USDT. Resolve NO if the observed Binance value is below 0.12. Use CoinGecko DOGE USD market data only if Binance DOGE/USDT is unavailable. Resolve CANCEL only if both sources are unavailable or do not clearly show the required UTC value."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will the U.S. Treasury 10-year constant maturity yield close at or above 4.50% on July 31, 2026 - check 3?",
+    "category": "Macro",
+    "resolutionSource": "https://home.treasury.gov/resource-center/data-chart-center/interest-rates/TextView",
+    "fallbackSource": "https://fred.stlouisfed.org/series/DGS10",
+    "closeTimeUtc": "2026-07-31T20:00:00Z",
+    "resolutionTimeUtc": "2026-08-01T02:00:00Z",
+    "resolutionRule": "Resolve YES if U.S. Treasury daily treasury rates list the 10-year Treasury constant maturity rate for July 31, 2026 as greater than or equal to 4.50%. Resolve NO if below 4.50%. Use FRED DGS10 only if Treasury is unavailable. Resolve CANCEL only if neither source publishes a value for that date by resolution time."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will FIFA's official 2026 World Cup match centre list any match on 2026-07-02 UTC with a winning margin of at least 2 goals?",
+    "category": "Sports",
+    "resolutionSource": "https://www.fifa.com/en/tournaments/mens/worldcup/canadamexicousa2026",
+    "fallbackSource": "https://www.espn.com/soccer/scoreboard",
+    "closeTimeUtc": "2026-07-02T12:00:00Z",
+    "resolutionTimeUtc": "2026-07-03T04:00:00Z",
+    "resolutionRule": "Resolve YES if FIFA's official 2026 World Cup match centre or match report pages list at least one completed match played on 2026-07-02 UTC where the final score after normal time plus stoppage time has a winning margin of at least 2 goals. Resolve NO if no such completed match is listed, including if no World Cup match is completed on that UTC date. Use ESPN only if FIFA is unavailable. Resolve CANCEL only if both sources are unavailable or contradictory."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will ETH/USDT trade at or above 2800 USDT on Binance before the end of 2026-06-26 UTC?",
+    "category": "Crypto",
+    "resolutionSource": "https://www.binance.com/en/trade/ETH_USDT",
+    "fallbackSource": "https://www.coingecko.com/en/coins/ethereum",
+    "closeTimeUtc": "2026-06-26T23:55:00Z",
+    "resolutionTimeUtc": "2026-06-27T01:00:00Z",
+    "resolutionRule": "Resolve YES if Binance ETH/USDT 1-minute or daily market data shows any traded price greater than or equal to 2800 USDT at any time from 00:00:00 UTC through 23:59:59 UTC on 2026-06-26. Resolve NO if the observed Binance value is below 2800. Use CoinGecko ETH USD market data only if Binance ETH/USDT is unavailable. Resolve CANCEL only if both sources are unavailable or do not clearly show the required UTC value."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will the U.S. BLS CPI-U all-items year-over-year change for June 2026 be at or above 3.0% - check 3?",
+    "category": "Macro",
+    "resolutionSource": "https://www.bls.gov/cpi/",
+    "fallbackSource": "https://fred.stlouisfed.org/series/CPIAUCSL",
+    "closeTimeUtc": "2026-07-15T12:25:00Z",
+    "resolutionTimeUtc": "2026-07-15T14:30:00Z",
+    "resolutionRule": "Resolve YES if the first official BLS CPI release for June 2026 reports CPI-U all-items year-over-year percent change greater than or equal to 3.0%. Resolve NO if it is below 3.0%. Use FRED CPIAUCSL only if the BLS release is unavailable. Resolve CANCEL only if no official June 2026 CPI value is published by resolution time."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will ESPN's 2026 World Cup scoreboard list at least 14 yellow cards across matches on 2026-06-28 UTC?",
+    "category": "Sports",
+    "resolutionSource": "https://www.espn.com/soccer/scoreboard",
+    "fallbackSource": "https://www.fifa.com/en/tournaments/mens/worldcup/canadamexicousa2026",
+    "closeTimeUtc": "2026-06-28T12:00:00Z",
+    "resolutionTimeUtc": "2026-06-29T05:00:00Z",
+    "resolutionRule": "Resolve YES if ESPN's soccer scoreboard or match box scores for the 2026 FIFA World Cup list 14 or more total yellow cards across completed matches played on 2026-06-28 UTC. Resolve NO if the total is below 14 or no completed World Cup match is listed for that UTC date. Use FIFA match reports only if ESPN is unavailable. Resolve CANCEL only if both sources are unavailable or contradictory."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will LINK/USDT daily candle close at or above 20 USDT on Binance before the end of 2026-08-25 UTC?",
+    "category": "Crypto",
+    "resolutionSource": "https://www.binance.com/en/trade/LINK_USDT",
+    "fallbackSource": "https://www.coingecko.com/en/coins/chainlink",
+    "closeTimeUtc": "2026-08-25T23:55:00Z",
+    "resolutionTimeUtc": "2026-08-26T01:00:00Z",
+    "resolutionRule": "Resolve YES if Binance LINK/USDT daily candle for 2026-08-25 UTC closes greater than or equal to 20 USDT. Resolve NO if the observed Binance value is below 20. Use CoinGecko LINK USD market data only if Binance LINK/USDT is unavailable. Resolve CANCEL only if both sources are unavailable or do not clearly show the required UTC value."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will the U.S. BLS unemployment rate for June 2026 be at or below 4.5% - check 2?",
+    "category": "Macro",
+    "resolutionSource": "https://www.bls.gov/news.release/empsit.toc.htm",
+    "fallbackSource": "https://fred.stlouisfed.org/series/UNRATE",
+    "closeTimeUtc": "2026-07-02T12:25:00Z",
+    "resolutionTimeUtc": "2026-07-02T14:30:00Z",
+    "resolutionRule": "Resolve YES if the first official BLS Employment Situation release for June 2026 reports the unemployment rate less than or equal to 4.5%. Resolve NO if it is above 4.5%. Use FRED UNRATE only if BLS is unavailable. Resolve CANCEL only if no official June 2026 unemployment value is published by resolution time."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will FIFA's official 2026 World Cup match centre list at least 9 total goals scored in matches played on 2026-06-24 UTC?",
+    "category": "Sports",
+    "resolutionSource": "https://www.fifa.com/en/tournaments/mens/worldcup/canadamexicousa2026",
+    "fallbackSource": "https://www.espn.com/soccer/scoreboard",
+    "closeTimeUtc": "2026-06-24T12:00:00Z",
+    "resolutionTimeUtc": "2026-06-25T04:00:00Z",
+    "resolutionRule": "Resolve YES if FIFA's official 2026 World Cup match centre or match report pages list matches played on 2026-06-24 UTC with a combined total of 9 or more goals after normal time plus stoppage time. Resolve NO if the listed combined total is below 9 or FIFA lists no completed World Cup matches on that UTC date. Use ESPN soccer scoreboard only if FIFA is unavailable. Resolve CANCEL only if both official and fallback sources are unavailable or internally contradictory at resolution time."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will XRP/USDT daily candle close at or above 3 USDT on Binance before the end of 2026-08-09 UTC?",
+    "category": "Crypto",
+    "resolutionSource": "https://www.binance.com/en/trade/XRP_USDT",
+    "fallbackSource": "https://www.coingecko.com/en/coins/xrp",
+    "closeTimeUtc": "2026-08-09T23:55:00Z",
+    "resolutionTimeUtc": "2026-08-10T01:00:00Z",
+    "resolutionRule": "Resolve YES if Binance XRP/USDT daily candle for 2026-08-09 UTC closes greater than or equal to 3 USDT. Resolve NO if the observed Binance value is below 3. Use CoinGecko XRP USD market data only if Binance XRP/USDT is unavailable. Resolve CANCEL only if both sources are unavailable or do not clearly show the required UTC value."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will the U.S. BEA advance estimate report Q2 2026 real GDP annualized growth at or above 1.5%?",
+    "category": "Macro",
+    "resolutionSource": "https://www.bea.gov/data/gdp/gross-domestic-product",
+    "fallbackSource": "https://fred.stlouisfed.org/series/A191RL1Q225SBEA",
+    "closeTimeUtc": "2026-07-30T12:25:00Z",
+    "resolutionTimeUtc": "2026-07-30T15:00:00Z",
+    "resolutionRule": "Resolve YES if the first BEA advance estimate for Q2 2026 real GDP reports annualized growth greater than or equal to 1.5%. Resolve NO if it is below 1.5%. Use FRED only if BEA is unavailable. Resolve CANCEL only if no official advance estimate is published by resolution time."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will FIFA's official 2026 World Cup match centre list any match on 2026-06-20 UTC with a winning margin of at least 2 goals?",
+    "category": "Sports",
+    "resolutionSource": "https://www.fifa.com/en/tournaments/mens/worldcup/canadamexicousa2026",
+    "fallbackSource": "https://www.espn.com/soccer/scoreboard",
+    "closeTimeUtc": "2026-06-20T12:00:00Z",
+    "resolutionTimeUtc": "2026-06-21T04:00:00Z",
+    "resolutionRule": "Resolve YES if FIFA's official 2026 World Cup match centre or match report pages list at least one completed match played on 2026-06-20 UTC where the final score after normal time plus stoppage time has a winning margin of at least 2 goals. Resolve NO if no such completed match is listed, including if no World Cup match is completed on that UTC date. Use ESPN only if FIFA is unavailable. Resolve CANCEL only if both sources are unavailable or contradictory."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will AVAX/USDT trade at or above 45 USDT on Binance before the end of 2026-07-24 UTC?",
+    "category": "Crypto",
+    "resolutionSource": "https://www.binance.com/en/trade/AVAX_USDT",
+    "fallbackSource": "https://www.coingecko.com/en/coins/avalanche",
+    "closeTimeUtc": "2026-07-24T23:55:00Z",
+    "resolutionTimeUtc": "2026-07-25T01:00:00Z",
+    "resolutionRule": "Resolve YES if Binance AVAX/USDT 1-minute or daily market data shows any traded price greater than or equal to 45 USDT at any time from 00:00:00 UTC through 23:59:59 UTC on 2026-07-24. Resolve NO if the observed Binance value is below 45. Use CoinGecko AVAX USD market data only if Binance AVAX/USDT is unavailable. Resolve CANCEL only if both sources are unavailable or do not clearly show the required UTC value."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will Netflix (NFLX) official regular-market closing price be at or above 850.00 USD on 2026-08-19?",
+    "category": "Stocks",
+    "resolutionSource": "https://finance.yahoo.com/quote/NFLX/",
+    "fallbackSource": "https://www.nasdaq.com/market-activity/stocks/nflx",
+    "closeTimeUtc": "2026-08-19T20:55:00Z",
+    "resolutionTimeUtc": "2026-08-19T22:30:00Z",
+    "resolutionRule": "Resolve YES if Yahoo Finance reports the official regular-market closing price for Netflix (NFLX) on 2026-08-19 as greater than or equal to 850.00 USD. Resolve NO if the official close is below 850.00 USD. Use Nasdaq only if Yahoo Finance is unavailable. Ignore pre-market, after-hours, intraday, adjusted close, and analyst target prices. Resolve CANCEL only if the stock/ETF is halted for the full regular session or both sources fail to publish a clear official close by resolution time."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will Coinbase publish at least one official blog post mentioning Base before August 1, 2026 - check 3?",
+    "category": "Crypto",
+    "resolutionSource": "https://www.coinbase.com/blog",
+    "fallbackSource": "https://base.org/blog",
+    "closeTimeUtc": "2026-07-31T23:00:00Z",
+    "resolutionTimeUtc": "2026-08-01T02:00:00Z",
+    "resolutionRule": "Resolve YES if Coinbase official blog publishes at least one post dated before 2026-08-01 UTC that mentions Base in the title or body. Resolve NO otherwise. Use Base blog only if Coinbase blog is unavailable. Resolve CANCEL only if both sources are unavailable."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will DOGE/USDT daily candle close at or above 0.12 USDT on Binance before the end of 2026-07-08 UTC?",
+    "category": "Crypto",
+    "resolutionSource": "https://www.binance.com/en/trade/DOGE_USDT",
+    "fallbackSource": "https://www.coingecko.com/en/coins/dogecoin",
+    "closeTimeUtc": "2026-07-08T23:55:00Z",
+    "resolutionTimeUtc": "2026-07-09T01:00:00Z",
+    "resolutionRule": "Resolve YES if Binance DOGE/USDT daily candle for 2026-07-08 UTC closes greater than or equal to 0.12 USDT. Resolve NO if the observed Binance value is below 0.12. Use CoinGecko DOGE USD market data only if Binance DOGE/USDT is unavailable. Resolve CANCEL only if both sources are unavailable or do not clearly show the required UTC value."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will Meta Platforms (META) official regular-market closing price be at or above 520.00 USD on 2026-08-10?",
+    "category": "Stocks",
+    "resolutionSource": "https://finance.yahoo.com/quote/META/",
+    "fallbackSource": "https://www.nasdaq.com/market-activity/stocks/meta",
+    "closeTimeUtc": "2026-08-10T20:55:00Z",
+    "resolutionTimeUtc": "2026-08-10T22:30:00Z",
+    "resolutionRule": "Resolve YES if Yahoo Finance reports the official regular-market closing price for Meta Platforms (META) on 2026-08-10 as greater than or equal to 520.00 USD. Resolve NO if the official close is below 520.00 USD. Use Nasdaq only if Yahoo Finance is unavailable. Ignore pre-market, after-hours, intraday, adjusted close, and analyst target prices. Resolve CANCEL only if the stock/ETF is halted for the full regular session or both sources fail to publish a clear official close by resolution time."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will the White House publish at least 20 official statements or releases during July 2026 - check 3?",
+    "category": "Politics",
+    "resolutionSource": "https://www.whitehouse.gov/briefing-room/",
+    "fallbackSource": "https://www.whitehouse.gov/",
+    "closeTimeUtc": "2026-07-31T23:00:00Z",
+    "resolutionTimeUtc": "2026-08-01T03:00:00Z",
+    "resolutionRule": "Resolve YES if the White House Briefing Room lists at least 20 official posts dated from 2026-07-01 through 2026-07-31 UTC. Resolve NO if fewer than 20 are listed. Resolve CANCEL only if the source is unavailable."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will ETH/USDT daily candle close at or above 2800 USDT on Binance before the end of 2026-06-23 UTC?",
+    "category": "Crypto",
+    "resolutionSource": "https://www.binance.com/en/trade/ETH_USDT",
+    "fallbackSource": "https://www.coingecko.com/en/coins/ethereum",
+    "closeTimeUtc": "2026-06-23T23:55:00Z",
+    "resolutionTimeUtc": "2026-06-24T01:00:00Z",
+    "resolutionRule": "Resolve YES if Binance ETH/USDT daily candle for 2026-06-23 UTC closes greater than or equal to 2800 USDT. Resolve NO if the observed Binance value is below 2800. Use CoinGecko ETH USD market data only if Binance ETH/USDT is unavailable. Resolve CANCEL only if both sources are unavailable or do not clearly show the required UTC value."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will NVIDIA (NVDA) official regular-market closing price be at or above 110.00 USD on 2026-07-31?",
+    "category": "Stocks",
+    "resolutionSource": "https://finance.yahoo.com/quote/NVDA/",
+    "fallbackSource": "https://www.nasdaq.com/market-activity/stocks/nvda",
+    "closeTimeUtc": "2026-07-31T20:55:00Z",
+    "resolutionTimeUtc": "2026-07-31T22:30:00Z",
+    "resolutionRule": "Resolve YES if Yahoo Finance reports the official regular-market closing price for NVIDIA (NVDA) on 2026-07-31 as greater than or equal to 110.00 USD. Resolve NO if the official close is below 110.00 USD. Use Nasdaq only if Yahoo Finance is unavailable. Ignore pre-market, after-hours, intraday, adjusted close, and analyst target prices. Resolve CANCEL only if the stock/ETF is halted for the full regular session or both sources fail to publish a clear official close by resolution time."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will the Arc Testnet status page report any incident lasting 30 minutes or longer before July 15, 2026 - check 3?",
+    "category": "Arc",
+    "resolutionSource": "https://status.arc.network/",
+    "fallbackSource": "https://arc.network/",
+    "closeTimeUtc": "2026-07-15T23:00:00Z",
+    "resolutionTimeUtc": "2026-07-16T02:00:00Z",
+    "resolutionRule": "Resolve YES if Arc official status page lists any incident between market creation and 2026-07-15 23:00 UTC whose duration is 30 minutes or longer. Resolve NO if no such incident is listed. Resolve CANCEL only if the status page is unavailable."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will FIFA's official 2026 World Cup match centre list at least 1 matches ending in a draw after normal time on 2026-06-25 UTC?",
+    "category": "Sports",
+    "resolutionSource": "https://www.fifa.com/en/tournaments/mens/worldcup/canadamexicousa2026",
+    "fallbackSource": "https://www.espn.com/soccer/scoreboard",
+    "closeTimeUtc": "2026-06-25T12:00:00Z",
+    "resolutionTimeUtc": "2026-06-26T04:00:00Z",
+    "resolutionRule": "Resolve YES if FIFA's official 2026 World Cup match centre or match report pages list at least 1 completed matches played on 2026-06-25 UTC whose score is tied after normal time plus stoppage time. For knockout matches, use the score before extra time and penalties. Resolve NO if fewer than 1 such matches are listed, including if no completed World Cup match exists on that UTC date. Use ESPN only if FIFA is unavailable. Resolve CANCEL only if both sources are unavailable or contradictory."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will Invesco QQQ Trust (QQQ) official regular-market closing price be at or above 480.00 USD on 2026-07-22?",
+    "category": "Stocks",
+    "resolutionSource": "https://finance.yahoo.com/quote/QQQ/",
+    "fallbackSource": "https://www.nasdaq.com/market-activity/stocks/qqq",
+    "closeTimeUtc": "2026-07-22T20:55:00Z",
+    "resolutionTimeUtc": "2026-07-22T22:30:00Z",
+    "resolutionRule": "Resolve YES if Yahoo Finance reports the official regular-market closing price for Invesco QQQ Trust (QQQ) on 2026-07-22 as greater than or equal to 480.00 USD. Resolve NO if the official close is below 480.00 USD. Use Nasdaq only if Yahoo Finance is unavailable. Ignore pre-market, after-hours, intraday, adjusted close, and analyst target prices. Resolve CANCEL only if the stock/ETF is halted for the full regular session or both sources fail to publish a clear official close by resolution time."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will NOAA report any Atlantic tropical storm named before August 15, 2026 - check 2?",
+    "category": "Weather",
+    "resolutionSource": "https://www.nhc.noaa.gov/",
+    "fallbackSource": "https://www.noaa.gov/",
+    "closeTimeUtc": "2026-08-15T23:00:00Z",
+    "resolutionTimeUtc": "2026-08-16T03:00:00Z",
+    "resolutionRule": "Resolve YES if NOAA National Hurricane Center advisories list at least one named Atlantic tropical storm or hurricane with formation date before 2026-08-15 23:00 UTC. Resolve NO if none are listed. Resolve CANCEL only if NOAA NHC is unavailable."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will FIFA's official 2026 World Cup match centre list at least 8 clean-sheet wins on 2026-06-21 UTC?",
+    "category": "Sports",
+    "resolutionSource": "https://www.fifa.com/en/tournaments/mens/worldcup/canadamexicousa2026",
+    "fallbackSource": "https://www.espn.com/soccer/scoreboard",
+    "closeTimeUtc": "2026-06-21T12:00:00Z",
+    "resolutionTimeUtc": "2026-06-22T04:00:00Z",
+    "resolutionRule": "Resolve YES if FIFA's official 2026 World Cup match centre or match report pages list at least 8 completed matches played on 2026-06-21 UTC where the winning team conceded zero goals. Resolve NO if fewer than 8 such matches are listed, including if no completed World Cup match exists on that UTC date. Use ESPN only if FIFA is unavailable. Resolve CANCEL only if both sources are unavailable or contradictory."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will MicroStrategy (MSTR) official regular-market closing price be at or above 1200.00 USD on 2026-07-13?",
+    "category": "Stocks",
+    "resolutionSource": "https://finance.yahoo.com/quote/MSTR/",
+    "fallbackSource": "https://www.nasdaq.com/market-activity/stocks/mstr",
+    "closeTimeUtc": "2026-07-13T20:55:00Z",
+    "resolutionTimeUtc": "2026-07-13T22:30:00Z",
+    "resolutionRule": "Resolve YES if Yahoo Finance reports the official regular-market closing price for MicroStrategy (MSTR) on 2026-07-13 as greater than or equal to 1200.00 USD. Resolve NO if the official close is below 1200.00 USD. Use Nasdaq only if Yahoo Finance is unavailable. Ignore pre-market, after-hours, intraday, adjusted close, and analyst target prices. Resolve CANCEL only if the stock/ETF is halted for the full regular session or both sources fail to publish a clear official close by resolution time."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will Apple publish at least one Newsroom post mentioning iPhone before July 31, 2026 - check 2?",
+    "category": "Technology",
+    "resolutionSource": "https://www.apple.com/newsroom/",
+    "fallbackSource": "https://www.apple.com/",
+    "closeTimeUtc": "2026-07-31T23:00:00Z",
+    "resolutionTimeUtc": "2026-08-01T02:00:00Z",
+    "resolutionRule": "Resolve YES if Apple Newsroom publishes at least one post dated on or before 2026-07-31 UTC that includes the word iPhone in the title or body. Resolve NO otherwise. Resolve CANCEL only if Apple Newsroom is unavailable."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will FIFA's official 2026 World Cup match centre list at least 5 matches with both teams scoring on 2026-07-19 UTC?",
+    "category": "Sports",
+    "resolutionSource": "https://www.fifa.com/en/tournaments/mens/worldcup/canadamexicousa2026",
+    "fallbackSource": "https://www.espn.com/soccer/scoreboard",
+    "closeTimeUtc": "2026-07-19T12:00:00Z",
+    "resolutionTimeUtc": "2026-07-20T04:00:00Z",
+    "resolutionRule": "Resolve YES if FIFA's official 2026 World Cup match centre or match report pages list at least 5 completed matches played on 2026-07-19 UTC where each team scored at least one goal. Resolve NO if fewer than 5 such matches are listed, including if no completed World Cup match is listed for that UTC date. Use ESPN soccer scoreboard only if FIFA is unavailable. Resolve CANCEL only if both sources are unavailable or contradictory."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will Alphabet Class A (GOOGL) official regular-market closing price be at or above 160.00 USD on 2026-07-01?",
+    "category": "Stocks",
+    "resolutionSource": "https://finance.yahoo.com/quote/GOOGL/",
+    "fallbackSource": "https://www.nasdaq.com/market-activity/stocks/googl",
+    "closeTimeUtc": "2026-07-01T20:55:00Z",
+    "resolutionTimeUtc": "2026-07-01T22:30:00Z",
+    "resolutionRule": "Resolve YES if Yahoo Finance reports the official regular-market closing price for Alphabet Class A (GOOGL) on 2026-07-01 as greater than or equal to 160.00 USD. Resolve NO if the official close is below 160.00 USD. Use Nasdaq only if Yahoo Finance is unavailable. Ignore pre-market, after-hours, intraday, adjusted close, and analyst target prices. Resolve CANCEL only if the stock/ETF is halted for the full regular session or both sources fail to publish a clear official close by resolution time."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will Coinbase publish at least one official blog post mentioning Base before August 1, 2026?",
+    "category": "Crypto",
+    "resolutionSource": "https://www.coinbase.com/blog",
+    "fallbackSource": "https://base.org/blog",
+    "closeTimeUtc": "2026-07-31T23:00:00Z",
+    "resolutionTimeUtc": "2026-08-01T02:00:00Z",
+    "resolutionRule": "Resolve YES if Coinbase official blog publishes at least one post dated before 2026-08-01 UTC that mentions Base in the title or body. Resolve NO otherwise. Use Base blog only if Coinbase blog is unavailable. Resolve CANCEL only if both sources are unavailable."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will FIFA's official 2026 World Cup match centre list at least 1 matches ending in a draw after normal time on 2026-07-15 UTC?",
+    "category": "Sports",
+    "resolutionSource": "https://www.fifa.com/en/tournaments/mens/worldcup/canadamexicousa2026",
+    "fallbackSource": "https://www.espn.com/soccer/scoreboard",
+    "closeTimeUtc": "2026-07-15T12:00:00Z",
+    "resolutionTimeUtc": "2026-07-16T04:00:00Z",
+    "resolutionRule": "Resolve YES if FIFA's official 2026 World Cup match centre or match report pages list at least 1 completed matches played on 2026-07-15 UTC whose score is tied after normal time plus stoppage time. For knockout matches, use the score before extra time and penalties. Resolve NO if fewer than 1 such matches are listed, including if no completed World Cup match exists on that UTC date. Use ESPN only if FIFA is unavailable. Resolve CANCEL only if both sources are unavailable or contradictory."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will Apple (AAPL) official regular-market closing price be at or above 180.00 USD on 2026-06-22?",
+    "category": "Stocks",
+    "resolutionSource": "https://finance.yahoo.com/quote/AAPL/",
+    "fallbackSource": "https://www.nasdaq.com/market-activity/stocks/aapl",
+    "closeTimeUtc": "2026-06-22T20:55:00Z",
+    "resolutionTimeUtc": "2026-06-22T22:30:00Z",
+    "resolutionRule": "Resolve YES if Yahoo Finance reports the official regular-market closing price for Apple (AAPL) on 2026-06-22 as greater than or equal to 180.00 USD. Resolve NO if the official close is below 180.00 USD. Use Nasdaq only if Yahoo Finance is unavailable. Ignore pre-market, after-hours, intraday, adjusted close, and analyst target prices. Resolve CANCEL only if the stock/ETF is halted for the full regular session or both sources fail to publish a clear official close by resolution time."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will the White House publish at least 20 official statements or releases during July 2026?",
+    "category": "Politics",
+    "resolutionSource": "https://www.whitehouse.gov/briefing-room/",
+    "fallbackSource": "https://www.whitehouse.gov/",
+    "closeTimeUtc": "2026-07-31T23:00:00Z",
+    "resolutionTimeUtc": "2026-08-01T03:00:00Z",
+    "resolutionRule": "Resolve YES if the White House Briefing Room lists at least 20 official posts dated from 2026-07-01 through 2026-07-31 UTC. Resolve NO if fewer than 20 are listed. Resolve CANCEL only if the source is unavailable."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will FIFA's official 2026 World Cup match centre list at least 8 clean-sheet wins on 2026-07-11 UTC?",
+    "category": "Sports",
+    "resolutionSource": "https://www.fifa.com/en/tournaments/mens/worldcup/canadamexicousa2026",
+    "fallbackSource": "https://www.espn.com/soccer/scoreboard",
+    "closeTimeUtc": "2026-07-11T12:00:00Z",
+    "resolutionTimeUtc": "2026-07-12T04:00:00Z",
+    "resolutionRule": "Resolve YES if FIFA's official 2026 World Cup match centre or match report pages list at least 8 completed matches played on 2026-07-11 UTC where the winning team conceded zero goals. Resolve NO if fewer than 8 such matches are listed, including if no completed World Cup match exists on that UTC date. Use ESPN only if FIFA is unavailable. Resolve CANCEL only if both sources are unavailable or contradictory."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will BTC/USDT trade at or above 95000 USDT on Binance before the end of 2026-08-01 UTC?",
+    "category": "Crypto",
+    "resolutionSource": "https://www.binance.com/en/trade/BTC_USDT",
+    "fallbackSource": "https://www.coingecko.com/en/coins/bitcoin",
+    "closeTimeUtc": "2026-08-01T23:55:00Z",
+    "resolutionTimeUtc": "2026-08-02T01:00:00Z",
+    "resolutionRule": "Resolve YES if Binance BTC/USDT 1-minute or daily market data shows any traded price greater than or equal to 95000 USDT at any time from 00:00:00 UTC through 23:59:59 UTC on 2026-08-01. Resolve NO if the observed Binance value is below 95000. Use CoinGecko BTC USD market data only if Binance BTC/USDT is unavailable. Resolve CANCEL only if both sources are unavailable or do not clearly show the required UTC value."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will the Arc Testnet status page report any incident lasting 30 minutes or longer before July 15, 2026?",
+    "category": "Arc",
+    "resolutionSource": "https://status.arc.network/",
+    "fallbackSource": "https://arc.network/",
+    "closeTimeUtc": "2026-07-15T23:00:00Z",
+    "resolutionTimeUtc": "2026-07-16T02:00:00Z",
+    "resolutionRule": "Resolve YES if Arc official status page lists any incident between market creation and 2026-07-15 23:00 UTC whose duration is 30 minutes or longer. Resolve NO if no such incident is listed. Resolve CANCEL only if the status page is unavailable."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will FIFA's official 2026 World Cup match centre list at least 5 matches with both teams scoring on 2026-07-07 UTC?",
+    "category": "Sports",
+    "resolutionSource": "https://www.fifa.com/en/tournaments/mens/worldcup/canadamexicousa2026",
+    "fallbackSource": "https://www.espn.com/soccer/scoreboard",
+    "closeTimeUtc": "2026-07-07T12:00:00Z",
+    "resolutionTimeUtc": "2026-07-08T04:00:00Z",
+    "resolutionRule": "Resolve YES if FIFA's official 2026 World Cup match centre or match report pages list at least 5 completed matches played on 2026-07-07 UTC where each team scored at least one goal. Resolve NO if fewer than 5 such matches are listed, including if no completed World Cup match is listed for that UTC date. Use ESPN soccer scoreboard only if FIFA is unavailable. Resolve CANCEL only if both sources are unavailable or contradictory."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will ADA/USDT daily candle close at or above 0.6 USDT on Binance before the end of 2026-07-16 UTC?",
+    "category": "Crypto",
+    "resolutionSource": "https://www.binance.com/en/trade/ADA_USDT",
+    "fallbackSource": "https://www.coingecko.com/en/coins/cardano",
+    "closeTimeUtc": "2026-07-16T23:55:00Z",
+    "resolutionTimeUtc": "2026-07-17T01:00:00Z",
+    "resolutionRule": "Resolve YES if Binance ADA/USDT daily candle for 2026-07-16 UTC closes greater than or equal to 0.6 USDT. Resolve NO if the observed Binance value is below 0.6. Use CoinGecko ADA USD market data only if Binance ADA/USDT is unavailable. Resolve CANCEL only if both sources are unavailable or do not clearly show the required UTC value."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will the U.S. BLS CPI-U all-items year-over-year change for June 2026 be at or above 3.0% - check 4?",
+    "category": "Macro",
+    "resolutionSource": "https://www.bls.gov/cpi/",
+    "fallbackSource": "https://fred.stlouisfed.org/series/CPIAUCSL",
+    "closeTimeUtc": "2026-07-15T12:25:00Z",
+    "resolutionTimeUtc": "2026-07-15T14:30:00Z",
+    "resolutionRule": "Resolve YES if the first official BLS CPI release for June 2026 reports CPI-U all-items year-over-year percent change greater than or equal to 3.0%. Resolve NO if it is below 3.0%. Use FRED CPIAUCSL only if the BLS release is unavailable. Resolve CANCEL only if no official June 2026 CPI value is published by resolution time."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will FIFA's official 2026 World Cup match centre list at least 1 matches ending in a draw after normal time on 2026-07-03 UTC?",
+    "category": "Sports",
+    "resolutionSource": "https://www.fifa.com/en/tournaments/mens/worldcup/canadamexicousa2026",
+    "fallbackSource": "https://www.espn.com/soccer/scoreboard",
+    "closeTimeUtc": "2026-07-03T12:00:00Z",
+    "resolutionTimeUtc": "2026-07-04T04:00:00Z",
+    "resolutionRule": "Resolve YES if FIFA's official 2026 World Cup match centre or match report pages list at least 1 completed matches played on 2026-07-03 UTC whose score is tied after normal time plus stoppage time. For knockout matches, use the score before extra time and penalties. Resolve NO if fewer than 1 such matches are listed, including if no completed World Cup match exists on that UTC date. Use ESPN only if FIFA is unavailable. Resolve CANCEL only if both sources are unavailable or contradictory."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will SOL/USDT daily candle close at or above 150 USDT on Binance before the end of 2026-06-30 UTC?",
+    "category": "Crypto",
+    "resolutionSource": "https://www.binance.com/en/trade/SOL_USDT",
+    "fallbackSource": "https://www.coingecko.com/en/coins/solana",
+    "closeTimeUtc": "2026-06-30T23:55:00Z",
+    "resolutionTimeUtc": "2026-07-01T01:00:00Z",
+    "resolutionRule": "Resolve YES if Binance SOL/USDT daily candle for 2026-06-30 UTC closes greater than or equal to 150 USDT. Resolve NO if the observed Binance value is below 150. Use CoinGecko SOL USD market data only if Binance SOL/USDT is unavailable. Resolve CANCEL only if both sources are unavailable or do not clearly show the required UTC value."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will the U.S. BLS unemployment rate for June 2026 be at or below 4.5% - check 3?",
+    "category": "Macro",
+    "resolutionSource": "https://www.bls.gov/news.release/empsit.toc.htm",
+    "fallbackSource": "https://fred.stlouisfed.org/series/UNRATE",
+    "closeTimeUtc": "2026-07-02T12:25:00Z",
+    "resolutionTimeUtc": "2026-07-02T14:30:00Z",
+    "resolutionRule": "Resolve YES if the first official BLS Employment Situation release for June 2026 reports the unemployment rate less than or equal to 4.5%. Resolve NO if it is above 4.5%. Use FRED UNRATE only if BLS is unavailable. Resolve CANCEL only if no official June 2026 unemployment value is published by resolution time."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will FIFA's official 2026 World Cup match centre list at least 8 clean-sheet wins on 2026-06-29 UTC?",
+    "category": "Sports",
+    "resolutionSource": "https://www.fifa.com/en/tournaments/mens/worldcup/canadamexicousa2026",
+    "fallbackSource": "https://www.espn.com/soccer/scoreboard",
+    "closeTimeUtc": "2026-06-29T12:00:00Z",
+    "resolutionTimeUtc": "2026-06-30T04:00:00Z",
+    "resolutionRule": "Resolve YES if FIFA's official 2026 World Cup match centre or match report pages list at least 8 completed matches played on 2026-06-29 UTC where the winning team conceded zero goals. Resolve NO if fewer than 8 such matches are listed, including if no completed World Cup match exists on that UTC date. Use ESPN only if FIFA is unavailable. Resolve CANCEL only if both sources are unavailable or contradictory."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will UNI/USDT trade at or above 15 USDT on Binance before the end of 2026-08-29 UTC?",
+    "category": "Crypto",
+    "resolutionSource": "https://www.binance.com/en/trade/UNI_USDT",
+    "fallbackSource": "https://www.coingecko.com/en/coins/uniswap",
+    "closeTimeUtc": "2026-08-29T23:55:00Z",
+    "resolutionTimeUtc": "2026-08-30T01:00:00Z",
+    "resolutionRule": "Resolve YES if Binance UNI/USDT 1-minute or daily market data shows any traded price greater than or equal to 15 USDT at any time from 00:00:00 UTC through 23:59:59 UTC on 2026-08-29. Resolve NO if the observed Binance value is below 15. Use CoinGecko UNI USD market data only if Binance UNI/USDT is unavailable. Resolve CANCEL only if both sources are unavailable or do not clearly show the required UTC value."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will the U.S. BEA advance estimate report Q2 2026 real GDP annualized growth at or above 1.5% - check 2?",
+    "category": "Macro",
+    "resolutionSource": "https://www.bea.gov/data/gdp/gross-domestic-product",
+    "fallbackSource": "https://fred.stlouisfed.org/series/A191RL1Q225SBEA",
+    "closeTimeUtc": "2026-07-30T12:25:00Z",
+    "resolutionTimeUtc": "2026-07-30T15:00:00Z",
+    "resolutionRule": "Resolve YES if the first BEA advance estimate for Q2 2026 real GDP reports annualized growth greater than or equal to 1.5%. Resolve NO if it is below 1.5%. Use FRED only if BEA is unavailable. Resolve CANCEL only if no official advance estimate is published by resolution time."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will FIFA's official 2026 World Cup match centre list at least 5 matches with both teams scoring on 2026-06-25 UTC?",
+    "category": "Sports",
+    "resolutionSource": "https://www.fifa.com/en/tournaments/mens/worldcup/canadamexicousa2026",
+    "fallbackSource": "https://www.espn.com/soccer/scoreboard",
+    "closeTimeUtc": "2026-06-25T12:00:00Z",
+    "resolutionTimeUtc": "2026-06-26T04:00:00Z",
+    "resolutionRule": "Resolve YES if FIFA's official 2026 World Cup match centre or match report pages list at least 5 completed matches played on 2026-06-25 UTC where each team scored at least one goal. Resolve NO if fewer than 5 such matches are listed, including if no completed World Cup match is listed for that UTC date. Use ESPN soccer scoreboard only if FIFA is unavailable. Resolve CANCEL only if both sources are unavailable or contradictory."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will BNB/USDT daily candle close at or above 950 USDT on Binance before the end of 2026-08-13 UTC?",
+    "category": "Crypto",
+    "resolutionSource": "https://www.binance.com/en/trade/BNB_USDT",
+    "fallbackSource": "https://www.coingecko.com/en/coins/bnb",
+    "closeTimeUtc": "2026-08-13T23:55:00Z",
+    "resolutionTimeUtc": "2026-08-14T01:00:00Z",
+    "resolutionRule": "Resolve YES if Binance BNB/USDT daily candle for 2026-08-13 UTC closes greater than or equal to 950 USDT. Resolve NO if the observed Binance value is below 950. Use CoinGecko BNB USD market data only if Binance BNB/USDT is unavailable. Resolve CANCEL only if both sources are unavailable or do not clearly show the required UTC value."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will the U.S. EIA weekly commercial crude oil inventory change report a draw of at least 2.0 million barrels for the week released on July 8, 2026?",
+    "category": "Macro",
+    "resolutionSource": "https://www.eia.gov/petroleum/supply/weekly/",
+    "fallbackSource": "https://www.eia.gov/",
+    "closeTimeUtc": "2026-07-08T14:25:00Z",
+    "resolutionTimeUtc": "2026-07-08T17:00:00Z",
+    "resolutionRule": "Resolve YES if EIA weekly petroleum status report released on July 8, 2026 reports U.S. commercial crude oil inventories excluding SPR decreased by 2.0 million barrels or more from the prior week. Resolve NO otherwise. Resolve CANCEL only if EIA does not publish the weekly report by resolution time."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will FIFA's official 2026 World Cup match centre list at least 1 matches ending in a draw after normal time on 2026-06-21 UTC?",
+    "category": "Sports",
+    "resolutionSource": "https://www.fifa.com/en/tournaments/mens/worldcup/canadamexicousa2026",
+    "fallbackSource": "https://www.espn.com/soccer/scoreboard",
+    "closeTimeUtc": "2026-06-21T12:00:00Z",
+    "resolutionTimeUtc": "2026-06-22T04:00:00Z",
+    "resolutionRule": "Resolve YES if FIFA's official 2026 World Cup match centre or match report pages list at least 1 completed matches played on 2026-06-21 UTC whose score is tied after normal time plus stoppage time. For knockout matches, use the score before extra time and penalties. Resolve NO if fewer than 1 such matches are listed, including if no completed World Cup match exists on that UTC date. Use ESPN only if FIFA is unavailable. Resolve CANCEL only if both sources are unavailable or contradictory."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will BTC/USDT daily candle close at or above 95000 USDT on Binance before the end of 2026-07-28 UTC?",
+    "category": "Crypto",
+    "resolutionSource": "https://www.binance.com/en/trade/BTC_USDT",
+    "fallbackSource": "https://www.coingecko.com/en/coins/bitcoin",
+    "closeTimeUtc": "2026-07-28T23:55:00Z",
+    "resolutionTimeUtc": "2026-07-29T01:00:00Z",
+    "resolutionRule": "Resolve YES if Binance BTC/USDT daily candle for 2026-07-28 UTC closes greater than or equal to 95000 USDT. Resolve NO if the observed Binance value is below 95000. Use CoinGecko BTC USD market data only if Binance BTC/USDT is unavailable. Resolve CANCEL only if both sources are unavailable or do not clearly show the required UTC value."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will SPDR S&P 500 ETF Trust (SPY) official regular-market closing price be at or above 590.00 USD on 2026-08-21?",
+    "category": "Stocks",
+    "resolutionSource": "https://finance.yahoo.com/quote/SPY/",
+    "fallbackSource": "https://www.nasdaq.com/market-activity/stocks/spy",
+    "closeTimeUtc": "2026-08-21T20:55:00Z",
+    "resolutionTimeUtc": "2026-08-21T22:30:00Z",
+    "resolutionRule": "Resolve YES if Yahoo Finance reports the official regular-market closing price for SPDR S&P 500 ETF Trust (SPY) on 2026-08-21 as greater than or equal to 590.00 USD. Resolve NO if the official close is below 590.00 USD. Use Nasdaq only if Yahoo Finance is unavailable. Ignore pre-market, after-hours, intraday, adjusted close, and analyst target prices. Resolve CANCEL only if the stock/ETF is halted for the full regular session or both sources fail to publish a clear official close by resolution time."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will ADA/USDT trade at or above 0.6 USDT on Binance before the end of 2026-07-12 UTC?",
+    "category": "Crypto",
+    "resolutionSource": "https://www.binance.com/en/trade/ADA_USDT",
+    "fallbackSource": "https://www.coingecko.com/en/coins/cardano",
+    "closeTimeUtc": "2026-07-12T23:55:00Z",
+    "resolutionTimeUtc": "2026-07-13T01:00:00Z",
+    "resolutionRule": "Resolve YES if Binance ADA/USDT 1-minute or daily market data shows any traded price greater than or equal to 0.6 USDT at any time from 00:00:00 UTC through 23:59:59 UTC on 2026-07-12. Resolve NO if the observed Binance value is below 0.6. Use CoinGecko ADA USD market data only if Binance ADA/USDT is unavailable. Resolve CANCEL only if both sources are unavailable or do not clearly show the required UTC value."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will Coinbase Global (COIN) official regular-market closing price be at or above 220.00 USD on 2026-08-12?",
+    "category": "Stocks",
+    "resolutionSource": "https://finance.yahoo.com/quote/COIN/",
+    "fallbackSource": "https://www.nasdaq.com/market-activity/stocks/coin",
+    "closeTimeUtc": "2026-08-12T20:55:00Z",
+    "resolutionTimeUtc": "2026-08-12T22:30:00Z",
+    "resolutionRule": "Resolve YES if Yahoo Finance reports the official regular-market closing price for Coinbase Global (COIN) on 2026-08-12 as greater than or equal to 220.00 USD. Resolve NO if the official close is below 220.00 USD. Use Nasdaq only if Yahoo Finance is unavailable. Ignore pre-market, after-hours, intraday, adjusted close, and analyst target prices. Resolve CANCEL only if the stock/ETF is halted for the full regular session or both sources fail to publish a clear official close by resolution time."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will Congress.gov list at least one bill enacted into law in July 2026 - check 3?",
+    "category": "Politics",
+    "resolutionSource": "https://www.congress.gov/",
+    "fallbackSource": "https://www.govinfo.gov/",
+    "closeTimeUtc": "2026-07-31T23:00:00Z",
+    "resolutionTimeUtc": "2026-08-02T03:00:00Z",
+    "resolutionRule": "Resolve YES if Congress.gov lists at least one bill with latest action enacted into public law dated from 2026-07-01 through 2026-07-31 UTC. Resolve NO if none are listed. Use GovInfo only if Congress.gov is unavailable. Resolve CANCEL only if both sources are unavailable."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will SOL/USDT daily candle close at or above 150 USDT on Binance before the end of 2026-06-26 UTC?",
+    "category": "Crypto",
+    "resolutionSource": "https://www.binance.com/en/trade/SOL_USDT",
+    "fallbackSource": "https://www.coingecko.com/en/coins/solana",
+    "closeTimeUtc": "2026-06-26T23:55:00Z",
+    "resolutionTimeUtc": "2026-06-27T01:00:00Z",
+    "resolutionRule": "Resolve YES if Binance SOL/USDT daily candle for 2026-06-26 UTC closes greater than or equal to 150 USDT. Resolve NO if the observed Binance value is below 150. Use CoinGecko SOL USD market data only if Binance SOL/USDT is unavailable. Resolve CANCEL only if both sources are unavailable or do not clearly show the required UTC value."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will Microsoft (MSFT) official regular-market closing price be at or above 460.00 USD on 2026-08-03?",
+    "category": "Stocks",
+    "resolutionSource": "https://finance.yahoo.com/quote/MSFT/",
+    "fallbackSource": "https://www.nasdaq.com/market-activity/stocks/msft",
+    "closeTimeUtc": "2026-08-03T20:55:00Z",
+    "resolutionTimeUtc": "2026-08-03T22:30:00Z",
+    "resolutionRule": "Resolve YES if Yahoo Finance reports the official regular-market closing price for Microsoft (MSFT) on 2026-08-03 as greater than or equal to 460.00 USD. Resolve NO if the official close is below 460.00 USD. Use Nasdaq only if Yahoo Finance is unavailable. Ignore pre-market, after-hours, intraday, adjusted close, and analyst target prices. Resolve CANCEL only if the stock/ETF is halted for the full regular session or both sources fail to publish a clear official close by resolution time."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will OpenAI publish a new official model or API announcement on its blog before August 1, 2026 - check 3?",
+    "category": "Technology",
+    "resolutionSource": "https://openai.com/news/",
+    "fallbackSource": "https://openai.com/blog/",
+    "closeTimeUtc": "2026-07-31T23:00:00Z",
+    "resolutionTimeUtc": "2026-08-01T02:00:00Z",
+    "resolutionRule": "Resolve YES if OpenAI official news/blog publishes at least one post dated before 2026-08-01 UTC announcing a new model or API capability. Resolve NO otherwise. Resolve CANCEL only if official OpenAI pages are unavailable."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will ESPN's 2026 World Cup scoreboard list at least 7 yellow cards across matches on 2026-06-26 UTC?",
+    "category": "Sports",
+    "resolutionSource": "https://www.espn.com/soccer/scoreboard",
+    "fallbackSource": "https://www.fifa.com/en/tournaments/mens/worldcup/canadamexicousa2026",
+    "closeTimeUtc": "2026-06-26T12:00:00Z",
+    "resolutionTimeUtc": "2026-06-27T05:00:00Z",
+    "resolutionRule": "Resolve YES if ESPN's soccer scoreboard or match box scores for the 2026 FIFA World Cup list 7 or more total yellow cards across completed matches played on 2026-06-26 UTC. Resolve NO if the total is below 7 or no completed World Cup match is listed for that UTC date. Use FIFA match reports only if ESPN is unavailable. Resolve CANCEL only if both sources are unavailable or contradictory."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will iShares Russell 2000 ETF (IWM) official regular-market closing price be at or above 210.00 USD on 2026-07-24?",
+    "category": "Stocks",
+    "resolutionSource": "https://finance.yahoo.com/quote/IWM/",
+    "fallbackSource": "https://www.nasdaq.com/market-activity/stocks/iwm",
+    "closeTimeUtc": "2026-07-24T20:55:00Z",
+    "resolutionTimeUtc": "2026-07-24T22:30:00Z",
+    "resolutionRule": "Resolve YES if Yahoo Finance reports the official regular-market closing price for iShares Russell 2000 ETF (IWM) on 2026-07-24 as greater than or equal to 210.00 USD. Resolve NO if the official close is below 210.00 USD. Use Nasdaq only if Yahoo Finance is unavailable. Ignore pre-market, after-hours, intraday, adjusted close, and analyst target prices. Resolve CANCEL only if the stock/ETF is halted for the full regular session or both sources fail to publish a clear official close by resolution time."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will GitHub status report any incident affecting Actions before July 31, 2026 - check 2?",
+    "category": "Technology",
+    "resolutionSource": "https://www.githubstatus.com/",
+    "fallbackSource": "https://github.blog/changelog/",
+    "closeTimeUtc": "2026-07-31T23:00:00Z",
+    "resolutionTimeUtc": "2026-08-01T02:00:00Z",
+    "resolutionRule": "Resolve YES if GitHub Status lists at least one incident between market creation and 2026-07-31 23:00 UTC whose affected component includes Actions. Resolve NO if no such incident is listed. Resolve CANCEL only if GitHub Status is unavailable."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will FIFA's official 2026 World Cup match centre list at least 3 total goals scored in matches played on 2026-06-22 UTC?",
+    "category": "Sports",
+    "resolutionSource": "https://www.fifa.com/en/tournaments/mens/worldcup/canadamexicousa2026",
+    "fallbackSource": "https://www.espn.com/soccer/scoreboard",
+    "closeTimeUtc": "2026-06-22T12:00:00Z",
+    "resolutionTimeUtc": "2026-06-23T04:00:00Z",
+    "resolutionRule": "Resolve YES if FIFA's official 2026 World Cup match centre or match report pages list matches played on 2026-06-22 UTC with a combined total of 3 or more goals after normal time plus stoppage time. Resolve NO if the listed combined total is below 3 or FIFA lists no completed World Cup matches on that UTC date. Use ESPN soccer scoreboard only if FIFA is unavailable. Resolve CANCEL only if both official and fallback sources are unavailable or internally contradictory at resolution time."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will Advanced Micro Devices (AMD) official regular-market closing price be at or above 150.00 USD on 2026-07-15?",
+    "category": "Stocks",
+    "resolutionSource": "https://finance.yahoo.com/quote/AMD/",
+    "fallbackSource": "https://www.nasdaq.com/market-activity/stocks/amd",
+    "closeTimeUtc": "2026-07-15T20:55:00Z",
+    "resolutionTimeUtc": "2026-07-15T22:30:00Z",
+    "resolutionRule": "Resolve YES if Yahoo Finance reports the official regular-market closing price for Advanced Micro Devices (AMD) on 2026-07-15 as greater than or equal to 150.00 USD. Resolve NO if the official close is below 150.00 USD. Use Nasdaq only if Yahoo Finance is unavailable. Ignore pre-market, after-hours, intraday, adjusted close, and analyst target prices. Resolve CANCEL only if the stock/ETF is halted for the full regular session or both sources fail to publish a clear official close by resolution time."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will the Federal Reserve leave the target federal funds rate upper bound at or above 4.00% after its July 2026 FOMC decision - check 2?",
+    "category": "Macro",
+    "resolutionSource": "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm",
+    "fallbackSource": "https://www.federalreserve.gov/monetarypolicy/openmarket.htm",
+    "closeTimeUtc": "2026-07-29T18:00:00Z",
+    "resolutionTimeUtc": "2026-07-29T21:00:00Z",
+    "resolutionRule": "Resolve YES if the Federal Reserve FOMC statement or implementation note after the July 2026 scheduled meeting states the target federal funds rate upper bound is greater than or equal to 4.00%. Resolve NO if below 4.00%. Resolve CANCEL only if no July 2026 FOMC decision is published by resolution time."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will FIFA's official 2026 World Cup match centre list any match on 2026-06-18 UTC with a winning margin of at least 2 goals?",
+    "category": "Sports",
+    "resolutionSource": "https://www.fifa.com/en/tournaments/mens/worldcup/canadamexicousa2026",
+    "fallbackSource": "https://www.espn.com/soccer/scoreboard",
+    "closeTimeUtc": "2026-06-18T12:00:00Z",
+    "resolutionTimeUtc": "2026-06-19T04:00:00Z",
+    "resolutionRule": "Resolve YES if FIFA's official 2026 World Cup match centre or match report pages list at least one completed match played on 2026-06-18 UTC where the final score after normal time plus stoppage time has a winning margin of at least 2 goals. Resolve NO if no such completed match is listed, including if no World Cup match is completed on that UTC date. Use ESPN only if FIFA is unavailable. Resolve CANCEL only if both sources are unavailable or contradictory."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will Amazon (AMZN) official regular-market closing price be at or above 200.00 USD on 2026-07-06?",
+    "category": "Stocks",
+    "resolutionSource": "https://finance.yahoo.com/quote/AMZN/",
+    "fallbackSource": "https://www.nasdaq.com/market-activity/stocks/amzn",
+    "closeTimeUtc": "2026-07-06T20:55:00Z",
+    "resolutionTimeUtc": "2026-07-06T22:30:00Z",
+    "resolutionRule": "Resolve YES if Yahoo Finance reports the official regular-market closing price for Amazon (AMZN) on 2026-07-06 as greater than or equal to 200.00 USD. Resolve NO if the official close is below 200.00 USD. Use Nasdaq only if Yahoo Finance is unavailable. Ignore pre-market, after-hours, intraday, adjusted close, and analyst target prices. Resolve CANCEL only if the stock/ETF is halted for the full regular session or both sources fail to publish a clear official close by resolution time."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will Circle publish at least one official Arc-related blog post between June 18 and June 30, 2026 - check 2?",
+    "category": "Arc",
+    "resolutionSource": "https://www.circle.com/blog",
+    "fallbackSource": "https://www.circle.com/",
+    "closeTimeUtc": "2026-06-30T23:00:00Z",
+    "resolutionTimeUtc": "2026-07-01T02:00:00Z",
+    "resolutionRule": "Resolve YES if Circle official blog publishes at least one post dated from 2026-06-18 through 2026-06-30 UTC that explicitly mentions Arc blockchain or Arc testnet. Resolve NO if no such post exists. Resolve CANCEL only if Circle blog is unavailable at resolution time."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will ESPN's 2026 World Cup scoreboard list at least 7 yellow cards across matches on 2026-07-16 UTC?",
+    "category": "Sports",
+    "resolutionSource": "https://www.espn.com/soccer/scoreboard",
+    "fallbackSource": "https://www.fifa.com/en/tournaments/mens/worldcup/canadamexicousa2026",
+    "closeTimeUtc": "2026-07-16T12:00:00Z",
+    "resolutionTimeUtc": "2026-07-17T05:00:00Z",
+    "resolutionRule": "Resolve YES if ESPN's soccer scoreboard or match box scores for the 2026 FIFA World Cup list 7 or more total yellow cards across completed matches played on 2026-07-16 UTC. Resolve NO if the total is below 7 or no completed World Cup match is listed for that UTC date. Use FIFA match reports only if ESPN is unavailable. Resolve CANCEL only if both sources are unavailable or contradictory."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will Tesla (TSLA) official regular-market closing price be at or above 200.00 USD on 2026-06-24?",
+    "category": "Stocks",
+    "resolutionSource": "https://finance.yahoo.com/quote/TSLA/",
+    "fallbackSource": "https://www.nasdaq.com/market-activity/stocks/tsla",
+    "closeTimeUtc": "2026-06-24T20:55:00Z",
+    "resolutionTimeUtc": "2026-06-24T22:30:00Z",
+    "resolutionRule": "Resolve YES if Yahoo Finance reports the official regular-market closing price for Tesla (TSLA) on 2026-06-24 as greater than or equal to 200.00 USD. Resolve NO if the official close is below 200.00 USD. Use Nasdaq only if Yahoo Finance is unavailable. Ignore pre-market, after-hours, intraday, adjusted close, and analyst target prices. Resolve CANCEL only if the stock/ETF is halted for the full regular session or both sources fail to publish a clear official close by resolution time."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will Congress.gov list at least one bill enacted into law in July 2026?",
+    "category": "Politics",
+    "resolutionSource": "https://www.congress.gov/",
+    "fallbackSource": "https://www.govinfo.gov/",
+    "closeTimeUtc": "2026-07-31T23:00:00Z",
+    "resolutionTimeUtc": "2026-08-02T03:00:00Z",
+    "resolutionRule": "Resolve YES if Congress.gov lists at least one bill with latest action enacted into public law dated from 2026-07-01 through 2026-07-31 UTC. Resolve NO if none are listed. Use GovInfo only if Congress.gov is unavailable. Resolve CANCEL only if both sources are unavailable."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will FIFA's official 2026 World Cup match centre list at least 3 total goals scored in matches played on 2026-07-12 UTC?",
+    "category": "Sports",
+    "resolutionSource": "https://www.fifa.com/en/tournaments/mens/worldcup/canadamexicousa2026",
+    "fallbackSource": "https://www.espn.com/soccer/scoreboard",
+    "closeTimeUtc": "2026-07-12T12:00:00Z",
+    "resolutionTimeUtc": "2026-07-13T04:00:00Z",
+    "resolutionRule": "Resolve YES if FIFA's official 2026 World Cup match centre or match report pages list matches played on 2026-07-12 UTC with a combined total of 3 or more goals after normal time plus stoppage time. Resolve NO if the listed combined total is below 3 or FIFA lists no completed World Cup matches on that UTC date. Use ESPN soccer scoreboard only if FIFA is unavailable. Resolve CANCEL only if both official and fallback sources are unavailable or internally contradictory at resolution time."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will ETH/USDT daily candle close at or above 2800 USDT on Binance before the end of 2026-08-05 UTC?",
+    "category": "Crypto",
+    "resolutionSource": "https://www.binance.com/en/trade/ETH_USDT",
+    "fallbackSource": "https://www.coingecko.com/en/coins/ethereum",
+    "closeTimeUtc": "2026-08-05T23:55:00Z",
+    "resolutionTimeUtc": "2026-08-06T01:00:00Z",
+    "resolutionRule": "Resolve YES if Binance ETH/USDT daily candle for 2026-08-05 UTC closes greater than or equal to 2800 USDT. Resolve NO if the observed Binance value is below 2800. Use CoinGecko ETH USD market data only if Binance ETH/USDT is unavailable. Resolve CANCEL only if both sources are unavailable or do not clearly show the required UTC value."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will OpenAI publish a new official model or API announcement on its blog before August 1, 2026?",
+    "category": "Technology",
+    "resolutionSource": "https://openai.com/news/",
+    "fallbackSource": "https://openai.com/blog/",
+    "closeTimeUtc": "2026-07-31T23:00:00Z",
+    "resolutionTimeUtc": "2026-08-01T02:00:00Z",
+    "resolutionRule": "Resolve YES if OpenAI official news/blog publishes at least one post dated before 2026-08-01 UTC announcing a new model or API capability. Resolve NO otherwise. Resolve CANCEL only if official OpenAI pages are unavailable."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will FIFA's official 2026 World Cup match centre list any match on 2026-07-08 UTC with a winning margin of at least 2 goals?",
+    "category": "Sports",
+    "resolutionSource": "https://www.fifa.com/en/tournaments/mens/worldcup/canadamexicousa2026",
+    "fallbackSource": "https://www.espn.com/soccer/scoreboard",
+    "closeTimeUtc": "2026-07-08T12:00:00Z",
+    "resolutionTimeUtc": "2026-07-09T04:00:00Z",
+    "resolutionRule": "Resolve YES if FIFA's official 2026 World Cup match centre or match report pages list at least one completed match played on 2026-07-08 UTC where the final score after normal time plus stoppage time has a winning margin of at least 2 goals. Resolve NO if no such completed match is listed, including if no World Cup match is completed on that UTC date. Use ESPN only if FIFA is unavailable. Resolve CANCEL only if both sources are unavailable or contradictory."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will LINK/USDT trade at or above 20 USDT on Binance before the end of 2026-07-20 UTC?",
+    "category": "Crypto",
+    "resolutionSource": "https://www.binance.com/en/trade/LINK_USDT",
+    "fallbackSource": "https://www.coingecko.com/en/coins/chainlink",
+    "closeTimeUtc": "2026-07-20T23:55:00Z",
+    "resolutionTimeUtc": "2026-07-21T01:00:00Z",
+    "resolutionRule": "Resolve YES if Binance LINK/USDT 1-minute or daily market data shows any traded price greater than or equal to 20 USDT at any time from 00:00:00 UTC through 23:59:59 UTC on 2026-07-20. Resolve NO if the observed Binance value is below 20. Use CoinGecko LINK USD market data only if Binance LINK/USDT is unavailable. Resolve CANCEL only if both sources are unavailable or do not clearly show the required UTC value."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will the U.S. BLS unemployment rate for June 2026 be at or below 4.5% - check 4?",
+    "category": "Macro",
+    "resolutionSource": "https://www.bls.gov/news.release/empsit.toc.htm",
+    "fallbackSource": "https://fred.stlouisfed.org/series/UNRATE",
+    "closeTimeUtc": "2026-07-02T12:25:00Z",
+    "resolutionTimeUtc": "2026-07-02T14:30:00Z",
+    "resolutionRule": "Resolve YES if the first official BLS Employment Situation release for June 2026 reports the unemployment rate less than or equal to 4.5%. Resolve NO if it is above 4.5%. Use FRED UNRATE only if BLS is unavailable. Resolve CANCEL only if no official June 2026 unemployment value is published by resolution time."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will ESPN's 2026 World Cup scoreboard list at least 7 yellow cards across matches on 2026-07-04 UTC?",
+    "category": "Sports",
+    "resolutionSource": "https://www.espn.com/soccer/scoreboard",
+    "fallbackSource": "https://www.fifa.com/en/tournaments/mens/worldcup/canadamexicousa2026",
+    "closeTimeUtc": "2026-07-04T12:00:00Z",
+    "resolutionTimeUtc": "2026-07-05T05:00:00Z",
+    "resolutionRule": "Resolve YES if ESPN's soccer scoreboard or match box scores for the 2026 FIFA World Cup list 7 or more total yellow cards across completed matches played on 2026-07-04 UTC. Resolve NO if the total is below 7 or no completed World Cup match is listed for that UTC date. Use FIFA match reports only if ESPN is unavailable. Resolve CANCEL only if both sources are unavailable or contradictory."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will XRP/USDT daily candle close at or above 3 USDT on Binance before the end of 2026-07-04 UTC?",
+    "category": "Crypto",
+    "resolutionSource": "https://www.binance.com/en/trade/XRP_USDT",
+    "fallbackSource": "https://www.coingecko.com/en/coins/xrp",
+    "closeTimeUtc": "2026-07-04T23:55:00Z",
+    "resolutionTimeUtc": "2026-07-05T01:00:00Z",
+    "resolutionRule": "Resolve YES if Binance XRP/USDT daily candle for 2026-07-04 UTC closes greater than or equal to 3 USDT. Resolve NO if the observed Binance value is below 3. Use CoinGecko XRP USD market data only if Binance XRP/USDT is unavailable. Resolve CANCEL only if both sources are unavailable or do not clearly show the required UTC value."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will the U.S. BEA advance estimate report Q2 2026 real GDP annualized growth at or above 1.5% - check 3?",
+    "category": "Macro",
+    "resolutionSource": "https://www.bea.gov/data/gdp/gross-domestic-product",
+    "fallbackSource": "https://fred.stlouisfed.org/series/A191RL1Q225SBEA",
+    "closeTimeUtc": "2026-07-30T12:25:00Z",
+    "resolutionTimeUtc": "2026-07-30T15:00:00Z",
+    "resolutionRule": "Resolve YES if the first BEA advance estimate for Q2 2026 real GDP reports annualized growth greater than or equal to 1.5%. Resolve NO if it is below 1.5%. Use FRED only if BEA is unavailable. Resolve CANCEL only if no official advance estimate is published by resolution time."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will FIFA's official 2026 World Cup match centre list at least 3 total goals scored in matches played on 2026-06-30 UTC?",
+    "category": "Sports",
+    "resolutionSource": "https://www.fifa.com/en/tournaments/mens/worldcup/canadamexicousa2026",
+    "fallbackSource": "https://www.espn.com/soccer/scoreboard",
+    "closeTimeUtc": "2026-06-30T12:00:00Z",
+    "resolutionTimeUtc": "2026-07-01T04:00:00Z",
+    "resolutionRule": "Resolve YES if FIFA's official 2026 World Cup match centre or match report pages list matches played on 2026-06-30 UTC with a combined total of 3 or more goals after normal time plus stoppage time. Resolve NO if the listed combined total is below 3 or FIFA lists no completed World Cup matches on that UTC date. Use ESPN soccer scoreboard only if FIFA is unavailable. Resolve CANCEL only if both official and fallback sources are unavailable or internally contradictory at resolution time."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will AVAX/USDT daily candle close at or above 45 USDT on Binance before the end of 2026-06-20 UTC?",
+    "category": "Crypto",
+    "resolutionSource": "https://www.binance.com/en/trade/AVAX_USDT",
+    "fallbackSource": "https://www.coingecko.com/en/coins/avalanche",
+    "closeTimeUtc": "2026-06-20T23:55:00Z",
+    "resolutionTimeUtc": "2026-06-21T01:00:00Z",
+    "resolutionRule": "Resolve YES if Binance AVAX/USDT daily candle for 2026-06-20 UTC closes greater than or equal to 45 USDT. Resolve NO if the observed Binance value is below 45. Use CoinGecko AVAX USD market data only if Binance AVAX/USDT is unavailable. Resolve CANCEL only if both sources are unavailable or do not clearly show the required UTC value."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will the U.S. EIA weekly commercial crude oil inventory change report a draw of at least 2.0 million barrels for the week released on July 8, 2026 - check 2?",
+    "category": "Macro",
+    "resolutionSource": "https://www.eia.gov/petroleum/supply/weekly/",
+    "fallbackSource": "https://www.eia.gov/",
+    "closeTimeUtc": "2026-07-08T14:25:00Z",
+    "resolutionTimeUtc": "2026-07-08T17:00:00Z",
+    "resolutionRule": "Resolve YES if EIA weekly petroleum status report released on July 8, 2026 reports U.S. commercial crude oil inventories excluding SPR decreased by 2.0 million barrels or more from the prior week. Resolve NO otherwise. Resolve CANCEL only if EIA does not publish the weekly report by resolution time."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will FIFA's official 2026 World Cup match centre list any match on 2026-06-26 UTC with a winning margin of at least 2 goals?",
+    "category": "Sports",
+    "resolutionSource": "https://www.fifa.com/en/tournaments/mens/worldcup/canadamexicousa2026",
+    "fallbackSource": "https://www.espn.com/soccer/scoreboard",
+    "closeTimeUtc": "2026-06-26T12:00:00Z",
+    "resolutionTimeUtc": "2026-06-27T04:00:00Z",
+    "resolutionRule": "Resolve YES if FIFA's official 2026 World Cup match centre or match report pages list at least one completed match played on 2026-06-26 UTC where the final score after normal time plus stoppage time has a winning margin of at least 2 goals. Resolve NO if no such completed match is listed, including if no World Cup match is completed on that UTC date. Use ESPN only if FIFA is unavailable. Resolve CANCEL only if both sources are unavailable or contradictory."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will DOGE/USDT trade at or above 0.12 USDT on Binance before the end of 2026-08-17 UTC?",
+    "category": "Crypto",
+    "resolutionSource": "https://www.binance.com/en/trade/DOGE_USDT",
+    "fallbackSource": "https://www.coingecko.com/en/coins/dogecoin",
+    "closeTimeUtc": "2026-08-17T23:55:00Z",
+    "resolutionTimeUtc": "2026-08-18T01:00:00Z",
+    "resolutionRule": "Resolve YES if Binance DOGE/USDT 1-minute or daily market data shows any traded price greater than or equal to 0.12 USDT at any time from 00:00:00 UTC through 23:59:59 UTC on 2026-08-17. Resolve NO if the observed Binance value is below 0.12. Use CoinGecko DOGE USD market data only if Binance DOGE/USDT is unavailable. Resolve CANCEL only if both sources are unavailable or do not clearly show the required UTC value."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will the U.S. Treasury 10-year constant maturity yield close at or above 4.50% on July 31, 2026?",
+    "category": "Macro",
+    "resolutionSource": "https://home.treasury.gov/resource-center/data-chart-center/interest-rates/TextView",
+    "fallbackSource": "https://fred.stlouisfed.org/series/DGS10",
+    "closeTimeUtc": "2026-07-31T20:00:00Z",
+    "resolutionTimeUtc": "2026-08-01T02:00:00Z",
+    "resolutionRule": "Resolve YES if U.S. Treasury daily treasury rates list the 10-year Treasury constant maturity rate for July 31, 2026 as greater than or equal to 4.50%. Resolve NO if below 4.50%. Use FRED DGS10 only if Treasury is unavailable. Resolve CANCEL only if neither source publishes a value for that date by resolution time."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will ESPN's 2026 World Cup scoreboard list at least 7 yellow cards across matches on 2026-06-22 UTC?",
+    "category": "Sports",
+    "resolutionSource": "https://www.espn.com/soccer/scoreboard",
+    "fallbackSource": "https://www.fifa.com/en/tournaments/mens/worldcup/canadamexicousa2026",
+    "closeTimeUtc": "2026-06-22T12:00:00Z",
+    "resolutionTimeUtc": "2026-06-23T05:00:00Z",
+    "resolutionRule": "Resolve YES if ESPN's soccer scoreboard or match box scores for the 2026 FIFA World Cup list 7 or more total yellow cards across completed matches played on 2026-06-22 UTC. Resolve NO if the total is below 7 or no completed World Cup match is listed for that UTC date. Use FIFA match reports only if ESPN is unavailable. Resolve CANCEL only if both sources are unavailable or contradictory."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will ETH/USDT daily candle close at or above 2800 USDT on Binance before the end of 2026-08-01 UTC?",
+    "category": "Crypto",
+    "resolutionSource": "https://www.binance.com/en/trade/ETH_USDT",
+    "fallbackSource": "https://www.coingecko.com/en/coins/ethereum",
+    "closeTimeUtc": "2026-08-01T23:55:00Z",
+    "resolutionTimeUtc": "2026-08-02T01:00:00Z",
+    "resolutionRule": "Resolve YES if Binance ETH/USDT daily candle for 2026-08-01 UTC closes greater than or equal to 2800 USDT. Resolve NO if the observed Binance value is below 2800. Use CoinGecko ETH USD market data only if Binance ETH/USDT is unavailable. Resolve CANCEL only if both sources are unavailable or do not clearly show the required UTC value."
+  },
+  {
+    "resolutionMode": 2,
+    "outcomeLabels": [
+      "YES",
+      "NO"
+    ],
+    "question": "Will the U.S. BLS CPI-U all-items year-over-year change for June 2026 be at or above 3.0%?",
+    "category": "Macro",
+    "resolutionSource": "https://www.bls.gov/cpi/",
+    "fallbackSource": "https://fred.stlouisfed.org/series/CPIAUCSL",
+    "closeTimeUtc": "2026-07-15T12:25:00Z",
+    "resolutionTimeUtc": "2026-07-15T14:30:00Z",
+    "resolutionRule": "Resolve YES if the first official BLS CPI release for June 2026 reports CPI-U all-items year-over-year percent change greater than or equal to 3.0%. Resolve NO if it is below 3.0%. Use FRED CPIAUCSL only if the BLS release is unavailable. Resolve CANCEL only if no official June 2026 CPI value is published by resolution time."
+  }
+]
