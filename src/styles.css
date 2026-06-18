@@ -2944,6 +2944,274 @@ h3 {
   padding-left: 18px;
 }
 
+/* Aura AI assistant */
+.assistant-page {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-height: 520px;
+}
+
+.assistant-header {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+}
+
+.assistant-header h2 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.assistant-header p {
+  margin: 2px 0 0;
+  color: #667085;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.assistant-avatar {
+  align-items: center;
+  background: linear-gradient(135deg, #2f6bff, #7f5cff);
+  border-radius: 12px;
+  color: #fff;
+  display: flex;
+  font-size: 20px;
+  height: 44px;
+  justify-content: center;
+  width: 44px;
+  flex-shrink: 0;
+}
+
+.assistant-thread {
+  background: #f6f8fc;
+  border: 1px solid #dfe6f1;
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  flex: 1;
+  overflow-y: auto;
+  max-height: 56vh;
+  padding: 16px;
+}
+
+.assistant-empty {
+  color: #667085;
+  display: grid;
+  gap: 10px;
+  margin: auto 0;
+  text-align: center;
+}
+
+.assistant-suggestions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.assistant-suggestions button {
+  background: #fff;
+  border: 1px solid #d9e1ee;
+  border-radius: 10px;
+  color: #2f3b52;
+  cursor: pointer;
+  font-size: 13px;
+  padding: 10px 12px;
+  text-align: left;
+  transition: border-color 0.15s ease, transform 0.1s ease;
+}
+
+.assistant-suggestions button:hover {
+  border-color: #2f6bff;
+  transform: translateY(-1px);
+}
+
+.assistant-bubble {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 86%;
+}
+
+.assistant-bubble.user {
+  align-self: flex-end;
+  align-items: flex-end;
+}
+
+.assistant-bubble.assistant {
+  align-self: flex-start;
+}
+
+.assistant-bubble-text {
+  border-radius: 14px;
+  font-size: 14px;
+  line-height: 1.5;
+  padding: 10px 14px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.assistant-bubble.user .assistant-bubble-text {
+  background: #2f6bff;
+  color: #fff;
+  border-bottom-right-radius: 4px;
+}
+
+.assistant-bubble.assistant .assistant-bubble-text {
+  background: #fff;
+  border: 1px solid #e2e8f4;
+  color: #1f2a40;
+  border-bottom-left-radius: 4px;
+}
+
+.assistant-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+.assistant-action-card {
+  background: #fff;
+  border: 1px solid #d9e1ee;
+  border-left: 3px solid #2f6bff;
+  border-radius: 10px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 10px 13px;
+  text-align: left;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.assistant-action-card:hover:not(:disabled) {
+  box-shadow: 0 6px 18px rgba(47, 107, 255, 0.16);
+}
+
+.assistant-action-card:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.assistant-action-card.bet {
+  border-left-color: #12b981;
+}
+
+.assistant-action-card.claim {
+  border-left-color: #f59e0b;
+}
+
+.assistant-action-label {
+  color: #1f2a40;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.assistant-action-meta {
+  color: #667085;
+  font-size: 12px;
+}
+
+.assistant-typing {
+  align-items: center;
+  background: #fff;
+  border: 1px solid #e2e8f4;
+  border-radius: 14px;
+  display: inline-flex;
+  gap: 4px;
+  padding: 12px 14px;
+}
+
+.assistant-typing span {
+  animation: assistant-blink 1.2s infinite ease-in-out;
+  background: #9aa7bd;
+  border-radius: 50%;
+  height: 7px;
+  width: 7px;
+}
+
+.assistant-typing span:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.assistant-typing span:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes assistant-blink {
+  0%, 80%, 100% {
+    opacity: 0.3;
+  }
+  40% {
+    opacity: 1;
+  }
+}
+
+.assistant-input-row {
+  display: flex;
+  gap: 8px;
+}
+
+.assistant-input-row input {
+  background: #fff;
+  border: 1px solid #d9e1ee;
+  border-radius: 10px;
+  color: #1f2a40;
+  flex: 1;
+  font-size: 14px;
+  min-height: 44px;
+  padding: 0 14px;
+}
+
+.assistant-input-row input:focus {
+  border-color: #2f6bff;
+  outline: none;
+}
+
+.assistant-input-row button {
+  background: #2f6bff;
+  border: none;
+  border-radius: 10px;
+  color: #fff;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  min-height: 44px;
+  padding: 0 20px;
+}
+
+.assistant-input-row button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+[data-theme="dark"] .assistant-header p,
+[data-theme="dark"] .assistant-empty,
+[data-theme="dark"] .assistant-action-meta {
+  color: #9aa7bd;
+}
+
+[data-theme="dark"] .assistant-thread {
+  background: rgba(8, 12, 22, 0.6);
+  border-color: #202a3f;
+}
+
+[data-theme="dark"] .assistant-suggestions button,
+[data-theme="dark"] .assistant-bubble.assistant .assistant-bubble-text,
+[data-theme="dark"] .assistant-action-card,
+[data-theme="dark"] .assistant-typing,
+[data-theme="dark"] .assistant-input-row input {
+  background: rgba(12, 17, 31, 0.96);
+  border-color: #202a3f;
+  color: #d8e1f0;
+}
+
+[data-theme="dark"] .assistant-action-label {
+  color: #f7f9ff;
+}
+
 .leaderboard-controls {
   align-items: start;
   display: grid;

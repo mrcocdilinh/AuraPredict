@@ -266,6 +266,16 @@ OPENAI_API_KEY=your_openai_key
 OPENAI_MODEL=gpt-4o-mini
 ```
 
+Aura AI chat assistant (the in-app "Aura AI" tab). Groq is tried first, then the
+OpenAI-compatible config above as a fallback. The assistant only proposes actions;
+users always sign in their own wallet.
+
+```bash
+GROQ_API_KEY=your_groq_key
+GROQ_MODEL=llama-3.3-70b-versatile
+# GROQ_BASE_URL=https://api.groq.com/openai/v1  # default
+```
+
 Optional automation:
 
 ```bash

@@ -152,7 +152,21 @@ export type ActivityItem = {
   txHash?: Hash | string;
 };
 
-export type AppView = "markets" | "ended" | "leaderboard" | "profile" | "collection" | "market" | "security" | "notifications" | "owner";
+export type AppView = "markets" | "ended" | "leaderboard" | "profile" | "collection" | "market" | "security" | "notifications" | "owner" | "assistant";
+
+export type AssistantAction = {
+  type: "bet" | "claim" | "view";
+  marketId: number;
+  side?: "YES" | "NO";
+  amount?: string;
+  label: string;
+};
+
+export type AssistantMessage = {
+  role: "user" | "assistant";
+  content: string;
+  actions?: AssistantAction[];
+};
 export type LeaderboardMetric = "volume" | "winRate" | "pnl" | "auraPoints";
 export type LeaderboardPeriod = "day" | "7d" | "30d" | "all";
 export type MarketSectionKey = "fresh" | "hot" | "closing" | "live";

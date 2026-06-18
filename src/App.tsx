@@ -50,6 +50,7 @@ import {
   type MarketContractVersion,
   type ActivityItem,
   type AppView,
+  type AssistantAction,
   type LeaderboardMetric,
   type LeaderboardPeriod,
   type MarketSectionKey,
@@ -207,6 +208,7 @@ import {
 } from "./components/icons";
 import { LandingPage } from "./components/LandingPage";
 import { AppUpdateNotice } from "./components/AppUpdateNotice";
+import { AuraAssistant, type AssistantMarketContext } from "./components/AuraAssistant";
 import {
   indexedMarketToView,
   normalizeCategory,
@@ -1911,6 +1913,8 @@ export default function App() {
                 ? isProtocolOwner ? "Owner dashboard" : "Owner review"
               : view === "security"
                 ? "Security and audit"
+              : view === "assistant"
+                ? "Aura AI assistant"
                 : "Live markets";
   const buildPlayerRows = useCallback((periodStart: number, category = "All") => {
     const marketMap = new Map(markets.map((market) => [market.id, market]));
@@ -5366,12 +5370,12 @@ export default function App() {
     }
   };
 
-  const placeBet = async (marketId: number, side: Outcome) => {
+  const placeBet = async (marketId: number, side: Outcome, amountOverride?: string) => {
     try {
       if (!account || !isAddress(account)) throw new Error("Connect wallet first.");
       const market = markets.find((item) => item.id === marketId);
       const amountDecimals = isStablecoinContractVersion(contractVersion) ? marketDecimals(market) : ARC_NATIVE_USDC_DECIMALS;
-      const amount = stakeInputs[marketId] || "";
+      const amount = amountOverride ?? stakeInputs[marketId] ?? "";
       const value = parseUsdcInput(amount, amountDecimals);
       if (!market) throw new Error("Market not found.");
       if (value <= 0n) throw new Error("Enter a valid amount.");
@@ -6090,6 +6094,52 @@ export default function App() {
     );
     if (completed) setNotificationMenuOpen(false);
   };
+
+  const assistantMarkets = useMemo<AssistantMarketContext[]>(() => {
+    const nowSeconds = Math.floor(Date.now() / 1000);
+    return markets
+      .filter((market) => !market.isDraft)
+      .map((market) => {
+        const total = market.yesPool + market.noPool;
+        const yesPercent = total > 0n ? Number((market.yesPool * 10000n) / total) / 100 : 50;
+        const status =
+          market.outcome !== Outcome.Unresolved ? "resolved" : market.closeTime > nowSeconds ? "live" : "pending";
+        return {
+          id: market.id,
+          question: market.question,
+          category: market.category,
+          status,
+          yesPercent: Math.round(yesPercent * 10) / 10,
+          noPercent: Math.round((100 - yesPercent) * 10) / 10,
+          closeIso: new Date(market.closeTime * 1000).toISOString(),
+          outcome: market.outcome === Outcome.Yes ? "YES" : market.outcome === Outcome.No ? "NO" : "Unresolved",
+          claimable: market.potentialPayout > 0n && !market.claimed
+        };
+      });
+  }, [markets]);
+
+  const handleAssistantAction = useCallback(
+    (action: AssistantAction) => {
+      if (action.type === "view") {
+        setSelectedProfileAddress("");
+        setSelectedMarketId(action.marketId);
+        updateMarketRoute(action.marketId);
+        setView("market");
+        return;
+      }
+      if (action.type === "claim") {
+        void claim(action.marketId);
+        return;
+      }
+      if (action.type === "bet" && action.side) {
+        const side = action.side === "YES" ? Outcome.Yes : Outcome.No;
+        if (action.amount) setStakeInputs((current) => ({ ...current, [action.marketId]: action.amount as string }));
+        void placeBet(action.marketId, side, action.amount);
+      }
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [claim, placeBet, updateMarketRoute]
+  );
 
   const withdrawPendingBalance = async (market: MarketView) => {
     if (!account || !isAddress(account)) throw new Error("Connect wallet first.");
@@ -8827,6 +8877,17 @@ export default function App() {
               Leaderboard
             </button>
             <button
+              className={view === "assistant" ? "tab active" : "tab"}
+              onClick={() => {
+                setSelectedMarketId(null);
+                setSelectedProfileAddress("");
+                updateMarketRoute(null);
+                setView("assistant");
+              }}
+            >
+              Aura AI
+            </button>
+            <button
               className={view === "security" ? "tab active" : "tab"}
               onClick={() => {
                 setSelectedMarketId(null);
@@ -9436,13 +9497,19 @@ export default function App() {
                   and user safety notes visible before mainnet decisions.
                 </p>
               )}
+              {view === "assistant" && (
+                <p>
+                  Chat in any language. Aura AI finds markets, drafts bets, checks AI and Oracle results, and claims —
+                  but you always approve and sign in your own wallet.
+                </p>
+              )}
             </div>
             <div
               className={`board-actions ${view === "market" ? "market-detail-board-actions" : ""} ${
                 view === "profile" ? "profile-board-actions" : ""
               }`}
             >
-              {view === "security" ? (
+              {view === "security" || view === "assistant" ? (
                 <button className="secondary" onClick={backToMarkets} type="button">
                   Back to markets
                 </button>
@@ -9476,7 +9543,7 @@ export default function App() {
             </div>
           </div>
 
-          {view !== "leaderboard" && view !== "profile" && view !== "market" && view !== "security" && view !== "owner" && (
+          {view !== "leaderboard" && view !== "profile" && view !== "market" && view !== "security" && view !== "owner" && view !== "assistant" && (
             <div className="category-row">
               {CATEGORIES.map((category) => (
                 <button
@@ -10962,6 +11029,13 @@ export default function App() {
                 })}
               </div>
             </section>
+          ) : view === "assistant" ? (
+            <AuraAssistant
+              account={account}
+              markets={assistantMarkets}
+              onAction={handleAssistantAction}
+              busy={transactionPending}
+            />
           ) : view === "security" ? (
             <section className="security-page">
               <article>

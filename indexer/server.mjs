@@ -72,6 +72,9 @@ const OPENAI_API_KEY = String(process.env.OPENAI_API_KEY || "").trim();
 const OPENAI_BASE_URL = String(process.env.OPENAI_BASE_URL || "https://api.openai.com/v1").trim().replace(/\/$/, "");
 const AI_MODEL = String(process.env.AI_MODEL || "gemini-2.5-flash").trim();
 const OPENAI_MODEL = String(process.env.OPENAI_MODEL || "gpt-4o-mini").trim();
+const GROQ_API_KEY = String(process.env.GROQ_API_KEY || "").trim();
+const GROQ_BASE_URL = String(process.env.GROQ_BASE_URL || "https://api.groq.com/openai/v1").trim().replace(/\/$/, "");
+const GROQ_MODEL = String(process.env.GROQ_MODEL || "llama-3.3-70b-versatile").trim();
 const RESOLUTION_ADMIN_TOKEN = String(process.env.AURA_RESOLUTION_ADMIN_TOKEN || "").trim();
 const RESOLUTION_AUTO_RUN = String(process.env.AURA_RESOLUTION_AUTO_RUN || "").trim() === "1";
 const RESOLUTION_AUTO_PROPOSE = String(process.env.AURA_RESOLUTION_AUTO_PROPOSE || "").trim() === "1";
@@ -5220,6 +5223,59 @@ async function callAiJson(systemInstruction, prompt) {
   throw lastError instanceof Error ? lastError : new Error(String(lastError));
 }
 
+// Multi-turn chat completion for the Aura AI assistant. Groq is tried first
+// (independent GROQ_API_KEY), then the OpenAI-compatible config as a fallback.
+// Both speak the OpenAI chat-completions shape, so one helper covers both.
+async function callOpenAiCompatibleChat({ apiKey, baseUrl, model, messages }) {
+  const response = await fetch(`${baseUrl}/chat/completions`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      authorization: `Bearer ${apiKey}`
+    },
+    body: JSON.stringify({
+      model,
+      temperature: 0.3,
+      response_format: { type: "json_object" },
+      messages
+    })
+  });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const message = body?.error?.message || `Chat request failed with status ${response.status}.`;
+    throw new AiProviderError(message, {
+      provider: "groq",
+      status: response.status,
+      retryable: response.status === 429 || response.status >= 500
+    });
+  }
+  const text = body?.choices?.[0]?.message?.content || "";
+  return { json: extractJsonObject(text), model };
+}
+
+async function callAssistantChat(messages) {
+  const attempts = [];
+  if (GROQ_API_KEY) attempts.push({ provider: "groq", apiKey: GROQ_API_KEY, baseUrl: GROQ_BASE_URL, model: GROQ_MODEL });
+  if (OPENAI_API_KEY) attempts.push({ provider: "openai", apiKey: OPENAI_API_KEY, baseUrl: OPENAI_BASE_URL, model: OPENAI_MODEL });
+  if (attempts.length === 0) {
+    throw new Error("Aura AI assistant is not configured. Set GROQ_API_KEY (recommended) or OPENAI_API_KEY.");
+  }
+  let lastError = null;
+  for (let index = 0; index < attempts.length; index += 1) {
+    const attempt = attempts[index];
+    try {
+      const result = await callOpenAiCompatibleChat({ ...attempt, messages });
+      return { ...result, provider: attempt.provider };
+    } catch (error) {
+      lastError = error;
+      const retryable = error instanceof AiProviderError ? error.retryable : false;
+      if (!retryable && index < attempts.length - 1) continue;
+      if (index === attempts.length - 1) break;
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error(String(lastError));
+}
+
 function marketDraftPrompt(body) {
   const idea = cleanText(body.idea || body.question, 900);
   const category = cleanText(body.category, 40) || "Other";
@@ -6084,6 +6140,92 @@ async function route(req, res) {
       }
 
       return notFound(res);
+    }
+
+    if (segments[0] === "api" && segments[1] === "assistant" && segments[2] === "chat") {
+      if (req.method !== "POST") return notFound(res);
+      const body = await readRequestBody(req);
+      const rawMessages = Array.isArray(body.messages) ? body.messages : [];
+      const history = rawMessages
+        .filter((message) => message && (message.role === "user" || message.role === "assistant") && typeof message.content === "string")
+        .slice(-12)
+        .map((message) => ({ role: message.role, content: cleanText(message.content, 2000) }));
+      if (history.length === 0 || history[history.length - 1].role !== "user") {
+        return json(res, 400, { error: "Send a user message to Aura AI." });
+      }
+
+      const rawMarkets = Array.isArray(body.markets) ? body.markets.slice(0, 300) : [];
+      const marketContext = rawMarkets
+        .map((market) => ({
+          id: Number(market.id),
+          question: cleanText(market.question, 200),
+          category: cleanText(market.category, 40),
+          status: cleanText(market.status, 20),
+          yesPercent: Number(market.yesPercent) || 0,
+          noPercent: Number(market.noPercent) || 0,
+          closeIso: cleanText(market.closeIso, 40),
+          outcome: cleanText(market.outcome, 16),
+          claimable: market.claimable === true
+        }))
+        .filter((market) => Number.isInteger(market.id));
+
+      const systemInstruction = [
+        "You are Aura AI, the in-app assistant for AuraPredict, a prediction market dapp on Arc Testnet.",
+        "You help the user find markets, place bets, check resolution status (AI and Oracle), and claim winnings or refunds.",
+        "CRITICAL: You never execute anything yourself. You only propose actions; the user must click the button and sign in their wallet.",
+        "LANGUAGE: Detect the language of the user's latest message and write the entire 'reply' field in that same language. If the user writes Vietnamese, reply in Vietnamese; if English, reply in English; and so on.",
+        "You are given a JSON list of markets (each with id, question, category, status, yesPercent, noPercent, closeIso, outcome, claimable).",
+        "Only reference markets from that list. NEVER invent a market id. If nothing matches the user's intent, say so and ask a clarifying question.",
+        "When the user wants to bet, find the best-matching market and propose a 'bet' action with the correct side (YES/NO) and amount they mentioned. If amount is missing, ask for it or omit the amount.",
+        "When the user wants to claim, propose a 'claim' action. To open/inspect a market, propose a 'view' action.",
+        "Respond with STRICT JSON only, shape: {\"reply\": string, \"actions\": [{\"type\": \"bet\"|\"claim\"|\"view\", \"marketId\": number, \"side\"?: \"YES\"|\"NO\", \"amount\"?: string, \"label\": string}]}.",
+        "Keep 'reply' concise and friendly. 'label' is short button text in the user's language. Provide actions only when you are confident about the market id; otherwise return an empty actions array.",
+        `Markets JSON: ${JSON.stringify(marketContext)}`
+      ].join("\n");
+
+      let chat = null;
+      let fallbackReason = "";
+      try {
+        chat = await callAssistantChat([{ role: "system", content: systemInstruction }, ...history]);
+      } catch (error) {
+        fallbackReason = error instanceof Error ? error.message : String(error);
+      }
+
+      const marketIds = new Set(marketContext.map((market) => market.id));
+      const parsed = chat?.json && typeof chat.json === "object" ? chat.json : {};
+      const reply = typeof parsed.reply === "string" && parsed.reply.trim()
+        ? parsed.reply.trim()
+        : fallbackReason
+          ? "Aura AI is temporarily unavailable. Please try again shortly."
+          : "I could not understand that. Could you rephrase?";
+      const actions = (Array.isArray(parsed.actions) ? parsed.actions : [])
+        .map((action) => {
+          const type = ["bet", "claim", "view"].includes(action?.type) ? action.type : null;
+          const marketId = Number(action?.marketId);
+          if (!type || !marketIds.has(marketId)) return null;
+          const side = action?.side === "YES" ? "YES" : action?.side === "NO" ? "NO" : undefined;
+          if (type === "bet" && !side) return null;
+          const amount = action?.amount !== undefined && action?.amount !== null ? String(action.amount).replace(/[^0-9.]/g, "") : undefined;
+          return {
+            type,
+            marketId,
+            ...(side ? { side } : {}),
+            ...(amount ? { amount } : {}),
+            label: cleanText(action?.label, 60) || (type === "bet" ? `${side} bet` : type === "claim" ? "Claim" : "View market")
+          };
+        })
+        .filter(Boolean)
+        .slice(0, 4);
+
+      json(res, 200, {
+        reply,
+        actions,
+        provider: chat?.provider || "unavailable",
+        model: chat?.model || "",
+        fallbackReason,
+        updatedAt: nowIso()
+      });
+      return;
     }
 
     if (segments[0] === "api" && segments[1] === "oracle-reputation") {
