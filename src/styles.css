@@ -14662,6 +14662,88 @@ label {
   .detail-trade-card .stake-shortcuts {
     grid-template-columns: repeat(4, 1fr);
   }
+
+  /* ── Hide hero hot-markets carousel on mobile ── */
+  .hero-hot-panel {
+    display: none;
+  }
+
+  /* ── Leaderboard: compact horizontal rows ── */
+  .leaderboard-row {
+    align-items: center;
+    display: grid;
+    gap: 8px;
+    grid-template-columns: 36px 1fr auto;
+    padding: 10px 12px;
+  }
+
+  /* wallet block stays in col 2, spans remaining */
+  .leaderboard-wallet {
+    min-width: 0;
+  }
+
+  /* Show only rank(1) + wallet(2) + aura-points(6); hide vol/winrate/pnl */
+  .leaderboard-row > span:nth-child(3),
+  .leaderboard-row > span:nth-child(4),
+  .leaderboard-row > span:nth-child(5) {
+    display: none;
+  }
+
+  /* Aura points in col 3 */
+  .leaderboard-row > span:nth-child(6) {
+    font-size: 0.78rem;
+    font-weight: 700;
+    text-align: right;
+    white-space: nowrap;
+  }
+
+  /* ── Profile: compact header + 2-col stat grid ── */
+  .profile-stat-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .profile-liquidity-card {
+    grid-column: span 2;
+  }
+
+  .profile-rank-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  /* Compact profile hero */
+  .profile-head {
+    gap: 10px;
+  }
+
+  .profile-avatar {
+    font-size: 1.4rem;
+    height: 48px;
+    min-width: 48px;
+    width: 48px;
+  }
+
+  /* Hide secondary info on profile header mobile */
+  .profile-username-help {
+    display: none;
+  }
+
+  .profile-chip-row {
+    flex-wrap: wrap;
+    gap: 5px;
+  }
+
+  /* Stat cards: smaller padding on mobile */
+  .profile-stat-card,
+  .profile-rank-grid article {
+    padding: 10px 12px;
+  }
+
+  .profile-stat-card strong,
+  .profile-rank-grid strong {
+    font-size: 1.05rem;
+  }
 }
 
 @media (max-width: 420px) {
