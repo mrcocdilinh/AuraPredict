@@ -62,6 +62,21 @@ export function compactErrorMessage(error: unknown) {
   if (lower.includes("transferfailed")) {
     return "Token transfer failed. Check the selected token balance and allowance before trying again.";
   }
+  if (lower.includes("tooearly") || lower.includes("too_early")) {
+    return "Too early: the market's resolution time has not passed yet. Wait until after the resolution deadline, then try again.";
+  }
+  if (lower.includes("toolate") || lower.includes("too_late")) {
+    return "Too late: the proposal or action window has closed for this market.";
+  }
+  if (lower.includes("invalidstate") || lower.includes("invalid_state")) {
+    return "Invalid market state: the market is not in the correct state for this action (e.g. already proposed, cancelled, or finalized).";
+  }
+  if (lower.includes("notauthorized") || lower.includes("not_authorized")) {
+    return "Not authorized: your wallet is not allowed to perform this action on this market.";
+  }
+  if (lower.includes("invalidoutcome") || lower.includes("invalid_outcome")) {
+    return "Invalid outcome: the outcome ID is not valid for this market.";
+  }
   if (lower.includes("execution reverted")) {
     return "Transaction reverted by the contract. Check market status, amount, wallet permission, or open the transaction on Arcscan.";
   }

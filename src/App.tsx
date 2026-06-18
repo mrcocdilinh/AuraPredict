@@ -162,6 +162,7 @@ import {
   MARKET_EVIDENCE_KEY,
   MARKET_REPORTS_KEY,
   LOCAL_CLAIMED_MARKETS_KEY,
+  AI_RESOLUTION_RECEIPTS_KEY,
   ONBOARDING_DISMISSED_KEY,
   MARKET_QUERY_KEY,
   PROFILE_QUERY_KEY,
@@ -578,7 +579,9 @@ export default function App() {
   const [auraCreateStatus, setAuraCreateStatus] = useState<"idle" | "ready" | "failed">("idle");
   const [duplicateAcknowledged, setDuplicateAcknowledged] = useState(false);
   const [aiResolutionReports, setAiResolutionReports] = useState<Record<number, AiResolutionReport>>({});
-  const [aiResolutionReceipts, setAiResolutionReceipts] = useState<Record<string, AiResolutionReceipt | null>>({});
+  const [aiResolutionReceipts, setAiResolutionReceipts] = useState<Record<string, AiResolutionReceipt | null>>(() => {
+    try { return JSON.parse(window.localStorage.getItem(AI_RESOLUTION_RECEIPTS_KEY) || "{}"); } catch { return {}; }
+  });
   const [oracleProposals, setOracleProposals] = useState<Record<string, OracleProposal | null>>({});
   const [aiMarketInsights, setAiMarketInsights] = useState<Record<string, AiMarketInsight | null>>({});
   const [publicOracleReceipts, setPublicOracleReceipts] = useState<Record<string, PublicOracleReceipt | null>>({});
@@ -2132,6 +2135,7 @@ export default function App() {
   }, [notice]);
 
 
+  useLocalStoragePersist(AI_RESOLUTION_RECEIPTS_KEY, aiResolutionReceipts);
   useLocalStoragePersist(FOLLOWED_CREATORS_KEY, followedCreators);
   useLocalStoragePersist(MARKET_COMMENTS_KEY, marketComments);
   useLocalStoragePersist(MARKET_EVIDENCE_KEY, marketEvidence);
@@ -5512,6 +5516,15 @@ export default function App() {
     if (market && requiresCancelForLiquidity(market)) {
       setNotice("This market is cancel-only because both YES and NO were not funded. Use Cancel to refund positions.");
       return;
+    }
+    if (contractVersion === "v5" && market) {
+      const unlockAt = resolutionUnlockTime(market);
+      if (Math.floor(Date.now() / 1000) < unlockAt) {
+        const diff = unlockAt - Math.floor(Date.now() / 1000);
+        const hrs = Math.ceil(diff / 3600);
+        setNotice(`Too early: resolution unlocks in ~${hrs}h. Wait until after the resolution time.`);
+        return;
+      }
     }
     const source = options?.source ?? "manual";
     if (market && (outcome === Outcome.Yes || outcome === Outcome.No)) {

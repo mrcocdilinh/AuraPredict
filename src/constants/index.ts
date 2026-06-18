@@ -124,6 +124,7 @@ export const MARKET_COMMENTS_KEY = "aurapredict.marketComments";
 export const MARKET_EVIDENCE_KEY = "aurapredict.marketEvidence";
 export const MARKET_REPORTS_KEY = "aurapredict.marketReports";
 export const MARKET_REJECTION_KEY = "aurapredict.marketRejections";
+export const AI_RESOLUTION_RECEIPTS_KEY = "aurapredict.aiResolutionReceipts";
 export const LOCAL_CLAIMED_MARKETS_KEY = "aurapredict.localClaimedMarkets";
 export const ONBOARDING_DISMISSED_KEY = "aurapredict.onboardingDismissed";
 export const MARKET_QUERY_KEY = "market";
