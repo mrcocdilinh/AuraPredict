@@ -6165,9 +6165,35 @@ async function route(req, res) {
           noPercent: Number(market.noPercent) || 0,
           closeIso: cleanText(market.closeIso, 40),
           outcome: cleanText(market.outcome, 16),
-          claimable: market.claimable === true
+          claimable: market.claimable === true,
+          // Per-user position on this market (USDC). Present only when the
+          // connected wallet has staked / has a claimable payout here.
+          ...(Number(market.myYes) > 0 ? { myYes: Number(market.myYes) } : {}),
+          ...(Number(market.myNo) > 0 ? { myNo: Number(market.myNo) } : {}),
+          ...(Number(market.myPayout) > 0 ? { myPayout: Number(market.myPayout) } : {})
         }))
         .filter((market) => Number.isInteger(market.id));
+
+      // Connected wallet + aggregate account stats (computed client-side over
+      // ALL of the user's markets, so counts stay correct even though only a
+      // slice of markets fits in the model context below).
+      const account = typeof body.account === "string" ? cleanText(body.account, 64) : "";
+      const rawStats = body.userStats && typeof body.userStats === "object" ? body.userStats : null;
+      const userStats = rawStats
+        ? {
+            wallet: cleanText(rawStats.wallet, 64) || account,
+            participatedMarkets: Number(rawStats.participatedMarkets) || 0,
+            createdMarkets: Number(rawStats.createdMarkets) || 0,
+            claimableMarkets: Number(rawStats.claimableMarkets) || 0,
+            totalClaimableUsdc: Number(rawStats.totalClaimableUsdc) || 0,
+            participatedMarketIds: Array.isArray(rawStats.participatedMarketIds)
+              ? rawStats.participatedMarketIds.map(Number).filter(Number.isInteger).slice(0, 200)
+              : [],
+            createdMarketIds: Array.isArray(rawStats.createdMarketIds)
+              ? rawStats.createdMarketIds.map(Number).filter(Number.isInteger).slice(0, 200)
+              : []
+          }
+        : null;
 
       // Groq free tier caps tokens-per-minute, so we cannot send every market.
       // Rank by relevance to the user's latest message, then keep a small slice.
@@ -6193,9 +6219,16 @@ async function route(req, res) {
         const ranked = [...allMarkets]
           .map((market) => ({ market, score: scoreMarket(market) }))
           .sort((a, b) => b.score - a.score || (a.market.status === "live" ? -1 : 1));
+        const myMarketIds = new Set([
+          ...(userStats?.participatedMarketIds || []),
+          ...(userStats?.createdMarketIds || [])
+        ]);
         const chosen = new Map();
         for (const market of allMarkets) {
-          if (mentionedIds.has(market.id) || market.claimable) chosen.set(market.id, market);
+          if (chosen.size >= MAX_CONTEXT_MARKETS) break;
+          if (mentionedIds.has(market.id) || market.claimable || market.myYes || market.myNo || myMarketIds.has(market.id)) {
+            chosen.set(market.id, market);
+          }
         }
         for (const { market } of ranked) {
           if (chosen.size >= MAX_CONTEXT_MARKETS) break;
@@ -6216,6 +6249,11 @@ async function route(req, res) {
         "CLAIM RULE: If the user asks about claiming, winnings, rewards, payouts, prizes or refunds in ANY language (e.g. Vietnamese 'phần thưởng', 'tiền thắng', 'nhận thưởng', 'rút'), and the markets list contains one or more markets with claimable=true, you MUST propose a 'claim' action for each claimable market and list them. Do NOT ask the user for a market id when claimable markets already exist. Only if there are zero claimable markets, tell them they have nothing to claim right now.",
         "Respond with STRICT JSON only, shape: {\"reply\": string, \"actions\": [{\"type\": \"bet\"|\"claim\"|\"view\", \"marketId\": number, \"side\"?: \"YES\"|\"NO\", \"amount\"?: string, \"label\": string}]}.",
         "Keep 'reply' concise and friendly. 'label' is short button text in the user's language. Provide actions only when you are confident about the market id; otherwise return an empty actions array.",
+        "ACCOUNT QUESTIONS: Some markets include the connected user's own position fields: myYes (USDC staked on YES), myNo (USDC staked on NO), myPayout (claimable USDC). A separate userStats object gives wallet-wide totals: participatedMarkets (count the user has bet on), createdMarkets (count the user created), claimableMarkets, totalClaimableUsdc, participatedMarketIds, createdMarketIds.",
+        "When the user asks about THEIR account in any language (how many markets they joined/created, whether they participated in market N, their positions, their winnings), answer using userStats and the myYes/myNo/myPayout fields. To check participation in a specific market id, look at participatedMarketIds (and createdMarketIds for creation). If userStats is null or the user is not connected, tell them to connect their wallet first.",
+        userStats
+          ? `Connected wallet: ${account || userStats.wallet}. userStats: ${JSON.stringify(userStats)}`
+          : "The user has NOT connected a wallet, so no account/position data is available.",
         `Markets JSON: ${JSON.stringify(marketContext)}`
       ].join("\n");
 

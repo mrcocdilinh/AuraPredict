@@ -210,6 +210,7 @@ import { LandingPage } from "./components/LandingPage";
 import { AppUpdateNotice } from "./components/AppUpdateNotice";
 import { AuraAssistant, type AssistantMarketContext } from "./components/AuraAssistant";
 import { AuraFloatingChat } from "./components/AuraFloatingChat";
+import type { AuraUserStats } from "./hooks/useAuraChat";
 import {
   indexedMarketToView,
   normalizeCategory,
@@ -6140,6 +6141,33 @@ export default function App() {
       });
   }, [markets]);
 
+  const assistantUserStats = useMemo<AuraUserStats | null>(() => {
+    if (!account) return null;
+    const D = 1e18;
+    const participatedIds: number[] = [];
+    const createdIds: number[] = [];
+    let claimableMarkets = 0;
+    let totalClaimable = 0;
+    for (const market of markets) {
+      if (market.isDraft) continue;
+      if (market.yesPosition > 0n || market.noPosition > 0n) participatedIds.push(market.id);
+      if (sameAddress(market.creator, account)) createdIds.push(market.id);
+      if (market.potentialPayout > 0n && !market.claimed) {
+        claimableMarkets += 1;
+        totalClaimable += Number(market.potentialPayout) / D;
+      }
+    }
+    return {
+      wallet: account,
+      participatedMarkets: participatedIds.length,
+      createdMarkets: createdIds.length,
+      claimableMarkets,
+      totalClaimableUsdc: Math.round(totalClaimable * 100) / 100,
+      participatedMarketIds: participatedIds,
+      createdMarketIds: createdIds
+    };
+  }, [account, markets]);
+
   const handleAssistantAction = useCallback(
     (action: AssistantAction) => {
       if (action.type === "view") {
@@ -11102,6 +11130,7 @@ export default function App() {
             <AuraAssistant
               account={account}
               markets={assistantMarkets}
+              userStats={assistantUserStats}
               onAction={handleAssistantAction}
               onConnect={openWalletModal}
               busy={transactionPending}
@@ -12177,6 +12206,7 @@ export default function App() {
         <AuraFloatingChat
           account={account}
           markets={assistantMarkets}
+          userStats={assistantUserStats}
           onAction={handleAssistantAction}
           onConnect={openWalletModal}
           busy={transactionPending}

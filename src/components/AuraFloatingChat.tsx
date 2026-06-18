@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { AssistantAction } from "../types";
-import { useAuraChat } from "../hooks/useAuraChat";
+import { useAuraChat, type AuraUserStats } from "../hooks/useAuraChat";
 import type { AssistantMarketContext } from "./AuraAssistant";
 
 const SUGGESTIONS = [
@@ -12,18 +12,20 @@ const SUGGESTIONS = [
 export function AuraFloatingChat({
   account,
   markets,
+  userStats,
   onAction,
   onConnect,
   busy
 }: {
   account: string;
   markets: AssistantMarketContext[];
+  userStats: AuraUserStats | null;
   onAction: (action: AssistantAction) => void;
   onConnect: () => void;
   busy?: boolean;
 }) {
   const [open, setOpen] = useState(false);
-  const { messages, input, setInput, loading, send, clearChat } = useAuraChat({ account, markets, onAction });
+  const { messages, input, setInput, loading, send, clearChat } = useAuraChat({ account, markets, userStats, onAction });
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const marketById = new Map(markets.map((m) => [m.id, m]));

@@ -28,13 +28,25 @@ type MarketCtx = {
   claimable: boolean; myYes?: number; myNo?: number; myPayout?: number;
 };
 
+export type AuraUserStats = {
+  wallet: string;
+  participatedMarkets: number;
+  createdMarkets: number;
+  claimableMarkets: number;
+  totalClaimableUsdc: number;
+  participatedMarketIds: number[];
+  createdMarketIds: number[];
+};
+
 export function useAuraChat({
   account,
   markets,
+  userStats,
   onAction
 }: {
   account: string;
   markets: MarketCtx[];
+  userStats: AuraUserStats | null;
   onAction: (action: AssistantAction) => void;
 }) {
   const [messages, setMessages] = useState<AssistantMessage[]>(loadHistory);
@@ -56,25 +68,6 @@ export function useAuraChat({
       setInput("");
       setLoading(true);
       try {
-        const participated = markets.filter((m) => m.myYes || m.myNo);
-        const claimable = markets.filter((m) => m.claimable);
-        const userStats = account ? {
-          wallet: account,
-          participatedMarkets: participated.length,
-          claimableMarkets: claimable.length,
-          totalClaimableUsdc: Math.round(claimable.reduce((s, m) => s + (m.myPayout ?? 0), 0) * 100) / 100,
-          positions: participated.map((m) => ({
-            marketId: m.id,
-            question: m.question,
-            myYes: m.myYes,
-            myNo: m.myNo,
-            myPayout: m.myPayout,
-            status: m.status,
-            outcome: m.outcome,
-            claimable: m.claimable
-          }))
-        } : null;
-
         const response = await fetch(`${INDEXER_URL}/api/assistant/chat`, {
           method: "POST",
           headers: { "content-type": "application/json" },
@@ -109,7 +102,7 @@ export function useAuraChat({
         setLoading(false);
       }
     },
-    [account, loading, markets, messages]
+    [account, loading, markets, messages, userStats]
   );
 
   return { messages, input, setInput, loading, send, clearChat, onAction };
