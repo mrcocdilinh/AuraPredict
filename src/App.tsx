@@ -11545,6 +11545,11 @@ export default function App() {
                 </span>
               </label>
             )}
+            {aiMarketDraft && (createForm.resolutionSource.trim().length === 0 || createForm.resolutionRule.trim().length === 0) && (
+              <p className="form-hint-apply-draft">
+                Click <strong>Apply suggestion</strong> above to fill the form, then review before launching.
+              </p>
+            )}
             <div className="modal-actions">
               <button className="secondary" type="button" onClick={() => setCreateModalOpen(false)}>
                 Cancel
