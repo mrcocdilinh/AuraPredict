@@ -73,6 +73,10 @@ const OPENAI_BASE_URL = String(process.env.OPENAI_BASE_URL || "https://api.opena
 const AI_MODEL = String(process.env.AI_MODEL || "gemini-2.5-flash").trim();
 const OPENAI_MODEL = String(process.env.OPENAI_MODEL || "gpt-4o-mini").trim();
 const GROQ_API_KEY = String(process.env.GROQ_API_KEY || "").trim();
+const GROQ_API_KEYS = String(process.env.GROQ_API_KEYS || "")
+  .split(",")
+  .map((key) => key.trim())
+  .filter(Boolean);
 const GROQ_BASE_URL = String(process.env.GROQ_BASE_URL || "https://api.groq.com/openai/v1").trim().replace(/\/$/, "");
 const GROQ_MODEL = String(process.env.GROQ_MODEL || "llama-3.3-70b-versatile").trim();
 const RESOLUTION_ADMIN_TOKEN = String(process.env.AURA_RESOLUTION_ADMIN_TOKEN || "").trim();
@@ -269,6 +273,11 @@ const walletClient = resolverAccount && !resolverUsesCircleWallet()
   : null;
 const GEMINI_RATE_LIMIT_COOLDOWN_MS = Number(process.env.GEMINI_RATE_LIMIT_COOLDOWN_MS || 120_000);
 const geminiKeyState = {
+  cursor: 0,
+  cooldownUntilByKey: new Map()
+};
+const GROQ_RATE_LIMIT_COOLDOWN_MS = Number(process.env.GROQ_RATE_LIMIT_COOLDOWN_MS || 60_000);
+const groqKeyState = {
   cursor: 0,
   cooldownUntilByKey: new Map()
 };
@@ -5074,6 +5083,31 @@ function nextGeminiKey() {
   return keys[fallbackIndex];
 }
 
+function configuredGroqKeys() {
+  const unique = new Set();
+  for (const key of GROQ_API_KEYS) unique.add(key);
+  if (GROQ_API_KEY) unique.add(GROQ_API_KEY);
+  return [...unique];
+}
+
+function nextGroqKey() {
+  const keys = configuredGroqKeys();
+  if (keys.length === 0) return null;
+  const now = Date.now();
+  for (let attempt = 0; attempt < keys.length; attempt += 1) {
+    const index = (groqKeyState.cursor + attempt) % keys.length;
+    const key = keys[index];
+    const cooldownUntil = groqKeyState.cooldownUntilByKey.get(key) || 0;
+    if (cooldownUntil <= now) {
+      groqKeyState.cursor = (index + 1) % keys.length;
+      return key;
+    }
+  }
+  const fallbackIndex = groqKeyState.cursor % keys.length;
+  groqKeyState.cursor = (fallbackIndex + 1) % keys.length;
+  return keys[fallbackIndex];
+}
+
 class AiProviderError extends Error {
   constructor(message, options = {}) {
     super(message);
@@ -5227,7 +5261,7 @@ async function callAiJson(systemInstruction, prompt) {
 // Multi-turn chat completion for the Aura AI assistant. Groq is tried first
 // (independent GROQ_API_KEY), then the OpenAI-compatible config as a fallback.
 // Both speak the OpenAI chat-completions shape, so one helper covers both.
-async function callOpenAiCompatibleChat({ apiKey, baseUrl, model, messages }) {
+async function callOpenAiCompatibleChat({ apiKey, baseUrl, model, messages, provider = "groq" }) {
   const response = await fetch(`${baseUrl}/chat/completions`, {
     method: "POST",
     headers: {
@@ -5246,7 +5280,7 @@ async function callOpenAiCompatibleChat({ apiKey, baseUrl, model, messages }) {
     const message = body?.error?.message || `Chat request failed with status ${response.status}.`;
     const retryAfterHeader = Number(response.headers.get("retry-after"));
     throw new AiProviderError(message, {
-      provider: "groq",
+      provider,
       status: response.status,
       retryable: response.status === 429 || response.status >= 500,
       retryAfterMs: Number.isFinite(retryAfterHeader) && retryAfterHeader > 0 ? retryAfterHeader * 1000 : 0
@@ -5254,6 +5288,36 @@ async function callOpenAiCompatibleChat({ apiKey, baseUrl, model, messages }) {
   }
   const text = body?.choices?.[0]?.message?.content || "";
   return { json: extractJsonObject(text), model };
+}
+
+// Try each configured Groq key in turn. Groq rate limits are per-key, so on a
+// 429 we put that key on a short cooldown and immediately try the next one.
+async function callGroqChat(messages) {
+  const keys = configuredGroqKeys();
+  if (keys.length === 0) {
+    throw new AiProviderError("Groq is not configured. Set GROQ_API_KEY or GROQ_API_KEYS.", {
+      provider: "groq",
+      retryable: false
+    });
+  }
+  let lastError = null;
+  for (let i = 0; i < keys.length; i += 1) {
+    const key = nextGroqKey();
+    if (!key) break;
+    try {
+      return await callOpenAiCompatibleChat({ apiKey: key, baseUrl: GROQ_BASE_URL, model: GROQ_MODEL, messages, provider: "groq" });
+    } catch (error) {
+      lastError = error;
+      if (error instanceof AiProviderError && error.status === 429) {
+        groqKeyState.cooldownUntilByKey.set(key, Date.now() + GROQ_RATE_LIMIT_COOLDOWN_MS);
+      }
+      // Only keep cycling keys on transient errors; a hard error (bad request,
+      // auth) would fail on every key, so surface it right away.
+      const retryable = error instanceof AiProviderError ? error.retryable : false;
+      if (!retryable) throw error;
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error(String(lastError));
 }
 
 // Flatten an OpenAI-style messages array into Gemini's (systemInstruction,
@@ -5275,11 +5339,8 @@ async function callAssistantChat(messages) {
   // Provider order: Groq (fast) → Gemini (multi-key, rate-limit resilient) →
   // OpenAI. Each provider gets one retry on a transient (429/5xx) error.
   const attempts = [];
-  if (GROQ_API_KEY) {
-    attempts.push({
-      provider: "groq",
-      run: () => callOpenAiCompatibleChat({ apiKey: GROQ_API_KEY, baseUrl: GROQ_BASE_URL, model: GROQ_MODEL, messages })
-    });
+  if (configuredGroqKeys().length > 0) {
+    attempts.push({ provider: "groq", run: () => callGroqChat(messages) });
   }
   if (configuredGeminiKeys().length > 0) {
     attempts.push({ provider: "gemini", run: () => callGeminiChat(messages) });
@@ -5287,11 +5348,11 @@ async function callAssistantChat(messages) {
   if (OPENAI_API_KEY) {
     attempts.push({
       provider: "openai",
-      run: () => callOpenAiCompatibleChat({ apiKey: OPENAI_API_KEY, baseUrl: OPENAI_BASE_URL, model: OPENAI_MODEL, messages })
+      run: () => callOpenAiCompatibleChat({ apiKey: OPENAI_API_KEY, baseUrl: OPENAI_BASE_URL, model: OPENAI_MODEL, messages, provider: "openai" })
     });
   }
   if (attempts.length === 0) {
-    throw new Error("Aura AI assistant is not configured. Set GROQ_API_KEY (recommended), GEMINI_API_KEY, or OPENAI_API_KEY.");
+    throw new Error("Aura AI assistant is not configured. Set GROQ_API_KEY/GROQ_API_KEYS (recommended), GEMINI_API_KEY, or OPENAI_API_KEY.");
   }
 
   let lastError = null;
