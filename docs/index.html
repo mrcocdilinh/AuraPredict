@@ -320,7 +320,7 @@
             <article><span>Token safety</span><strong>Frontend checks balance and allowance for the selected settlement token before create, stake, or dispute actions.</strong></article>
             <article><span>Optional swap</span><strong>Circle App Kit-first quoting, with LI.FI fallback, visible minimum receive, and adjustable tolerance helps a wallet obtain USDC or EURC without changing any market's payout denomination.</strong></article>
             <article><span>Settlement report</span><strong>Resolution actions summarize AI choice, Oracle choice, creator proposal, dispute state, pools, and deadlines before finalization.</strong></article>
-            <article><span>Oracle proposal</span><strong>The indexer can check objective crypto price, macro chart, and health/status API markets without spending AI quota, then auto-submit eligible high-confidence proposals.</strong></article>
+            <article><span>Oracle proposal</span><strong>The indexer can check objective markets — crypto price, stocks, macro chart, economic releases (CPI/PPI/Fed/EIA), sports scoreboards, and health/status APIs — without spending AI quota, then auto-submit eligible high-confidence proposals.</strong></article>
             <article><span>Agent signer</span><strong>Circle Agent Wallet mode lets the indexer sign proposal transactions without storing a raw resolver private key.</strong></article>
             <article><span>No-liquidity markets</span><strong>If no one stakes, the resolver can cancel without spending an AI review.</strong></article>
             <article><span>No-proposal timeout</span><strong>If a market passes its proposal grace period without a result, it can be canceled/refunded instead of leaving funds stuck.</strong></article>
@@ -442,6 +442,18 @@
             <article>
               <h3>Macro chart adapter</h3>
               <p>Checks gold and US Dollar Index markets against Yahoo chart data near the market's onchain resolution timestamp.</p>
+            </article>
+            <article>
+              <h3>Economic release adapter</h3>
+              <p>Reads official BLS releases for CPI/PPI markets, FRED data for Fed target-rate markets, and EIA weekly data for crude inventory markets.</p>
+            </article>
+            <article>
+              <h3>Stock adapter</h3>
+              <p>Checks equity closing-price markets against Yahoo chart data at the resolution timestamp, with weekend and holiday calendar guards.</p>
+            </article>
+            <article>
+              <h3>Sports scoreboard adapter</h3>
+              <p>Uses deterministic schedule and final-score data such as the MLB schedule API and league scoreboards instead of inferring results from memory.</p>
             </article>
             <article>
               <h3>Health/status adapter</h3>

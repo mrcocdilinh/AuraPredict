@@ -1,6 +1,6 @@
 # AuraPredict V5 Protocol Notes
 
-V5 is the major contract branch for the next AuraPredict deployment. It is not the active production/testnet contract until a new V5 address is deployed and the frontend/indexer environment is switched to that address.
+V5 is the active AuraPredict contract branch. It is deployed on Arc Testnet and the frontend/indexer environment now points at the V5 address (`VITE_AURAPREDICT_V5_ADDRESS`). Older V3/V4 deployments remain readable by the indexer for historical markets only.
 
 ## Core Goals
 

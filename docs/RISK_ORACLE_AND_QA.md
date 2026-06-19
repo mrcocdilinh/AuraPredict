@@ -12,7 +12,7 @@ Users should review each market question, source URL, fallback source, resolutio
 
 ## Current Trust Assumptions
 
-- Contract: V4 on Arc Testnet, unaudited.
+- Contract: V5 on Arc Testnet, unaudited.
 - Custody: user funds are held by the market contract, not by the frontend.
 - Owner: currently a single protocol owner wallet.
 - Authority: the active resolution authority can be operated by a Circle Agent Wallet.
@@ -33,7 +33,7 @@ Aura Agent can draft market wording, but new markets should pass deterministic c
 - Sports fixture check: "next match", group-stage, standings, team participation, qualification, and tournament winner markets need an official fixture, standings, or final/end timestamp. The AI must not infer group membership or schedule from memory.
 - Risk badge check: markets with weak sources, date mismatch, weekend stock close, unknown fixture, open reports, dispute, or authority review should show visible risk badges and appear in the owner queue.
 
-These checks are off-chain controls for V4. They do not pause an already-created market onchain. Emergency cancel, market pause, and onchain reason events are reserved for a future contract version.
+These checks are off-chain controls layered on top of the V5 contract. They do not pause an already-created market onchain. Owner-side report/cancel and policy gates are the onchain controls; richer per-market emergency events remain a future contract direction.
 
 ## Resolution And Owner Review Policy
 

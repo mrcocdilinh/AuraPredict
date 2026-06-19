@@ -133,6 +133,18 @@ export function LandingPage() {
       text: "Gold and US Dollar Index markets can be checked against Yahoo chart data near the market's onchain resolution timestamp."
     },
     {
+      title: "Economic releases",
+      text: "CPI and PPI markets read official BLS releases, Fed target-rate markets read FRED data, and crude inventory markets read EIA weekly data."
+    },
+    {
+      title: "Stocks",
+      text: "Equity closing-price markets can be checked against Yahoo chart data at the market's resolution timestamp, with weekend/holiday calendar guards."
+    },
+    {
+      title: "Sports scoreboards",
+      text: "Sports markets use deterministic schedule and final-score data (MLB schedule API, league scoreboards) instead of guessing from memory."
+    },
+    {
       title: "Health and status",
       text: "API health checks, JSON ok:true endpoints, and supported public status pages can produce a source-based Oracle suggestion."
     },
@@ -661,7 +673,7 @@ export function LandingPage() {
           </article>
           <article>
             <span>Oracle proposal</span>
-            <strong>Objective adapters can fetch crypto price, macro chart, and health/status API data, then display or auto-submit YES/NO/Cancel guidance without spending AI quota.</strong>
+            <strong>Objective adapters can fetch crypto price, stocks, macro chart, economic releases (CPI/PPI/Fed/EIA), sports scoreboards, and health/status API data, then display or auto-submit YES/NO/Cancel guidance without spending AI quota.</strong>
           </article>
           <article>
             <span>AI resolution</span>
