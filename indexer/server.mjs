@@ -93,6 +93,7 @@ const AI_ATTESTATION_PRIVATE_KEY = String(process.env.AURA_ATTESTATION_PRIVATE_K
 const RESOLUTION_MIN_CONFIDENCE = Number(process.env.AURA_RESOLUTION_MIN_CONFIDENCE || 72);
 const RESOLUTION_CONSENSUS_COUNT = Number(process.env.AURA_RESOLUTION_CONSENSUS_COUNT || 2);
 const ORACLE_AUTO_RUN = String(process.env.AURA_ORACLE_AUTO_RUN || "1").trim() !== "0";
+const AUTO_FINALIZE = String(process.env.AURA_AUTO_FINALIZE || "").trim() === "1";
 const ORACLE_HTTP_TIMEOUT_MS = Number(process.env.AURA_ORACLE_HTTP_TIMEOUT_MS || 8_000);
 const AUTO_EVIDENCE_ENABLED = String(process.env.AURA_AUTO_EVIDENCE_ENABLED || "1").trim() !== "0";
 const AUTO_EVIDENCE_TIMEOUT_MS = Number(process.env.AURA_AUTO_EVIDENCE_TIMEOUT_MS || 6_000);
@@ -5046,6 +5047,31 @@ async function runAutoOracleSweep() {
   }
 }
 
+async function runAutoFinalizeSweep() {
+  if (!hasResolverSigner()) return;
+  const now = Math.floor(Date.now() / 1000);
+  const candidates = Object.values(state.markets)
+    .filter((market) => market.outcome === Outcome.Unresolved)
+    .filter((market) => Number(market.proposedAt || 0) > 0)
+    .filter((market) => !market.disputed)
+    .filter((market) => !market.authorityReviewRequired)
+    .filter((market) => Number(market.disputeDeadline || 0) > 0 && now >= Number(market.disputeDeadline))
+    .slice(0, 5);
+
+  for (const market of candidates) {
+    try {
+      const functionName = isV5Contract() ? "finalize" : isV4Contract() ? "finalize" : "finalize";
+      const txHash = await writeResolverContract(functionName, [BigInt(market.id)]);
+      market.autoFinalizedAt = nowIso();
+      market.autoFinalizedTx = txHash;
+      console.log(`[auto-finalize] market ${market.id} finalized tx=${txHash}`);
+      await saveState();
+    } catch (error) {
+      console.error(`[auto-finalize] market ${market.id} error:`, error instanceof Error ? error.message : String(error));
+    }
+  }
+}
+
 function extractJsonObject(text) {
   const raw = String(text || "").trim();
   if (!raw) throw new Error("AI returned an empty response.");
@@ -5965,6 +5991,9 @@ async function syncOnce() {
       }
       if (RESOLUTION_AUTO_RUN) {
         await runAutoResolutionSweep();
+      }
+      if (AUTO_FINALIZE) {
+        await runAutoFinalizeSweep();
       }
       runtime.lastSyncedAt = nowIso();
       runtime.lastSyncError = "";
