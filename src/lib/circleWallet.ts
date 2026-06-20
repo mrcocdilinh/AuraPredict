@@ -2,13 +2,13 @@
 // Flow: backend opens a session + (for new users) a PIN/wallet creation
 // challenge; the W3S SDK runs that challenge in a Circle-hosted iframe so the
 // user sets a PIN and their Arc SCA wallet is created. Keys stay with Circle.
-import { W3SSdk } from "@circle-fin/w3s-pw-web-sdk";
 import { INDEXER_URL } from "../constants";
 
 const USER_ID_KEY = "aura_circle_user_id";
 const WALLET_TYPE_KEY = "aura_wallet_type";
 
 export type CircleWallet = { address: string; id: string };
+type CircleW3SSdk = InstanceType<typeof import("@circle-fin/w3s-pw-web-sdk").W3SSdk>;
 
 type SessionResponse = {
   appId: string;
@@ -22,9 +22,12 @@ function emailToUserId(email: string): string {
   return email.trim().toLowerCase();
 }
 
-let sdk: W3SSdk | null = null;
-function getSdk(appId: string): W3SSdk {
-  if (!sdk) sdk = new W3SSdk({ appSettings: { appId } });
+let sdk: CircleW3SSdk | null = null;
+async function getSdk(appId: string): Promise<CircleW3SSdk> {
+  if (!sdk) {
+    const { W3SSdk } = await import("@circle-fin/w3s-pw-web-sdk");
+    sdk = new W3SSdk({ appSettings: { appId } });
+  }
   return sdk;
 }
 
@@ -42,7 +45,7 @@ async function startSession(userId: string): Promise<SessionResponse> {
 }
 
 async function runChallenge(session: SessionResponse): Promise<void> {
-  const client = getSdk(session.appId);
+  const client = await getSdk(session.appId);
   client.setAuthentication({ userToken: session.userToken, encryptionKey: session.encryptionKey });
   await client.getDeviceId();
   await new Promise<void>((resolve, reject) => {
