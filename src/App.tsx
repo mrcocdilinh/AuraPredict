@@ -12122,32 +12122,41 @@ export default function App() {
 
       {emailLoginOpen && (
         <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Email login">
-          <section className="modal-panel wallet-connect-modal">
-            <div className="modal-header">
-              <h2>Log in with email</h2>
-              <button className="icon-button" type="button" onClick={() => setEmailLoginOpen(false)}>
+          <section className="modal-panel email-login-modal">
+            <div className="modal-header email-login-header">
+              <div>
+                <span className="email-login-eyebrow">Circle wallet</span>
+                <h2>Log in with email</h2>
+              </div>
+              <button className="icon-button" type="button" aria-label="Close email login" onClick={() => setEmailLoginOpen(false)}>
                 X
               </button>
             </div>
-            <p>
-              No crypto wallet needed. We create a secure Circle wallet on Arc for you, protected by a PIN.
-              You stay in control — keys are never shared with AuraPredict.
-            </p>
+            <div className="email-login-intro">
+              <strong>Secure Arc wallet, no extension required.</strong>
+              <p>
+                We create a PIN-protected Circle wallet for you. Your keys stay private and are never shared with AuraPredict.
+              </p>
+            </div>
             <form
+              className="email-login-form"
               onSubmit={async (event) => {
                 event.preventDefault();
                 await connectCircleWallet(emailLoginInput);
                 setEmailLoginOpen(false);
               }}
             >
-              <input
-                type="email"
-                value={emailLoginInput}
-                placeholder="you@example.com"
-                onChange={(event) => setEmailLoginInput(event.target.value)}
-                autoFocus
-              />
-              <div className="modal-actions">
+              <label className="email-login-field">
+                <span>Email address</span>
+                <input
+                  type="email"
+                  value={emailLoginInput}
+                  placeholder="you@example.com"
+                  onChange={(event) => setEmailLoginInput(event.target.value)}
+                  autoFocus
+                />
+              </label>
+              <div className="modal-actions email-login-actions">
                 <button className="secondary" type="button" onClick={() => setEmailLoginOpen(false)}>
                   Cancel
                 </button>

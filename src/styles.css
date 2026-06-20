@@ -5252,6 +5252,78 @@ textarea {
   width: min(900px, 100%);
 }
 
+.email-login-modal {
+  display: grid;
+  gap: 16px;
+  padding: 22px;
+  width: min(460px, 100%);
+}
+
+.email-login-header {
+  align-items: center;
+}
+
+.email-login-header h2 {
+  font-size: 1.25rem;
+  margin-top: 4px;
+}
+
+.email-login-eyebrow {
+  color: #2f6bff;
+  display: inline-flex;
+  font-size: 0.72rem;
+  font-weight: 950;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.email-login-intro {
+  background:
+    linear-gradient(135deg, rgba(47, 107, 255, 0.1), rgba(91, 232, 255, 0.1)),
+    #f7fbff;
+  border: 1px solid #dbeafe;
+  border-radius: 8px;
+  display: grid;
+  gap: 6px;
+  padding: 14px;
+}
+
+.email-login-intro strong {
+  color: #101827;
+  font-size: 0.98rem;
+}
+
+.email-login-intro p {
+  color: #5c667a;
+  line-height: 1.45;
+  margin: 0;
+}
+
+.email-login-form {
+  display: grid;
+  gap: 14px;
+}
+
+.email-login-field {
+  color: #344054;
+  display: grid;
+  font-size: 0.82rem;
+  font-weight: 850;
+  gap: 7px;
+}
+
+.email-login-field input {
+  min-height: 46px;
+}
+
+.email-login-actions {
+  justify-content: stretch;
+}
+
+.email-login-actions button {
+  flex: 1 1 0;
+}
+
 .wallet-list-panel,
 .wallet-info-panel {
   display: grid;
@@ -8997,6 +9069,26 @@ label {
   background: rgba(47, 107, 255, 0.08);
   border-color: rgba(47, 107, 255, 0.22);
   color: #d8e1f0;
+}
+
+[data-theme="dark"] .email-login-eyebrow {
+  color: #79e7ff;
+}
+
+[data-theme="dark"] .email-login-intro {
+  background:
+    linear-gradient(135deg, rgba(47, 107, 255, 0.16), rgba(91, 232, 255, 0.08)),
+    rgba(8, 13, 26, 0.74);
+  border-color: rgba(121, 231, 255, 0.2);
+}
+
+[data-theme="dark"] .email-login-intro strong {
+  color: #f7f9ff;
+}
+
+[data-theme="dark"] .email-login-intro p,
+[data-theme="dark"] .email-login-field {
+  color: #aebbd0;
 }
 
 [data-theme="dark"] .unified-balance-card {
