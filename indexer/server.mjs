@@ -5047,21 +5047,27 @@ async function runAutoOracleSweep() {
   }
 }
 
+function marketHasOpenReport(marketId) {
+  const reports = socialState().reports[String(marketId)] ?? [];
+  return reports.some((report) => report.status === "open");
+}
+
 async function runAutoFinalizeSweep() {
-  if (!hasResolverSigner()) return;
+  // finalize(uint256) is the V5 signature; older contracts use a different path.
+  if (!isV5Contract() || !hasResolverSigner()) return;
   const now = Math.floor(Date.now() / 1000);
   const candidates = Object.values(state.markets)
     .filter((market) => market.outcome === Outcome.Unresolved)
     .filter((market) => Number(market.proposedAt || 0) > 0)
     .filter((market) => !market.disputed)
     .filter((market) => !market.authorityReviewRequired)
+    .filter((market) => !marketHasOpenReport(market.id))
     .filter((market) => Number(market.disputeDeadline || 0) > 0 && now >= Number(market.disputeDeadline))
     .slice(0, 5);
 
   for (const market of candidates) {
     try {
-      const functionName = isV5Contract() ? "finalize" : isV4Contract() ? "finalize" : "finalize";
-      const txHash = await writeResolverContract(functionName, [BigInt(market.id)]);
+      const txHash = await writeResolverContract("finalize", [BigInt(market.id)]);
       market.autoFinalizedAt = nowIso();
       market.autoFinalizedTx = txHash;
       console.log(`[auto-finalize] market ${market.id} finalized tx=${txHash}`);
