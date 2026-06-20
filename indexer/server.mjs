@@ -8,6 +8,7 @@ import { createPublicClient, createWalletClient, encodeAbiParameters, fallback, 
 import { privateKeyToAccount } from "viem/accounts";
 import { arcPredictionMarketV2Abi, arcPredictionMarketV3Abi, arcPredictionMarketV4Abi } from "./arcPredictionMarketAbi.mjs";
 import { arcPredictionMarketV5Abi } from "./arcPredictionMarketV5Abi.mjs";
+import { circleWalletsEnabled, circleAppId, circleStartSession, circleListWallets } from "./circleWallets.mjs";
 import { scoreEvidenceSearchResult } from "./evidenceSearchPolicy.mjs";
 import {
   NUMERIC_COMPARATORS,
@@ -6188,6 +6189,41 @@ async function route(req, res) {
         toBlock: body.toBlock || url.searchParams.get("toBlock")
       });
       json(res, 200, { ok: true, ...result, updatedAt: state.updatedAt });
+      return;
+    }
+
+    if (url.pathname === "/api/wallet/circle/config") {
+      json(res, 200, { enabled: circleWalletsEnabled(), appId: circleAppId() });
+      return;
+    }
+
+    if (url.pathname === "/api/wallet/circle/session") {
+      if (req.method !== "POST") return notFound(res);
+      if (!circleWalletsEnabled()) return json(res, 503, { error: "Circle wallets are not configured." });
+      const body = await readRequestBody(req);
+      const userId = cleanText(body.userId, 128);
+      if (!userId || userId.length < 5) return json(res, 400, { error: "userId must be at least 5 characters." });
+      try {
+        const session = await circleStartSession(userId);
+        json(res, 200, session);
+      } catch (error) {
+        console.error("[circle] session error:", error instanceof Error ? error.message : String(error));
+        json(res, 502, { error: "Could not start Circle wallet session." });
+      }
+      return;
+    }
+
+    if (url.pathname === "/api/wallet/circle/wallets") {
+      if (!circleWalletsEnabled()) return json(res, 503, { error: "Circle wallets are not configured." });
+      const userId = cleanText(url.searchParams.get("userId") || "", 128);
+      if (!userId || userId.length < 5) return json(res, 400, { error: "userId must be at least 5 characters." });
+      try {
+        const wallets = await circleListWallets(userId);
+        json(res, 200, { wallets });
+      } catch (error) {
+        console.error("[circle] wallets error:", error instanceof Error ? error.message : String(error));
+        json(res, 502, { error: "Could not list Circle wallets." });
+      }
       return;
     }
 
