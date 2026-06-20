@@ -24,6 +24,9 @@ import {
 } from "../lib/errorUtils";
 import { isStablecoinContractVersion, sameAddress } from "../lib/marketUtils";
 import { stablecoinMarketAbi } from "../lib/contractUtils";
+import { circleEmailLogin, clearCircleSession } from "../lib/circleWallet";
+
+export type WalletType = "" | "injected" | "circle";
 
 export interface WalletStateOptions {
   contractVersion: MarketContractVersion;
@@ -42,6 +45,7 @@ export function useWalletState({
   setNotice
 }: WalletStateOptions) {
   const [account, setAccount] = useState("");
+  const [walletType, setWalletType] = useState<WalletType>("");
   const [selectedWalletProvider, setSelectedWalletProvider] = useState<EthereumProvider | null>(null);
   const [connecting, setConnecting] = useState(false);
   const [isArcNetwork, setIsArcNetwork] = useState(true);
@@ -202,6 +206,7 @@ export function useWalletState({
       throw new Error("No wallet account returned.");
     }
     setAccount(addresses[0]);
+    setWalletType("injected");
     void refreshWalletBalance(addresses[0]);
     setSelectedWalletProvider(providerToUse);
     setIsArcNetwork(true);
@@ -210,6 +215,34 @@ export function useWalletState({
     setNotice("Wallet connected on Arc Testnet.");
     setConnecting(false);
   }, [refreshWalletBalance, selectedWalletProvider, setNotice, switchToArc]);
+
+  // Email login via Circle User-Controlled Wallets. Mutually exclusive with the
+  // injected wallet: drop any injected provider so only one wallet is ever active.
+  const connectCircleWallet = useCallback(async (email: string) => {
+    setNotice("");
+    setConnecting(true);
+    try {
+      const wallet = await circleEmailLogin(email);
+      try {
+        await selectedWalletProvider?.disconnect?.();
+      } catch {
+        // injected providers usually have no disconnect
+      }
+      setSelectedWalletProvider(null);
+      setWalletType("circle");
+      setAccount(wallet.address);
+      setIsArcNetwork(true);
+      void refreshWalletBalance(wallet.address);
+      window.localStorage.setItem(WALLET_CONNECTED_KEY, "true");
+      window.localStorage.removeItem(WALLET_DISCONNECTED_KEY);
+      setWalletModalOpen(false);
+      setNotice("Logged in with email on Arc Testnet.");
+    } catch (error) {
+      setNotice(walletConnectionErrorMessage("Email login failed", error));
+    } finally {
+      setConnecting(false);
+    }
+  }, [refreshWalletBalance, selectedWalletProvider, setNotice]);
 
   const handleConnectWallet = useCallback(async (provider?: EthereumProvider | null) => {
     try {
@@ -242,6 +275,8 @@ export function useWalletState({
       // Injected wallets usually do not expose disconnect.
     }
     setAccount("");
+    setWalletType("");
+    clearCircleSession();
     setWalletBalance(0n);
     setSelectedWalletProvider(null);
     setWalletMenuOpen(false);
@@ -291,6 +326,9 @@ export function useWalletState({
   return {
     account,
     setAccount,
+    walletType,
+    setWalletType,
+    connectCircleWallet,
     selectedWalletProvider,
     setSelectedWalletProvider,
     connecting,

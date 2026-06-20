@@ -444,6 +444,8 @@ export default function App() {
   const [notificationMenuOpen, setNotificationMenuOpen] = useState(false);
   const [themeMenuOpen, setThemeMenuOpen] = useState(false);
   const [createModalOpen, setCreateModalOpen] = useState(false);
+  const [emailLoginOpen, setEmailLoginOpen] = useState(false);
+  const [emailLoginInput, setEmailLoginInput] = useState("");
   const currentTime = useCurrentTime();
   const [marketReloadToken, setMarketReloadToken] = useState(0);
   const [lastDataRefresh, setLastDataRefresh] = useState<Date | null>(null);
@@ -475,6 +477,7 @@ export default function App() {
     connectWallet,
     handleConnectWallet,
     handleWalletConnect,
+    connectCircleWallet,
     disconnectWallet
   } = useWalletState({
     contractVersion,
@@ -9338,9 +9341,19 @@ export default function App() {
               </div>
             </>
           ) : (
-            <button onClick={openWalletModal} disabled={connecting || isReconnecting}>
-              {connecting || isReconnecting ? "Connecting..." : "Sign in"}
-            </button>
+            <>
+              <button onClick={openWalletModal} disabled={connecting || isReconnecting}>
+                {connecting || isReconnecting ? "Connecting..." : "Sign in"}
+              </button>
+              <button
+                className="secondary"
+                type="button"
+                onClick={() => setEmailLoginOpen(true)}
+                disabled={connecting || isReconnecting}
+              >
+                Email login
+              </button>
+            </>
           )}
         </div>
       </nav>
@@ -12106,6 +12119,46 @@ export default function App() {
         </div>
       )}
 
+
+      {emailLoginOpen && (
+        <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Email login">
+          <section className="modal-panel wallet-connect-modal">
+            <div className="modal-header">
+              <h2>Log in with email</h2>
+              <button className="icon-button" type="button" onClick={() => setEmailLoginOpen(false)}>
+                X
+              </button>
+            </div>
+            <p>
+              No crypto wallet needed. We create a secure Circle wallet on Arc for you, protected by a PIN.
+              You stay in control — keys are never shared with AuraPredict.
+            </p>
+            <form
+              onSubmit={async (event) => {
+                event.preventDefault();
+                await connectCircleWallet(emailLoginInput);
+                setEmailLoginOpen(false);
+              }}
+            >
+              <input
+                type="email"
+                value={emailLoginInput}
+                placeholder="you@example.com"
+                onChange={(event) => setEmailLoginInput(event.target.value)}
+                autoFocus
+              />
+              <div className="modal-actions">
+                <button className="secondary" type="button" onClick={() => setEmailLoginOpen(false)}>
+                  Cancel
+                </button>
+                <button type="submit" disabled={connecting || !emailLoginInput.trim()}>
+                  {connecting ? "Setting up..." : "Continue"}
+                </button>
+              </div>
+            </form>
+          </section>
+        </div>
+      )}
 
       <footer className="site-footer">
         <section className="footer-brand">
