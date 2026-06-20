@@ -1,7 +1,7 @@
 import "dotenv/config";
 import { spawn } from "node:child_process";
 import { createServer } from "node:http";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile, rename } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createPublicClient, createWalletClient, encodeAbiParameters, fallback, formatUnits, http, isAddress, keccak256, stringToHex, webSocket } from "viem";
@@ -556,9 +556,24 @@ async function loadState() {
   }
 }
 
-async function saveState() {
+let saveChain = Promise.resolve();
+
+async function writeStateAtomic() {
   await mkdir(DATA_DIR, { recursive: true });
-  await writeFile(DATA_FILE, `${JSON.stringify(state, null, 2)}\n`, "utf8");
+  // Atomic write: serialize to a temp file, then rename over the target.
+  // rename() is atomic on POSIX, so a crash mid-write can never leave a
+  // half-written (corrupt) data file — loadState always sees a complete file.
+  const tmp = `${DATA_FILE}.tmp`;
+  await writeFile(tmp, `${JSON.stringify(state, null, 2)}\n`, "utf8");
+  await rename(tmp, DATA_FILE);
+}
+
+async function saveState() {
+  // Serialize concurrent saves so two writers never clash on the temp file.
+  saveChain = saveChain.then(writeStateAtomic, writeStateAtomic).catch((error) => {
+    console.error("[indexer] saveState failed:", error instanceof Error ? error.message : String(error));
+  });
+  return saveChain;
 }
 
 async function getBlockTimestamp(blockNumber) {
