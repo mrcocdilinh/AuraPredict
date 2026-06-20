@@ -5875,19 +5875,20 @@ async function runAutoResolutionSweep() {
 }
 
 async function syncRange(fromBlock, toBlock) {
-  const logs = [];
   const abi = currentContractAbi();
-  const eventNames = isV5Contract() ? V5_EVENT_NAMES : isV4Contract() ? V4_EVENT_NAMES : isV3Contract() ? V3_EVENT_NAMES : V2_EVENT_NAMES;
-  for (const eventName of eventNames) {
-    const eventLogs = await eventClient.getContractEvents({
-      address: CONTRACT_ADDRESS,
-      abi,
-      eventName,
-      fromBlock,
-      toBlock
-    });
-    logs.push(...eventLogs.map((log) => ({ ...log, eventName })));
-  }
+  const eventNames = new Set(
+    isV5Contract() ? V5_EVENT_NAMES : isV4Contract() ? V4_EVENT_NAMES : isV3Contract() ? V3_EVENT_NAMES : V2_EVENT_NAMES
+  );
+  // One getLogs per chunk for all events at once. Per-event queries multiply the
+  // request count (~1 per event name), which falls behind on free-tier RPCs that
+  // cap the block range to a small window. viem decodes and tags each log's eventName.
+  const allEvents = await eventClient.getContractEvents({
+    address: CONTRACT_ADDRESS,
+    abi,
+    fromBlock,
+    toBlock
+  });
+  const logs = allEvents.filter((log) => eventNames.has(log.eventName));
 
   logs.sort((a, b) => {
     const blockOrder = Number((a.blockNumber ?? 0n) - (b.blockNumber ?? 0n));
