@@ -5258,6 +5258,21 @@ textarea {
   padding: 22px;
   width: min(460px, 100%);
 }
+.auth-option {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+.auth-option + .auth-option {
+  margin-top: 8px;
+}
+.auth-option-icon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
 .auth-divider {
   display: flex;
   align-items: center;
