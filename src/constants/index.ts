@@ -113,6 +113,14 @@ export const WALLET_CONNECTED_KEY = "aurapredict.walletConnected";
 export const WALLET_DISCONNECTED_KEY = "aurapredict.walletDisconnected";
 export const WALLETCONNECT_PROJECT_ID = String(import.meta.env.VITE_WALLETCONNECT_PROJECT_ID || "").trim();
 export const CIRCLE_APP_KIT_KEY = String(import.meta.env.VITE_CIRCLE_APP_KIT_KEY || "").trim();
+// Google OAuth client ID for Circle social login (public value, used by the W3S SDK).
+export const GOOGLE_CLIENT_ID = String(
+  import.meta.env.VITE_GOOGLE_CLIENT_ID || "538252206986-mad95jc8aoph0d9c5kod0qc47sl6l1ta.apps.googleusercontent.com"
+).trim();
+// Redirect URI registered in Google Cloud + Circle for the social login flow.
+export const CIRCLE_SOCIAL_REDIRECT_URI = String(
+  import.meta.env.VITE_CIRCLE_SOCIAL_REDIRECT_URI || "https://app.aurapredict.xyz"
+).trim();
 export const DISMISSED_RESULT_KEY = "aurapredict.dismissedResultNotices";
 export const THEME_KEY = "aurapredict.theme";
 export const PROFILE_NAMES_KEY = "aurapredict.profileNames";
