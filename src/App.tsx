@@ -482,6 +482,7 @@ export default function App() {
     handleConnectWallet,
     handleWalletConnect,
     connectCircleWallet,
+    connectGoogleWallet,
     disconnectWallet
   } = useWalletState({
     contractVersion,
@@ -9378,6 +9379,14 @@ export default function App() {
                 disabled={connecting || isReconnecting}
               >
                 Email login
+              </button>
+              <button
+                className="secondary"
+                type="button"
+                onClick={() => void connectGoogleWallet()}
+                disabled={connecting || isReconnecting}
+              >
+                Google
               </button>
             </>
           )}

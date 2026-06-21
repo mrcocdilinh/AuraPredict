@@ -24,7 +24,15 @@ import {
 } from "../lib/errorUtils";
 import { isStablecoinContractVersion, sameAddress } from "../lib/marketUtils";
 import { stablecoinMarketAbi } from "../lib/contractUtils";
-import { circleEmailLogin, clearCircleSession, restoreCircleWallet } from "../lib/circleWallet";
+import {
+  circleEmailLogin,
+  clearCircleSession,
+  restoreCircleWallet,
+  circleGoogleLogin,
+  circleResumeGoogleLogin,
+  setCircleLoginHandlers,
+  type CircleWallet
+} from "../lib/circleWallet";
 
 export type WalletType = "" | "injected" | "circle";
 
@@ -247,6 +255,24 @@ export function useWalletState({
     }
   }, [refreshWalletBalance, selectedWalletProvider, setNotice]);
 
+  // Google login redirects to Google and back; completion is handled by the
+  // login handlers registered on mount, not here.
+  const connectGoogleWallet = useCallback(async () => {
+    setNotice("");
+    setConnecting(true);
+    try {
+      try {
+        await selectedWalletProvider?.disconnect?.();
+      } catch {
+        // injected providers usually have no disconnect
+      }
+      await circleGoogleLogin();
+    } catch (error) {
+      setConnecting(false);
+      setNotice(walletConnectionErrorMessage("Google login failed", error));
+    }
+  }, [selectedWalletProvider, setNotice]);
+
   const handleConnectWallet = useCallback(async (provider?: EthereumProvider | null) => {
     try {
       await connectWallet(provider);
@@ -289,23 +315,36 @@ export function useWalletState({
     setNotice("Wallet disconnected in AuraPredict.");
   }, [selectedWalletProvider, setNotice]);
 
-  // Restore a previous Circle (email) session on reload. Injected sessions are
-  // restored separately by the AppKit bridge.
+  // Restore a previous Circle session, wire the Google-login handlers, and
+  // finish a Google OAuth redirect if we're returning from one.
   useEffect(() => {
     let canceled = false;
-    void (async () => {
-      const wallet = await restoreCircleWallet();
-      if (canceled || !wallet) return;
+    const applyCircleWallet = (wallet: CircleWallet) => {
+      if (canceled) return;
       setWalletType("circle");
       setCircleWalletId(wallet.id);
       setAccount(wallet.address);
       setIsArcNetwork(true);
+      setConnecting(false);
       void refreshWalletBalance(wallet.address);
+      window.localStorage.setItem(WALLET_CONNECTED_KEY, "true");
+      window.localStorage.removeItem(WALLET_DISCONNECTED_KEY);
+      setNotice("Logged in on Arc Testnet.");
+    };
+    setCircleLoginHandlers(applyCircleWallet, (message) => {
+      if (canceled) return;
+      setConnecting(false);
+      setNotice(message);
+    });
+    void (async () => {
+      const wallet = await restoreCircleWallet();
+      if (!canceled && wallet) applyCircleWallet(wallet);
+      await circleResumeGoogleLogin();
     })();
     return () => {
       canceled = true;
     };
-    // Mount-once restore; refreshWalletBalance is stable enough for this purpose.
+    // Mount-once; the setters are stable.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -354,6 +393,7 @@ export function useWalletState({
     setWalletType,
     circleWalletId,
     connectCircleWallet,
+    connectGoogleWallet,
     selectedWalletProvider,
     setSelectedWalletProvider,
     connecting,

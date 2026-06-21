@@ -5,10 +5,11 @@
 // transaction challenges (each still PIN-approved in the Circle-hosted UI).
 import { getAbiItem, toFunctionSignature } from "viem";
 import type { Abi, AbiFunction, Hash } from "viem";
-import { INDEXER_URL } from "../constants";
+import { INDEXER_URL, GOOGLE_CLIENT_ID } from "../constants";
 
 const SESSION_KEY = "aura_circle_session";
 const WALLET_TYPE_KEY = "aura_wallet_type";
+const GOOGLE_PENDING_KEY = "aura_circle_google_pending";
 
 export type CircleWallet = { address: string; id: string };
 type CircleSession = { userToken: string; encryptionKey: string; walletId: string; address: string };
@@ -52,24 +53,51 @@ async function ensureAppId(): Promise<string> {
 }
 
 // The W3S SDK reports login results through an onLoginComplete callback set at
-// construction; bridge it to a per-login promise.
+// construction. Email OTP awaits in-page via `pendingLogin`; Google returns
+// after an OAuth redirect (no in-page promise), so its result is handed to the
+// app through registered handlers.
 let pendingLogin: { resolve: (r: LoginResult) => void; reject: (e: Error) => void } | null = null;
+let onVerifiedLogin: ((wallet: CircleWallet) => void) | null = null;
+let onVerifiedLoginError: ((message: string) => void) | null = null;
+export function setCircleLoginHandlers(
+  onLogin: (wallet: CircleWallet) => void,
+  onError: (message: string) => void
+): void {
+  onVerifiedLogin = onLogin;
+  onVerifiedLoginError = onError;
+}
+
 let sdk: CircleW3SSdk | null = null;
-async function getSdk(): Promise<CircleW3SSdk> {
+type CircleLoginConfigs = NonNullable<Parameters<CircleW3SSdk["updateConfigs"]>[0]>["loginConfigs"];
+async function getSdk(loginConfigs?: CircleLoginConfigs): Promise<CircleW3SSdk> {
   if (!sdk) {
     const appId = await ensureAppId();
     const { W3SSdk } = await import("@circle-fin/w3s-pw-web-sdk");
-    sdk = new W3SSdk({ appSettings: { appId } }, (error, result) => {
-      if (!pendingLogin) return;
-      const settle = pendingLogin;
-      pendingLogin = null;
-      if (error) {
-        settle.reject(new Error(errorMessage(error, "Login failed.")));
-        return;
+    sdk = new W3SSdk(
+      { appSettings: { appId }, ...(loginConfigs ? { loginConfigs } : {}) },
+      (error, result) => {
+        const data = result as { userToken?: string; encryptionKey?: string } | undefined;
+        if (pendingLogin) {
+          const settle = pendingLogin;
+          pendingLogin = null;
+          if (error) settle.reject(new Error(errorMessage(error, "Login failed.")));
+          else settle.resolve({ userToken: data?.userToken || "", encryptionKey: data?.encryptionKey || "" });
+          return;
+        }
+        // Google redirect return — no in-page await; finish and notify the app.
+        if (error) {
+          onVerifiedLoginError?.(errorMessage(error, "Google login failed."));
+          return;
+        }
+        if (sdk && data?.userToken && data?.encryptionKey) {
+          finishLogin(sdk, data.userToken, data.encryptionKey)
+            .then((wallet) => onVerifiedLogin?.(wallet))
+            .catch((err) => onVerifiedLoginError?.(err instanceof Error ? err.message : String(err)));
+        }
       }
-      const data = result as { userToken?: string; encryptionKey?: string } | undefined;
-      settle.resolve({ userToken: data?.userToken || "", encryptionKey: data?.encryptionKey || "" });
-    });
+    );
+  } else if (loginConfigs) {
+    sdk.updateConfigs({ appSettings: { appId: cachedAppId }, loginConfigs });
   }
   return sdk;
 }
@@ -174,6 +202,65 @@ export async function restoreCircleWallet(): Promise<CircleWallet | null> {
   const session = getSession();
   if (!session?.address || !session.walletId) return null;
   return { address: session.address, id: session.walletId };
+}
+
+// --- login (Google social) ------------------------------------------------
+// performLogin redirects to Google and back, so this returns nothing; the
+// result arrives via onLoginComplete on the return page (circleResumeGoogleLogin
+// re-inits the SDK to catch it). Register handlers with setCircleLoginHandlers.
+export async function circleGoogleLogin(): Promise<void> {
+  const redirectUri = window.location.origin;
+  const client = await getSdk();
+  const deviceId = await client.getDeviceId();
+
+  const res = await fetch(`${INDEXER_URL}/api/wallet/circle/login/social`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ deviceId })
+  });
+  if (!res.ok) {
+    const data = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(data.error || "Could not start Google login.");
+  }
+  const { deviceToken, deviceEncryptionKey } = (await res.json()) as {
+    deviceToken: string;
+    deviceEncryptionKey: string;
+  };
+
+  const appId = await ensureAppId();
+  // Remember we're mid-login so the return page knows to re-init and finish.
+  window.localStorage.setItem(GOOGLE_PENDING_KEY, JSON.stringify({ deviceToken, deviceEncryptionKey }));
+  const loginConfigs = {
+    deviceToken,
+    deviceEncryptionKey,
+    google: { clientId: GOOGLE_CLIENT_ID, redirectUri, selectAccountPrompt: true }
+  };
+  client.updateConfigs({ appSettings: { appId }, loginConfigs });
+  // SocialLoginProvider.GOOGLE === "Google"; the enum isn't re-exported, so pass
+  // the value directly with the parameter's type.
+  client.performLogin("Google" as Parameters<CircleW3SSdk["performLogin"]>[0]);
+}
+
+// Call on app load: if we redirected out for Google, re-init the SDK with the
+// stored configs so it processes the OAuth return and fires onLoginComplete.
+export async function circleResumeGoogleLogin(): Promise<void> {
+  const raw = window.localStorage.getItem(GOOGLE_PENDING_KEY);
+  if (!raw) return;
+  window.localStorage.removeItem(GOOGLE_PENDING_KEY);
+  try {
+    const { deviceToken, deviceEncryptionKey } = JSON.parse(raw) as {
+      deviceToken: string;
+      deviceEncryptionKey: string;
+    };
+    await getSdk({
+      deviceToken,
+      deviceEncryptionKey,
+      google: { clientId: GOOGLE_CLIENT_ID, redirectUri: window.location.origin, selectAccountPrompt: true }
+    });
+    // onLoginComplete (set in getSdk) will fire with the OAuth result.
+  } catch {
+    // ignore — user can retry
+  }
 }
 
 // --- transactions ---------------------------------------------------------
