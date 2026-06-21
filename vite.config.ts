@@ -6,10 +6,10 @@ export default defineConfig({
   plugins: [
     react(),
     // The Circle W3S wallet SDK (and some wallet deps) reach for Node built-ins
-    // like util.inherits/stream/events that browsers don't provide. Polyfill the
-    // builtin modules; leave `process` to Vite so its env handling stays intact.
+    // (util.inherits/stream/events) and the `process` global that browsers don't
+    // provide. Polyfill the builtin modules plus Buffer/global/process globals.
     nodePolyfills({
-      globals: { Buffer: true, global: true, process: false }
+      globals: { Buffer: true, global: true, process: true }
     })
   ],
   optimizeDeps: {
