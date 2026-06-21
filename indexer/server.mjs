@@ -8,7 +8,7 @@ import { createPublicClient, createWalletClient, encodeAbiParameters, fallback, 
 import { privateKeyToAccount } from "viem/accounts";
 import { arcPredictionMarketV2Abi, arcPredictionMarketV3Abi, arcPredictionMarketV4Abi } from "./arcPredictionMarketAbi.mjs";
 import { arcPredictionMarketV5Abi } from "./arcPredictionMarketV5Abi.mjs";
-import { circleWalletsEnabled, circleAppId, circleStartSession, circleListWallets } from "./circleWallets.mjs";
+import { circleWalletsEnabled, circleAppId, circleStartSession, circleListWallets, circleContractChallenge } from "./circleWallets.mjs";
 import { scoreEvidenceSearchResult } from "./evidenceSearchPolicy.mjs";
 import {
   NUMERIC_COMPARATORS,
@@ -6223,6 +6223,39 @@ async function route(req, res) {
       } catch (error) {
         console.error("[circle] wallets error:", error instanceof Error ? error.message : String(error));
         json(res, 502, { error: "Could not list Circle wallets." });
+      }
+      return;
+    }
+
+    if (url.pathname === "/api/wallet/circle/contract-execute") {
+      if (req.method !== "POST") return notFound(res);
+      if (!circleWalletsEnabled()) return json(res, 503, { error: "Circle wallets are not configured." });
+      const body = await readRequestBody(req);
+      const userId = cleanText(body.userId, 128);
+      const walletId = cleanText(body.walletId, 128);
+      const contractAddress = cleanText(body.contractAddress, 64);
+      const abiFunctionSignature = cleanText(body.abiFunctionSignature, 256);
+      const abiParameters = Array.isArray(body.abiParameters) ? body.abiParameters.slice(0, 16) : [];
+      if (!userId || userId.length < 5 || !walletId || !contractAddress || !abiFunctionSignature) {
+        return json(res, 400, { error: "Missing userId, walletId, contractAddress, or abiFunctionSignature." });
+      }
+      // Only allow the prediction-market contract and the Arc settlement tokens
+      // (USDC ERC-20, EURC). The PIN gate already protects funds, but this keeps
+      // the endpoint from signing arbitrary contracts.
+      const allowed = new Set([
+        CONTRACT_ADDRESS.toLowerCase(),
+        "0x3600000000000000000000000000000000000000",
+        "0x89b50855aa3be2f677cd6303cec089b5f319d72a"
+      ]);
+      if (!allowed.has(contractAddress.toLowerCase())) {
+        return json(res, 403, { error: "Contract address is not allowed." });
+      }
+      try {
+        const result = await circleContractChallenge({ userId, walletId, contractAddress, abiFunctionSignature, abiParameters });
+        json(res, 200, result);
+      } catch (error) {
+        console.error("[circle] contract-execute error:", error instanceof Error ? error.message : String(error));
+        json(res, 502, { error: "Could not create Circle contract challenge." });
       }
       return;
     }

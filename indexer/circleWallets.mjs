@@ -77,3 +77,24 @@ export async function circleListWallets(userId) {
     state: wallet.state
   }));
 }
+
+// Open a contract-execution challenge for a Circle wallet (stake/approve/claim).
+// Returns the challengeId + a fresh session token; the frontend W3S SDK runs the
+// challenge so the user approves with their PIN and Circle submits the tx on Arc.
+// Creating the challenge is harmless without the PIN, so this is safe to expose.
+export async function circleContractChallenge({ userId, walletId, contractAddress, abiFunctionSignature, abiParameters }) {
+  const c = client();
+  const tokenRes = await c.createUserToken({ userId });
+  const userToken = tokenRes.data?.userToken;
+  const encryptionKey = tokenRes.data?.encryptionKey;
+  if (!userToken) throw new Error("Circle did not return a user session token.");
+  const res = await c.createUserTransactionContractExecutionChallenge({
+    userToken,
+    walletId,
+    contractAddress,
+    abiFunctionSignature,
+    abiParameters,
+    fee: { type: "level", config: { feeLevel: "MEDIUM" } }
+  });
+  return { userToken, encryptionKey, challengeId: res.data?.challengeId || "" };
+}
