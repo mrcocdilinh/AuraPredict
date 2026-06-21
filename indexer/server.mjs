@@ -8,7 +8,18 @@ import { createPublicClient, createWalletClient, encodeAbiParameters, fallback, 
 import { privateKeyToAccount } from "viem/accounts";
 import { arcPredictionMarketV2Abi, arcPredictionMarketV3Abi, arcPredictionMarketV4Abi } from "./arcPredictionMarketAbi.mjs";
 import { arcPredictionMarketV5Abi } from "./arcPredictionMarketV5Abi.mjs";
-import { circleWalletsEnabled, circleAppId, circleStartSession, circleListWallets, circleContractChallenge, circleLatestTx } from "./circleWallets.mjs";
+import {
+  circleWalletsEnabled,
+  circleAppId,
+  circleStartSession,
+  circleListWallets,
+  circleContractChallenge,
+  circleLatestTx,
+  circleEmailLoginToken,
+  circleSocialLoginToken,
+  circleInitWalletByToken,
+  circleWalletsByToken
+} from "./circleWallets.mjs";
 import { scoreEvidenceSearchResult } from "./evidenceSearchPolicy.mjs";
 import {
   NUMERIC_COMPARATORS,
@@ -6197,6 +6208,67 @@ async function route(req, res) {
       return;
     }
 
+    if (url.pathname === "/api/wallet/circle/login/email-otp") {
+      if (req.method !== "POST") return notFound(res);
+      if (!circleWalletsEnabled()) return json(res, 503, { error: "Circle wallets are not configured." });
+      const body = await readRequestBody(req);
+      const deviceId = cleanText(body.deviceId, 128);
+      const email = cleanText(body.email, 160);
+      if (!deviceId || !email || !email.includes("@")) return json(res, 400, { error: "Missing deviceId or valid email." });
+      try {
+        json(res, 200, await circleEmailLoginToken({ deviceId, email }));
+      } catch (error) {
+        console.error("[circle] email-otp error:", error instanceof Error ? error.message : String(error));
+        json(res, 502, { error: "Could not start email login." });
+      }
+      return;
+    }
+
+    if (url.pathname === "/api/wallet/circle/login/social") {
+      if (req.method !== "POST") return notFound(res);
+      if (!circleWalletsEnabled()) return json(res, 503, { error: "Circle wallets are not configured." });
+      const body = await readRequestBody(req);
+      const deviceId = cleanText(body.deviceId, 128);
+      if (!deviceId) return json(res, 400, { error: "Missing deviceId." });
+      try {
+        json(res, 200, await circleSocialLoginToken({ deviceId }));
+      } catch (error) {
+        console.error("[circle] social-login error:", error instanceof Error ? error.message : String(error));
+        json(res, 502, { error: "Could not start social login." });
+      }
+      return;
+    }
+
+    if (url.pathname === "/api/wallet/circle/init-wallet") {
+      if (req.method !== "POST") return notFound(res);
+      if (!circleWalletsEnabled()) return json(res, 503, { error: "Circle wallets are not configured." });
+      const body = await readRequestBody(req);
+      const userToken = cleanText(body.userToken, 4096);
+      if (!userToken) return json(res, 400, { error: "Missing userToken." });
+      try {
+        json(res, 200, await circleInitWalletByToken(userToken));
+      } catch (error) {
+        console.error("[circle] init-wallet error:", error instanceof Error ? error.message : String(error));
+        json(res, 502, { error: "Could not initialize the wallet." });
+      }
+      return;
+    }
+
+    if (url.pathname === "/api/wallet/circle/wallets-by-token") {
+      if (req.method !== "POST") return notFound(res);
+      if (!circleWalletsEnabled()) return json(res, 503, { error: "Circle wallets are not configured." });
+      const body = await readRequestBody(req);
+      const userToken = cleanText(body.userToken, 4096);
+      if (!userToken) return json(res, 400, { error: "Missing userToken." });
+      try {
+        json(res, 200, { wallets: await circleWalletsByToken(userToken) });
+      } catch (error) {
+        console.error("[circle] wallets-by-token error:", error instanceof Error ? error.message : String(error));
+        json(res, 502, { error: "Could not list wallets." });
+      }
+      return;
+    }
+
     if (url.pathname === "/api/wallet/circle/session") {
       if (req.method !== "POST") return notFound(res);
       if (!circleWalletsEnabled()) return json(res, 503, { error: "Circle wallets are not configured." });
@@ -6229,11 +6301,14 @@ async function route(req, res) {
 
     if (url.pathname === "/api/wallet/circle/tx-status") {
       if (!circleWalletsEnabled()) return json(res, 503, { error: "Circle wallets are not configured." });
-      const userId = cleanText(url.searchParams.get("userId") || "", 128);
-      const walletId = cleanText(url.searchParams.get("walletId") || "", 128);
-      if (!userId || userId.length < 5 || !walletId) return json(res, 400, { error: "Missing userId or walletId." });
+      // Accept GET (legacy PIN flow: userId in query) or POST (verified login: userToken in body).
+      const body = req.method === "POST" ? await readRequestBody(req) : {};
+      const userId = cleanText(body.userId || url.searchParams.get("userId") || "", 128);
+      const userToken = cleanText(body.userToken || "", 4096);
+      const walletId = cleanText(body.walletId || url.searchParams.get("walletId") || "", 128);
+      if ((!userId && !userToken) || !walletId) return json(res, 400, { error: "Missing userToken/userId or walletId." });
       try {
-        const tx = await circleLatestTx({ userId, walletId });
+        const tx = await circleLatestTx({ userId, userToken, walletId });
         json(res, 200, tx || { id: "", state: "", txHash: "" });
       } catch (error) {
         console.error("[circle] tx-status error:", error instanceof Error ? error.message : String(error));
@@ -6247,12 +6322,13 @@ async function route(req, res) {
       if (!circleWalletsEnabled()) return json(res, 503, { error: "Circle wallets are not configured." });
       const body = await readRequestBody(req);
       const userId = cleanText(body.userId, 128);
+      const userToken = cleanText(body.userToken, 4096);
       const walletId = cleanText(body.walletId, 128);
       const contractAddress = cleanText(body.contractAddress, 64);
       const abiFunctionSignature = cleanText(body.abiFunctionSignature, 256);
       const abiParameters = Array.isArray(body.abiParameters) ? body.abiParameters.slice(0, 16) : [];
-      if (!userId || userId.length < 5 || !walletId || !contractAddress || !abiFunctionSignature) {
-        return json(res, 400, { error: "Missing userId, walletId, contractAddress, or abiFunctionSignature." });
+      if ((!userId && !userToken) || !walletId || !contractAddress || !abiFunctionSignature) {
+        return json(res, 400, { error: "Missing userToken/userId, walletId, contractAddress, or abiFunctionSignature." });
       }
       // Only allow the prediction-market contract and the Arc settlement tokens
       // (USDC ERC-20, EURC). The PIN gate already protects funds, but this keeps
@@ -6266,7 +6342,7 @@ async function route(req, res) {
         return json(res, 403, { error: "Contract address is not allowed." });
       }
       try {
-        const result = await circleContractChallenge({ userId, walletId, contractAddress, abiFunctionSignature, abiParameters });
+        const result = await circleContractChallenge({ userId, userToken, walletId, contractAddress, abiFunctionSignature, abiParameters });
         json(res, 200, result);
       } catch (error) {
         console.error("[circle] contract-execute error:", error instanceof Error ? error.message : String(error));

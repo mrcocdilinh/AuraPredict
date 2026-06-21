@@ -27,6 +27,64 @@ function errorCode(error) {
   return Number(error?.response?.data?.code ?? error?.code ?? 0);
 }
 
+// --- Verified login (email OTP / social) ---------------------------------
+// Unlike the PIN-only flow above, here Circle verifies the email/identity, so
+// the userToken comes from an authenticated login (onLoginComplete on the
+// frontend), not minted from an email string. The frontend then passes that
+// userToken back for wallet init / transactions.
+
+// Step 1 (email OTP): request a device token; Circle emails the OTP. The
+// frontend feeds these into the SDK and calls verifyOtp().
+export async function circleEmailLoginToken({ deviceId, email }) {
+  const c = client();
+  const res = await c.createDeviceTokenForEmailLogin({ deviceId, email });
+  return {
+    deviceToken: res.data?.deviceToken || "",
+    deviceEncryptionKey: res.data?.deviceEncryptionKey || "",
+    otpToken: res.data?.otpToken || ""
+  };
+}
+
+// Step 1 (social/Google): request a device token for the social login flow.
+export async function circleSocialLoginToken({ deviceId }) {
+  const c = client();
+  const res = await c.createDeviceTokenForSocialLogin({ deviceId });
+  return {
+    deviceToken: res.data?.deviceToken || "",
+    deviceEncryptionKey: res.data?.deviceEncryptionKey || ""
+  };
+}
+
+// Step 2 (after verified login): open the PIN + wallet creation challenge using
+// the authenticated userToken. Returning users (155106) already have a wallet.
+export async function circleInitWalletByToken(userToken) {
+  const c = client();
+  try {
+    const res = await c.createUserPinWithWallets({
+      userToken,
+      blockchains: [Blockchain.ArcTestnet],
+      accountType: "SCA"
+    });
+    return { challengeId: res.data?.challengeId || "", walletReady: false };
+  } catch (error) {
+    if (errorCode(error) === 155106) return { challengeId: "", walletReady: true };
+    throw error;
+  }
+}
+
+// List wallets using an authenticated userToken (no email-as-userId needed).
+export async function circleWalletsByToken(userToken) {
+  const c = client();
+  const res = await c.listWallets({ userToken });
+  return (res.data?.wallets || []).map((wallet) => ({
+    id: wallet.id,
+    address: wallet.address,
+    blockchain: wallet.blockchain,
+    accountType: wallet.accountType,
+    state: wallet.state
+  }));
+}
+
 // Create (idempotent) the Circle user, mint a 60-minute session token, and — for
 // a brand-new user — open the PIN + wallet creation challenge on Arc. The
 // frontend SDK executes the returned challengeId. Returning users already have a
@@ -82,11 +140,17 @@ export async function circleListWallets(userId) {
 // Returns the challengeId + a fresh session token; the frontend W3S SDK runs the
 // challenge so the user approves with their PIN and Circle submits the tx on Arc.
 // Creating the challenge is harmless without the PIN, so this is safe to expose.
-export async function circleContractChallenge({ userId, walletId, contractAddress, abiFunctionSignature, abiParameters }) {
+export async function circleContractChallenge({ userId, userToken: providedToken, walletId, contractAddress, abiFunctionSignature, abiParameters }) {
   const c = client();
-  const tokenRes = await c.createUserToken({ userId });
-  const userToken = tokenRes.data?.userToken;
-  const encryptionKey = tokenRes.data?.encryptionKey;
+  // Prefer the authenticated login token (email-OTP/social); fall back to minting
+  // one from userId for the legacy PIN-only flow.
+  let userToken = providedToken || "";
+  let encryptionKey = "";
+  if (!userToken) {
+    const tokenRes = await c.createUserToken({ userId });
+    userToken = tokenRes.data?.userToken;
+    encryptionKey = tokenRes.data?.encryptionKey;
+  }
   if (!userToken) throw new Error("Circle did not return a user session token.");
   const res = await c.createUserTransactionContractExecutionChallenge({
     userToken,
@@ -101,10 +165,13 @@ export async function circleContractChallenge({ userId, walletId, contractAddres
 
 // After a challenge is approved, Circle submits the tx asynchronously. Return the
 // most recent transaction for the wallet so the frontend can poll for its txHash.
-export async function circleLatestTx({ userId, walletId }) {
+export async function circleLatestTx({ userId, userToken: providedToken, walletId }) {
   const c = client();
-  const tokenRes = await c.createUserToken({ userId });
-  const userToken = tokenRes.data?.userToken;
+  let userToken = providedToken || "";
+  if (!userToken) {
+    const tokenRes = await c.createUserToken({ userId });
+    userToken = tokenRes.data?.userToken;
+  }
   if (!userToken) throw new Error("Circle did not return a user session token.");
   const res = await c.listTransactions({ userToken, walletIds: [walletId], pageSize: 10 });
   const txs = res.data?.transactions || [];
