@@ -70,13 +70,24 @@ async function fetchArcWallet(userId: string): Promise<CircleWallet | null> {
   return wallet ? { address: wallet.address, id: wallet.id } : null;
 }
 
+// Circle provisions the SCA wallet asynchronously after the PIN challenge, so
+// poll until it's queryable instead of failing on the first (too-early) read.
+async function pollArcWallet(userId: string, attempts = 12, delayMs = 1500): Promise<CircleWallet | null> {
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    const wallet = await fetchArcWallet(userId);
+    if (wallet) return wallet;
+    if (attempt < attempts - 1) await new Promise((resolve) => setTimeout(resolve, delayMs));
+  }
+  return null;
+}
+
 // Email login end to end: session -> PIN/wallet challenge (new users) -> address.
 export async function circleEmailLogin(email: string): Promise<CircleWallet> {
   const userId = emailToUserId(email);
   if (userId.length < 5 || !userId.includes("@")) throw new Error("Please enter a valid email.");
   const session = await startSession(userId);
   if (session.challengeId) await runChallenge(session);
-  const wallet = await fetchArcWallet(userId);
+  const wallet = await pollArcWallet(userId);
   if (!wallet) throw new Error("Wallet was not created. Please try again.");
   window.localStorage.setItem(USER_ID_KEY, userId);
   window.localStorage.setItem(WALLET_TYPE_KEY, "circle");
