@@ -178,7 +178,7 @@ export async function circleSendTx(params: {
 
   const client = await getSdk();
   client.setAuthentication({ userToken: data.userToken, encryptionKey: data.encryptionKey });
-  return new Promise<Hash>((resolve, reject) => {
+  const immediateHash = await new Promise<string>((resolve, reject) => {
     client.execute(data.challengeId, (error, result) => {
       if (error) {
         const message = typeof error === "object" && error && "message" in error
@@ -187,8 +187,31 @@ export async function circleSendTx(params: {
         reject(new Error(message));
         return;
       }
-      const txHash = (result as { data?: { txHash?: string } } | undefined)?.data?.txHash;
-      resolve((txHash || "0x") as Hash);
+      resolve((result as { data?: { txHash?: string } } | undefined)?.data?.txHash || "");
     });
   });
+  if (immediateHash) return immediateHash as Hash;
+  // The challenge is approved but Circle submits the tx asynchronously, so poll
+  // for the on-chain hash before handing back to the caller's receipt wait.
+  const txHash = await pollTxHash(userId, params.walletId);
+  if (!txHash) throw new Error("Transaction is processing — check your profile in a moment for the result.");
+  return txHash as Hash;
+}
+
+async function pollTxHash(userId: string, walletId: string, attempts = 24, delayMs = 2000): Promise<string> {
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    try {
+      const res = await fetch(
+        `${INDEXER_URL}/api/wallet/circle/tx-status?userId=${encodeURIComponent(userId)}&walletId=${encodeURIComponent(walletId)}`
+      );
+      if (res.ok) {
+        const data = (await res.json()) as { txHash?: string };
+        if (data.txHash) return data.txHash;
+      }
+    } catch {
+      // transient — keep polling
+    }
+    await new Promise((resolve) => setTimeout(resolve, delayMs));
+  }
+  return "";
 }

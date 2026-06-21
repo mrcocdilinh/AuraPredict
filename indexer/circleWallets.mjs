@@ -98,3 +98,18 @@ export async function circleContractChallenge({ userId, walletId, contractAddres
   });
   return { userToken, encryptionKey, challengeId: res.data?.challengeId || "" };
 }
+
+// After a challenge is approved, Circle submits the tx asynchronously. Return the
+// most recent transaction for the wallet so the frontend can poll for its txHash.
+export async function circleLatestTx({ userId, walletId }) {
+  const c = client();
+  const tokenRes = await c.createUserToken({ userId });
+  const userToken = tokenRes.data?.userToken;
+  if (!userToken) throw new Error("Circle did not return a user session token.");
+  const res = await c.listTransactions({ userToken, walletIds: [walletId], pageSize: 10 });
+  const txs = res.data?.transactions || [];
+  const latest = [...txs].sort(
+    (a, b) => new Date(b.createDate || 0).getTime() - new Date(a.createDate || 0).getTime()
+  )[0];
+  return latest ? { id: latest.id, state: latest.state, txHash: latest.txHash || "" } : null;
+}

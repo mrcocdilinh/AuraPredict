@@ -24,7 +24,7 @@ import {
 } from "../lib/errorUtils";
 import { isStablecoinContractVersion, sameAddress } from "../lib/marketUtils";
 import { stablecoinMarketAbi } from "../lib/contractUtils";
-import { circleEmailLogin, clearCircleSession } from "../lib/circleWallet";
+import { circleEmailLogin, clearCircleSession, restoreCircleWallet } from "../lib/circleWallet";
 
 export type WalletType = "" | "injected" | "circle";
 
@@ -206,6 +206,7 @@ export function useWalletState({
     if (!addresses[0]) {
       throw new Error("No wallet account returned.");
     }
+    clearCircleSession();
     setAccount(addresses[0]);
     setWalletType("injected");
     void refreshWalletBalance(addresses[0]);
@@ -287,6 +288,26 @@ export function useWalletState({
     window.localStorage.setItem(WALLET_DISCONNECTED_KEY, "true");
     setNotice("Wallet disconnected in AuraPredict.");
   }, [selectedWalletProvider, setNotice]);
+
+  // Restore a previous Circle (email) session on reload. Injected sessions are
+  // restored separately by the AppKit bridge.
+  useEffect(() => {
+    let canceled = false;
+    void (async () => {
+      const wallet = await restoreCircleWallet();
+      if (canceled || !wallet) return;
+      setWalletType("circle");
+      setCircleWalletId(wallet.id);
+      setAccount(wallet.address);
+      setIsArcNetwork(true);
+      void refreshWalletBalance(wallet.address);
+    })();
+    return () => {
+      canceled = true;
+    };
+    // Mount-once restore; refreshWalletBalance is stable enough for this purpose.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Refresh wallet balance when account changes
   useEffect(() => {

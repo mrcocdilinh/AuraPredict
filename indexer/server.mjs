@@ -8,7 +8,7 @@ import { createPublicClient, createWalletClient, encodeAbiParameters, fallback, 
 import { privateKeyToAccount } from "viem/accounts";
 import { arcPredictionMarketV2Abi, arcPredictionMarketV3Abi, arcPredictionMarketV4Abi } from "./arcPredictionMarketAbi.mjs";
 import { arcPredictionMarketV5Abi } from "./arcPredictionMarketV5Abi.mjs";
-import { circleWalletsEnabled, circleAppId, circleStartSession, circleListWallets, circleContractChallenge } from "./circleWallets.mjs";
+import { circleWalletsEnabled, circleAppId, circleStartSession, circleListWallets, circleContractChallenge, circleLatestTx } from "./circleWallets.mjs";
 import { scoreEvidenceSearchResult } from "./evidenceSearchPolicy.mjs";
 import {
   NUMERIC_COMPARATORS,
@@ -6223,6 +6223,21 @@ async function route(req, res) {
       } catch (error) {
         console.error("[circle] wallets error:", error instanceof Error ? error.message : String(error));
         json(res, 502, { error: "Could not list Circle wallets." });
+      }
+      return;
+    }
+
+    if (url.pathname === "/api/wallet/circle/tx-status") {
+      if (!circleWalletsEnabled()) return json(res, 503, { error: "Circle wallets are not configured." });
+      const userId = cleanText(url.searchParams.get("userId") || "", 128);
+      const walletId = cleanText(url.searchParams.get("walletId") || "", 128);
+      if (!userId || userId.length < 5 || !walletId) return json(res, 400, { error: "Missing userId or walletId." });
+      try {
+        const tx = await circleLatestTx({ userId, walletId });
+        json(res, 200, tx || { id: "", state: "", txHash: "" });
+      } catch (error) {
+        console.error("[circle] tx-status error:", error instanceof Error ? error.message : String(error));
+        json(res, 502, { error: "Could not read Circle transaction status." });
       }
       return;
     }
