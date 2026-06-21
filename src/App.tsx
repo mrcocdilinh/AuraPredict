@@ -10,6 +10,7 @@
   keccak256,
   parseUnits,
   stringToHex,
+  type Abi,
   type Address,
   type Hash,
   type TransactionReceipt
@@ -348,6 +349,7 @@ import {
 import { mapWithConcurrency } from "./lib/asyncUtils";
 import { normalizeProfileUsername } from "./lib/profileUtils";
 import { stablecoinMarketAbi } from "./lib/contractUtils";
+import { circleSendTx } from "./lib/circleWallet";
 import { useWalletState } from "./hooks/useWalletState";
 import { useAppKitBridge } from "./hooks/useAppKitBridge";
 import { appKitModal } from "./lib/walletkit";
@@ -475,6 +477,7 @@ export default function App() {
     refreshWalletBalance,
     ensureArcNetwork,
     walletType,
+    circleWalletId,
     connectWallet,
     handleConnectWallet,
     handleWalletConnect,
@@ -2371,8 +2374,30 @@ export default function App() {
 
 
   const getActiveWalletClient = useCallback(
-    (provider?: EthereumProvider | null) => getWalletClient(provider ?? selectedWalletProvider),
-    [selectedWalletProvider]
+    (provider?: EthereumProvider | null) => {
+      // Circle (email) wallets sign through Circle's transaction challenge, not
+      // an injected provider — route writeContract there so the existing call
+      // sites (stake/approve/claim/...) work unchanged.
+      if (walletType === "circle") {
+        return {
+          writeContract: (args: {
+            address: Address;
+            abi: Abi;
+            functionName: string;
+            args?: readonly unknown[];
+          }) =>
+            circleSendTx({
+              walletId: circleWalletId,
+              contractAddress: args.address,
+              abi: args.abi,
+              functionName: args.functionName,
+              args: args.args ?? []
+            })
+        } as unknown as ReturnType<typeof getWalletClient>;
+      }
+      return getWalletClient(provider ?? selectedWalletProvider);
+    },
+    [walletType, circleWalletId, selectedWalletProvider]
   );
 
   const setNotice = useCallback((message: string, txHash?: Hash) => {

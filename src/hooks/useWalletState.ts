@@ -46,6 +46,7 @@ export function useWalletState({
 }: WalletStateOptions) {
   const [account, setAccount] = useState("");
   const [walletType, setWalletType] = useState<WalletType>("");
+  const [circleWalletId, setCircleWalletId] = useState("");
   const [selectedWalletProvider, setSelectedWalletProvider] = useState<EthereumProvider | null>(null);
   const [connecting, setConnecting] = useState(false);
   const [isArcNetwork, setIsArcNetwork] = useState(true);
@@ -230,6 +231,7 @@ export function useWalletState({
       }
       setSelectedWalletProvider(null);
       setWalletType("circle");
+      setCircleWalletId(wallet.id);
       setAccount(wallet.address);
       setIsArcNetwork(true);
       void refreshWalletBalance(wallet.address);
@@ -276,6 +278,7 @@ export function useWalletState({
     }
     setAccount("");
     setWalletType("");
+    setCircleWalletId("");
     clearCircleSession();
     setWalletBalance(0n);
     setSelectedWalletProvider(null);
@@ -328,6 +331,7 @@ export function useWalletState({
     setAccount,
     walletType,
     setWalletType,
+    circleWalletId,
     connectCircleWallet,
     selectedWalletProvider,
     setSelectedWalletProvider,

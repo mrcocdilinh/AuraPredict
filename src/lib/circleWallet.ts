@@ -2,6 +2,8 @@
 // Flow: backend opens a session + (for new users) a PIN/wallet creation
 // challenge; the W3S SDK runs that challenge in a Circle-hosted iframe so the
 // user sets a PIN and their Arc SCA wallet is created. Keys stay with Circle.
+import { getAbiItem, toFunctionSignature } from "viem";
+import type { Abi, AbiFunction, Hash } from "viem";
 import { INDEXER_URL } from "../constants";
 
 const USER_ID_KEY = "aura_circle_user_id";
@@ -9,6 +11,15 @@ const WALLET_TYPE_KEY = "aura_wallet_type";
 
 export type CircleWallet = { address: string; id: string };
 type CircleW3SSdk = InstanceType<typeof import("@circle-fin/w3s-pw-web-sdk").W3SSdk>;
+
+let cachedAppId = "";
+async function ensureAppId(): Promise<string> {
+  if (cachedAppId) return cachedAppId;
+  const res = await fetch(`${INDEXER_URL}/api/wallet/circle/config`);
+  const data = (await res.json().catch(() => ({}))) as { appId?: string };
+  cachedAppId = data.appId || "";
+  return cachedAppId;
+}
 
 type SessionResponse = {
   appId: string;
@@ -23,10 +34,12 @@ function emailToUserId(email: string): string {
 }
 
 let sdk: CircleW3SSdk | null = null;
-async function getSdk(appId: string): Promise<CircleW3SSdk> {
+async function getSdk(appId?: string): Promise<CircleW3SSdk> {
+  const id = appId || (await ensureAppId());
+  if (appId) cachedAppId = appId;
   if (!sdk) {
     const { W3SSdk } = await import("@circle-fin/w3s-pw-web-sdk");
-    sdk = new W3SSdk({ appSettings: { appId } });
+    sdk = new W3SSdk({ appSettings: { appId: id } });
   }
   return sdk;
 }
@@ -117,4 +130,65 @@ export async function restoreCircleWallet(): Promise<CircleWallet | null> {
   const userId = savedCircleUserId();
   if (!userId) return null;
   return fetchArcWallet(userId);
+}
+
+// Circle wants ABI params as JSON-friendly values (strings/bools/arrays), so
+// stringify bigints and recurse arrays; everything else passes through.
+function toCircleParam(value: unknown): unknown {
+  if (typeof value === "bigint") return value.toString();
+  if (Array.isArray(value)) return value.map(toCircleParam);
+  return value;
+}
+
+// Send a contract write through the Circle wallet: open a transaction challenge
+// on the backend, run it in the W3S SDK (user approves with PIN), and return the
+// on-chain tx hash so the caller can wait for the receipt like a normal write.
+export async function circleSendTx(params: {
+  walletId: string;
+  contractAddress: string;
+  abi: Abi;
+  functionName: string;
+  args: readonly unknown[];
+}): Promise<Hash> {
+  const userId = savedCircleUserId();
+  if (!userId) throw new Error("Not signed in with email.");
+  if (!params.walletId) throw new Error("Circle wallet is not ready.");
+  const abiItem = getAbiItem({ abi: params.abi, name: params.functionName }) as AbiFunction | undefined;
+  if (!abiItem) throw new Error(`Unknown contract function: ${params.functionName}`);
+  const abiFunctionSignature = toFunctionSignature(abiItem);
+  const abiParameters = params.args.map(toCircleParam);
+
+  const res = await fetch(`${INDEXER_URL}/api/wallet/circle/contract-execute`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      userId,
+      walletId: params.walletId,
+      contractAddress: params.contractAddress,
+      abiFunctionSignature,
+      abiParameters
+    })
+  });
+  if (!res.ok) {
+    const data = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(data.error || "Could not start the Circle transaction.");
+  }
+  const data = (await res.json()) as { userToken: string; encryptionKey: string; challengeId: string };
+  if (!data.challengeId) throw new Error("Circle did not return a transaction challenge.");
+
+  const client = await getSdk();
+  client.setAuthentication({ userToken: data.userToken, encryptionKey: data.encryptionKey });
+  return new Promise<Hash>((resolve, reject) => {
+    client.execute(data.challengeId, (error, result) => {
+      if (error) {
+        const message = typeof error === "object" && error && "message" in error
+          ? String((error as { message?: unknown }).message)
+          : "Circle transaction approval failed.";
+        reject(new Error(message));
+        return;
+      }
+      const txHash = (result as { data?: { txHash?: string } } | undefined)?.data?.txHash;
+      resolve((txHash || "0x") as Hash);
+    });
+  });
 }
