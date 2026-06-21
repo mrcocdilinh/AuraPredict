@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { isAddress } from "viem";
 import type { Address } from "viem";
 import {
@@ -55,6 +55,12 @@ export function useWalletState({
   const [account, setAccount] = useState("");
   const [walletType, setWalletType] = useState<WalletType>("");
   const [circleWalletId, setCircleWalletId] = useState("");
+  // Mirror walletType into a ref so the network callbacks can read it without
+  // taking it as a dependency (keeps their identities stable for callers).
+  const walletTypeRef = useRef<WalletType>("");
+  useEffect(() => {
+    walletTypeRef.current = walletType;
+  }, [walletType]);
   const [selectedWalletProvider, setSelectedWalletProvider] = useState<EthereumProvider | null>(null);
   const [connecting, setConnecting] = useState(false);
   const [isArcNetwork, setIsArcNetwork] = useState(true);
@@ -67,6 +73,12 @@ export function useWalletState({
   const [authMoreOpen, setAuthMoreOpen] = useState(false);
 
   const switchToArc = useCallback(async (provider?: EthereumProvider | null) => {
+    // Circle (email/Google) wallets are custodial and always on Arc — there's no
+    // injected provider to switch, so skip (avoids the "open in a wallet browser" error).
+    if (walletTypeRef.current === "circle") {
+      setIsArcNetwork(true);
+      return;
+    }
     const injected = getInjectedProvider(provider ?? selectedWalletProvider);
     // Already on Arc? Skip the switch entirely. Embedded wallets (email/social)
     // are pinned to Arc by AppKit and may not implement wallet_switchEthereumChain.
@@ -121,6 +133,10 @@ export function useWalletState({
   }, [selectedWalletProvider]);
 
   const refreshNetworkState = useCallback(async (provider?: EthereumProvider | null) => {
+    if (walletTypeRef.current === "circle") {
+      setIsArcNetwork(true);
+      return;
+    }
     try {
       const walletClient = getWalletClient(provider ?? selectedWalletProvider ?? window.ethereum ?? null);
       const chainId = await walletClient.getChainId();
@@ -177,6 +193,10 @@ export function useWalletState({
   }, [account, contractVersion, defaultSettlementToken]);
 
   const ensureArcNetwork = useCallback(async (provider?: EthereumProvider | null) => {
+    if (walletTypeRef.current === "circle") {
+      setIsArcNetwork(true);
+      return;
+    }
     setSwitchingNetwork(true);
     try {
       await switchToArc(provider);
