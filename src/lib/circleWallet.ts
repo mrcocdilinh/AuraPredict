@@ -198,7 +198,7 @@ export async function circleSendTx(params: {
   return txHash as Hash;
 }
 
-async function pollTxHash(userId: string, walletId: string, attempts = 24, delayMs = 2000): Promise<string> {
+async function pollTxHash(userId: string, walletId: string, attempts = 40, delayMs = 1200): Promise<string> {
   for (let attempt = 0; attempt < attempts; attempt += 1) {
     try {
       const res = await fetch(
