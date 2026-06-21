@@ -5258,6 +5258,22 @@ textarea {
   padding: 22px;
   width: min(460px, 100%);
 }
+.auth-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.auth-divider::before,
+.auth-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--border, rgba(255, 255, 255, 0.12));
+}
 
 .email-login-header {
   align-items: center;

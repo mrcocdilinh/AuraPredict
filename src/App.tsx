@@ -9368,27 +9368,9 @@ export default function App() {
               </div>
             </>
           ) : (
-            <>
-              <button onClick={openWalletModal} disabled={connecting || isReconnecting}>
-                {connecting || isReconnecting ? "Connecting..." : "Sign in"}
-              </button>
-              <button
-                className="secondary"
-                type="button"
-                onClick={() => setEmailLoginOpen(true)}
-                disabled={connecting || isReconnecting}
-              >
-                Email login
-              </button>
-              <button
-                className="secondary"
-                type="button"
-                onClick={() => void connectGoogleWallet()}
-                disabled={connecting || isReconnecting}
-              >
-                Google
-              </button>
-            </>
+            <button onClick={() => setEmailLoginOpen(true)} disabled={connecting || isReconnecting}>
+              {connecting || isReconnecting ? "Connecting..." : "Sign in"}
+            </button>
           )}
         </div>
       </nav>
@@ -12191,15 +12173,33 @@ export default function App() {
                   autoFocus
                 />
               </label>
-              <div className="modal-actions email-login-actions">
-                <button className="secondary" type="button" onClick={() => setEmailLoginOpen(false)}>
-                  Cancel
-                </button>
-                <button type="submit" disabled={connecting || !emailLoginInput.trim()}>
-                  {connecting ? "Setting up..." : "Continue"}
-                </button>
-              </div>
+              <button type="submit" disabled={connecting || !emailLoginInput.trim()} style={{ width: "100%" }}>
+                {connecting ? "Setting up..." : "Continue with email"}
+              </button>
             </form>
+            <div className="auth-divider"><span>or</span></div>
+            <button
+              className="secondary"
+              type="button"
+              style={{ width: "100%" }}
+              onClick={() => {
+                setEmailLoginOpen(false);
+                void connectGoogleWallet();
+              }}
+            >
+              Continue with Google
+            </button>
+            <button
+              className="secondary"
+              type="button"
+              style={{ width: "100%", marginTop: "8px" }}
+              onClick={() => {
+                setEmailLoginOpen(false);
+                openWalletModal();
+              }}
+            >
+              Connect a crypto wallet
+            </button>
           </section>
         </div>
       )}
