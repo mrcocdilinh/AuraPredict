@@ -474,6 +474,7 @@ export default function App() {
     refreshNetworkState,
     refreshWalletBalance,
     ensureArcNetwork,
+    walletType,
     connectWallet,
     handleConnectWallet,
     handleWalletConnect,
@@ -488,7 +489,7 @@ export default function App() {
     setNotice: setNoticeText
   });
 
-  const { isReconnecting } = useAppKitBridge({ account, connectWallet, disconnectWallet });
+  const { isReconnecting } = useAppKitBridge({ account, walletType, connectWallet, disconnectWallet });
   const [noticeTxHash, setNoticeTxHash] = useState<Hash | "">("");
   const [transactionPending, setTransactionPending] = useState(false);
   const [pendingMarketActions, setPendingMarketActions] = useState<Record<string, boolean>>({});
