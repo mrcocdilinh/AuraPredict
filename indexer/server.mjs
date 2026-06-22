@@ -92,6 +92,10 @@ const GROQ_API_KEYS = String(process.env.GROQ_API_KEYS || "")
 const GROQ_BASE_URL = String(process.env.GROQ_BASE_URL || "https://api.groq.com/openai/v1").trim().replace(/\/$/, "");
 const GROQ_MODEL = String(process.env.GROQ_MODEL || "llama-3.3-70b-versatile").trim();
 const RESOLUTION_ADMIN_TOKEN = String(process.env.AURA_RESOLUTION_ADMIN_TOKEN || "").trim();
+// Re-reading every market's on-chain state each poll is the dominant RPC cost.
+// Events keep markets fresh between full reconciles, so throttle the full read.
+const CONTRACT_REFRESH_MS = Math.max(0, Number(process.env.AURA_INDEXER_CONTRACT_REFRESH_MS || 600_000) || 0);
+let lastContractRefresh = 0;
 const RESOLUTION_AUTO_RUN = String(process.env.AURA_RESOLUTION_AUTO_RUN || "").trim() === "1";
 const RESOLUTION_AUTO_PROPOSE = String(process.env.AURA_RESOLUTION_AUTO_PROPOSE || "").trim() === "1";
 const RESOLVER_PRIVATE_KEY = String(process.env.AURA_RESOLVER_PRIVATE_KEY || "").trim();
@@ -6018,7 +6022,11 @@ async function syncOnce() {
         }
       }
 
-      await refreshContractState();
+      // Full on-chain reconcile is throttled (events keep state fresh between).
+      if (!lastContractRefresh || Date.now() - lastContractRefresh >= CONTRACT_REFRESH_MS) {
+        await refreshContractState();
+        lastContractRefresh = Date.now();
+      }
       computeStats();
       if (ORACLE_AUTO_RUN) {
         await runAutoOracleSweep();
