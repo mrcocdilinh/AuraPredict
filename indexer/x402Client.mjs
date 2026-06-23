@@ -1,20 +1,19 @@
-// x402 client for paying AuraGate agent APIs on Arc.
-// AuraGate returns 402 with a base64 "payment-required" challenge using Circle's
-// "GatewayWalletBatched" scheme; we sign it with the agent wallet via Circle's
-// @circle-fin/x402-batching client, then retry with the X-PAYMENT header.
-import { privateKeyToAccount } from "viem/accounts";
-import { BatchEvmScheme } from "@circle-fin/x402-batching/client";
+// x402 client for paying AuraGate agent APIs on Arc, via Circle's Gateway
+// batching scheme. The agent's USDC must first be deposited into the Gateway
+// balance (one-time), then pay() settles per-call against that balance.
+import { GatewayClient } from "@circle-fin/x402-batching/client";
 
 const AGENT_PRIVATE_KEY = String(process.env.AURA_AGENT_PRIVATE_KEY || "").trim();
+const X402_CHAIN = String(process.env.AURA_X402_CHAIN || "arcTestnet").trim();
 
-let cachedAccount = null;
-function agentAccount() {
+let gateway = null;
+function client() {
   if (!AGENT_PRIVATE_KEY) throw new Error("AURA_AGENT_PRIVATE_KEY is not configured.");
-  if (!cachedAccount) {
+  if (!gateway) {
     const key = AGENT_PRIVATE_KEY.startsWith("0x") ? AGENT_PRIVATE_KEY : `0x${AGENT_PRIVATE_KEY}`;
-    cachedAccount = privateKeyToAccount(key);
+    gateway = new GatewayClient({ chain: X402_CHAIN, privateKey: key });
   }
-  return cachedAccount;
+  return gateway;
 }
 
 export function x402Enabled() {
@@ -23,49 +22,27 @@ export function x402Enabled() {
 
 export function agentAddress() {
   try {
-    return agentAccount().address;
+    return client().account.address;
   } catch {
     return "";
   }
 }
 
-function decodeChallenge(res) {
-  const raw = res.headers.get("payment-required") || res.headers.get("PAYMENT-REQUIRED");
-  if (!raw) throw new Error("AuraGate did not return a payment-required challenge.");
-  return JSON.parse(Buffer.from(raw, "base64").toString("utf8"));
+// Pay an x402 AuraGate endpoint and return its JSON data plus settlement refs.
+export async function x402GetJson(url) {
+  const response = await client().pay(url);
+  return {
+    data: response?.data ?? response,
+    receiptId: response?.receiptId || "",
+    settlementTx: response?.settlementTx || ""
+  };
 }
 
-// GET an x402-protected URL, paying with the agent wallet if challenged.
-// Returns { data, receiptId, settlementTx, network } on success.
-export async function x402GetJson(url, timeoutMs = 12_000) {
-  const first = await fetch(url, { signal: AbortSignal.timeout(timeoutMs) });
-  if (first.status !== 402) {
-    if (!first.ok) throw new Error(`AuraGate request failed: ${first.status}`);
-    return { data: await first.json(), receiptId: "", settlementTx: "", network: "" };
-  }
+// One-time: move USDC from the wallet into the Gateway balance pay() draws from.
+export async function x402Deposit(amount) {
+  return client().deposit(String(amount));
+}
 
-  const challenge = decodeChallenge(first);
-  const requirements = (challenge.accepts || [])[0];
-  if (!requirements) throw new Error("AuraGate challenge had no payment options.");
-
-  const scheme = new BatchEvmScheme(agentAccount());
-  const { x402Version, payload } = await scheme.createPaymentPayload(challenge.x402Version || 2, requirements);
-  const xPayment = Buffer.from(
-    JSON.stringify({ x402Version, scheme: requirements.scheme, network: requirements.network, payload })
-  ).toString("base64");
-
-  const paid = await fetch(url, {
-    headers: { "x-payment": xPayment, "x-payer": agentAccount().address },
-    signal: AbortSignal.timeout(timeoutMs)
-  });
-  if (!paid.ok) {
-    const body = await paid.text().catch(() => "");
-    throw new Error(`AuraGate paid request failed: ${paid.status} ${body.slice(0, 200)}`);
-  }
-  return {
-    data: await paid.json(),
-    receiptId: paid.headers.get("x-receipt-id") || "",
-    settlementTx: paid.headers.get("x-settlement-tx") || "",
-    network: paid.headers.get("x-payment-network") || ""
-  };
+export async function x402Balances() {
+  return client().getBalances();
 }
