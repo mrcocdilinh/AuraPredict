@@ -28,6 +28,7 @@
     "@circle-fin/app-kit": "^1.7.0",
     "@circle-fin/user-controlled-wallets": "^10.6.0",
     "@circle-fin/w3s-pw-web-sdk": "^1.1.11",
+    "@circle-fin/x402-batching": "^3.2.0",
     "@lifi/sdk": "^3.16.3",
     "@reown/appkit": "^1.8.21",
     "@reown/appkit-adapter-ethers": "^1.8.21",
