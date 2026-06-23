@@ -6243,6 +6243,40 @@ export default function App() {
     }
   };
 
+  // Withdraw every token's pending balance (bond refunds, dispute compensation,
+  // cancel refunds) in one go — usually a single token, so one transaction.
+  const withdrawAllPending = async () => {
+    if (!account || !isAddress(account)) {
+      setNotice("Connect wallet first.");
+      return;
+    }
+    const tokens = Object.entries(pendingWithdrawalsByToken)
+      .filter(([, amount]) => amount > 0n)
+      .map(([token]) => token);
+    if (tokens.length === 0) {
+      setNotice("No pending balance to withdraw.");
+      return;
+    }
+    await switchToArc();
+    const walletClient = getActiveWalletClient();
+    for (const token of tokens) {
+      const completed = await runTransaction(
+        () =>
+          walletClient.writeContract({
+            account: account as Address,
+            chain: arcTestnet,
+            address: contractAddress,
+            abi: stablecoinMarketAbi(contractVersion),
+            functionName: "withdrawBalance",
+            args: [token as Address]
+          }),
+        "Withdrawing pending balance..."
+      );
+      if (completed) setPendingWithdrawalsByToken((current) => ({ ...current, [token]: 0n }));
+    }
+    void refreshWalletBalance();
+  };
+
   const requestAuthorityReview = async (market: MarketView) => {
     if (!account || !isAddress(account)) throw new Error("Connect authority wallet first.");
     if (!isStablecoinContractVersion(contractVersion)) return;
@@ -9134,6 +9168,13 @@ export default function App() {
                             {claimRetryLabel}
                           </button>
                         )}
+                      </div>
+                    )}
+                    {Object.values(pendingWithdrawalsByToken).some((amount) => amount > 0n) && (
+                      <div className="notification-bulk-actions">
+                        <button onClick={() => void withdrawAllPending()} disabled={transactionPending} type="button">
+                          Withdraw pending balance (bonds &amp; refunds)
+                        </button>
                       </div>
                     )}
                     {resolveNotifications.map((market) => {
