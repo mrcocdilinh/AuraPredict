@@ -20,6 +20,7 @@ import {
   circleInitWalletByToken,
   circleWalletsByToken
 } from "./circleWallets.mjs";
+import { x402GetJson, x402Enabled } from "./x402Client.mjs";
 import { scoreEvidenceSearchResult } from "./evidenceSearchPolicy.mjs";
 import {
   NUMERIC_COMPARATORS,
@@ -109,6 +110,8 @@ const AI_ATTESTATION_PRIVATE_KEY = String(process.env.AURA_ATTESTATION_PRIVATE_K
 const RESOLUTION_MIN_CONFIDENCE = Number(process.env.AURA_RESOLUTION_MIN_CONFIDENCE || 72);
 const RESOLUTION_CONSENSUS_COUNT = Number(process.env.AURA_RESOLUTION_CONSENSUS_COUNT || 2);
 const ORACLE_AUTO_RUN = String(process.env.AURA_ORACLE_AUTO_RUN || "1").trim() !== "0";
+// Source crypto oracle prices from the AuraGate agent API (paid via x402) when enabled.
+const USE_AURAGATE_ORACLE = String(process.env.AURA_ORACLE_USE_AURAGATE || "").trim() === "1";
 const AUTO_FINALIZE = String(process.env.AURA_AUTO_FINALIZE || "").trim() === "1";
 const ORACLE_HTTP_TIMEOUT_MS = Number(process.env.AURA_ORACLE_HTTP_TIMEOUT_MS || 8_000);
 const AUTO_EVIDENCE_ENABLED = String(process.env.AURA_AUTO_EVIDENCE_ENABLED || "1").trim() !== "0";
@@ -137,7 +140,7 @@ const ORACLE_AUTO_PROPOSE_MIN_CONFIDENCE = Number(process.env.AURA_ORACLE_AUTO_P
 const ORACLE_AUTO_PROPOSE_ADAPTERS = new Set(
   String(
     process.env.AURA_ORACLE_AUTO_PROPOSE_ADAPTERS ||
-      "crypto-price,stock-yahoo-chart,macro-yahoo-chart,macro-bls-release,macro-fed-rate,macro-eia-inventory,status-health,status-page,liquidity-rule"
+      "crypto-price,auragate-crypto,stock-yahoo-chart,macro-yahoo-chart,macro-bls-release,macro-fed-rate,macro-eia-inventory,status-health,status-page,liquidity-rule"
   )
     .split(",")
     .map((adapter) => adapter.trim())
@@ -4397,6 +4400,43 @@ async function buildCryptoOracleProposal(market, config) {
   return finalizeOracleProposal(proposal);
 }
 
+// Crypto oracle sourced from the AuraGate agent API, paid per call in USDC via
+// x402 / Circle Gateway. Returns a near-time spot price (suits markets resolved
+// right after their resolution time, which is when auto-propose runs).
+async function buildAuraGateCryptoProposal(market, config) {
+  const proposal = baseOracleProposal(market, "auragate-crypto");
+  proposal.comparator = config.comparator;
+  proposal.targetValue = String(config.target);
+  proposal.sourceUrls = [`https://auragate.app/api/premium/oracle-check?coins=${config.coingecko}`];
+
+  const resolutionTime = marketResolutionTime(market);
+  if (Math.floor(Date.now() / 1000) < resolutionTime) {
+    proposal.status = "not_ready";
+    proposal.summary = "Oracle cannot evaluate this market before the resolution timestamp.";
+    return finalizeOracleProposal(proposal);
+  }
+
+  const url = `https://auragate.app/api/premium/oracle-check?coins=${encodeURIComponent(config.coingecko)}`;
+  const { data, settlementTx } = await x402GetJson(url);
+  const observed = Number(data?.prices?.[config.coingecko]?.usd);
+  if (!Number.isFinite(observed)) throw new Error(`AuraGate returned no price for ${config.coingecko}`);
+
+  const matched = compareObservedValue(observed, config.comparator, config.target);
+  proposal.outcome = matched ? "YES" : "NO";
+  proposal.observedValue = `${config.symbol}/USD ${observed} (AuraGate/${data?.source || "agent"})`;
+  proposal.observedAt = nowIso();
+  const sourceConfidence = Number(data?.confidence);
+  proposal.confidence = Number.isFinite(sourceConfidence) ? Math.round(sourceConfidence * 100) : 90;
+  if (settlementTx) proposal.auragateSettlementTx = settlementTx;
+  proposal.summary = `AuraGate agent oracle reported ${config.symbol} = ${observed} USD (paid via x402/Circle Gateway). Rule target is ${config.comparator.toUpperCase()} ${config.target}.`;
+  proposal.checks = [
+    "Price sourced from the AuraGate agent API, settled in USDC via Circle Gateway (x402).",
+    settlementTx ? `Settlement tx: ${settlementTx}` : "",
+    "AuraGate returns a near-time spot price, not exact-minute historical data."
+  ].filter(Boolean);
+  return finalizeOracleProposal(proposal);
+}
+
 function parseBlsReleaseObservedValue(config, htmlText) {
   const plain = stripHtml(htmlText).replace(/\s+/g, " ").trim();
   if (!plain) return null;
@@ -4868,7 +4908,16 @@ async function buildOracleProposal(marketId, options = {}) {
   if (eiaInventoryConfig) return buildEiaInventoryOracleProposal(market, eiaInventoryConfig);
 
   const cryptoConfig = detectCryptoOracleMarket(market);
-  if (cryptoConfig) return buildCryptoOracleProposal(market, cryptoConfig);
+  if (cryptoConfig) {
+    if (USE_AURAGATE_ORACLE && x402Enabled()) {
+      try {
+        return await buildAuraGateCryptoProposal(market, cryptoConfig);
+      } catch (error) {
+        console.warn(`[auragate] crypto oracle failed, falling back to Binance: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
+    return buildCryptoOracleProposal(market, cryptoConfig);
+  }
 
   const stockConfig = detectStockOracleMarket(market);
   if (stockConfig) return buildStockYahooProposal(market, stockConfig);
