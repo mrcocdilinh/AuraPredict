@@ -92,7 +92,7 @@ V5 settlement assets are restricted to owner-approved tokens, with the current s
 Admin reconcile can safely backfill missed trade/claim activity without resetting state. It replays contract events by tx hash and log index, refreshes market reads, and returns the activity integrity summary before and after the scan:
 
 ```bash
-curl -X POST https://api.aurapredict.xyz/api/admin/reconcile \
+curl -X POST https://api.auraon.xyz/api/admin/reconcile \
   -H "authorization: Bearer $AURA_RESOLUTION_ADMIN_TOKEN" \
   -H "content-type: application/json" \
   -d '{"fromBlock":"44083985"}'
@@ -295,15 +295,15 @@ When Gemini returns `429` (rate limit), the indexer puts that key on cooldown an
 
 ## Public Deploy
 
-The production app at `https://app.aurapredict.xyz` needs a public indexer URL, not `127.0.0.1`.
+The production app at `https://app.auraon.xyz` needs a public indexer URL, not `127.0.0.1`.
 
 ## Current VPS Service
 
 The current public service runs on a VPS behind Nginx and HTTPS:
 
 ```text
-https://api.aurapredict.xyz/health
-https://api.aurapredict.xyz/api/stats
+https://api.auraon.xyz/health
+https://api.auraon.xyz/api/stats
 ```
 
 The current V5 address and deployment block are configured in `/opt/aurapredict/.env`:
@@ -324,7 +324,7 @@ The VPS stores server-only configuration at `/opt/aurapredict/.env` because `npm
 ```bash
 cd /opt/aurapredict
 pm2 restart aurapredict-indexer
-curl https://api.aurapredict.xyz/health
+curl https://api.auraon.xyz/health
 npm run smoke:api
 ```
 
@@ -333,7 +333,7 @@ The indexer runs in hybrid mode when `AURA_INDEXER_WS_ENABLED=1`: WebSocket bloc
 Set this on the frontend deployment:
 
 ```bash
-VITE_AURA_INDEXER_URL=https://api.aurapredict.xyz
+VITE_AURA_INDEXER_URL=https://api.auraon.xyz
 VITE_PREDICTION_MARKET_START_BLOCK=44083985
 ```
 

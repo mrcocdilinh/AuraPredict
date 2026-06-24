@@ -5,7 +5,7 @@ AuraPredict exposes a read-only agent surface for builders and AI agents on Arc 
 Production base URL:
 
 ```text
-https://api.aurapredict.xyz
+https://api.auraon.xyz
 ```
 
 ## Endpoints
@@ -44,25 +44,25 @@ These tools are read-only. They do not propose, finalize, dispute, claim, or mov
 List recent markets:
 
 ```bash
-curl "https://api.aurapredict.xyz/api/agent/markets?limit=20&status=live"
+curl "https://api.auraon.xyz/api/agent/markets?limit=20&status=live"
 ```
 
 Get an evidence package for one market:
 
 ```bash
-curl "https://api.aurapredict.xyz/api/agent/markets/89"
+curl "https://api.auraon.xyz/api/agent/markets/89"
 ```
 
 Preview the next safe workflow step:
 
 ```bash
-curl "https://api.aurapredict.xyz/api/agent/markets/89/action-preview"
+curl "https://api.auraon.xyz/api/agent/markets/89/action-preview"
 ```
 
 Read the Aura Oracle Agent reputation summary:
 
 ```bash
-curl "https://api.aurapredict.xyz/api/oracle-reputation"
+curl "https://api.auraon.xyz/api/oracle-reputation"
 ```
 
 ## Safety Model

@@ -119,7 +119,7 @@ export const GOOGLE_CLIENT_ID = String(
 ).trim();
 // Redirect URI registered in Google Cloud + Circle for the social login flow.
 export const CIRCLE_SOCIAL_REDIRECT_URI = String(
-  import.meta.env.VITE_CIRCLE_SOCIAL_REDIRECT_URI || "https://app.aurapredict.xyz"
+  import.meta.env.VITE_CIRCLE_SOCIAL_REDIRECT_URI || "https://app.auraon.xyz"
 ).trim();
 export const DISMISSED_RESULT_KEY = "aurapredict.dismissedResultNotices";
 export const THEME_KEY = "aurapredict.theme";
@@ -139,9 +139,9 @@ export const ONBOARDING_DISMISSED_KEY = "aurapredict.onboardingDismissed";
 export const MARKET_QUERY_KEY = "market";
 export const PROFILE_QUERY_KEY = "profile";
 export const PROFILE_NAME_QUERY_KEY = "name";
-export const LANDING_HOSTS = new Set(["aurapredict.xyz", "www.aurapredict.xyz"]);
-export const APP_URL = "https://app.aurapredict.xyz";
-export const DOCS_URL = "https://docs.aurapredict.xyz";
+export const LANDING_HOSTS = new Set(["auraon.xyz", "www.auraon.xyz"]);
+export const APP_URL = "https://app.auraon.xyz";
+export const DOCS_URL = "https://docs.auraon.xyz";
 export const ARC_FAUCET_URL = "https://faucet.circle.com";
 export const ARC_UNIFIED_BALANCE_URL = "https://docs.arc.io/app-kit/unified-balance";
 export const X_URL = "https://x.com/AuraPredict";
@@ -149,7 +149,7 @@ export const DISCORD_URL = "https://discord.gg/3wTYhdsr";
 export const DEMO_VIDEO_URL = "https://www.youtube.com/watch?v=tdYqpAIG82s";
 export const DEMO_EMBED_URL = "https://www.youtube.com/embed/tdYqpAIG82s";
 export const CURRENT_APP_URL =
-  typeof window !== "undefined" ? `${window.location.host}${window.location.pathname}${window.location.search}` : "app.aurapredict.xyz";
+  typeof window !== "undefined" ? `${window.location.host}${window.location.pathname}${window.location.search}` : "app.auraon.xyz";
 export const WALLET_DEEP_LINKS = [
   {
     name: "WalletConnect",
@@ -199,7 +199,7 @@ export const WALLET_DEEP_LINKS = [
 ];
 export const INDEXER_URL = String(
   import.meta.env.VITE_AURA_INDEXER_URL ||
-    (import.meta.env.DEV ? "http://127.0.0.1:8787" : "https://api.aurapredict.xyz")
+    (import.meta.env.DEV ? "http://127.0.0.1:8787" : "https://api.auraon.xyz")
 ).replace(/\/$/, "");
 export const EVENT_START_BLOCK = BigInt(VIEWING_V3_ARCHIVE ? ACTIVE_V3_DEPLOYMENT_BLOCK : PRIMARY_DEPLOYMENT_BLOCK);
 export const EVENT_LOG_CHUNK_SIZE = 9_000n;

@@ -52,8 +52,8 @@ export async function getWalletConnectProvider() {
     metadata: {
       name: "AuraPredict",
       description: "Prediction markets on Arc Testnet",
-      url: typeof window !== "undefined" ? window.location.origin : "https://app.aurapredict.xyz",
-      icons: [typeof window !== "undefined" ? `${window.location.origin}/aurapredict-logo.png` : "https://app.aurapredict.xyz/aurapredict-logo.png"]
+      url: typeof window !== "undefined" ? window.location.origin : "https://app.auraon.xyz",
+      icons: [typeof window !== "undefined" ? `${window.location.origin}/aurapredict-logo.png` : "https://app.auraon.xyz/aurapredict-logo.png"]
     },
     methods: [
       "eth_requestAccounts",

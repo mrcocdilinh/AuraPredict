@@ -541,7 +541,7 @@ export function LandingPage() {
           <p className="landing-kicker">Project docs</p>
           <h2>Transparent testnet mechanics without hiding the roadmap.</h2>
           <p>
-            AuraPredict is live as an Arc Testnet MVP with its public indexer hosted at api.aurapredict.xyz. The current product
+            AuraPredict is live as an Arc Testnet MVP with its public indexer hosted at api.auraon.xyz. The current product
             proves market creation, staking, dispute-aware settlement, profiles, comments, evidence,
             AI resolution receipts, objective Oracle automation, Circle Agent Wallet proposal signing, live stats, notifications, and public reputation while wallet
             actions remain fully onchain. Production reads the active Arc Testnet contract through the AuraPredict indexer and wallet transactions remain verifiable on Arcscan.
@@ -713,7 +713,7 @@ export function LandingPage() {
           </article>
           <article>
             <span>Docs domain</span>
-            <strong>docs.aurapredict.xyz documents app usage, smart contract behavior, indexer setup, and deployment.</strong>
+            <strong>docs.auraon.xyz documents app usage, smart contract behavior, indexer setup, and deployment.</strong>
           </article>
         </div>
 

@@ -1,4 +1,4 @@
-const baseUrl = String(process.argv[2] || process.env.AURA_API_BASE || "https://api.aurapredict.xyz").replace(/\/$/, "");
+const baseUrl = String(process.argv[2] || process.env.AURA_API_BASE || "https://api.auraon.xyz").replace(/\/$/, "");
 
 const checks = [
   {

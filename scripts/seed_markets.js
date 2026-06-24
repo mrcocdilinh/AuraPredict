@@ -119,7 +119,7 @@ async function main() {
       );
       const approveTx = await token.approve(contractAddress, requiredValue);
       await approveTx.wait();
-      const resolutionSource = String(item.resolutionSource || item.source || "https://app.aurapredict.xyz").trim();
+      const resolutionSource = String(item.resolutionSource || item.source || "https://app.auraon.xyz").trim();
       const fallbackSource = String(item.fallbackSource || "").trim();
       const resolutionRule = String(
         item.resolutionRule ||

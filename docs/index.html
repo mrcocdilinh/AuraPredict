@@ -36,7 +36,7 @@
       </nav>
       <div class="header-actions">
         <button id="themeToggle" type="button" aria-label="Toggle theme">Light</button>
-        <a class="app-link" href="https://app.aurapredict.xyz">Open app</a>
+        <a class="app-link" href="https://app.auraon.xyz">Open app</a>
       </div>
     </header>
 
@@ -177,7 +177,7 @@
         <div class="section-body">
           <h2>Use AuraPredict</h2>
           <ol>
-            <li>Open <a href="https://app.aurapredict.xyz">app.aurapredict.xyz</a>.</li>
+            <li>Open <a href="https://app.auraon.xyz">app.auraon.xyz</a>.</li>
             <li>Connect MetaMask, Rabby, OKX, Zerion, or another injected EVM wallet.</li>
             <li>Switch to Arc Testnet when prompted, or add the network manually with the settings above.</li>
             <li>Fund the wallet with Arc Testnet USDC or EURC from the faucet shortcut in the wallet menu.</li>
@@ -314,7 +314,7 @@
             Shared source rule: new markets keep a human-readable rule plus structured rule metadata onchain. Aura Agent, Oracle adapters, the resolver, and the final reviewer can all read the same source, fallback source, event time, comparator, target, and asset context.
           </div>
           <div class="reference-table">
-            <article><span>Current state</span><strong>Live test markets are indexed at api.aurapredict.xyz.</strong></article>
+            <article><span>Current state</span><strong>Live test markets are indexed at api.auraon.xyz.</strong></article>
             <article><span>Source/rule storage</span><strong>The contract stores the resolution source, fallback source, human rule, and structured rule metadata for every new market.</strong></article>
             <article><span>Proposal timing</span><strong>Trading close time and result resolution time are separate; the contract rejects early proposals.</strong></article>
             <article><span>Token safety</span><strong>Frontend checks balance and allowance for the selected settlement token before create, stake, or dispute actions.</strong></article>
@@ -565,7 +565,7 @@
             fast read endpoints for stats, market rows, activity, leaderboard views, social data,
             AI resolution receipts, and objective Oracle proposals.
           </p>
-          <div class="note">Current production indexer endpoint: <code>https://api.aurapredict.xyz</code></div>
+          <div class="note">Current production indexer endpoint: <code>https://api.auraon.xyz</code></div>
           <div class="flow-diagram" aria-label="AuraPredict data flow">
             <div>Wallet</div>
             <div>Frontend</div>
@@ -617,7 +617,7 @@ npm run build</code></pre>
               <pre><code>VITE_AURAPREDICT_V5_ADDRESS=0xb3B74ee71a02a25eB668A6206ed3F74b3444611A
 VITE_PREDICTION_MARKET_ADDRESS=0xb3B74ee71a02a25eB668A6206ed3F74b3444611A
 VITE_ARC_EURC_TOKEN_ADDRESS=0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a
-VITE_AURA_INDEXER_URL=https://api.aurapredict.xyz
+VITE_AURA_INDEXER_URL=https://api.auraon.xyz
 VITE_AURAPREDICT_V5_DEPLOYMENT_BLOCK=47380000
 VITE_WALLETCONNECT_PROJECT_ID=your_project_id
 VITE_CIRCLE_APP_KIT_KEY=optional_app_kit_key</code></pre>
@@ -658,10 +658,10 @@ npm run deploy:arc</code></pre>
             <code>docs</code> folder.
           </p>
           <div class="reference-table domain-table">
-            <article><span>Main site</span><strong>aurapredict.xyz -> app project, repo root</strong></article>
-            <article><span>App site</span><strong>app.aurapredict.xyz -> app project, repo root</strong></article>
-            <article><span>Docs site</span><strong>docs.aurapredict.xyz -> docs project, root directory docs</strong></article>
-            <article><span>API site</span><strong>api.aurapredict.xyz -> self-hosted indexer behind HTTPS</strong></article>
+            <article><span>Main site</span><strong>auraon.xyz -> app project, repo root</strong></article>
+            <article><span>App site</span><strong>app.auraon.xyz -> app project, repo root</strong></article>
+            <article><span>Docs site</span><strong>docs.auraon.xyz -> docs project, root directory docs</strong></article>
+            <article><span>API site</span><strong>api.auraon.xyz -> self-hosted indexer behind HTTPS</strong></article>
           </div>
           <div class="two-column">
             <article>
@@ -671,7 +671,7 @@ npm run deploy:arc</code></pre>
                 <li>Set Root Directory to <code>docs</code>.</li>
                 <li>Use Framework Preset <code>Other</code>.</li>
                 <li>Use Output Directory <code>.</code>.</li>
-                <li>Add domain <code>docs.aurapredict.xyz</code>.</li>
+                <li>Add domain <code>docs.auraon.xyz</code>.</li>
               </ul>
             </article>
             <article>
@@ -733,8 +733,8 @@ Value: cname.vercel-dns.com</code></pre>
         <div class="section-body">
           <h2>Useful links</h2>
           <div class="reference-grid">
-            <a href="https://aurapredict.xyz">AuraPredict landing</a>
-            <a href="https://app.aurapredict.xyz">AuraPredict app</a>
+            <a href="https://auraon.xyz">AuraPredict landing</a>
+            <a href="https://app.auraon.xyz">AuraPredict app</a>
             <a href="https://github.com/mrcocdilinh/AuraPredict">GitHub repository</a>
             <a href="https://github.com/mrcocdilinh/AuraPredict/blob/main/docs/RISK_ORACLE_AND_QA.md">Risk, oracle, and QA policy</a>
             <a href="https://docs.arc.io/arc/references/rpc-endpoints">Arc RPC endpoints</a>
@@ -751,7 +751,7 @@ Value: cname.vercel-dns.com</code></pre>
 
     <footer>
       <span>AuraPredict Docs</span>
-      <span>docs.aurapredict.xyz</span>
+      <span>docs.auraon.xyz</span>
     </footer>
 
     <script>

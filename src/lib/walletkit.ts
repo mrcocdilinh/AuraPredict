@@ -21,8 +21,8 @@ export const appKitModal = createAppKit({
   metadata: {
     name: "AuraPredict",
     description: "Prediction markets on Arc Testnet",
-    url: "https://app.aurapredict.xyz",
-    icons: ["https://app.aurapredict.xyz/aurapredict-logo-192.png"]
+    url: "https://app.auraon.xyz",
+    icons: ["https://app.auraon.xyz/aurapredict-logo-192.png"]
   },
   features: {
     // Reown's embedded email/social wallet runs on secure.walletconnect.org and

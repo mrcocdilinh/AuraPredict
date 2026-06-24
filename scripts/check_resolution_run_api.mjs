@@ -1,7 +1,7 @@
 const apiBase = String(
   process.env.AURA_INDEXER_URL ||
   process.env.VITE_AURA_INDEXER_URL ||
-  "https://api.aurapredict.xyz"
+  "https://api.auraon.xyz"
 ).replace(/\/+$/, "");
 const adminToken = String(process.env.AURA_RESOLUTION_ADMIN_TOKEN || "").trim();
 const marketId = String(process.env.AURA_SMOKE_MARKET_ID || process.argv[2] || "").trim();

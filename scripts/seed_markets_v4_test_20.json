@@ -139,8 +139,8 @@
     "question": "Will the AuraPredict indexer health endpoint return ok true at this V4 test market's resolution time?",
     "category": "Other",
     "closeInHours": 156,
-    "resolutionSource": "https://api.aurapredict.xyz/health",
-    "fallbackSource": "https://app.aurapredict.xyz",
+    "resolutionSource": "https://api.auraon.xyz/health",
+    "fallbackSource": "https://app.auraon.xyz",
     "resolutionRule": "Resolve YES if the primary source returns a readable health response with ok true at the market's onchain resolution time. Resolve NO if it returns ok false, an error response, or cannot be reached. Use the fallback source only to verify whether the app is online. Resolve CANCEL only if external network access prevents fair verification."
   },
   {
@@ -155,8 +155,8 @@
     "question": "Will AuraPredict app load its public landing page at this V4 test market's resolution time?",
     "category": "Other",
     "closeInHours": 200,
-    "resolutionSource": "https://app.aurapredict.xyz",
-    "fallbackSource": "https://aurapredict.xyz",
+    "resolutionSource": "https://app.auraon.xyz",
+    "fallbackSource": "https://auraon.xyz",
     "resolutionRule": "Resolve YES if the primary source loads the public AuraPredict app or landing shell at the market's onchain resolution time. Resolve NO if it is unreachable or returns an application-level failure. Use the fallback domain only if the app subdomain is unavailable. Resolve CANCEL only if the outage cannot be fairly distinguished from local network failure."
   }
 ]

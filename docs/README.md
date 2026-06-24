@@ -3,7 +3,7 @@
 This folder is a standalone static documentation site for:
 
 ```text
-docs.aurapredict.xyz
+docs.auraon.xyz
 ```
 
 ## Deploy on Vercel
@@ -21,8 +21,8 @@ Install command: empty
 Then add the custom domain:
 
 ```text
-docs.aurapredict.xyz
+docs.auraon.xyz
 ```
 
-Keep the main app project pointed at the repo root for `aurapredict.xyz`.
+Keep the main app project pointed at the repo root for `auraon.xyz`.
 

@@ -5,8 +5,8 @@ This handoff is for a new coding agent continuing AuraPredict. It summarizes the
 ## Current Project
 
 - Repo: `https://github.com/mrcocdilinh/AuraPredict`
-- App: `https://app.aurapredict.xyz/`
-- API/indexer: `https://api.aurapredict.xyz/`
+- App: `https://app.auraon.xyz/`
+- API/indexer: `https://api.auraon.xyz/`
 - VPS: `/opt/aurapredict` on `root@14.225.218.99`
 - Main local workspace: `C:\Users\admin\Documents\Codex\2026-06-02\files-mentioned-by-the-user-aurapredict-2\work\AuraPredict`
 - Current direction: fully move from V4 to V5, with a more mobile-first, seedless/login-friendly prediction market app on Arc Testnet.
@@ -140,7 +140,7 @@ Indexer lives in `indexer/server.mjs`.
 Health endpoints:
 
 - Local VPS: `curl http://127.0.0.1:8787/health`
-- Public: `curl https://api.aurapredict.xyz/health`
+- Public: `curl https://api.auraon.xyz/health`
 
 Expected healthy V5 health:
 
@@ -193,7 +193,7 @@ If VPS PM2 still shows old contract:
    pm2 start ecosystem.config.cjs --update-env
    sleep 10
    curl http://127.0.0.1:8787/health
-   curl https://api.aurapredict.xyz/health
+   curl https://api.auraon.xyz/health
    ```
 
 Note: If `marketCount:0` and `lastIndexedBlock` stays deployment block while WS says connected, wait for logs or ensure V5 ABI/events match the deployed contract.
@@ -317,10 +317,10 @@ VITE_MAGIC_PUBLISHABLE_KEY=pk_live_or_pk_test_from_magic
 
 Current Magic errors seen:
 
-1. `First App has not approved access for https://app.aurapredict.xyz.`
+1. `First App has not approved access for https://app.auraon.xyz.`
    - Fix in Magic dashboard:
-     - Add/approve `https://app.aurapredict.xyz` under Allowed Origins.
-     - Add/approve redirect for `https://app.aurapredict.xyz` if required.
+     - Add/approve `https://app.auraon.xyz` under Allowed Origins.
+     - Add/approve redirect for `https://app.auraon.xyz` if required.
      - Save.
 
 2. `Magic RPC Error: [-32603] RPC route not enabled or provider not supported`
@@ -334,11 +334,11 @@ Magic dashboard notes:
 - User has a Magic publishable key like `pk_live_...`.
 - In Magic "Allowed Origins & Redirects", enable Domain and add:
   ```txt
-  https://app.aurapredict.xyz
+  https://app.auraon.xyz
   ```
 - For redirects, if Magic requires exact redirect, add:
   ```txt
-  https://app.aurapredict.xyz
+  https://app.auraon.xyz
   ```
   and any callback path the code uses if introduced later.
 
@@ -371,7 +371,7 @@ VITE_PREDICTION_MARKET_ADDRESS=0xb3B74ee71a02a25eB668A6206ed3F74b3444611A
 VITE_AURAPREDICT_V5_ADDRESS=0xb3B74ee71a02a25eB668A6206ed3F74b3444611A
 VITE_PREDICTION_MARKET_START_BLOCK=47380000
 VITE_AURAPREDICT_V5_DEPLOYMENT_BLOCK=47380000
-VITE_AURA_INDEXER_URL=https://api.aurapredict.xyz
+VITE_AURA_INDEXER_URL=https://api.auraon.xyz
 VITE_CIRCLE_APP_KIT_KEY=...
 VITE_SEEDLESS_ENABLED=1
 VITE_MAGIC_PUBLISHABLE_KEY=...
@@ -444,7 +444,7 @@ npm ci
 pm2 restart aurapredict-indexer --update-env
 sleep 10
 curl http://127.0.0.1:8787/health
-curl https://api.aurapredict.xyz/health
+curl https://api.auraon.xyz/health
 ```
 
 If package-lock conflicts on VPS:
@@ -576,7 +576,7 @@ Before changing code:
 ## Immediate Next Recommended Steps
 
 1. Finish Magic dashboard configuration:
-   - Approve `https://app.aurapredict.xyz`.
+   - Approve `https://app.auraon.xyz`.
    - Enable Email OTP.
    - Enable/configure Google OAuth.
    - Retest email and Google login.

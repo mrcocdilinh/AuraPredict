@@ -73,11 +73,11 @@ For local development, start from `.env.example` and only fill in the services y
 
 Important production references:
 
-- Frontend indexer URL: `https://api.aurapredict.xyz`
-- Indexer health: `https://api.aurapredict.xyz/health`
-- Indexer stats: `https://api.aurapredict.xyz/api/stats`
-- Agent API manifest: `https://api.aurapredict.xyz/api/agent`
-- MCP-style tool metadata: `https://api.aurapredict.xyz/api/agent/mcp`
+- Frontend indexer URL: `https://api.auraon.xyz`
+- Indexer health: `https://api.auraon.xyz/health`
+- Indexer stats: `https://api.auraon.xyz/api/stats`
+- Agent API manifest: `https://api.auraon.xyz/api/agent`
+- MCP-style tool metadata: `https://api.auraon.xyz/api/agent/mcp`
 
 Do not commit `.env`, private keys, API keys, Circle credentials, or wallet secrets.
 
@@ -135,7 +135,7 @@ Unified Balance funding is a convenience flow for getting USDC onto Arc Testnet.
 
 ## Docs Site
 
-The `docs/` folder is a static documentation site intended for `docs.aurapredict.xyz`.
+The `docs/` folder is a static documentation site intended for `docs.auraon.xyz`.
 
 On Vercel, deploy it as a separate project from the same repository with:
 

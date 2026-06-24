@@ -54,8 +54,8 @@ const RPC_URLS = (
   .filter(Boolean);
 const PORT = Number(process.env.PORT || process.env.AURA_INDEXER_PORT || 8787);
 const HOST = process.env.AURA_INDEXER_HOST || (process.env.PORT ? "0.0.0.0" : "127.0.0.1");
-const PUBLIC_API_BASE_URL = String(process.env.AURA_PUBLIC_API_BASE_URL || "https://api.aurapredict.xyz").replace(/\/+$/, "");
-const PUBLIC_APP_BASE_URL = String(process.env.AURA_PUBLIC_APP_BASE_URL || "https://app.aurapredict.xyz").replace(/\/+$/, "");
+const PUBLIC_API_BASE_URL = String(process.env.AURA_PUBLIC_API_BASE_URL || "https://api.auraon.xyz").replace(/\/+$/, "");
+const PUBLIC_APP_BASE_URL = String(process.env.AURA_PUBLIC_APP_BASE_URL || "https://app.auraon.xyz").replace(/\/+$/, "");
 const POLL_MS = Number(process.env.AURA_INDEXER_POLL_MS || 60_000);
 const WS_URLS = (
   process.env.AURA_INDEXER_WS_URLS ||
@@ -2489,7 +2489,7 @@ function escapeHtml(value) {
 
 function embedMarketHtml(market) {
   const insight = aiInsightForMarket(market);
-  const appUrl = `https://app.aurapredict.xyz/?market=${encodeURIComponent(String(market.id))}`;
+  const appUrl = `https://app.auraon.xyz/?market=${encodeURIComponent(String(market.id))}`;
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -3909,7 +3909,7 @@ function detectHealthOracleMarket(market) {
   const urls = marketSourceUrls(market);
   const explicitHealthUrl = urls.find((url) => /\/health(?:\?|$|\/)/i.test(url)) || urls.find((url) => /api\./i.test(url));
   if (explicitHealthUrl) return { url: explicitHealthUrl };
-  if (text.includes("aurapredict") && text.includes("health")) return { url: "https://api.aurapredict.xyz/health" };
+  if (text.includes("aurapredict") && text.includes("health")) return { url: "https://api.auraon.xyz/health" };
   return null;
 }
 
