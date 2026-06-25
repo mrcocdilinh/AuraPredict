@@ -92,12 +92,14 @@ export async function requireMarketPayment(req, res) {
       kind
     ).accepts[0];
 
+    console.log("[x402] Verifying payment, requirements:", JSON.stringify(paymentRequirements));
     const verifyRes = await fetch(`${GATEWAY_API}/v1/x402/verify`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ payment, paymentRequirements })
     });
     const verifyData = await verifyRes.json();
+    console.log("[x402] Verify response:", JSON.stringify(verifyData));
     if (!verifyData.isValid) {
       res.writeHead(402, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ error: verifyData.invalidReason || "Payment invalid" }));
