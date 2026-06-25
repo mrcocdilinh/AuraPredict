@@ -314,6 +314,10 @@ export function evaluateSimpleSportsMarket(market, snapshots) {
     .filter((event) => (event.competitors || []).every((competitor) => competitor.score !== null));
 
   if (matched.length !== 1) {
+    // Aggregate questions ("total goals across all matches on a date") span
+    // many fixtures, so the single-row path above never fires for them.
+    const aggregate = evaluateAggregateGoalsMarket(market, snapshots, lower);
+    if (aggregate) return aggregate;
     return null;
   }
 
@@ -368,6 +372,59 @@ export function evaluateSimpleSportsMarket(market, snapshots) {
   }
 
   return null;
+}
+
+// Handles "at least N total goals/points/runs scored in matches played on <date>"
+// style markets that aggregate every completed fixture instead of one named game.
+// Only auto-resolves YES (sum already meets the target, so missing fixtures can't
+// flip it); a sum below target is left for manual review because the scoreboard
+// scan may not have captured every match.
+function evaluateAggregateGoalsMarket(market, snapshots, lower) {
+  const goalMatch =
+    lower.match(/\bat\s+least\s+(\d+(?:\.\d+)?)\s+(?:total\s+)?(?:goals?|points?|runs?)\b/) ||
+    lower.match(/\b(?:total\s+)?(?:goals?|points?|runs?)\s+(?:is\s+)?(?:at\s+least|>=)\s+(\d+(?:\.\d+)?)\b/);
+  if (!goalMatch) return null;
+
+  const spansAllMatches = /\b(matches|games|fixtures|combined|across)\b/.test(lower);
+  if (!spansAllMatches) return null;
+
+  const target = Number(goalMatch[1]);
+  if (!Number.isFinite(target)) return null;
+
+  const seen = new Set();
+  const completedEvents = (snapshots || [])
+    .filter((row) => row?.ok)
+    .flatMap((row) => row.events || [])
+    .filter((event) => event?.completed && (event.competitors || []).length >= 2)
+    .filter((event) => (event.competitors || []).every((competitor) => competitor.score !== null))
+    .filter((event) => {
+      const key = event.id || event.summary;
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+
+  if (completedEvents.length === 0) return null;
+
+  const totalGoals = completedEvents.reduce(
+    (sum, event) => sum + (event.competitors || []).reduce((s, competitor) => s + Number(competitor.score || 0), 0),
+    0
+  );
+  const sample = completedEvents.map((event) => event.summary).join(" / ");
+
+  // Below target may be wrong if the scan missed fixtures — defer to review.
+  if (totalGoals < target) return null;
+
+  return {
+    outcome: "YES",
+    confidence: 88,
+    observedValue: `${completedEvents.length} completed match(es); total ${totalGoals} goals`,
+    summary: `ESPN structured scoreboard returned ${completedEvents.length} completed match(es) for the date. Combined total ${totalGoals} already meets the rule target of at least ${target}. Matches: ${sample}.`,
+    checks: [
+      `Aggregated ${completedEvents.length} completed scoreboard rows across all matches on the date.`,
+      `Summed every score (${totalGoals}) and confirmed it meets the market threshold (at least ${target}).`
+    ]
+  };
 }
 
 function hasTeamNameInText(lowerText, rawName) {

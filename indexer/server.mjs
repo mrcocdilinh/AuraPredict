@@ -141,7 +141,7 @@ const ORACLE_AUTO_PROPOSE_MIN_CONFIDENCE = Number(process.env.AURA_ORACLE_AUTO_P
 const ORACLE_AUTO_PROPOSE_ADAPTERS = new Set(
   String(
     process.env.AURA_ORACLE_AUTO_PROPOSE_ADAPTERS ||
-      "crypto-price,auragate-crypto,stock-yahoo-chart,macro-yahoo-chart,macro-bls-release,macro-fed-rate,macro-eia-inventory,status-health,status-page,liquidity-rule"
+      "crypto-price,auragate-crypto,stock-yahoo-chart,macro-yahoo-chart,macro-bls-release,macro-fed-rate,macro-eia-inventory,status-health,status-page,liquidity-rule,sports-scoreboard"
   )
     .split(",")
     .map((adapter) => adapter.trim())
@@ -4251,8 +4251,10 @@ function statusPageOracleIntegrityIssue(proposal, market) {
 
 function sportsScoreboardOracleIntegrityIssue(proposal) {
   const text = `${proposal.summary || ""} ${proposal.observedValue || ""} ${(proposal.checks || []).join(" ")}`;
-  if (!/\b(matched one completed scoreboard row|completed scoreboard row)\b/i.test(text)) {
-    return "Sports scoreboard oracle must match exactly one completed structured scoreboard row before proposing YES or NO.";
+  const matchedSingleRow = /\b(matched one completed scoreboard row|completed scoreboard row)\b/i.test(text);
+  const aggregatedRows = /\baggregated \d+ completed scoreboard rows? across all matches\b/i.test(text);
+  if (!matchedSingleRow && !aggregatedRows) {
+    return "Sports scoreboard oracle must match completed structured scoreboard rows before proposing YES or NO.";
   }
   if (!/\b(final|\[final\]|ft|full time|completed)\b/i.test(text)) {
     return "Sports scoreboard oracle outcome is missing final/completed status evidence.";
