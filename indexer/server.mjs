@@ -6144,7 +6144,8 @@ async function route(req, res) {
     res.writeHead(204, {
       "access-control-allow-origin": "*",
       "access-control-allow-methods": "GET, POST, OPTIONS",
-      "access-control-allow-headers": "content-type, authorization, x-aura-admin-token"
+      "access-control-allow-headers": "content-type, authorization, x-aura-admin-token, payment-signature",
+      "access-control-expose-headers": "PAYMENT-REQUIRED, X-PAYMENT-RESPONSE"
     });
     res.end();
     return;
