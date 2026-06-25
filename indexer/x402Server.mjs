@@ -70,7 +70,7 @@ export async function requireMarketPayment(req, res) {
       const requirements = buildPaymentRequirements(req.url ?? "/api/agent/markets", kind);
       const encoded = Buffer.from(JSON.stringify(requirements)).toString("base64");
       res.writeHead(402, { "Content-Type": "application/json", "PAYMENT-REQUIRED": encoded });
-      res.end(JSON.stringify({}));
+      res.end(JSON.stringify(requirements));
     } catch (err) {
       console.warn("[x402] 402 build failed, serving open:", err.message);
       return true; // fallback: serve data if gateway unreachable
