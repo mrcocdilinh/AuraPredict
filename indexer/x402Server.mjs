@@ -1,43 +1,120 @@
-// x402 server-side gate for AuraOn paid endpoints.
-// Wraps Circle Gateway middleware so any route can require USDC payment
-// before serving data. Enabled when AURA_X402_SELLER_ADDRESS is set.
-import { createGatewayMiddleware } from "@circle-fin/x402-batching/server";
+// x402 server-side gate — calls Circle Gateway API directly, no peer deps.
+// When AURA_X402_SELLER_ADDRESS is set, GET /api/agent/markets returns 402
+// for unauthenticated requests and serves data after valid payment.
 
 const SELLER_ADDRESS = String(process.env.AURA_X402_SELLER_ADDRESS || "").trim();
-const MARKET_FEED_PRICE = String(process.env.AURA_X402_MARKET_PRICE || "0.005").trim();
-const GATEWAY_API_URL = "https://gateway-api-testnet.circle.com";
+const MARKET_PRICE = String(process.env.AURA_X402_MARKET_PRICE || "0.005").trim();
+const GATEWAY_API = "https://gateway-api-testnet.circle.com";
+// Arc Testnet USDC: 18 decimals on-chain
+const ARC_USDC_DECIMALS = 18;
+const GATEWAY_AUTH_VALIDITY = 604900; // 7 days + 100s buffer
 
 export function x402ServerEnabled() {
   return Boolean(SELLER_ADDRESS);
 }
 
-let _middleware = null;
-function getMiddleware() {
-  if (!_middleware) {
-    _middleware = createGatewayMiddleware({
-      facilitatorUrl: GATEWAY_API_URL,
-      sellerAddress: SELLER_ADDRESS,
-      description: "AuraOn Live Market Feed — real-time prediction market data on Arc Testnet",
-      networks: ["arcTestnet"]
-    });
-  }
-  return _middleware;
+function priceToAtomic(usdcDecimal) {
+  // e.g. "0.005" → "5000000000000000" (18 decimals)
+  return String(BigInt(Math.round(parseFloat(usdcDecimal) * 10 ** ARC_USDC_DECIMALS)));
 }
 
-// Call before serving a paid endpoint. If payment is missing/invalid,
-// writes 402 to res and resolves false. If payment is valid, resolves true.
+let cachedArcKind = null;
+async function getArcKind() {
+  if (cachedArcKind) return cachedArcKind;
+  const res = await fetch(`${GATEWAY_API}/v1/x402/supported`);
+  if (!res.ok) throw new Error(`Gateway supported fetch failed: ${res.status}`);
+  const data = await res.json();
+  cachedArcKind = (data.kinds || []).find((k) => k.network === "arcTestnet");
+  if (!cachedArcKind) throw new Error("arcTestnet not in Gateway supported list");
+  return cachedArcKind;
+}
+
+function buildPaymentRequirements(url, kind) {
+  return {
+    x402Version: 2,
+    resource: { url, description: "AuraOn Live Market Feed", mimeType: "application/json" },
+    accepts: [
+      {
+        scheme: "exact",
+        network: "arcTestnet",
+        asset: kind.extra?.usdcAddress || kind.extra?.asset || "",
+        amount: priceToAtomic(MARKET_PRICE),
+        payTo: SELLER_ADDRESS,
+        maxTimeoutSeconds: GATEWAY_AUTH_VALIDITY,
+        extra: {
+          name: "GatewayWalletBatched",
+          version: "1",
+          verifyingContract: kind.extra?.verifyingContract || ""
+        }
+      }
+    ]
+  };
+}
+
+// Call before serving a paid route.
+// Returns true  → payment OK (or gate disabled), caller should serve data.
+// Returns false → 402 or error already written to res, caller should return.
 export async function requireMarketPayment(req, res) {
-  if (!x402ServerEnabled()) return true; // gate off — passthrough
-  let granted = false;
-  try {
-    await getMiddleware().require(MARKET_FEED_PRICE)(req, res, () => {
-      granted = true;
-    });
-  } catch (err) {
-    if (!res.writableEnded) {
-      res.writeHead(500, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ error: "Payment gate error." }));
+  if (!x402ServerEnabled()) return true;
+
+  const paymentHeader = req.headers["payment-signature"];
+
+  if (!paymentHeader) {
+    // No payment → send 402
+    try {
+      const kind = await getArcKind();
+      const requirements = buildPaymentRequirements(req.url ?? "/api/agent/markets", kind);
+      const encoded = Buffer.from(JSON.stringify(requirements)).toString("base64");
+      res.writeHead(402, { "Content-Type": "application/json", "PAYMENT-REQUIRED": encoded });
+      res.end(JSON.stringify({}));
+    } catch (err) {
+      console.warn("[x402] 402 build failed, serving open:", err.message);
+      return true; // fallback: serve data if gateway unreachable
     }
+    return false;
   }
-  return granted;
+
+  // Payment header present → verify then settle
+  try {
+    const payment = JSON.parse(Buffer.from(paymentHeader, "base64").toString("utf-8"));
+    const kind = await getArcKind();
+    const paymentRequirements = buildPaymentRequirements(
+      req.url ?? "/api/agent/markets",
+      kind
+    ).accepts[0];
+
+    const verifyRes = await fetch(`${GATEWAY_API}/v1/x402/verify`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ payment, paymentRequirements })
+    });
+    const verifyData = await verifyRes.json();
+    if (!verifyData.isValid) {
+      res.writeHead(402, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: verifyData.invalidReason || "Payment invalid" }));
+      return false;
+    }
+
+    const settleRes = await fetch(`${GATEWAY_API}/v1/x402/settle`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ payment, paymentRequirements })
+    });
+    const settleData = await settleRes.json();
+    if (!settleData.success) {
+      res.writeHead(402, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "Payment settlement failed" }));
+      return false;
+    }
+
+    res.setHeader(
+      "X-PAYMENT-RESPONSE",
+      Buffer.from(JSON.stringify(settleData)).toString("base64")
+    );
+    console.log(`[x402] Payment settled: ${MARKET_PRICE} USDC from ${payment?.accepted?.from || "?"}`);
+    return true;
+  } catch (err) {
+    console.warn("[x402] Payment verify/settle error (serving open):", err.message);
+    return true; // non-fatal: serve data on unexpected error
+  }
 }
