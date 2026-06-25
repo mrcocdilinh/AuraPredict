@@ -96,25 +96,28 @@ export async function requireMarketPayment(req, res) {
     const verifyRes = await fetch(`${GATEWAY_API}/v1/x402/verify`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ payment, paymentRequirements })
+      body: JSON.stringify({ paymentPayload: payment, paymentRequirements })
     });
     const verifyData = await verifyRes.json();
     console.log("[x402] Verify response:", JSON.stringify(verifyData));
-    if (!verifyData.isValid) {
+    const verified = verifyData.isValid === true || verifyData.success === true;
+    if (!verified) {
+      const reason = verifyData.invalidReason || verifyData.message || "Payment invalid";
       res.writeHead(402, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ error: verifyData.invalidReason || "Payment invalid" }));
+      res.end(JSON.stringify({ error: reason }));
       return false;
     }
 
     const settleRes = await fetch(`${GATEWAY_API}/v1/x402/settle`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ payment, paymentRequirements })
+      body: JSON.stringify({ paymentPayload: payment, paymentRequirements })
     });
     const settleData = await settleRes.json();
-    if (!settleData.success) {
+    console.log("[x402] Settle response:", JSON.stringify(settleData));
+    if (!settleData.success && !settleData.isValid) {
       res.writeHead(402, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ error: "Payment settlement failed" }));
+      res.end(JSON.stringify({ error: settleData.message || "Payment settlement failed" }));
       return false;
     }
 
