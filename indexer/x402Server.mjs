@@ -5,8 +5,10 @@
 const SELLER_ADDRESS = String(process.env.AURA_X402_SELLER_ADDRESS || "").trim();
 const MARKET_PRICE = String(process.env.AURA_X402_MARKET_PRICE || "0.005").trim();
 const GATEWAY_API = "https://gateway-api-testnet.circle.com";
-// Arc Testnet USDC: 18 decimals on-chain
-const ARC_USDC_DECIMALS = 18;
+// Circle Gateway identifies Arc Testnet by CAIP-2 chain ID
+const ARC_NETWORK_ID = "eip155:5042002";
+// USDC on Arc Testnet: 6 decimals (per Circle Gateway assets list)
+const ARC_USDC_DECIMALS = 6;
 const GATEWAY_AUTH_VALIDITY = 604900; // 7 days + 100s buffer
 
 export function x402ServerEnabled() {
@@ -14,8 +16,8 @@ export function x402ServerEnabled() {
 }
 
 function priceToAtomic(usdcDecimal) {
-  // e.g. "0.005" → "5000000000000000" (18 decimals)
-  return String(BigInt(Math.round(parseFloat(usdcDecimal) * 10 ** ARC_USDC_DECIMALS)));
+  // e.g. "0.005" → "5000" (6 decimals)
+  return String(Math.round(parseFloat(usdcDecimal) * 10 ** ARC_USDC_DECIMALS));
 }
 
 let cachedArcKind = null;
@@ -24,26 +26,28 @@ async function getArcKind() {
   const res = await fetch(`${GATEWAY_API}/v1/x402/supported`);
   if (!res.ok) throw new Error(`Gateway supported fetch failed: ${res.status}`);
   const data = await res.json();
-  cachedArcKind = (data.kinds || []).find((k) => k.network === "arcTestnet");
-  if (!cachedArcKind) throw new Error("arcTestnet not in Gateway supported list");
+  cachedArcKind = (data.kinds || []).find((k) => k.network === ARC_NETWORK_ID);
+  if (!cachedArcKind) throw new Error(`${ARC_NETWORK_ID} not in Gateway supported list`);
   return cachedArcKind;
 }
 
 function buildPaymentRequirements(url, kind) {
+  // Circle Gateway response: extra.assets[0].address is the USDC token address
+  const usdcAddress = kind.extra?.assets?.[0]?.address || "";
   return {
     x402Version: 2,
     resource: { url, description: "AuraOn Live Market Feed", mimeType: "application/json" },
     accepts: [
       {
         scheme: "exact",
-        network: "arcTestnet",
-        asset: kind.extra?.usdcAddress || kind.extra?.asset || "",
+        network: ARC_NETWORK_ID,
+        asset: usdcAddress,
         amount: priceToAtomic(MARKET_PRICE),
         payTo: SELLER_ADDRESS,
         maxTimeoutSeconds: GATEWAY_AUTH_VALIDITY,
         extra: {
-          name: "GatewayWalletBatched",
-          version: "1",
+          name: kind.extra?.name || "GatewayWalletBatched",
+          version: kind.extra?.version || "1",
           verifyingContract: kind.extra?.verifyingContract || ""
         }
       }
