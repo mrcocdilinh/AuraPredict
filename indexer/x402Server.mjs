@@ -128,7 +128,11 @@ export async function requireMarketPayment(req, res) {
     console.log(`[x402] Payment settled: ${MARKET_PRICE} USDC from ${payment?.accepted?.from || "?"}`);
     return true;
   } catch (err) {
-    console.warn("[x402] Payment verify/settle error (serving open):", err.message);
-    return true; // non-fatal: serve data on unexpected error
+    console.warn("[x402] Payment verify/settle error:", err.message);
+    if (!res.writableEnded) {
+      res.writeHead(402, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "Payment verification error" }));
+    }
+    return false;
   }
 }
