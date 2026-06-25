@@ -19,7 +19,7 @@ export const appKitModal = createAppKit({
   networks: [arcTestnetAppKit],
   projectId: "8a0467ff451041ae0b982bf8aa2239f0",
   metadata: {
-    name: "AuraPredict",
+    name: "AuraOn",
     description: "Prediction markets on Arc Testnet",
     url: "https://app.auraon.xyz",
     icons: ["https://app.auraon.xyz/aurapredict-logo-192.png"]
@@ -38,7 +38,7 @@ export const appKitModal = createAppKit({
   },
   themeMode: "dark",
   themeVariables: {
-    "--w3m-accent": "#2f6bff",
+    "--w3m-accent": "#0a7cff",
     "--w3m-border-radius-master": "4px"
   }
 });

@@ -41,7 +41,7 @@ async function main() {
   await writeJson(path.join(OUT_DIR, "state", "aurapredict-index.json"), state);
   await writeFile(
     path.join(OUT_DIR, "index.html"),
-    `<!doctype html><meta charset="utf-8"><title>AuraPredict Index</title><pre>AuraPredict static index updated ${state.updatedAt}</pre>`,
+    `<!doctype html><meta charset="utf-8"><title>AuraOn Index</title><pre>AuraOn static index updated ${state.updatedAt}</pre>`,
     "utf8"
   );
 

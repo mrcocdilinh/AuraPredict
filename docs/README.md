@@ -1,4 +1,4 @@
-# AuraPredict Docs Site
+# AuraOn Docs Site
 
 This folder is a standalone static documentation site for:
 

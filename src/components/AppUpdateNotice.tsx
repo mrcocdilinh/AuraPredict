@@ -45,7 +45,7 @@ export function AppUpdateNotice() {
 
   return (
     <div className="app-update-notice" role="status" aria-live="polite">
-      <span>A new AuraPredict version is available.</span>
+      <span>A new AuraOn version is available.</span>
       <button onClick={() => window.location.reload()} type="button">
         Refresh
       </button>

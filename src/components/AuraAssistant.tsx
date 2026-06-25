@@ -74,7 +74,7 @@ export function AuraAssistant({
           <div className="assistant-thread" ref={scrollRef}>
             {messages.length === 0 && (
               <div className="assistant-empty">
-                <p>Ask me anything about AuraPredict. Try one of these:</p>
+                <p>Ask me anything about AuraOn. Try one of these:</p>
                 <div className="assistant-suggestions">
                   {SUGGESTIONS.map((s) => (
                     <button key={s} type="button" onClick={() => void send(s)}>{s}</button>

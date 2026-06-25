@@ -144,7 +144,7 @@ export const APP_URL = "https://app.auraon.xyz";
 export const DOCS_URL = "https://docs.auraon.xyz";
 export const ARC_FAUCET_URL = "https://faucet.circle.com";
 export const ARC_UNIFIED_BALANCE_URL = "https://docs.arc.io/app-kit/unified-balance";
-export const X_URL = "https://x.com/AuraPredict";
+export const X_URL = "https://x.com/AuraOn";
 export const DISCORD_URL = "https://discord.gg/3wTYhdsr";
 export const DEMO_VIDEO_URL = "https://www.youtube.com/watch?v=tdYqpAIG82s";
 export const DEMO_EMBED_URL = "https://www.youtube.com/embed/tdYqpAIG82s";
@@ -158,17 +158,17 @@ export const WALLET_DEEP_LINKS = [
   },
   {
     name: "MetaMask",
-    detail: "Open AuraPredict inside MetaMask mobile browser",
+    detail: "Open AuraOn inside MetaMask mobile browser",
     url: `https://metamask.app.link/dapp/${CURRENT_APP_URL}`
   },
   {
     name: "Rabby",
-    detail: "Open AuraPredict inside Rabby mobile browser",
+    detail: "Open AuraOn inside Rabby mobile browser",
     url: `https://rabby.io/dapp?url=${encodeURIComponent(`https://${CURRENT_APP_URL}`)}`
   },
   {
     name: "Rainbow",
-    detail: "Open AuraPredict in Rainbow browser",
+    detail: "Open AuraOn in Rainbow browser",
     url: `https://rnbwapp.com/wc?uri=${encodeURIComponent(`https://${CURRENT_APP_URL}`)}`
   },
   {

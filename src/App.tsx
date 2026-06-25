@@ -7153,10 +7153,10 @@ export default function App() {
       await copyTextToClipboard(url, "Market link copied.");
     };
     const marketShareUrl = `${window.location.origin}${window.location.pathname}?market=${selectedMarket.id}`;
-    const marketEmbedCode = `<iframe src="${marketShareUrl}" title="AuraPredict Market ${selectedMarket.id}" width="100%" height="720"></iframe>`;
+    const marketEmbedCode = `<iframe src="${marketShareUrl}" title="AuraOn Market ${selectedMarket.id}" width="100%" height="720"></iframe>`;
     const shareMarketOnX = () => {
       const tweet = new URL("https://x.com/intent/tweet");
-      tweet.searchParams.set("text", `${selectedMarket.question} | YES ${selectedMarketYesPercent.toFixed(0)}% / NO ${selectedMarketNoPercent.toFixed(0)}% on AuraPredict`);
+      tweet.searchParams.set("text", `${selectedMarket.question} | YES ${selectedMarketYesPercent.toFixed(0)}% / NO ${selectedMarketNoPercent.toFixed(0)}% on AuraOn`);
       tweet.searchParams.set("url", marketShareUrl);
       window.open(tweet.toString(), "_blank", "noopener,noreferrer");
     };
@@ -8960,14 +8960,14 @@ export default function App() {
         <a
           className="brand"
           href="#top"
-          aria-label="AuraPredict home"
+          aria-label="AuraOn home"
           onClick={(event) => {
             event.preventDefault();
             goHomeTop();
           }}
         >
-          <img src="/aurapredict-logo.png" alt="AuraPredict" />
-          <span className="brand-name">AuraPredict</span>
+          <img src="/aurapredict-logo.png" alt="AuraOn" />
+          <span className="brand-name">AuraOn</span>
           <span className="arc-topbar-chip">
             <img src="/arc-icon-navy-gradient.svg" alt="" />
             Arc
@@ -9521,7 +9521,7 @@ export default function App() {
             })}
           {tickerActivities.length === 0 && tickerFallbackLoop.length === 0 && (
             <span className="ticker-item">
-              Recent trades will appear here once players stake YES or NO on AuraPredict markets.
+              Recent trades will appear here once players stake YES or NO on AuraOn markets.
             </span>
           )}
         </div>
@@ -9661,7 +9661,7 @@ export default function App() {
               )}
               {view === "security" && (
                 <p>
-                  AuraPredict is still a testnet MVP. This page keeps audit status, contract custody, resolution risk,
+                  AuraOn is still a testnet MVP. This page keeps audit status, contract custody, resolution risk,
                   and user safety notes visible before mainnet decisions.
                 </p>
               )}
@@ -11212,7 +11212,7 @@ export default function App() {
                 <span className="section-label">Audit status</span>
                 <h3>Unaudited testnet contract</h3>
                 <p>
-                  AuraPredict is operating as an Arc Testnet MVP. Treat all market activity as testing until a formal
+                  AuraOn is operating as an Arc Testnet MVP. Treat all market activity as testing until a formal
                   smart contract audit, public findings, and mainnet deployment checklist are complete.
                 </p>
               </article>
@@ -11220,7 +11220,7 @@ export default function App() {
                 <span className="section-label">Legal and risk notice</span>
                 <h3>Experimental software, not financial advice</h3>
                 <p>
-                  AuraPredict is not a regulated exchange, broker, gambling platform, investment product, or financial
+                  AuraOn is not a regulated exchange, broker, gambling platform, investment product, or financial
                   adviser. Testnet tokens have no real-world value. Market wording, AI summaries, oracle suggestions,
                   source checks, odds, and payouts are provided for testing and research only.
                 </p>
@@ -11303,7 +11303,7 @@ export default function App() {
                       badges, and leaderboard rank from your profile.
                     </p>
                   </div>
-                  <div className="onboarding-steps" aria-label="AuraPredict onboarding steps">
+                  <div className="onboarding-steps" aria-label="AuraOn onboarding steps">
                     {["Connect", "Pick side", "Stake token", "Track Aura"].map((step, index) => (
                       <span key={step}>{index + 1}. {step}</span>
                     ))}
@@ -12193,7 +12193,7 @@ export default function App() {
             <div className="email-login-intro">
               <strong>Secure Arc wallet, no extension required.</strong>
               <p>
-                We create a PIN-protected Circle wallet for you. Your keys stay private and are never shared with AuraPredict.
+                We create a PIN-protected Circle wallet for you. Your keys stay private and are never shared with AuraOn.
               </p>
             </div>
             <button
@@ -12255,10 +12255,10 @@ export default function App() {
 
       <footer className="site-footer">
         <section className="footer-brand">
-          <img src="/aurapredict-logo.png" alt="AuraPredict" />
+          <img src="/aurapredict-logo.png" alt="AuraOn" />
           <div>
             <div className="footer-brand-row">
-              <strong>AuraPredict</strong>
+              <strong>AuraOn</strong>
               <span className="arc-brand-chip footer-arc-chip">
                 <img src="/arc-icon-navy-gradient.svg" alt="" />
                 Built on Arc
@@ -12279,14 +12279,14 @@ export default function App() {
             <span>EVM compatible</span>
           </div>
         </section>
-        <section className="social-links" aria-label="AuraPredict social links">
-          <a href={X_URL} target="_blank" rel="noreferrer" aria-label="AuraPredict on X">
+        <section className="social-links" aria-label="AuraOn social links">
+          <a href={X_URL} target="_blank" rel="noreferrer" aria-label="AuraOn on X">
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <path d="M18.9 2h3.1l-6.8 7.8 8 10.2h-6.3l-4.9-6.2-5.6 6.2h-3.1l7.3-8.3-7.7-9.7h6.4l4.4 5.6 5.2-5.6Zm-1.1 16.2h1.7L8.4 3.7H6.6l11.2 14.5Z" />
             </svg>
             <span>X</span>
           </a>
-          <a href={DISCORD_URL} target="_blank" rel="noreferrer" aria-label="AuraPredict Discord">
+          <a href={DISCORD_URL} target="_blank" rel="noreferrer" aria-label="AuraOn Discord">
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <path d="M19.6 4.8A16.1 16.1 0 0 0 15.7 3l-.2.4c1.4.4 2.1.9 3 1.5a13.8 13.8 0 0 0-12.9 0c.9-.7 1.8-1.1 3-1.5L8.4 3c-1.4.3-2.7.9-3.9 1.8C2 8.5 1.3 12 1.6 15.5c1.6 1.2 3.1 1.9 4.6 2.4l1-1.7c-.6-.2-1.2-.5-1.7-.8l.4-.3c3.3 1.5 6.9 1.5 10.2 0l.4.3c-.5.3-1.1.6-1.7.8l1 1.7c1.5-.5 3.1-1.2 4.6-2.4.4-4.1-.7-7.6-2.8-10.7ZM8.4 13.4c-1 0-1.8-.9-1.8-2s.8-2 1.8-2 1.8.9 1.8 2-.8 2-1.8 2Zm7.2 0c-1 0-1.8-.9-1.8-2s.8-2 1.8-2 1.8.9 1.8 2-.8 2-1.8 2Z" />
             </svg>

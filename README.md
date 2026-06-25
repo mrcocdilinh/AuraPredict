@@ -1,6 +1,6 @@
-# AuraPredict
+# AuraOn
 
-AuraPredict is an AI-assisted prediction market dapp built on Arc Testnet. It lets users create YES/NO markets, stake testnet USDC or EURC, review market evidence, and resolve outcomes through a mix of creator proposals, authority review, oracle checks, and dispute windows.
+AuraOn is an AI-assisted prediction market dapp built on Arc Testnet. It lets users create YES/NO markets, stake testnet USDC or EURC, review market evidence, and resolve outcomes through a mix of creator proposals, authority review, oracle checks, and dispute windows.
 
 The project is a testnet MVP and a public builder project for the Arc ecosystem. It is not a financial product, broker, investment platform, or real-money betting service.
 
@@ -28,7 +28,7 @@ The project is a testnet MVP and a public builder project for the Arc ecosystem.
 - Circle Agent Wallet support for authority/oracle proposal signing.
 - Circle Gateway-based USDC funding utility for moving testnet USDC from supported source chains to Arc Testnet.
 - In-app USDC/EURC swap helper using Circle App Kit first, with LI.FI fallback when available.
-- Off-chain social data for profiles, comments, notifications, evidence links, and username reservations through the AuraPredict indexer.
+- Off-chain social data for profiles, comments, notifications, evidence links, and username reservations through the AuraOn indexer.
 - Read-only Agent API and MCP-style tool metadata for external AI agents and Arc builders.
 - Owner dashboard queues for reports, pending proposals, finalization, dispute/authority review, and flagged market-risk badges.
 - Public docs, risk disclosures, oracle policy, backtest sample, and frontend E2E coverage for core market flows.
@@ -37,7 +37,7 @@ The project is a testnet MVP and a public builder project for the Arc ecosystem.
 
 ## Active Testnet Deployment
 
-AuraPredict now targets the deployed V5 contract surface:
+AuraOn now targets the deployed V5 contract surface:
 
 - Chain ID: `5042002`
 - RPC: `https://rpc.testnet.arc.network`
@@ -69,7 +69,7 @@ On Windows PowerShell, use `copy .env.example .env` instead of `cp`.
 
 The app uses `.env` values for the active contract, Arc RPC, token addresses, WalletConnect, indexer URL, Circle App Kit, oracle automation, and signer settings.
 
-For local development, start from `.env.example` and only fill in the services you actually use. The frontend can run directly against Arc RPC, while production is expected to use the AuraPredict indexer for faster market stats, leaderboard, history, profiles, comments, notifications, and evidence data.
+For local development, start from `.env.example` and only fill in the services you actually use. The frontend can run directly against Arc RPC, while production is expected to use the AuraOn indexer for faster market stats, leaderboard, history, profiles, comments, notifications, and evidence data.
 
 Important production references:
 
@@ -99,7 +99,7 @@ For setup details, see `indexer/README.md`.
 
 ## Agent API
 
-AuraPredict publishes read-only agent endpoints for market discovery, evidence packages, oracle receipts, oracle reputation, and next-action previews. These endpoints are designed for AI agents and partner widgets; they do not propose, finalize, dispute, claim, or move funds.
+AuraOn publishes read-only agent endpoints for market discovery, evidence packages, oracle receipts, oracle reputation, and next-action previews. These endpoints are designed for AI agents and partner widgets; they do not propose, finalize, dispute, claim, or move funds.
 
 Market reports also have an owner-review lifecycle (`open`, `resolved`, `flagged`, `dismissed`) so bad-source or bad-rule reports can be tracked without leaving stale warnings open forever.
 
@@ -107,7 +107,7 @@ See `docs/AGENT_API_AND_MCP.md`.
 
 ## Oracle And Resolution Flow
 
-AuraPredict V5 separates market trading close time from event resolution time. Results cannot be proposed before the event resolution timestamp, and public market creation now goes through owner review before a market becomes live.
+AuraOn V5 separates market trading close time from event resolution time. Results cannot be proposed before the event resolution timestamp, and public market creation now goes through owner review before a market becomes live.
 
 Supported resolution paths include:
 
@@ -122,7 +122,7 @@ For the full policy, see `docs/RISK_ORACLE_AND_QA.md`.
 
 ## Circle And Arc Integrations
 
-AuraPredict uses Arc and Circle tooling in several places:
+AuraOn uses Arc and Circle tooling in several places:
 
 - Arc Testnet contract deployment and settlement.
 - USDC as native gas on Arc.
@@ -161,5 +161,5 @@ Use the seed scripts only with a funded Arc Testnet wallet and after confirming 
 - Testnet tokens have no real value.
 - AI, oracle checks, source routing, and automated proposals can be wrong, incomplete, delayed, or unavailable.
 - Dispute windows and authority review are part of the safety model, not a replacement for audits, compliance, monitoring, or multisig governance.
-- Each market settles only in its selected token. AuraPredict does not perform FX conversion between settlement assets.
+- Each market settles only in its selected token. AuraOn does not perform FX conversion between settlement assets.
 - Do not use this project as financial, legal, investment, trading, or betting advice.

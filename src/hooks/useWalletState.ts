@@ -332,7 +332,7 @@ export function useWalletState({
     setWalletMenuOpen(false);
     window.localStorage.removeItem(WALLET_CONNECTED_KEY);
     window.localStorage.setItem(WALLET_DISCONNECTED_KEY, "true");
-    setNotice("Wallet disconnected in AuraPredict.");
+    setNotice("Wallet disconnected in AuraOn.");
   }, [selectedWalletProvider, setNotice]);
 
   // Restore a previous Circle session, wire the Google-login handlers, and

@@ -80,7 +80,7 @@ function market(overrides: Record<string, unknown>) {
   const id = Number(overrides.id ?? 1);
   return {
     id,
-    question: `Will AuraPredict E2E market #${id} render correctly?`,
+    question: `Will AuraOn E2E market #${id} render correctly?`,
     category: "Arc",
     createdAt: seconds(-7_200),
     closeTime: seconds(7_200),
@@ -127,7 +127,7 @@ function market(overrides: Record<string, unknown>) {
 const markets = [
   market({
     id: 1,
-    question: "Will AuraPredict let users stake YES or NO on a live Arc market?",
+    question: "Will AuraOn let users stake YES or NO on a live Arc market?",
     closeTime: seconds(86_400),
     resolutionTime: seconds(86_400),
     yesPool: "8000000",
@@ -136,7 +136,7 @@ const markets = [
   }),
   market({
     id: 2,
-    question: "Will AuraPredict show dispute and finalization controls after a proposal?",
+    question: "Will AuraOn show dispute and finalization controls after a proposal?",
     closeTime: seconds(-7_200),
     resolutionTime: seconds(-7_200),
     proposedOutcome: 1,
@@ -147,7 +147,7 @@ const markets = [
   }),
   market({
     id: 3,
-    question: "Will AuraPredict show claim state after a market is finalized?",
+    question: "Will AuraOn show claim state after a market is finalized?",
     closeTime: seconds(-86_400),
     resolutionTime: seconds(-86_400),
     proposedOutcome: 1,
@@ -160,7 +160,7 @@ const markets = [
   }),
   market({
     id: 4,
-    question: "Will AuraPredict include a second finalized claimable market?",
+    question: "Will AuraOn include a second finalized claimable market?",
     closeTime: seconds(-90_000),
     resolutionTime: seconds(-90_000),
     proposedOutcome: 1,
@@ -449,7 +449,7 @@ test("create market explains all resolution modes and UTC timing", async ({ page
 
 test("market detail exposes stake, resolution, dispute, finalize and claim surfaces", async ({ page }) => {
   await page.goto("/?market=1");
-  await expect(page.getByRole("heading", { name: /Will AuraPredict let users stake YES or NO/i })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /Will AuraOn let users stake YES or NO/i })).toBeVisible();
   await expect(page.getByText(/Public preview/i)).toBeVisible();
   await expect(page.getByRole("img", { name: /Market odds chart/i })).toBeVisible();
   await expect(page.getByRole("tab", { name: /Overview/i })).toBeVisible();

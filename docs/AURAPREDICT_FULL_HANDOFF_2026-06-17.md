@@ -1,6 +1,6 @@
-# AuraPredict Full Handoff - 2026-06-17
+# AuraOn Full Handoff - 2026-06-17
 
-This handoff is for a new coding agent continuing AuraPredict. It summarizes the practical project history, current architecture, deployments, environment variables, known issues, decisions already made, and next steps. Do not assume any private keys or API keys in screenshots are safe to reuse or expose. Never commit `.env`, local private keys, or local bot tools unless the user explicitly requests it.
+This handoff is for a new coding agent continuing AuraOn. It summarizes the practical project history, current architecture, deployments, environment variables, known issues, decisions already made, and next steps. Do not assume any private keys or API keys in screenshots are safe to reuse or expose. Never commit `.env`, local private keys, or local bot tools unless the user explicitly requests it.
 
 ## Current Project
 
@@ -8,12 +8,12 @@ This handoff is for a new coding agent continuing AuraPredict. It summarizes the
 - App: `https://app.auraon.xyz/`
 - API/indexer: `https://api.auraon.xyz/`
 - VPS: `/opt/aurapredict` on `root@14.225.218.99`
-- Main local workspace: `C:\Users\admin\Documents\Codex\2026-06-02\files-mentioned-by-the-user-aurapredict-2\work\AuraPredict`
+- Main local workspace: `C:\Users\admin\Documents\Codex\2026-06-02\files-mentioned-by-the-user-aurapredict-2\work\AuraOn`
 - Current direction: fully move from V4 to V5, with a more mobile-first, seedless/login-friendly prediction market app on Arc Testnet.
 
 ## Product Direction
 
-AuraPredict is an AI-assisted prediction market dapp on Arc Testnet. The user wants it to evolve toward:
+AuraOn is an AI-assisted prediction market dapp on Arc Testnet. The user wants it to evolve toward:
 
 - Mobile-first market browsing and betting, closer in usability to Polymarket/Opinion mobile.
 - Seedless onboarding: login with Google/email/social/wallet, create or attach an Arc wallet, then trade from one account.

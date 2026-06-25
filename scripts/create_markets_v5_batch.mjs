@@ -50,7 +50,7 @@ const contractAddress =
 const privateKey = process.env.AURA_MARKET_CREATOR_PK || process.env.PRIVATE_KEY;
 
 if (!validateOnly && (!contractAddress || !ethers.isAddress(contractAddress))) {
-  throw new Error("Set AURA_INDEXER_CONTRACT_ADDRESS or PREDICTION_MARKET_ADDRESS to the AuraPredict V5 contract address.");
+  throw new Error("Set AURA_INDEXER_CONTRACT_ADDRESS or PREDICTION_MARKET_ADDRESS to the AuraOn V5 contract address.");
 }
 if (!validateOnly && (!privateKey || !/^0x[0-9a-fA-F]{64}$/.test(privateKey))) {
   throw new Error("Set AURA_MARKET_CREATOR_PK to a 0x-prefixed private key.");
@@ -132,7 +132,7 @@ const provider = new ethers.JsonRpcProvider(rpcUrl, ARC_CHAIN_ID);
 const wallet = new ethers.Wallet(privateKey, provider);
 const contract = new ethers.Contract(contractAddress, CONTRACT_ABI, wallet);
 
-console.log("AuraPredict V5 batch market creator");
+console.log("AuraOn V5 batch market creator");
 console.log(`Contract: ${contractAddress}`);
 console.log(`Wallet: ${wallet.address}`);
 console.log(`Markets: ${selected.length} / ${json.length}`);
@@ -140,7 +140,7 @@ console.log(`Mode: ${dryRun ? "dry-run" : submitDraft ? "submit-draft" : "create
 
 const version = await contract.CONTRACT_VERSION();
 if (!String(version).includes("V5")) {
-  throw new Error(`Contract version is ${version}; expected AuraPredict V5.`);
+  throw new Error(`Contract version is ${version}; expected AuraOn V5.`);
 }
 console.log(`Contract version: ${version}`);
 

@@ -1,6 +1,6 @@
-# AuraPredict Agent API And MCP Surface
+# AuraOn Agent API And MCP Surface
 
-AuraPredict exposes a read-only agent surface for builders and AI agents on Arc Testnet. The goal is to make market data, source evidence, AI receipts, and oracle reputation easy to inspect without scraping the web app.
+AuraOn exposes a read-only agent surface for builders and AI agents on Arc Testnet. The goal is to make market data, source evidence, AI receipts, and oracle reputation easy to inspect without scraping the web app.
 
 Production base URL:
 

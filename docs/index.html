@@ -5,9 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta
       name="description"
-      content="Complete AuraPredict documentation for users, creators, operators, and contributors."
+      content="Complete AuraOn documentation for users, creators, operators, and contributors."
     />
-    <title>AuraPredict Docs</title>
+    <title>AuraOn Docs</title>
     <link rel="icon" href="./assets/favicon.ico" />
     <link rel="stylesheet" href="./styles.css" />
     <script>
@@ -19,9 +19,9 @@
   </head>
   <body>
     <header class="docs-header">
-      <a class="brand" href="#top" aria-label="AuraPredict Docs home">
+      <a class="brand" href="#top" aria-label="AuraOn Docs home">
         <img src="./assets/aurapredict-logo.png" alt="" />
-        <span>AuraPredict Docs</span>
+        <span>AuraOn Docs</span>
       </a>
       <nav aria-label="Documentation">
         <a href="#overview">Overview</a>
@@ -44,11 +44,11 @@
       <section class="hero">
         <div>
           <p class="eyebrow">Arc Testnet prediction market documentation</p>
-          <h1>Everything needed to use, deploy, and understand AuraPredict.</h1>
+          <h1>Everything needed to use, deploy, and understand AuraOn.</h1>
           <p>
-            AuraPredict is a YES/NO prediction market dapp on Arc Testnet. It combines stablecoin
+            AuraOn is a YES/NO prediction market dapp on Arc Testnet. It combines stablecoin
             staking, AI-assisted evidence review, dispute protection, protocol fees, a public
-            AuraPredict indexer, wallet profiles, searchable bet history, and Aura Points. Its current
+            AuraOn indexer, wallet profiles, searchable bet history, and Aura Points. Its current
             contract adds onchain source/rule terms, enforced resolution timing, configurable
             settlement assets, signed-Aura hooks, and Circle Agent Wallet-backed authority/oracle proposal support.
           </p>
@@ -124,9 +124,9 @@
       <section id="overview" class="docs-section">
         <div class="section-label">Overview</div>
         <div class="section-body">
-          <h2>What AuraPredict is</h2>
+          <h2>What AuraOn is</h2>
           <p>
-            AuraPredict is a testnet prediction market venue for binary questions. Traders stake
+            AuraOn is a testnet prediction market venue for binary questions. Traders stake
             stablecoins on YES or NO, results follow an evidence and review flow, and winners claim
             payout from the contract. The product is designed to make public forecasting measurable:
             every wallet can build history, PNL, win rate, Aura Points, and creator reputation.
@@ -175,7 +175,7 @@
       <section id="users" class="docs-section">
         <div class="section-label">Users</div>
         <div class="section-body">
-          <h2>Use AuraPredict</h2>
+          <h2>Use AuraOn</h2>
           <ol>
             <li>Open <a href="https://app.auraon.xyz">app.auraon.xyz</a>.</li>
             <li>Connect MetaMask, Rabby, OKX, Zerion, or another injected EVM wallet.</li>
@@ -208,7 +208,7 @@
               </ul>
             </article>
           </div>
-          <div class="note">Use a testnet-only wallet. AuraPredict is not a mainnet financial product.</div>
+          <div class="note">Use a testnet-only wallet. AuraOn is not a mainnet financial product.</div>
         </div>
       </section>
 
@@ -289,13 +289,13 @@
             <article><span>Contract controls</span><strong>source/rule terms, resolutionTime, asset snapshots, authority review, signed Aura hooks, adapter-only mode, policy gates, receipt hashes, pull withdrawals</strong></article>
           </div>
           <div class="note">
-            Deployment status: the primary AuraPredict app and indexer now target the V5 deployment configured by <code>VITE_AURAPREDICT_V5_ADDRESS</code> and <code>VITE_AURAPREDICT_V5_DEPLOYMENT_BLOCK</code>.
+            Deployment status: the primary AuraOn app and indexer now target the V5 deployment configured by <code>VITE_AURAPREDICT_V5_ADDRESS</code> and <code>VITE_AURAPREDICT_V5_DEPLOYMENT_BLOCK</code>.
           </div>
           <div class="note">
             Arc USDC has a native gas representation and an ERC-20 interface for the same asset. The active contract uses the official ERC-20 interface at <code>0x3600000000000000000000000000000000000000</code> for allowance-based settlement and keeps amounts at 6 decimals.
           </div>
           <div class="note">
-            Multi-asset scope: the active contract accepts 6-decimal settlement stablecoins such as USDC and optional EURC. A market settles and refunds only in the token selected when it was created. AuraPredict does not perform FX conversion; dashboards report USDC and EURC volume separately.
+            Multi-asset scope: the active contract accepts 6-decimal settlement stablecoins such as USDC and optional EURC. A market settles and refunds only in the token selected when it was created. AuraOn does not perform FX conversion; dashboards report USDC and EURC volume separately.
           </div>
           <div class="note">
             Reporting update: the app and indexer expose token-specific volume and liquidity rows, so USDC and EURC activity is shown separately instead of being merged into one generic total.
@@ -333,7 +333,7 @@
         <div class="section-body">
           <h2>AI-assisted resolution with onchain accountability</h2>
           <p>
-            AuraPredict keeps Aura Agent's calculation off-chain. After the event timestamp
+            AuraOn keeps Aura Agent's calculation off-chain. After the event timestamp
             in the rule, Resolution actions can show a suggested YES or NO outcome, confidence,
             supporting detail, a receipt, and a settlement report. The report compares Aura's suggestion,
             an optional Oracle proposal, the creator or resolver proposal, dispute/review status, pool balances, volume, and timing windows before final action.
@@ -420,7 +420,7 @@
         <div class="section-body">
           <h2>Objective Oracle proposal v1</h2>
           <p>
-            AuraPredict now has a source-based Oracle proposal layer in the indexer. It is separate from
+            AuraOn now has a source-based Oracle proposal layer in the indexer. It is separate from
             Aura Agent: it is designed for objective markets that can be checked by fetching data from a
             known source, not for open-ended news interpretation. The Oracle result appears in the market's
             settlement report beside Aura's suggestion, the creator/resolver proposal, dispute state, pools,
@@ -519,7 +519,7 @@
         <div class="section-body">
           <h2>Open Prediction Market Infrastructure on Arc</h2>
           <p>
-            AuraPredict is not only a YES/NO trading UI. The current stack exposes reusable market data,
+            AuraOn is not only a YES/NO trading UI. The current stack exposes reusable market data,
             AI insight, public oracle receipts, embeddable market cards, and Unified Balance funding flows so other Arc
             apps can route users into prediction-market activity without rebuilding the whole settlement layer.
           </p>
@@ -530,7 +530,7 @@
             </article>
             <article>
               <h3>Embeddable cards</h3>
-              <p>A compact market HTML endpoint can be embedded in partner pages, docs, and demos while users still open AuraPredict for wallet-signed actions.</p>
+              <p>A compact market HTML endpoint can be embedded in partner pages, docs, and demos while users still open AuraOn for wallet-signed actions.</p>
             </article>
             <article>
               <h3>Public oracle receipts</h3>
@@ -561,12 +561,12 @@
           <h2>Indexer and data flow</h2>
           <p>
             The frontend can read directly from Arc RPC, but production UX is smoother with the
-            AuraPredict indexer. The indexer reads contract events, stores JSON snapshots, and serves
+            AuraOn indexer. The indexer reads contract events, stores JSON snapshots, and serves
             fast read endpoints for stats, market rows, activity, leaderboard views, social data,
             AI resolution receipts, and objective Oracle proposals.
           </p>
           <div class="note">Current production indexer endpoint: <code>https://api.auraon.xyz</code></div>
-          <div class="flow-diagram" aria-label="AuraPredict data flow">
+          <div class="flow-diagram" aria-label="AuraOn data flow">
             <div>Wallet</div>
             <div>Frontend</div>
             <div>Indexer</div>
@@ -653,7 +653,7 @@ npm run deploy:arc</code></pre>
         <div class="section-body">
           <h2>Domains and Vercel projects</h2>
           <p>
-            AuraPredict uses one GitHub repo but should use separate Vercel projects when deploying
+            AuraOn uses one GitHub repo but should use separate Vercel projects when deploying
             different roots. The app project deploys the repo root. The docs project deploys the
             <code>docs</code> folder.
           </p>
@@ -691,7 +691,7 @@ Value: cname.vercel-dns.com</code></pre>
           <div class="feature-grid">
             <article>
               <h3>Wallet custody</h3>
-              <p>AuraPredict never receives private keys. Every transaction is confirmed in the user's wallet.</p>
+              <p>AuraOn never receives private keys. Every transaction is confirmed in the user's wallet.</p>
             </article>
             <article>
               <h3>Testnet only</h3>
@@ -715,7 +715,7 @@ Value: cname.vercel-dns.com</code></pre>
             </article>
           </div>
           <div class="note">
-            Before mainnet, AuraPredict still needs an independent contract audit, multisig or
+            Before mainnet, AuraOn still needs an independent contract audit, multisig or
             timelocked administration, durable social data storage, a selected oracle/committee
             operating policy, and production monitoring.
           </div>
@@ -733,8 +733,8 @@ Value: cname.vercel-dns.com</code></pre>
         <div class="section-body">
           <h2>Useful links</h2>
           <div class="reference-grid">
-            <a href="https://auraon.xyz">AuraPredict landing</a>
-            <a href="https://app.auraon.xyz">AuraPredict app</a>
+            <a href="https://auraon.xyz">AuraOn landing</a>
+            <a href="https://app.auraon.xyz">AuraOn app</a>
             <a href="https://github.com/mrcocdilinh/AuraPredict">GitHub repository</a>
             <a href="https://github.com/mrcocdilinh/AuraPredict/blob/main/docs/RISK_ORACLE_AND_QA.md">Risk, oracle, and QA policy</a>
             <a href="https://docs.arc.io/arc/references/rpc-endpoints">Arc RPC endpoints</a>
@@ -750,7 +750,7 @@ Value: cname.vercel-dns.com</code></pre>
     </main>
 
     <footer>
-      <span>AuraPredict Docs</span>
+      <span>AuraOn Docs</span>
       <span>docs.auraon.xyz</span>
     </footer>
 

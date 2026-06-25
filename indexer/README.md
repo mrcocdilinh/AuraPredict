@@ -1,6 +1,6 @@
-# AuraPredict Indexer
+# AuraOn Indexer
 
-Local backend/indexer for AuraPredict. It reads AuraPredict contract events on Arc Testnet, stores a JSON checkpoint, and exposes fast read APIs for the frontend.
+Local backend/indexer for AuraOn. It reads AuraOn contract events on Arc Testnet, stores a JSON checkpoint, and exposes fast read APIs for the frontend.
 
 It does not change or deploy any contract.
 
@@ -24,7 +24,7 @@ http://127.0.0.1:8787
 
 ## Environment
 
-The production indexer now targets the active AuraPredict V5 contract from environment variables, detects its ABI at startup, and indexes the V5 market surface. Legacy V3/V4 ABI support is kept only so historical deployments can still be inspected when explicitly configured. Optional runtime settings:
+The production indexer now targets the active AuraOn V5 contract from environment variables, detects its ABI at startup, and indexes the V5 market surface. Legacy V3/V4 ABI support is kept only so historical deployments can still be inspected when explicitly configured. Optional runtime settings:
 
 ```bash
 VITE_AURA_INDEXER_URL=http://127.0.0.1:8787
@@ -102,7 +102,7 @@ Use a narrow `fromBlock`/`toBlock` when checking a specific incident, or omit bo
 
 ## Open Prediction Market Infrastructure
 
-AuraPredict exposes a small public infrastructure layer for other Arc builders:
+AuraOn exposes a small public infrastructure layer for other Arc builders:
 
 - `/api/markets/:id/ai-insight` compares market YES pricing with Aura's current probability estimate, possible edge, confidence, risk flags, and source basis.
 - `/api/oracle-receipts/:marketId` returns the public AI/Oracle receipt: outcome, confidence, evidence rows, source URLs, hashes, dispute status, and tx references.
@@ -178,7 +178,7 @@ Without `propose: true`, the endpoint only refreshes the saved Oracle suggestion
 
 ## AI Resolution And V4 Receipts
 
-AuraPredict keeps AI calculation off-chain and stores detailed AI resolution receipts in the indexer state. The receipt is public through the indexer API, while the contract controls proposal, review/dispute, finalization, cancellation, and claim flow. With V4, each market stores its primary source, fallback source, and resolution rule onchain. A proposal can also commit `evidenceHash` and `aiReceiptHash`, supports authority-review modes, and cannot be proposed before the market's onchain `resolutionTime`.
+AuraOn keeps AI calculation off-chain and stores detailed AI resolution receipts in the indexer state. The receipt is public through the indexer API, while the contract controls proposal, review/dispute, finalization, cancellation, and claim flow. With V4, each market stores its primary source, fallback source, and resolution rule onchain. A proposal can also commit `evidenceHash` and `aiReceiptHash`, supports authority-review modes, and cannot be proposed before the market's onchain `resolutionTime`.
 
 V4 supports an optional Aura attestation path. If `AURA_ATTESTATION_PRIVATE_KEY` is set on the indexer and the contract owner configures the matching public address with `setAiAttestationSigner`, the indexer can attach a signed AI suggestion to a receipt. A creator proposal that matches that signed suggestion can follow the normal dispute/finalize path. A proposal without a signed receipt, or a proposal that differs from Aura's signed suggestion, is routed to authority review. If the signer is not configured, the system stays in the current creator plus Aura plus owner-review mode.
 

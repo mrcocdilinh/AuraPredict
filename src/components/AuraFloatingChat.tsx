@@ -83,7 +83,7 @@ export function AuraFloatingChat({
           <div className="aura-float-thread" ref={scrollRef}>
             {messages.length === 0 && (
               <div className="assistant-empty aura-float-empty">
-                <p>{account ? "Ask me anything about AuraPredict:" : "Connect your wallet to chat with Aura AI."}</p>
+                <p>{account ? "Ask me anything about AuraOn:" : "Connect your wallet to chat with Aura AI."}</p>
                 {account ? (
                   <div className="assistant-suggestions">
                     {SUGGESTIONS.map((s) => (

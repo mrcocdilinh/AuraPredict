@@ -1,4 +1,4 @@
-# Huong dan chay AuraPredict, dua len GitHub va deploy Vercel
+# Huong dan chay AuraOn, dua len GitHub va deploy Vercel
 
 File nay viet theo tung buoc cho nguoi moi. Ban cu lam tu tren xuong duoi.
 
@@ -6,8 +6,8 @@ File nay viet theo tung buoc cho nguoi moi. Ban cu lam tu tren xuong duoi.
 
 Sau khi lam xong, ban se co:
 
-- Code AuraPredict nam tren GitHub cua ban.
-- Smart contract AuraPredict deploy tren Arc Testnet.
+- Code AuraOn nam tren GitHub cua ban.
+- Smart contract AuraOn deploy tren Arc Testnet.
 - Website chay tren Vercel voi domain dang `https://aurapredict.vercel.app` neu ten nay con trong.
 
 Luu y quan trong: Vercel dung domain mac dinh ket thuc bang `.vercel.app`, khong phai `.vercel.com`. Theo tai lieu Vercel, moi deployment duoc gan domain dua tren ten project va ket thuc bang `.vercel.app`; domain nay duoc cap theo nguyen tac ai tao truoc dung truoc.
@@ -49,7 +49,7 @@ Ban can:
 - Vi EVM nhu MetaMask hoac Rabby
 - Mot it USDC testnet tren Arc tu faucet: https://faucet.circle.com
 
-## 2. Chay AuraPredict tren may cua ban
+## 2. Chay AuraOn tren may cua ban
 
 ### 2.1. Mo PowerShell trong thu muc du an
 
@@ -204,7 +204,7 @@ Dung dev server neu dang chay bang `Ctrl + C`, roi chay lai:
 npm.cmd run dev
 ```
 
-Bay gio AuraPredict co the doc market, tao market, stake YES/NO, resolve va claim tren Arc Testnet.
+Bay gio AuraOn co the doc market, tao market, stake YES/NO, resolve va claim tren Arc Testnet.
 
 ## 4. Dua code len GitHub
 
@@ -217,7 +217,7 @@ Co 2 cach. Neu ban moi hoc, dung Cach A bang GitHub website va PowerShell.
 1. Dang nhap https://github.com
 2. Bam dau `+` goc tren phai.
 3. Chon `New repository`.
-4. Repository name: `AuraPredict`
+4. Repository name: `AuraOn`
 5. Chon `Public` hoac `Private`.
 6. Khong tick `Add a README file`.
 7. Khong tick `.gitignore`.
@@ -233,7 +233,7 @@ Nguon: [GitHub - Adding locally hosted code to GitHub](https://docs.github.com/e
 Sau khi tao repo, GitHub se hien URL dang:
 
 ```text
-https://github.com/TEN_GITHUB_CUA_BAN/AuraPredict.git
+https://github.com/TEN_GITHUB_CUA_BAN/AuraOn.git
 ```
 
 Copy URL nay.
@@ -246,7 +246,7 @@ Trong PowerShell:
 cd "C:\Users\duong\Documents\Codex\2026-05-21\h-y-vi-t-cho-t"
 git init
 git add .
-git commit -m "Initial AuraPredict dapp"
+git commit -m "Initial AuraOn dapp"
 git branch -M main
 ```
 
@@ -255,7 +255,7 @@ git branch -M main
 Thay `TEN_GITHUB_CUA_BAN` bang username GitHub cua ban:
 
 ```powershell
-git remote add origin https://github.com/TEN_GITHUB_CUA_BAN/AuraPredict.git
+git remote add origin https://github.com/TEN_GITHUB_CUA_BAN/AuraOn.git
 git remote -v
 ```
 
@@ -271,7 +271,7 @@ git push -u origin main
 
 Neu Git yeu cau dang nhap, lam theo huong dan trong terminal. Sau khi xong, refresh trang GitHub repo, ban se thay code.
 
-## 5. Deploy AuraPredict len Vercel
+## 5. Deploy AuraOn len Vercel
 
 ### 5.1. Import project tu GitHub
 
@@ -279,7 +279,7 @@ Neu Git yeu cau dang nhap, lam theo huong dan trong terminal. Sau khi xong, refr
 2. Dang nhap bang GitHub.
 3. Bam `Add New...`.
 4. Chon `Project`.
-5. Tim repo `AuraPredict`.
+5. Tim repo `AuraOn`.
 6. Bam `Import`.
 
 Vercel docs noi khi import Git repository, Vercel se tu dong build/deploy; moi commit hoac pull request tren Git provider duoc ho tro co the kich hoat deployment moi.
@@ -353,7 +353,7 @@ Moi lan sua code tren may:
 ```powershell
 git status
 git add .
-git commit -m "Update AuraPredict"
+git commit -m "Update AuraOn"
 git push
 ```
 
@@ -408,7 +408,7 @@ git remote -v
 Neu remote sai:
 
 ```powershell
-git remote set-url origin https://github.com/TEN_GITHUB_CUA_BAN/AuraPredict.git
+git remote set-url origin https://github.com/TEN_GITHUB_CUA_BAN/AuraOn.git
 ```
 
 ## 8. Khong dua len GitHub nhung file nao

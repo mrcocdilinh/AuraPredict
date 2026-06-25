@@ -1,10 +1,10 @@
-# AuraPredict Risk, Oracle, And QA Policy
+# AuraOn Risk, Oracle, And QA Policy
 
-AuraPredict is an experimental Arc Testnet prediction market application. This document records the current risk posture, oracle operating policy, confidence calibration plan, and manual QA steps that cannot be fully automated without a real wallet signature.
+AuraOn is an experimental Arc Testnet prediction market application. This document records the current risk posture, oracle operating policy, confidence calibration plan, and manual QA steps that cannot be fully automated without a real wallet signature.
 
 ## Legal And Risk Notice
 
-AuraPredict is not a regulated exchange, broker, gambling platform, investment product, or financial adviser. Markets, prices, odds, AI outputs, oracle suggestions, source checks, and resolution reports are provided for testing and research only.
+AuraOn is not a regulated exchange, broker, gambling platform, investment product, or financial adviser. Markets, prices, odds, AI outputs, oracle suggestions, source checks, and resolution reports are provided for testing and research only.
 
 Testnet USDC and EURC have no real-world value. Smart contracts are unaudited and may contain bugs. AI and oracle systems may produce incorrect, incomplete, delayed, or unverifiable results. Market outcomes may depend on creator proposals, authority review, oracle adapters, dispute windows, source availability, and final reviewer actions.
 
@@ -21,14 +21,14 @@ Users should review each market question, source URL, fallback source, resolutio
 - Sports schedule counts: supported MLB schedule-count markets use deterministic schedule data before AI review; generic HTML/source-router no-match is not enough to resolve NO.
 - Dispute: the 12-hour dispute window remains visible after a proposal.
 
-Before any mainnet or real-value use, AuraPredict needs an independent contract audit, multisig or timelocked owner operations, durable backend storage, production monitoring, and a formally selected oracle/committee process.
+Before any mainnet or real-value use, AuraOn needs an independent contract audit, multisig or timelocked owner operations, durable backend storage, production monitoring, and a formally selected oracle/committee process.
 
 ## Market Creation Verification Policy
 
 Aura Agent can draft market wording, but new markets should pass deterministic checks before launch:
 
 - Source check: primary source must be a valid `http` or `https` URL. Sports markets should prefer official league/tournament pages or a major fixture source. Stock and crypto markets should use direct market-data or exchange sources.
-- Date check: form close/resolution time must match the timestamp inside the rule. AuraPredict should block date mismatches instead of silently changing the user's date.
+- Date check: form close/resolution time must match the timestamp inside the rule. AuraOn should block date mismatches instead of silently changing the user's date.
 - Stock calendar check: official closing-price stock markets should not use Saturday or Sunday dates. Market holidays still require manual review until a full trading-calendar provider is integrated.
 - Sports fixture check: "next match", group-stage, standings, team participation, qualification, and tournament winner markets need an official fixture, standings, or final/end timestamp. The AI must not infer group membership or schedule from memory.
 - Risk badge check: markets with weak sources, date mismatch, weekend stock close, unknown fixture, open reports, dispute, or authority review should show visible risk badges and appear in the owner queue.
@@ -37,7 +37,7 @@ These checks are off-chain controls layered on top of the V5 contract. They do n
 
 ## Resolution And Owner Review Policy
 
-AuraPredict settlement should follow the shared market rule, source URLs, onchain timing, and available evidence. AI summaries are decision support only.
+AuraOn settlement should follow the shared market rule, source URLs, onchain timing, and available evidence. AI summaries are decision support only.
 
 - Creator/resolver proposals should include evidence or a public source basis.
 - Users with funded positions can dispute during the dispute window when the proposed result conflicts with the rule or evidence.
@@ -126,7 +126,7 @@ The smoke check verifies `/health`, `/api/stats`, `/api/social/reports`, and `/a
 
 This flow must be tested with a real testnet wallet after deploy because Circle Gateway requires wallet signatures and cross-chain confirmation.
 
-1. Open AuraPredict production with the latest deployed frontend.
+1. Open AuraOn production with the latest deployed frontend.
 2. Connect the same wallet on Arc Testnet.
 3. Open Unified Balance from the wallet menu, Profile, Create Market, or market funding panel.
 4. Confirm `Wallet USDC by chain` shows Ethereum Sepolia, Base Sepolia, Arbitrum Sepolia, and Arc Testnet.

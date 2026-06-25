@@ -2359,7 +2359,7 @@ function agentActionPreview(marketId) {
 
 function agentManifest() {
   return {
-    name: "AuraPredict Agent API",
+    name: "AuraOn Agent API",
     version: "2026-06-15",
     network: "Arc Testnet",
     chainId: state.chainId || CHAIN_ID,
@@ -2367,7 +2367,7 @@ function agentManifest() {
     appUrl: PUBLIC_APP_BASE_URL,
     apiBaseUrl: PUBLIC_API_BASE_URL,
     description:
-      "Read-only market, evidence, oracle receipt, and reputation API for AI agents building around AuraPredict on Arc.",
+      "Read-only market, evidence, oracle receipt, and reputation API for AI agents building around AuraOn on Arc.",
     safety: {
       mode: "read-only by default",
       writeActions: "Onchain actions still require a connected wallet or admin-authorized resolver endpoint.",
@@ -2387,7 +2387,7 @@ function agentManifest() {
     tools: [
       {
         name: "aurapredict.list_markets",
-        description: "List AuraPredict markets with status, pools, source URLs, and current oracle/AI hints.",
+        description: "List AuraOn markets with status, pools, source URLs, and current oracle/AI hints.",
         inputSchema: {
           type: "object",
           properties: {
@@ -2495,7 +2495,7 @@ function embedMarketHtml(market) {
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>AuraPredict Market #${escapeHtml(market.id)}</title>
+  <title>AuraOn Market #${escapeHtml(market.id)}</title>
   <style>
     :root{color-scheme:dark;font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#070c18;color:#eef6ff}
     body{margin:0;padding:16px;background:#070c18}
@@ -2512,7 +2512,7 @@ function embedMarketHtml(market) {
 </head>
 <body>
   <article class="card">
-    <span class="label">AuraPredict market #${escapeHtml(market.id)} on Arc</span>
+    <span class="label">AuraOn market #${escapeHtml(market.id)} on Arc</span>
     <h1>${escapeHtml(market.question)}</h1>
     <div class="grid">
       <div class="cell"><span>Market YES</span><strong>${escapeHtml(insight.marketYesPrice)}%</strong></div>
@@ -2520,7 +2520,7 @@ function embedMarketHtml(market) {
       <div class="cell"><span>Edge</span><strong>${escapeHtml(insight.edgeSide)}</strong></div>
     </div>
     <p>${escapeHtml(insight.summary)}</p>
-    <a href="${appUrl}" target="_blank" rel="noreferrer">Open on AuraPredict</a>
+    <a href="${appUrl}" target="_blank" rel="noreferrer">Open on AuraOn</a>
   </article>
 </body>
 </html>`;
@@ -2871,7 +2871,7 @@ async function fetchTextWithTimeout(url) {
     const response = await fetch(url, {
       headers: {
         accept: "text/html,application/rss+xml,application/atom+xml,application/xml,text/xml,*/*",
-        "user-agent": "AuraPredictEvidenceBot/1.0"
+        "user-agent": "AuraOnEvidenceBot/1.0"
       },
       redirect: "follow",
       signal: controller.signal
@@ -4089,7 +4089,7 @@ async function fetchJsonWithTimeout(url, options = {}) {
       ...fetchOptions,
       headers: {
         accept: "application/json,text/plain,*/*",
-        "user-agent": "AuraPredictOracle/1.0",
+        "user-agent": "AuraOnOracle/1.0",
         ...(fetchOptions.headers || {})
       },
       signal: controller.signal
@@ -5813,7 +5813,7 @@ async function buildResolutionReceipt(marketId, options = {}) {
     "market rules interpreter"
   ];
   const systemInstruction = [
-    "You are one reviewer in AuraPredict's AI resolution committee.",
+    "You are one reviewer in AuraOn's AI resolution committee.",
     "You do not control settlement by yourself.",
     "You must be conservative, cite evidence, and return INSUFFICIENT_EVIDENCE when facts are unclear.",
     "Return compact JSON only."
@@ -6610,7 +6610,7 @@ async function route(req, res) {
       }
 
       const systemInstruction = [
-        "You are Aura AI, the in-app assistant for AuraPredict, a prediction market dapp on Arc Testnet.",
+        "You are Aura AI, the in-app assistant for AuraOn, a prediction market dapp on Arc Testnet.",
         "You help the user find markets, place bets, check resolution status (AI and Oracle), and claim winnings or refunds.",
         "CRITICAL: You never execute anything yourself. You only propose actions; the user must click the button and sign in their wallet.",
         "LANGUAGE: Detect the language of the user's latest message and write the entire 'reply' field in that same language. If the user writes Vietnamese, reply in Vietnamese; if English, reply in English; and so on.",
@@ -7134,7 +7134,7 @@ async function main() {
 
   const server = createServer(route);
   server.listen(PORT, HOST, () => {
-    console.log(`[indexer] AuraPredict indexer listening on http://${HOST}:${PORT}`);
+    console.log(`[indexer] AuraOn indexer listening on http://${HOST}:${PORT}`);
   });
 
   startRealtimeSync();

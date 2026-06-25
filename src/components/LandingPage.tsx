@@ -89,11 +89,11 @@ export function LandingPage() {
     },
     {
       title: "Live indexer",
-      text: "Read market history, wallet-searchable bet activity, token-specific USDC/EURC stats, and leaderboard data from the live AuraPredict indexer before falling back to Arc RPC."
+      text: "Read market history, wallet-searchable bet activity, token-specific USDC/EURC stats, and leaderboard data from the live AuraOn indexer before falling back to Arc RPC."
     }
   ];
   const flow = ["Create a market", "Stake YES or NO", "Track odds", "Resolve result", "Claim payout"];
-  const architectureSteps = ["Wallet", "AuraPredict UI", "AuraPredict Indexer", "Arc RPC", "Market Contract", "Arcscan"];
+  const architectureSteps = ["Wallet", "AuraOn UI", "AuraOn Indexer", "Arc RPC", "Market Contract", "Arcscan"];
   const settlementSteps = [
     "Trading closes at the published UTC time",
     "Resolution opens only after the rule's event timestamp",
@@ -108,7 +108,7 @@ export function LandingPage() {
     "Winners claim payout"
   ];
   const dataFlow = [
-    "The live AuraPredict indexer now powers market history, per-token volume, participants, activity, and leaderboards",
+    "The live AuraOn indexer now powers market history, per-token volume, participants, activity, and leaderboards",
     "Wallet UI shows USDC and EURC balances with copy-address, faucet, Unified Balance funding, and swap access from markets or the user's profile",
     "Market cards are now compact click-through summaries; staking, Aura review, Oracle checks, dispute, finalize, and claim actions happen inside the market page",
     "The app checks selected-token balance and allowance before create, stake, or dispute transactions",
@@ -164,11 +164,11 @@ export function LandingPage() {
   const infrastructureCards = [
     {
       title: "Prediction market API",
-      text: "Public endpoints expose markets, activity, AI insights, public oracle receipts, hot markets, and oracle reputation so other builders can consume AuraPredict data on Arc."
+      text: "Public endpoints expose markets, activity, AI insights, public oracle receipts, hot markets, and oracle reputation so other builders can consume AuraOn data on Arc."
     },
     {
       title: "Embeddable market cards",
-      text: "Each market can be shared as a compact card or embedded by URL, turning AuraPredict markets into portable forecasting components for partner apps and docs."
+      text: "Each market can be shared as a compact card or embedded by URL, turning AuraOn markets into portable forecasting components for partner apps and docs."
     },
     {
       title: "Public oracle receipts",
@@ -279,9 +279,9 @@ export function LandingPage() {
     <main className={`landing-page landing-${landingTheme}`}>
       <AppUpdateNotice />
       <nav className="landing-nav">
-        <a className="landing-brand" href="#top" aria-label="AuraPredict home">
-          <img src="/aurapredict-logo.png" alt="AuraPredict" />
-          <span>AuraPredict</span>
+        <a className="landing-brand" href="#top" aria-label="AuraOn home">
+          <img src="/aurapredict-logo.png" alt="AuraOn" />
+          <span>AuraOn</span>
           <span className="arc-brand-chip">
             <img src="/arc-icon-navy-gradient.svg" alt="" />
             Built on Arc
@@ -316,7 +316,7 @@ export function LandingPage() {
       <section className="landing-hero" id="top">
         <div className="landing-hero-copy">
           <div className="landing-network-row">
-            <span>AuraPredict</span>
+            <span>AuraOn</span>
             <span className="landing-arc-powered">
               <img src="/arc-logo-white.svg" alt="Arc" />
               Testnet
@@ -328,11 +328,11 @@ export function LandingPage() {
             <span>{heroMarketText}</span> prediction markets indexed.
           </h1>
           <p>
-            Trade YES/NO markets with Arc testnet stablecoins while the live AuraPredict indexer keeps market
+            Trade YES/NO markets with Arc testnet stablecoins while the live AuraOn indexer keeps market
             history, volume, participants, leaderboards, comments, evidence, AI resolution receipts, oracle proposals,
             Circle Agent Wallet proposal status, and profile reputation fast enough for public forecasting.
           </p>
-          <div className="landing-hero-ledger" aria-label="AuraPredict live indexer metrics">
+          <div className="landing-hero-ledger" aria-label="AuraOn live indexer metrics">
             <div>
               <span>Total volume by token</span>
               <strong>{indexedVolumeText}</strong>
@@ -362,7 +362,7 @@ export function LandingPage() {
             </a>
           </div>
           <div className="landing-proof">
-            <span>{indexerIsRealtime ? "AuraPredict indexer live" : "Indexer fallback active"}</span>
+            <span>{indexerIsRealtime ? "AuraOn indexer live" : "Indexer fallback active"}</span>
             <span className="landing-proof-arc">
               <img src="/arc-icon-white.svg" alt="" />
               Deployed on Arc Testnet
@@ -372,7 +372,7 @@ export function LandingPage() {
             <span>Circle Agent Wallet authority ready</span>
           </div>
         </div>
-        <aside className="landing-network-panel" aria-label="Live AuraPredict network metrics">
+        <aside className="landing-network-panel" aria-label="Live AuraOn network metrics">
           <div>
             <span>Live markets</span>
             <strong>{liveMarketsText}</strong>
@@ -391,12 +391,12 @@ export function LandingPage() {
           </div>
           <div className="landing-network-wide">
             <span>Realtime data path</span>
-            <strong>AuraPredict indexer to UI to wallet-signed Arc transactions</strong>
+            <strong>AuraOn indexer to UI to wallet-signed Arc transactions</strong>
           </div>
         </aside>
       </section>
 
-      <section className="landing-strip landing-live-stats" aria-label="AuraPredict live stats">
+      <section className="landing-strip landing-live-stats" aria-label="AuraOn live stats">
         {liveMetricCards.map((metric) => (
           <div key={metric.label}>
             <strong>{metric.value}</strong>
@@ -411,7 +411,7 @@ export function LandingPage() {
           <h2>Built for people who want their forecasts to compound into reputation.</h2>
           <p>
             The app keeps the trading surface simple while making evidence, profiles, and leaderboard
-            performance visible enough for social forecasting. AuraPredict combines onchain YES/NO
+            performance visible enough for social forecasting. AuraOn combines onchain YES/NO
             staking, an indexer-backed data layer, AI-assisted market quality checks, AI resolution
             receipts, objective oracle proposals, and Circle Agent Wallet signing for eligible authority/oracle markets. The current contract is deployed on Arc Testnet with onchain source/rule terms, structured rule metadata, resolution timing, configurable settlement assets, signed-Aura hooks, and authority/oracle controls.
           </p>
@@ -432,7 +432,7 @@ export function LandingPage() {
           <p className="landing-kicker">Objective Oracle v1</p>
           <h2>Source-based proposals for markets that can be checked without AI.</h2>
           <p>
-            AuraPredict now separates two kinds of help during resolution. Aura Agent is used for reasoning-heavy
+            AuraOn now separates two kinds of help during resolution. Aura Agent is used for reasoning-heavy
             questions and evidence review. Oracle proposal v1 is used when the market can be checked directly against
             objective data sources. It gives reviewers a YES, NO, Cancel, or manual-review signal before they sign a
             contract action. When auto-propose is enabled and confidence passes the policy threshold, the configured
@@ -464,7 +464,7 @@ export function LandingPage() {
           <p className="landing-kicker">Open infrastructure</p>
           <h2>Open Prediction Market Infrastructure on Arc.</h2>
           <p>
-            AuraPredict is expanding from a trading dapp into a reusable prediction-market layer for Arc. Builders can
+            AuraOn is expanding from a trading dapp into a reusable prediction-market layer for Arc. Builders can
             read market data, embed live cards, inspect AI and Oracle receipts, and route users into USDC funding before
             they stake onchain.
           </p>
@@ -492,7 +492,7 @@ export function LandingPage() {
           <p className="landing-kicker">Demo</p>
           <h2>Preview the dapp flow after the live network stats.</h2>
           <p>
-            Watch the AuraPredict walkthrough, then launch the app to create markets, check Aura Agent duplicate
+            Watch the AuraOn walkthrough, then launch the app to create markets, check Aura Agent duplicate
             risk, stake YES/NO, and resolve outcomes on Arc Testnet.
           </p>
         </div>
@@ -500,7 +500,7 @@ export function LandingPage() {
           <div className="landing-video-frame">
             <iframe
               src={`${DEMO_EMBED_URL}?rel=0&modestbranding=1`}
-              title="AuraPredict demo video"
+              title="AuraOn demo video"
               loading="lazy"
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
               allowFullScreen
@@ -541,10 +541,10 @@ export function LandingPage() {
           <p className="landing-kicker">Project docs</p>
           <h2>Transparent testnet mechanics without hiding the roadmap.</h2>
           <p>
-            AuraPredict is live as an Arc Testnet MVP with its public indexer hosted at api.auraon.xyz. The current product
+            AuraOn is live as an Arc Testnet MVP with its public indexer hosted at api.auraon.xyz. The current product
             proves market creation, staking, dispute-aware settlement, profiles, comments, evidence,
             AI resolution receipts, objective Oracle automation, Circle Agent Wallet proposal signing, live stats, notifications, and public reputation while wallet
-            actions remain fully onchain. Production reads the active Arc Testnet contract through the AuraPredict indexer and wallet transactions remain verifiable on Arcscan.
+            actions remain fully onchain. Production reads the active Arc Testnet contract through the AuraOn indexer and wallet transactions remain verifiable on Arcscan.
           </p>
           <div className="landing-docs-actions">
             <a className="landing-primary" href={DOCS_URL}>
@@ -598,12 +598,12 @@ export function LandingPage() {
             <span className="docs-label">System architecture</span>
             <h3>Live indexer, wallet signed</h3>
             <p>
-              The public app reads the AuraPredict indexer first for low-latency market state, social data,
+              The public app reads the AuraOn indexer first for low-latency market state, social data,
               and AI receipts. Wallets still sign transactions against the prediction market contract,
               and Arcscan remains the verification layer.
             </p>
           </div>
-          <div className="docs-flow-diagram" aria-label="AuraPredict architecture diagram">
+          <div className="docs-flow-diagram" aria-label="AuraOn architecture diagram">
             {architectureSteps.map((step, index) => (
               <div className="docs-flow-step" key={step}>
                 <span>{index + 1}</span>
@@ -722,7 +722,7 @@ export function LandingPage() {
             <span className="docs-label">Roadmap</span>
             <h3>Path toward a production-grade prediction market</h3>
             <p>
-            AuraPredict now has a live public indexer, AI market drafting, duplicate-risk checks, comments,
+            AuraOn now has a live public indexer, AI market drafting, duplicate-risk checks, comments,
               evidence fields, AI resolution receipts, profile reputation, and leaderboard metrics. The remaining
               gap is production-grade realtime streaming, durable social data, and broader oracle-backed settlement coverage.
             </p>
@@ -740,7 +740,7 @@ export function LandingPage() {
         <div className="docs-note">
           <strong>Important note</strong>
           <p>
-            AuraPredict is currently a testnet dapp. It is not financial advice and the current market
+            AuraOn is currently a testnet dapp. It is not financial advice and the current market
             resolution flow uses AI and source-based Oracle checks as decision aids, not as a trustless oracle.
             Circle Agent Wallet proposals still follow contract timing, dispute, review, and finalization rules.
           </p>
@@ -749,10 +749,10 @@ export function LandingPage() {
 
       <section className="landing-section landing-dark-panel">
         <div className="landing-section-head">
-          <p className="landing-kicker">Why AuraPredict</p>
+          <p className="landing-kicker">Why AuraOn</p>
           <h2>Prediction markets become more powerful when they are social.</h2>
           <p>
-            AuraPredict is designed around public forecasting identity. Every trade, market, payout,
+            AuraOn is designed around public forecasting identity. Every trade, market, payout,
             and ranking can help users build a visible prediction track record.
           </p>
         </div>

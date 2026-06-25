@@ -136,7 +136,7 @@
     "resolutionRule": "Resolve YES if Circle's blog shows a new post published after this market was created and before or at the market's onchain resolution time. Resolve NO if no such post appears. Resolve CANCEL only if the official blog cannot be accessed."
   },
   {
-    "question": "Will the AuraPredict indexer health endpoint return ok true at this V4 test market's resolution time?",
+    "question": "Will the AuraOn indexer health endpoint return ok true at this V4 test market's resolution time?",
     "category": "Other",
     "closeInHours": 156,
     "resolutionSource": "https://api.auraon.xyz/health",
@@ -144,19 +144,19 @@
     "resolutionRule": "Resolve YES if the primary source returns a readable health response with ok true at the market's onchain resolution time. Resolve NO if it returns ok false, an error response, or cannot be reached. Use the fallback source only to verify whether the app is online. Resolve CANCEL only if external network access prevents fair verification."
   },
   {
-    "question": "Will the AuraPredict GitHub repository page be reachable at this V4 test market's resolution time?",
+    "question": "Will the AuraOn GitHub repository page be reachable at this V4 test market's resolution time?",
     "category": "Other",
     "closeInHours": 177,
     "resolutionSource": "https://github.com/mrcocdilinh/AuraPredict",
     "fallbackSource": "https://github.com/mrcocdilinh",
-    "resolutionRule": "Resolve YES if the primary source loads the AuraPredict repository page at the market's onchain resolution time. Resolve NO if the page is unavailable, removed, or inaccessible. Use the fallback source only to check whether the GitHub account is reachable. Resolve CANCEL only if GitHub has a broader outage preventing fair verification."
+    "resolutionRule": "Resolve YES if the primary source loads the AuraOn repository page at the market's onchain resolution time. Resolve NO if the page is unavailable, removed, or inaccessible. Use the fallback source only to check whether the GitHub account is reachable. Resolve CANCEL only if GitHub has a broader outage preventing fair verification."
   },
   {
-    "question": "Will AuraPredict app load its public landing page at this V4 test market's resolution time?",
+    "question": "Will AuraOn app load its public landing page at this V4 test market's resolution time?",
     "category": "Other",
     "closeInHours": 200,
     "resolutionSource": "https://app.auraon.xyz",
     "fallbackSource": "https://auraon.xyz",
-    "resolutionRule": "Resolve YES if the primary source loads the public AuraPredict app or landing shell at the market's onchain resolution time. Resolve NO if it is unreachable or returns an application-level failure. Use the fallback domain only if the app subdomain is unavailable. Resolve CANCEL only if the outage cannot be fairly distinguished from local network failure."
+    "resolutionRule": "Resolve YES if the primary source loads the public AuraOn app or landing shell at the market's onchain resolution time. Resolve NO if it is unreachable or returns an application-level failure. Use the fallback domain only if the app subdomain is unavailable. Resolve CANCEL only if the outage cannot be fairly distinguished from local network failure."
   }
 ]

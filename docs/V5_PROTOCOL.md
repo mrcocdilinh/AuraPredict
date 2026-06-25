@@ -1,6 +1,6 @@
-# AuraPredict V5 Protocol Notes
+# AuraOn V5 Protocol Notes
 
-V5 is the active AuraPredict contract branch. It is deployed on Arc Testnet and the frontend/indexer environment now points at the V5 address (`VITE_AURAPREDICT_V5_ADDRESS`). Older V3/V4 deployments remain readable by the indexer for historical markets only.
+V5 is the active AuraOn contract branch. It is deployed on Arc Testnet and the frontend/indexer environment now points at the V5 address (`VITE_AURAPREDICT_V5_ADDRESS`). Older V3/V4 deployments remain readable by the indexer for historical markets only.
 
 ## Core Goals
 
@@ -43,7 +43,7 @@ Read surfaces:
 
 The V5 contract is seedless-ready, not a full account system by itself.
 
-To ship true Google/social login and no-Web3 UX, AuraPredict still needs an embedded wallet or smart-account provider plus relayer/paymaster infrastructure:
+To ship true Google/social login and no-Web3 UX, AuraOn still needs an embedded wallet or smart-account provider plus relayer/paymaster infrastructure:
 
 - Embedded/social wallet provider creates or recovers a user wallet.
 - The user wallet approves settlement tokens or signs session permissions.

@@ -113,7 +113,7 @@ async function fetchJson(url, timeoutMs) {
     const response = await fetch(url, {
       headers: {
         accept: "application/json,text/plain,*/*",
-        "user-agent": "AuraPredictSportsAdapter/1.0"
+        "user-agent": "AuraOnSportsAdapter/1.0"
       },
       signal: controller.signal
     });

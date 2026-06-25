@@ -1,5 +1,5 @@
 /**
- * Approve all draft markets on AuraPredict V5.
+ * Approve all draft markets on AuraOn V5.
  *
  * Usage:
  *   OWNER_PRIVATE_KEY=0x... node scripts/approve_draft_markets.mjs [--dry-run]
@@ -62,7 +62,7 @@ const provider = new ethers.JsonRpcProvider(RPC_URL, ARC_CHAIN_ID);
 const signer = SCAN_ONLY ? provider : new ethers.Wallet(VALID_KEY ? PRIVATE_KEY : "", provider);
 const contract = new ethers.Contract(CONTRACT_ADDRESS, ABI, signer);
 
-console.log("=== AuraPredict V5 — Bulk Draft Approver ===");
+console.log("=== AuraOn V5 — Bulk Draft Approver ===");
 console.log(`RPC:      ${RPC_URL}`);
 console.log(`Contract: ${CONTRACT_ADDRESS}`);
 if (!SCAN_ONLY) console.log(`Wallet:   ${signer.address}`);
@@ -72,7 +72,7 @@ console.log("");
 // Verify version and ownership
 const version = await contract.CONTRACT_VERSION().catch(() => "unknown");
 if (!String(version).includes("V5")) {
-  console.error(`ERROR: Contract version is "${version}", expected AuraPredict V5.`);
+  console.error(`ERROR: Contract version is "${version}", expected AuraOn V5.`);
   process.exit(1);
 }
 

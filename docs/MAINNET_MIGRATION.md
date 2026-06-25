@@ -1,4 +1,4 @@
-# Kế hoạch chuyển AuraPredict lên Arc Mainnet
+# Kế hoạch chuyển AuraOn lên Arc Mainnet
 
 > Trạng thái (cập nhật 2026-06): Arc vẫn ở public testnet. Circle dự kiến mainnet
 > **summer 2026** nhưng **chưa công bố** chain ID / RPC / explorer / địa chỉ USDC/EURC

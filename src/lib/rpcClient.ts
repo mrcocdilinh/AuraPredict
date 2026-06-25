@@ -6,7 +6,7 @@ import type { EthereumProvider } from "../types";
 export function getInjectedProvider(provider?: EthereumProvider | null) {
   const injected = provider ?? window.ethereum;
   if (!injected) {
-    throw new Error("Open AuraPredict inside a wallet browser such as Zerion, MetaMask, Rabby, or OKX.");
+    throw new Error("Open AuraOn inside a wallet browser such as Zerion, MetaMask, Rabby, or OKX.");
   }
   return injected;
 }
@@ -50,7 +50,7 @@ export async function getWalletConnectProvider() {
       [String(ARC_CHAIN_ID_NUMBER)]: ARC_RPC_URL
     },
     metadata: {
-      name: "AuraPredict",
+      name: "AuraOn",
       description: "Prediction markets on Arc Testnet",
       url: typeof window !== "undefined" ? window.location.origin : "https://app.auraon.xyz",
       icons: [typeof window !== "undefined" ? `${window.location.origin}/aurapredict-logo.png` : "https://app.auraon.xyz/aurapredict-logo.png"]

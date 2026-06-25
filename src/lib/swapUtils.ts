@@ -108,7 +108,7 @@ export async function lifiRouteDiagnostic(pair: StablecoinSwapPair, requestedAmo
       )} ${pair.fromSymbol} or less, or wait for LI.FI liquidity to recover.`;
     }
     if (pair.fromSymbol === "EURC" && pair.toSymbol === "USDC") {
-      return "LI.FI currently has no EURC to USDC route on Arc Testnet. This is a LI.FI/liquidity limitation, not an AuraPredict market issue. Use USDC directly or try again later.";
+      return "LI.FI currently has no EURC to USDC route on Arc Testnet. This is a LI.FI/liquidity limitation, not an AuraOn market issue. Use USDC directly or try again later.";
     }
     if (directFailure.toLowerCase().includes("liquidity")) {
       return `LI.FI does not have enough ${pair.fromSymbol} to ${pair.toSymbol} liquidity on Arc Testnet for this amount. Try a much smaller amount or try again later.`;
