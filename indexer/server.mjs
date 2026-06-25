@@ -21,6 +21,7 @@ import {
   circleWalletsByToken
 } from "./circleWallets.mjs";
 import { x402GetJson, x402Enabled } from "./x402Client.mjs";
+import { requireMarketPayment, x402ServerEnabled } from "./x402Server.mjs";
 import { scoreEvidenceSearchResult } from "./evidenceSearchPolicy.mjs";
 import {
   NUMERIC_COMPARATORS,
@@ -6199,6 +6200,8 @@ async function route(req, res) {
 
     if (segments[0] === "api" && segments[1] === "agent" && segments[2] === "markets" && !segments[3]) {
       if (req.method !== "GET") return notFound(res);
+      const granted = await requireMarketPayment(req, res);
+      if (!granted) return;
       json(res, 200, {
         markets: filterAgentMarkets(url),
         total: state.marketCount,
