@@ -5651,7 +5651,6 @@ export default function App() {
         0,
         ZERO_HASH
       ] as const;
-      let v5ProposalGas: bigint | undefined;
       if (actionContractVersion === "v5" && market) {
         const token = (market.settlementToken || defaultSettlementToken) as Address;
         const assetCfg = await withRpcRetry(() => getPublicClient().readContract({
@@ -5684,14 +5683,6 @@ export default function App() {
             if (!approved) { setMarketActionPending("resolve", marketId, false); return; }
           }
         }
-        const estimatedGas = await withRpcRetry(() => getPublicClient().estimateContractGas({
-          account: account as Address,
-          address: contractAddress,
-          abi: arcPredictionMarketV5Abi,
-          functionName: "proposeOutcome",
-          args: v5ProposalArgs
-        }));
-        v5ProposalGas = (estimatedGas * 130n) / 100n;
       }
       const success = await runTransaction(
         () =>
@@ -5703,7 +5694,7 @@ export default function App() {
                 abi: arcPredictionMarketV5Abi,
                 functionName: "proposeOutcome",
                 args: v5ProposalArgs,
-                gas: v5ProposalGas
+                gas: 500_000n
               })
             : actionContractVersion === "v4" && signedAiSuggestion
             ? walletClient.writeContract({
