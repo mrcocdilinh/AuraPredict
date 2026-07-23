@@ -180,6 +180,39 @@ AURA_CIRCLE_WALLET_ADDRESS_FLAG=--address
 
 In this mode the indexer sends proposal transactions through `circle wallet execute` instead of loading `AURA_RESOLVER_PRIVATE_KEY`. The Circle wallet still must be the market resolver, market authority, contract owner, or configured adapter for the market's resolution mode. For new Oracle-led markets, `Authority / oracle only` is the cleanest flow because the creator cannot front-run the authority path. Creator-led modes can still allow the authority signer to propose when no result has been proposed yet. The VPS session must already be authenticated with Circle CLI, usually with `circle wallet login your@email --testnet`, and production shells should set `CIRCLE_ACCEPT_TERMS=1` so the CLI does not pause on first use.
 
+Recommended production mode uses Circle's Developer-Controlled Wallet API and
+does not keep a raw EVM private key on the indexer:
+
+```bash
+AURA_RESOLVER_SIGNER_MODE=circle-api
+CIRCLE_API_KEY=...
+CIRCLE_ENTITY_SECRET=...
+AURA_CIRCLE_DEV_WALLET_ID=...
+AURA_CIRCLE_DEV_WALLET_ADDRESS=0x...
+AURA_CIRCLE_DEV_BLOCKCHAIN=ARC-TESTNET
+AURA_CIRCLE_DEV_FEE_LEVEL=MEDIUM
+```
+
+`AURA_CIRCLE_DEV_WALLET_ID` submits transactions and the address lets the
+indexer verify resolver/owner authorization before spending gas. Keep both API
+credentials and the entity secret server-side. Migrate safely by retaining the
+private-key signer for old markets, setting the Circle address as resolution
+authority for newly created markets, then switching modes. Existing markets
+retain their snapshotted authority unless the Circle wallet is also owner.
+
+Arc deterministic finality makes event replay the primary index state source.
+RPC settings accept comma-separated fallback URLs:
+
+```bash
+AURA_INDEXER_RPC_URLS=https://your-dedicated-rpc,https://rpc.testnet.arc.network,https://rpc.drpc.testnet.arc.network,https://rpc.quicknode.testnet.arc.network
+AURA_INDEXER_EVENT_RPC_URLS=https://your-event-rpc,https://rpc.drpc.testnet.arc.network
+AURA_INDEXER_CONTRACT_REFRESH_MS=21600000
+```
+
+A valid cached state skips the startup-wide market scan. Full reconciliation is
+a six-hour safety audit by default; set `AURA_INDEXER_CONTRACT_REFRESH_MS=0` for
+event-only operation after cache recovery.
+
 Manual API proposal is also gated:
 
 ```text

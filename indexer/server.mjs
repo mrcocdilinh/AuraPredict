@@ -48,7 +48,7 @@ const CONTRACT_ADDRESS = String(
 const RPC_URLS = (
   process.env.AURA_INDEXER_RPC_URLS ||
   process.env.ARC_RPC_URL ||
-  "https://rpc.testnet.arc.network"
+  "https://rpc.testnet.arc.network,https://rpc.drpc.testnet.arc.network,https://rpc.quicknode.testnet.arc.network"
 )
   .split(",")
   .map((url) => url.trim())
@@ -97,8 +97,9 @@ const GROQ_BASE_URL = String(process.env.GROQ_BASE_URL || "https://api.groq.com/
 const GROQ_MODEL = String(process.env.GROQ_MODEL || "llama-3.3-70b-versatile").trim();
 const RESOLUTION_ADMIN_TOKEN = String(process.env.AURA_RESOLUTION_ADMIN_TOKEN || "").trim();
 // Re-reading every market's on-chain state each poll is the dominant RPC cost.
-// Events keep markets fresh between full reconciles, so throttle the full read.
-const CONTRACT_REFRESH_MS = Math.max(0, Number(process.env.AURA_INDEXER_CONTRACT_REFRESH_MS || 600_000) || 0);
+// Arc has deterministic finality, so events are the primary state source. A
+// full reconciliation is only a low-frequency safety audit; set 0 to disable.
+const CONTRACT_REFRESH_MS = Math.max(0, Number(process.env.AURA_INDEXER_CONTRACT_REFRESH_MS ?? 21_600_000) || 0);
 let lastContractRefresh = 0;
 const RESOLUTION_AUTO_RUN = String(process.env.AURA_RESOLUTION_AUTO_RUN || "").trim() === "1";
 const RESOLUTION_AUTO_PROPOSE = String(process.env.AURA_RESOLUTION_AUTO_PROPOSE || "").trim() === "1";
@@ -109,6 +110,16 @@ const CIRCLE_CLI_PATH = String(process.env.AURA_CIRCLE_CLI_PATH || "circle").tri
 const CIRCLE_AGENT_CHAIN = String(process.env.AURA_CIRCLE_AGENT_CHAIN || "ARC-TESTNET").trim();
 const CIRCLE_EXECUTE_TIMEOUT_MS = Math.max(1_000, Number(process.env.AURA_CIRCLE_EXECUTE_TIMEOUT_MS || 60_000) || 60_000);
 const CIRCLE_WALLET_ADDRESS_FLAG = String(process.env.AURA_CIRCLE_WALLET_ADDRESS_FLAG || "--address").trim();
+const CIRCLE_API_KEY = String(process.env.CIRCLE_API_KEY || "").trim();
+const CIRCLE_ENTITY_SECRET = String(process.env.CIRCLE_ENTITY_SECRET || "").trim();
+const CIRCLE_DEV_WALLET_ID = String(process.env.AURA_CIRCLE_DEV_WALLET_ID || "").trim();
+const CIRCLE_DEV_WALLET_ADDRESS = String(
+  process.env.AURA_CIRCLE_DEV_WALLET_ADDRESS || process.env.AURA_CIRCLE_AGENT_WALLET_ADDRESS || ""
+).trim();
+const CIRCLE_DEV_BLOCKCHAIN = String(process.env.AURA_CIRCLE_DEV_BLOCKCHAIN || "ARC-TESTNET").trim();
+const CIRCLE_DEV_FEE_LEVEL = String(process.env.AURA_CIRCLE_DEV_FEE_LEVEL || "MEDIUM").trim().toUpperCase();
+const CIRCLE_DEV_POLL_MS = Math.max(500, Number(process.env.AURA_CIRCLE_DEV_POLL_MS || 2_000) || 2_000);
+const CIRCLE_DEV_TIMEOUT_MS = Math.max(5_000, Number(process.env.AURA_CIRCLE_DEV_TIMEOUT_MS || 180_000) || 180_000);
 const AI_ATTESTATION_PRIVATE_KEY = String(process.env.AURA_ATTESTATION_PRIVATE_KEY || "").trim();
 const RESOLUTION_MIN_CONFIDENCE = Number(process.env.AURA_RESOLUTION_MIN_CONFIDENCE || 72);
 const RESOLUTION_CONSENSUS_COUNT = Number(process.env.AURA_RESOLUTION_CONSENSUS_COUNT || 2);
@@ -156,6 +167,7 @@ const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 const ZERO_HASH = "0x0000000000000000000000000000000000000000000000000000000000000000";
 const AURA_RULE_JSON_PREFIX = "AURA_RULE_JSON:";
 const CIRCLE_SIGNER_MODES = new Set(["circle", "circle-cli", "agent-wallet", "circle-agent-wallet"]);
+const CIRCLE_API_SIGNER_MODES = new Set(["circle-api", "circle-sdk", "circle-dev-controlled"]);
 const PRIVATE_KEY_SIGNER_MODES = new Set(["", "private-key", "wallet-private-key"]);
 const ARC_CHAIN = {
   id: 5042002,
@@ -272,10 +284,20 @@ const client = createPublicClient({
     retryDelay: 500
   })
 });
-const eventRpcUrl = String(process.env.AURA_INDEXER_EVENT_RPC_URL || RPC_URLS[0] || "").trim();
+const EVENT_RPC_URLS = (
+  process.env.AURA_INDEXER_EVENT_RPC_URLS ||
+  process.env.AURA_INDEXER_EVENT_RPC_URL ||
+  RPC_URLS.join(",")
+)
+  .split(",")
+  .map((url) => url.trim())
+  .filter(Boolean);
 const eventClient = createPublicClient({
   chain: ARC_CHAIN,
-  transport: http(eventRpcUrl, { retryCount: 1, retryDelay: 250, timeout: 15_000 })
+  transport: fallback(
+    EVENT_RPC_URLS.map((url) => http(url, { retryCount: 1, retryDelay: 250, timeout: 15_000 })),
+    { rank: false, retryCount: 2, retryDelay: 500 }
+  )
 });
 const realtimeClient =
   REALTIME_SYNC_ENABLED && WS_URLS.length > 0
@@ -285,8 +307,13 @@ const realtimeClient =
       })
     : null;
 const circleAgentWalletAddress = isAddress(CIRCLE_AGENT_WALLET_ADDRESS) ? CIRCLE_AGENT_WALLET_ADDRESS : "";
+const circleDevWalletAddress = isAddress(CIRCLE_DEV_WALLET_ADDRESS) ? CIRCLE_DEV_WALLET_ADDRESS : "";
 const resolverAccount = RESOLVER_PRIVATE_KEY ? privateKeyToAccount(RESOLVER_PRIVATE_KEY) : null;
-const resolverSignerAddress = resolverUsesCircleWallet() ? circleAgentWalletAddress : resolverAccount?.address || "";
+const resolverSignerAddress = resolverUsesCircleApi()
+  ? circleDevWalletAddress
+  : resolverUsesCircleWallet()
+    ? circleAgentWalletAddress
+    : resolverAccount?.address || "";
 const attestationAccount = AI_ATTESTATION_PRIVATE_KEY ? privateKeyToAccount(AI_ATTESTATION_PRIVATE_KEY) : null;
 const walletClient = resolverAccount && !resolverUsesCircleWallet()
   ? createWalletClient({
@@ -546,6 +573,8 @@ async function loadState() {
     const saved = JSON.parse(raw);
     if (saved.contractAddress?.toLowerCase() === CONTRACT_ADDRESS.toLowerCase()) {
       state = { ...emptyState(), ...saved };
+      // Resume event replay from the saved block without a startup-wide read.
+      lastContractRefresh = Date.now();
       recomputeTraderCounts();
       indexerRuntimeState();
       // Clear stale "unsupported" oracle proposals so the sweep re-evaluates them after code updates.
@@ -968,12 +997,29 @@ function resolverUsesCircleWallet() {
   return CIRCLE_SIGNER_MODES.has(RESOLVER_SIGNER_MODE);
 }
 
+function resolverUsesCircleApi() {
+  return CIRCLE_API_SIGNER_MODES.has(RESOLVER_SIGNER_MODE);
+}
+
 function resolverSignerModeIsValid() {
-  return resolverUsesCircleWallet() || PRIVATE_KEY_SIGNER_MODES.has(RESOLVER_SIGNER_MODE);
+  return resolverUsesCircleWallet() || resolverUsesCircleApi() || PRIVATE_KEY_SIGNER_MODES.has(RESOLVER_SIGNER_MODE);
 }
 
 function resolverMissingReason() {
-  if (!resolverSignerModeIsValid()) return "AURA_RESOLVER_SIGNER_MODE must be private-key or circle-cli.";
+  if (!resolverSignerModeIsValid()) {
+    return "AURA_RESOLVER_SIGNER_MODE must be private-key, circle-cli, or circle-api.";
+  }
+  if (resolverUsesCircleApi()) {
+    if (!CIRCLE_API_KEY) return "CIRCLE_API_KEY is not configured.";
+    if (!CIRCLE_ENTITY_SECRET) return "CIRCLE_ENTITY_SECRET is not configured.";
+    if (!CIRCLE_DEV_WALLET_ID && !CIRCLE_DEV_WALLET_ADDRESS) {
+      return "AURA_CIRCLE_DEV_WALLET_ID or AURA_CIRCLE_DEV_WALLET_ADDRESS is not configured.";
+    }
+    if (!circleDevWalletAddress) {
+      return "AURA_CIRCLE_DEV_WALLET_ADDRESS is required and must be a valid EVM address.";
+    }
+    return "Circle Developer-Controlled Wallet signer is not configured.";
+  }
   if (resolverUsesCircleWallet()) {
     if (!CIRCLE_AGENT_WALLET_ADDRESS) return "AURA_CIRCLE_AGENT_WALLET_ADDRESS is not configured.";
     if (!circleAgentWalletAddress) return "AURA_CIRCLE_AGENT_WALLET_ADDRESS is not a valid EVM address.";
@@ -986,6 +1032,14 @@ function resolverMissingReason() {
 
 function hasResolverSigner() {
   if (!resolverSignerModeIsValid()) return false;
+  if (resolverUsesCircleApi()) {
+    return Boolean(
+      CIRCLE_API_KEY &&
+        CIRCLE_ENTITY_SECRET &&
+        (CIRCLE_DEV_WALLET_ID || circleDevWalletAddress) &&
+        circleDevWalletAddress
+    );
+  }
   if (resolverUsesCircleWallet()) return Boolean(circleAgentWalletAddress && CIRCLE_CLI_PATH && CIRCLE_WALLET_ADDRESS_FLAG);
   return Boolean(walletClient && resolverAccount);
 }
@@ -1001,6 +1055,7 @@ function circleFunctionSignature(functionName) {
   if (functionName === "proposeCancel") return "proposeCancel(uint256,bytes32,bytes32)";
   if (functionName === "cancelUnproposedMarket") return "cancelUnproposedMarket(uint256)";
   if (functionName === "cancelEmptyMarket") return "cancelEmptyMarket(uint256)";
+  if (functionName === "finalize") return "finalize(uint256)";
   if (functionName === "resolveWithAiAttestation") return "resolveWithAiAttestation(uint256,uint8,bytes32,bytes32,uint8,bytes)";
   if (functionName === "cancel") return isStablecoinContract() ? "cancel(uint256,bytes32,bytes32)" : "cancel(uint256)";
   if (functionName === "resolve") return isStablecoinContract() ? "resolve(uint256,uint8,bytes32,bytes32)" : "resolve(uint256,uint8)";
@@ -1095,7 +1150,68 @@ async function runCircleWalletExecute(functionName, args) {
   });
 }
 
+let circleDeveloperClientPromise = null;
+
+async function circleDeveloperClient() {
+  if (!circleDeveloperClientPromise) {
+    circleDeveloperClientPromise = import("@circle-fin/developer-controlled-wallets").then(
+      ({ initiateDeveloperControlledWalletsClient }) =>
+        initiateDeveloperControlledWalletsClient({
+          apiKey: CIRCLE_API_KEY,
+          entitySecret: CIRCLE_ENTITY_SECRET
+        })
+    );
+  }
+  return circleDeveloperClientPromise;
+}
+
+async function runCircleDeveloperWalletExecute(functionName, args) {
+  const signature = circleFunctionSignature(functionName);
+  if (!signature) throw new Error(`Circle Developer Wallet cannot execute unsupported function ${functionName}.`);
+  if (!hasResolverSigner()) throw new Error(resolverMissingReason());
+
+  const circleClient = await circleDeveloperClient();
+  const wallet = CIRCLE_DEV_WALLET_ID
+    ? { walletId: CIRCLE_DEV_WALLET_ID }
+    : { walletAddress: circleDevWalletAddress, blockchain: CIRCLE_DEV_BLOCKCHAIN };
+  const created = await circleClient.createContractExecutionTransaction({
+    ...wallet,
+    contractAddress: CONTRACT_ADDRESS,
+    abiFunctionSignature: signature,
+    abiParameters: args.map(circleCliArg),
+    fee: {
+      type: "level",
+      config: { feeLevel: CIRCLE_DEV_FEE_LEVEL }
+    },
+    refId: `aurapredict-${functionName}-${Date.now()}`
+  });
+  const transactionId = created?.data?.id;
+  if (!transactionId) throw new Error("Circle Developer Wallet API did not return a transaction ID.");
+
+  const controller = new AbortController();
+  const timeout = setTimeout(
+    () => controller.abort(new Error(`Circle transaction timed out after ${CIRCLE_DEV_TIMEOUT_MS}ms.`)),
+    CIRCLE_DEV_TIMEOUT_MS
+  );
+  try {
+    const response = await circleClient.getTransaction({
+      id: transactionId,
+      waitForTxHash: true,
+      pollingInterval: CIRCLE_DEV_POLL_MS,
+      signal: controller.signal
+    });
+    const txHash = response?.data?.transaction?.txHash || "";
+    if (!/^0x[a-fA-F0-9]{64}$/.test(txHash)) {
+      throw new Error(`Circle transaction ${transactionId} did not return a valid on-chain hash.`);
+    }
+    return txHash;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 async function writeResolverContract(functionName, args) {
+  if (resolverUsesCircleApi()) return runCircleDeveloperWalletExecute(functionName, args);
   if (resolverUsesCircleWallet()) return runCircleWalletExecute(functionName, args);
   if (!walletClient) throw new Error(resolverMissingReason());
   return walletClient.writeContract({
@@ -6159,6 +6275,7 @@ async function syncOnce() {
       // next poll can ingest receipts/events and process the next batch.
       if (
         timeoutKeeperAttempts === 0 &&
+        CONTRACT_REFRESH_MS > 0 &&
         (!lastContractRefresh || Date.now() - lastContractRefresh >= CONTRACT_REFRESH_MS)
       ) {
         await refreshContractState();
