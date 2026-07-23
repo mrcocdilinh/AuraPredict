@@ -116,6 +116,7 @@ const ORACLE_AUTO_RUN = String(process.env.AURA_ORACLE_AUTO_RUN || "1").trim() !
 // Source crypto oracle prices from the AuraGate agent API (paid via x402) when enabled.
 const USE_AURAGATE_ORACLE = String(process.env.AURA_ORACLE_USE_AURAGATE || "").trim() === "1";
 const AUTO_FINALIZE = String(process.env.AURA_AUTO_FINALIZE || "").trim() === "1";
+const AUTO_CANCEL_UNPROPOSED = String(process.env.AURA_AUTO_CANCEL_UNPROPOSED || "").trim() === "1";
 const ORACLE_HTTP_TIMEOUT_MS = Number(process.env.AURA_ORACLE_HTTP_TIMEOUT_MS || 8_000);
 const AUTO_EVIDENCE_ENABLED = String(process.env.AURA_AUTO_EVIDENCE_ENABLED || "1").trim() !== "0";
 const AUTO_EVIDENCE_TIMEOUT_MS = Number(process.env.AURA_AUTO_EVIDENCE_TIMEOUT_MS || 6_000);
@@ -992,6 +993,7 @@ function circleCliArg(value) {
 function circleFunctionSignature(functionName) {
   if (functionName === "proposeOutcome") return "proposeOutcome(uint256,uint16,bytes32,bytes32,uint16,uint16,uint16,bytes32)";
   if (functionName === "proposeCancel") return "proposeCancel(uint256,bytes32,bytes32)";
+  if (functionName === "cancelUnproposedMarket") return "cancelUnproposedMarket(uint256)";
   if (functionName === "cancelEmptyMarket") return "cancelEmptyMarket(uint256)";
   if (functionName === "resolveWithAiAttestation") return "resolveWithAiAttestation(uint256,uint8,bytes32,bytes32,uint8,bytes)";
   if (functionName === "cancel") return isStablecoinContract() ? "cancel(uint256,bytes32,bytes32)" : "cancel(uint256)";
@@ -5164,6 +5166,38 @@ async function runAutoFinalizeSweep() {
   }
 }
 
+async function runAutoCancelUnproposedSweep() {
+  if (!isV5Contract() || !hasResolverSigner()) return;
+  const now = Math.floor(Date.now() / 1000);
+  const candidates = Object.values(state.markets)
+    .filter((market) => market.outcome === Outcome.Unresolved)
+    .filter((market) => Number(market.proposedAt || 0) === 0)
+    .filter((market) => !marketHasOpenReport(market.id))
+    .filter((market) => {
+      const resolutionTime = marketResolutionTime(market);
+      const gracePeriod = Number(market.termsProposalGracePeriod || 0);
+      return resolutionTime > 0 && gracePeriod > 0 && now >= resolutionTime + gracePeriod;
+    })
+    .slice(0, 5);
+
+  for (const market of candidates) {
+    try {
+      const txHash = await writeResolverContract("cancelUnproposedMarket", [BigInt(market.id)]);
+      const receipt = await client.waitForTransactionReceipt({ hash: txHash, timeout: 120_000 });
+      if (receipt.status !== "success") throw new Error(`Transaction ${txHash} reverted.`);
+      market.outcome = Outcome.Canceled;
+      market.resolvedAt = Math.floor(Date.now() / 1000);
+      market.updatedTxHash = txHash;
+      market.autoCanceledAt = nowIso();
+      market.autoCanceledTx = txHash;
+      console.log(`[auto-cancel] market ${market.id} canceled after proposal timeout tx=${txHash}`);
+      await saveState();
+    } catch (error) {
+      console.error(`[auto-cancel] market ${market.id} error:`, error instanceof Error ? error.message : String(error));
+    }
+  }
+}
+
 function extractJsonObject(text) {
   const raw = String(text || "").trim();
   if (!raw) throw new Error("AI returned an empty response.");
@@ -6104,6 +6138,12 @@ async function syncOnce() {
         lastContractRefresh = Date.now();
       }
       computeStats();
+      // Timeout cancellation takes priority over oracle proposal generation:
+      // once the snapshotted grace period has elapsed, refund instead of
+      // allowing automation to introduce a late YES/NO proposal.
+      if (AUTO_CANCEL_UNPROPOSED) {
+        await runAutoCancelUnproposedSweep();
+      }
       if (ORACLE_AUTO_RUN) {
         await runAutoOracleSweep();
       }
@@ -6113,6 +6153,7 @@ async function syncOnce() {
       if (AUTO_FINALIZE) {
         await runAutoFinalizeSweep();
       }
+      computeStats();
       runtime.lastSyncedAt = nowIso();
       runtime.lastSyncError = "";
       runtime.lastSyncErrorAt = null;

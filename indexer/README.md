@@ -151,6 +151,20 @@ AURA_RESOLVER_SIGNER_MODE=private-key
 AURA_RESOLVER_PRIVATE_KEY=0x...
 ```
 
+Optional V5 timeout keeper:
+
+```bash
+AURA_AUTO_CANCEL_UNPROPOSED=1
+AURA_RESOLVER_SIGNER_MODE=private-key
+AURA_RESOLVER_PRIVATE_KEY=0x...
+```
+
+When enabled, each sync cancels up to five V5 markets that are still live, have
+no proposal, have no open report, and have passed their snapshotted
+`resolutionTime + proposalGracePeriod`. The keeper waits for each transaction
+receipt before updating indexed state. Cancellation refunds positions through
+the normal `claim` or `claimMany` flow; it does not push funds to every wallet.
+
 Auto-propose only runs after `resolutionTime`, only when no result has already been proposed, and only when the configured signer is allowed by that market's resolution mode. Numeric adapters must pass the rule safety guard: the adapter comparator/target and observed value must produce the same YES/NO outcome as the visible rule. YES/NO auto-propose requires both YES and NO pools to be funded. One-sided markets can only auto-propose Cancel through the liquidity rule. The normal dispute window, owner review, and finalization buttons remain the source of final settlement.
 
 Circle Agent Wallet signer mode:
