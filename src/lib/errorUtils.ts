@@ -28,7 +28,12 @@ export function walletConnectionErrorMessage(prefix: string, error: unknown) {
 
 export function isRateLimitError(error: unknown) {
   const message = errorMessage(error).toLowerCase();
-  return message.includes("429") || message.includes("too many requests") || message.includes("rate limit");
+  return (
+    message.includes("429") ||
+    message.includes("too many requests") ||
+    message.includes("rate limit") ||
+    message.includes("request limit reached")
+  );
 }
 
 export function isTransientRpcError(error: unknown) {
@@ -37,6 +42,7 @@ export function isTransientRpcError(error: unknown) {
     isRateLimitError(error) ||
     message.includes("failed to fetch") ||
     message.includes("http request failed") ||
+    message.includes("rpc request failed") ||
     message.includes("networkerror") ||
     message.includes("timeout")
   );

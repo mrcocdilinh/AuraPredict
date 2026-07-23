@@ -3895,23 +3895,36 @@ export default function App() {
       let detectedContractVersion: MarketContractVersion = contractVersion;
       let detectedSettlementSymbol = defaultSettlementSymbol;
       let detectedSettlementDecimals = defaultSettlementDecimals;
-      const [count, contractOwner, contractMinStake] = await Promise.all([
-        withRpcRetry(() => publicClient.readContract({
-          address: contractAddress,
-          abi: arcPredictionMarketAbi,
-          functionName: "marketCount"
-        })),
-        withRpcRetry(() => publicClient.readContract({
-          address: contractAddress,
-          abi: arcPredictionMarketAbi,
-          functionName: "owner"
-        })),
-        withRpcRetry(() => publicClient.readContract({
-          address: contractAddress,
-          abi: arcPredictionMarketAbi,
-          functionName: "minStake"
-        }))
-      ]);
+      let coreContractReads: readonly [bigint, Address, bigint];
+      try {
+        coreContractReads = await Promise.all([
+          withRpcRetry(() => publicClient.readContract({
+            address: contractAddress,
+            abi: arcPredictionMarketAbi,
+            functionName: "marketCount"
+          })),
+          withRpcRetry(() => publicClient.readContract({
+            address: contractAddress,
+            abi: arcPredictionMarketAbi,
+            functionName: "owner"
+          })),
+          withRpcRetry(() => publicClient.readContract({
+            address: contractAddress,
+            abi: arcPredictionMarketAbi,
+            functionName: "minStake"
+          }))
+        ]) as readonly [bigint, Address, bigint];
+      } catch (error) {
+        // A healthy indexer snapshot is sufficient for browsing. Do not discard
+        // it or surface a large viem error when Arc's public RPC throttles these
+        // optional configuration refreshes.
+        if (prefetchedIndexedSnapshot && isTransientRpcError(error)) {
+          setNotice("Live contract settings are temporarily rate-limited. Market data is up to date from the Aura indexer.");
+          return;
+        }
+        throw error;
+      }
+      const [count, contractOwner, contractMinStake] = coreContractReads;
 
       const totalMarketCount = Number(count);
       const requestedMarketCount = Math.min(totalMarketCount, Math.max(1, marketLoadLimit));
