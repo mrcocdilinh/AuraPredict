@@ -6033,9 +6033,18 @@ export default function App() {
   const cancelMarket = async (marketId: number) => {
     if (!account || !isAddress(account)) throw new Error("Connect wallet first.");
     if (isMarketActionPending("resolve", marketId)) return;
+    const market = markets.find((item) => item.id === marketId);
+    if (
+      market &&
+      !requiresCancelForLiquidity(market) &&
+      !window.confirm(
+        "This market has liquidity on both YES and NO. This action proposes CANCEL, not a YES/NO result. Continue only when the resolution sources are unavailable or contradictory."
+      )
+    ) {
+      return;
+    }
     await switchToArc();
     const walletClient = getActiveWalletClient();
-    const market = markets.find((item) => item.id === marketId);
     const aiReceipt = aiResolutionReceipts[String(marketId)];
     const evidenceHash = keccak256(stringToHex(JSON.stringify(marketEvidence[String(marketId)] || [])));
     const receiptHash =
@@ -7065,7 +7074,7 @@ export default function App() {
       (selectedMarket.termsDisputeGracePeriod ?? disputeGracePeriod) > 0 &&
       Date.now() / 1000 >= selectedMarket.disputeDeadline + (selectedMarket.termsDisputeGracePeriod ?? disputeGracePeriod);
     const canCancelUnproposed =
-      contractVersion === "v4" &&
+      (contractVersion === "v4" || contractVersion === "v5") &&
       Boolean(account) &&
       selectedMarket.outcome === Outcome.Unresolved &&
       selectedMarket.proposedAt === 0 &&
@@ -7913,7 +7922,7 @@ export default function App() {
                   </div>
                   <div>
                     <span>Proposal grace</span>
-                    <strong>{durationText(selectedProposalGraceSeconds)} - cancel after {closeDate(selectedProposalGraceDeadline)}</strong>
+                    <strong>{durationText(selectedProposalGraceSeconds)} - cancelable after {closeDate(selectedProposalGraceDeadline)} (not automatic)</strong>
                   </div>
                   <div>
                     <span>Dispute window</span>
@@ -8006,7 +8015,7 @@ export default function App() {
                           Propose NO
                         </button>
                         <button className="secondary action-propose-cancel" disabled={resolutionActionBusy || (!canResolveAfterAura(selectedMarket.id) && !cancelOnlyResolution)} onClick={() => cancelMarket(selectedMarket.id)}>
-                          {cancelOnlyResolution ? "Cancel / Refund" : "Cancel"}
+                          {cancelOnlyResolution ? "Cancel / Refund" : "Propose CANCEL (source failure)"}
                         </button>
                       </>
                     )}
@@ -8049,7 +8058,7 @@ export default function App() {
                     )}
                     {canCancelUnproposed && (
                       <button className="secondary action-propose-cancel" onClick={() => cancelUnproposedMarket(selectedMarket.id)}>
-                        Cancel timed-out market / refund
+                        Cancel timed-out market / refund now
                       </button>
                     )}
                     {canClaim && (

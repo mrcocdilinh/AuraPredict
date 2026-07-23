@@ -70,7 +70,9 @@ const WS_URLS = (
 const REALTIME_SYNC_ENABLED = String(process.env.AURA_INDEXER_WS_ENABLED || "1").trim() !== "0";
 const REALTIME_SYNC_DEBOUNCE_MS = Math.max(100, Number(process.env.AURA_INDEXER_WS_DEBOUNCE_MS || 750) || 750);
 const START_BLOCK = BigInt(process.env.START_BLOCK || process.env.AURA_INDEXER_START_BLOCK || process.env.VITE_AURAPREDICT_V5_DEPLOYMENT_BLOCK || 0);
-const CHUNK_SIZE = BigInt(process.env.AURA_INDEXER_CHUNK_SIZE || 100);
+const CHUNK_SIZE = BigInt(process.env.AURA_INDEXER_CHUNK_SIZE || 1000);
+const SYNC_CHUNK_DELAY_MS = Math.max(0, Number(process.env.AURA_INDEXER_CHUNK_DELAY_MS || 150) || 0);
+const SYNC_CHECKPOINT_CHUNKS = Math.max(1, Number(process.env.AURA_INDEXER_CHECKPOINT_CHUNKS || 10) || 10);
 const READ_RETRY_COUNT = Math.max(0, Number(process.env.AURA_INDEXER_READ_RETRIES || 3) || 3);
 const READ_RETRY_BASE_MS = Math.max(100, Number(process.env.AURA_INDEXER_READ_RETRY_BASE_MS || 350) || 350);
 const MARKET_READ_CONCURRENCY = Math.max(1, Number(process.env.AURA_INDEXER_MARKET_READ_CONCURRENCY || 8) || 8);
@@ -1111,6 +1113,7 @@ function isRetryableReadError(error) {
     "timeout",
     "time-out",
     "daily request limit",
+    "request limit",
     "rate limit",
     "too many requests",
     "429",
@@ -5965,12 +5968,24 @@ async function syncRange(fromBlock, toBlock) {
   // One getLogs per chunk for all events at once. Per-event queries multiply the
   // request count (~1 per event name), which falls behind on free-tier RPCs that
   // cap the block range to a small window. viem decodes and tags each log's eventName.
-  const allEvents = await eventClient.getContractEvents({
-    address: CONTRACT_ADDRESS,
-    abi,
-    fromBlock,
-    toBlock
-  });
+  let allEvents;
+  let lastError;
+  for (let attempt = 0; attempt <= READ_RETRY_COUNT; attempt += 1) {
+    try {
+      allEvents = await eventClient.getContractEvents({
+        address: CONTRACT_ADDRESS,
+        abi,
+        fromBlock,
+        toBlock
+      });
+      break;
+    } catch (error) {
+      lastError = error;
+      if (attempt >= READ_RETRY_COUNT || !isRetryableReadError(error)) throw error;
+      await sleep(READ_RETRY_BASE_MS * 2 ** attempt);
+    }
+  }
+  if (!allEvents) throw lastError;
   const logs = allEvents.filter((log) => eventNames.has(log.eventName));
 
   logs.sort((a, b) => {
@@ -6066,11 +6081,20 @@ async function syncOnce() {
       let fromBlock = toBigint(state.lastIndexedBlock) > 0n ? toBigint(state.lastIndexedBlock) + 1n : startBlock;
 
       if (fromBlock <= latestBlock) {
+        let syncedChunks = 0;
         while (fromBlock <= latestBlock) {
           const toBlock = fromBlock + CHUNK_SIZE - 1n > latestBlock ? latestBlock : fromBlock + CHUNK_SIZE - 1n;
           await syncRange(fromBlock, toBlock);
           state.lastIndexedBlock = toBlock.toString();
           fromBlock = toBlock + 1n;
+          syncedChunks += 1;
+          if (syncedChunks % SYNC_CHECKPOINT_CHUNKS === 0) {
+            state.updatedAt = nowIso();
+            await saveState();
+          }
+          if (SYNC_CHUNK_DELAY_MS > 0 && fromBlock <= latestBlock) {
+            await sleep(SYNC_CHUNK_DELAY_MS);
+          }
         }
       }
 

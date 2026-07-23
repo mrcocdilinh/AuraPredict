@@ -9,6 +9,8 @@ import type {
 } from "../types";
 import { indexedMarketToView, indexedStatsToProjectStats, indexedActivityToItem } from "./marketTransform";
 
+const MAX_INDEXER_SNAPSHOT_AGE_MS = 5 * 60 * 1000;
+
 export async function fetchIndexerJson<T>(path: string): Promise<T | null> {
   if (!INDEXER_URL || VIEWING_V3_ARCHIVE) return null;
   const [route, query = ""] = path.split("?");
@@ -91,6 +93,13 @@ export async function loadIndexedSnapshot(account?: string): Promise<IndexedSnap
   ]);
 
   if (!marketsResponse?.markets?.length) return null;
+  const updatedAtMs = Date.parse(String(healthResponse?.updatedAt || ""));
+  const snapshotIsStale =
+    !healthResponse?.ok ||
+    !Number.isFinite(updatedAtMs) ||
+    Date.now() - updatedAtMs > MAX_INDEXER_SNAPSHOT_AGE_MS ||
+    Boolean(healthResponse.indexer?.lastSyncError);
+  if (snapshotIsStale) return null;
 
   const markets = marketsResponse.markets.map(indexedMarketToView).sort((a, b) => b.id - a.id);
   const marketsById = new Map(markets.map((market) => [market.id, market]));
