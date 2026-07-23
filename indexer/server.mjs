@@ -6132,18 +6132,19 @@ async function syncOnce() {
         }
       }
 
+      // Events are current at this point, so timeout cancellation does not need
+      // to wait behind the expensive full-market read. The contract re-checks
+      // Live/no-proposal/timeout state and safely reverts a stale candidate.
+      if (AUTO_CANCEL_UNPROPOSED) {
+        await runAutoCancelUnproposedSweep();
+      }
+
       // Full on-chain reconcile is throttled (events keep state fresh between).
       if (!lastContractRefresh || Date.now() - lastContractRefresh >= CONTRACT_REFRESH_MS) {
         await refreshContractState();
         lastContractRefresh = Date.now();
       }
       computeStats();
-      // Timeout cancellation takes priority over oracle proposal generation:
-      // once the snapshotted grace period has elapsed, refund instead of
-      // allowing automation to introduce a late YES/NO proposal.
-      if (AUTO_CANCEL_UNPROPOSED) {
-        await runAutoCancelUnproposedSweep();
-      }
       if (ORACLE_AUTO_RUN) {
         await runAutoOracleSweep();
       }
