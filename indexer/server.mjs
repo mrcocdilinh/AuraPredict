@@ -921,6 +921,12 @@ async function processEvent(eventName, log) {
     market.isDraft = false;
     market.resolvedAt = timestamp;
     market.updatedTxHash = txHash;
+    if (market.autoCancelPendingTx?.toLowerCase() === txHash.toLowerCase()) {
+      market.autoCanceledAt = new Date(timestamp * 1000).toISOString();
+      market.autoCanceledTx = txHash;
+    }
+    delete market.autoCancelPendingTx;
+    delete market.autoCancelPendingAt;
     addSnapshot(market, timestamp, txHash, logIndex);
     return;
   }
@@ -5167,11 +5173,16 @@ async function runAutoFinalizeSweep() {
 }
 
 async function runAutoCancelUnproposedSweep() {
-  if (!isV5Contract() || !hasResolverSigner()) return;
+  if (!isV5Contract() || !hasResolverSigner()) return 0;
   const now = Math.floor(Date.now() / 1000);
   const candidates = Object.values(state.markets)
     .filter((market) => market.outcome === Outcome.Unresolved)
     .filter((market) => Number(market.proposedAt || 0) === 0)
+    .filter((market) => {
+      if (!market.autoCancelPendingTx) return true;
+      const pendingAt = Date.parse(String(market.autoCancelPendingAt || ""));
+      return !Number.isFinite(pendingAt) || Date.now() - pendingAt >= 15 * 60_000;
+    })
     .filter((market) => !marketHasOpenReport(market.id))
     .filter((market) => {
       const resolutionTime = marketResolutionTime(market);
@@ -5183,6 +5194,9 @@ async function runAutoCancelUnproposedSweep() {
   for (const market of candidates) {
     try {
       const txHash = await writeResolverContract("cancelUnproposedMarket", [BigInt(market.id)]);
+      market.autoCancelPendingTx = txHash;
+      market.autoCancelPendingAt = nowIso();
+      await saveState();
       const receipt = await client.waitForTransactionReceipt({ hash: txHash, timeout: 120_000 });
       if (receipt.status !== "success") throw new Error(`Transaction ${txHash} reverted.`);
       market.outcome = Outcome.Canceled;
@@ -5190,12 +5204,15 @@ async function runAutoCancelUnproposedSweep() {
       market.updatedTxHash = txHash;
       market.autoCanceledAt = nowIso();
       market.autoCanceledTx = txHash;
+      delete market.autoCancelPendingTx;
+      delete market.autoCancelPendingAt;
       console.log(`[auto-cancel] market ${market.id} canceled after proposal timeout tx=${txHash}`);
       await saveState();
     } catch (error) {
       console.error(`[auto-cancel] market ${market.id} error:`, error instanceof Error ? error.message : String(error));
     }
   }
+  return candidates.length;
 }
 
 function extractJsonObject(text) {
@@ -6135,12 +6152,15 @@ async function syncOnce() {
       // Events are current at this point, so timeout cancellation does not need
       // to wait behind the expensive full-market read. The contract re-checks
       // Live/no-proposal/timeout state and safely reverts a stale candidate.
-      if (AUTO_CANCEL_UNPROPOSED) {
-        await runAutoCancelUnproposedSweep();
-      }
+      const timeoutKeeperAttempts = AUTO_CANCEL_UNPROPOSED ? await runAutoCancelUnproposedSweep() : 0;
 
       // Full on-chain reconcile is throttled (events keep state fresh between).
-      if (!lastContractRefresh || Date.now() - lastContractRefresh >= CONTRACT_REFRESH_MS) {
+      // When the keeper submitted a batch, finish this sync promptly so the
+      // next poll can ingest receipts/events and process the next batch.
+      if (
+        timeoutKeeperAttempts === 0 &&
+        (!lastContractRefresh || Date.now() - lastContractRefresh >= CONTRACT_REFRESH_MS)
+      ) {
         await refreshContractState();
         lastContractRefresh = Date.now();
       }
