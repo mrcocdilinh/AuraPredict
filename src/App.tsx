@@ -6148,38 +6148,54 @@ export default function App() {
   };
 
   const claim = async (marketId: number) => {
-    if (!account || !isAddress(account)) throw new Error("Connect wallet first.");
-    await switchToArc();
-    const eligibility = await refreshClaimEligibility(marketId);
-    if (eligibility.claimed) {
-      setNotice("This payout was already claimed. Notification updated.");
-      setNotificationMenuOpen(false);
-      return;
-    }
-    if (eligibility.payout <= 0n) {
-      setNotice("No claimable payout is available onchain for this market. Notification updated.");
-      setMarkets((current) =>
-        current.map((market) => (market.id === marketId ? { ...market, potentialPayout: 0n } : market))
+    try {
+      if (!account || !isAddress(account)) {
+        setNotice("Connect wallet first.");
+        return;
+      }
+      await switchToArc();
+      try {
+        const eligibility = await refreshClaimEligibility(marketId);
+        if (eligibility.claimed) {
+          setNotice("This payout was already claimed. Notification updated.");
+          setNotificationMenuOpen(false);
+          return;
+        }
+        if (eligibility.payout <= 0n) {
+          setNotice("No claimable payout is available onchain for this market. Notification updated.");
+          setMarkets((current) =>
+            current.map((market) => (market.id === marketId ? { ...market, potentialPayout: 0n } : market))
+          );
+          setNotificationMenuOpen(false);
+          return;
+        }
+      } catch (error) {
+        if (!isTransientRpcError(error)) throw error;
+        // The notification/indexed position is enough to attempt the claim.
+        // The contract remains the source of truth and safely rejects an
+        // already-claimed or non-winning position.
+        setNotice("Arc RPC could not refresh the payout preview. Sending the claim directly...");
+      }
+      const walletClient = getActiveWalletClient();
+      const completed = await runTransaction(
+        () =>
+          walletClient.writeContract({
+            account: account as Address,
+            chain: arcTestnet,
+            address: contractAddress,
+            abi: isStablecoinContractVersion(contractVersion) ? stablecoinMarketAbi(contractVersion) : arcPredictionMarketAbi,
+            functionName: "claim",
+            args: [BigInt(marketId)],
+            gas: 500_000n
+          }),
+        "Claiming payout...",
+        true,
+        () => markClaimedLocally(marketId)
       );
-      setNotificationMenuOpen(false);
-      return;
+      if (completed) setNotificationMenuOpen(false);
+    } catch (error) {
+      setNotice(compactErrorMessage(error));
     }
-    const walletClient = getActiveWalletClient();
-    const completed = await runTransaction(
-      () =>
-        walletClient.writeContract({
-          account: account as Address,
-          chain: arcTestnet,
-          address: contractAddress,
-          abi: isStablecoinContractVersion(contractVersion) ? stablecoinMarketAbi(contractVersion) : arcPredictionMarketAbi,
-          functionName: "claim",
-          args: [BigInt(marketId)]
-        }),
-      "Claiming payout...",
-      true,
-      () => markClaimedLocally(marketId)
-    );
-    if (completed) setNotificationMenuOpen(false);
   };
 
   const assistantMarkets = useMemo<AssistantMarketContext[]>(() => {
