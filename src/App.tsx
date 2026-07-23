@@ -5564,11 +5564,30 @@ export default function App() {
     if (!account || !isAddress(account)) throw new Error("Connect wallet first.");
     if (isMarketActionPending("resolve", marketId)) return;
     const market = markets.find((item) => item.id === marketId);
+    let actionContractVersion = contractVersion;
+    if (actionContractVersion === "unknown") {
+      const contractVersionName = await withRpcRetry(() => getPublicClient().readContract({
+        address: contractAddress,
+        abi: arcPredictionMarketAbi,
+        functionName: "CONTRACT_VERSION"
+      }));
+      actionContractVersion =
+        String(contractVersionName) === "AURAPREDICT_V5"
+          ? "v5"
+          : String(contractVersionName) === "AURAPREDICT_V4"
+            ? "v4"
+            : String(contractVersionName) === "AURAPREDICT_V3"
+              ? "v3"
+              : String(contractVersionName) === "AURAPREDICT_V2"
+                ? "v2"
+                : "dispute";
+      setContractVersion(actionContractVersion);
+    }
     if (market && requiresCancelForLiquidity(market)) {
       setNotice("This market is cancel-only because both YES and NO were not funded. Use Cancel to refund positions.");
       return;
     }
-    if (contractVersion === "v5" && market) {
+    if (actionContractVersion === "v5" && market) {
       const unlockAt = resolutionUnlockTime(market);
       if (Math.floor(Date.now() / 1000) < unlockAt) {
         const diff = unlockAt - Math.floor(Date.now() / 1000);
@@ -5615,14 +5634,14 @@ export default function App() {
         ? aiReceipt.receiptHash as Hash
         : ZERO_HASH as Hash;
     const signedAiSuggestion =
-      contractVersion === "v4" &&
+      actionContractVersion === "v4" &&
       hasAiSuggestion &&
       storedReceiptHash !== ZERO_HASH &&
       typeof aiReceipt?.attestation === "string" &&
       /^0x[a-fA-F0-9]{130}$/.test(aiReceipt.attestation);
     setMarketActionPending("resolve", marketId, true);
     try {
-      if (contractVersion === "v5" && market) {
+      if (actionContractVersion === "v5" && market) {
         const token = (market.settlementToken || defaultSettlementToken) as Address;
         const assetCfg = await withRpcRetry(() => getPublicClient().readContract({
           address: contractAddress,
@@ -5657,7 +5676,7 @@ export default function App() {
       }
       const success = await runTransaction(
         () =>
-          contractVersion === "v5"
+          actionContractVersion === "v5"
             ? walletClient.writeContract({
                 account: account as Address,
                 chain: arcTestnet,
@@ -5675,7 +5694,7 @@ export default function App() {
                   ZERO_HASH
                 ]
               })
-            : contractVersion === "v4" && signedAiSuggestion
+            : actionContractVersion === "v4" && signedAiSuggestion
             ? walletClient.writeContract({
                 account: account as Address,
                 chain: arcTestnet,
@@ -5691,12 +5710,12 @@ export default function App() {
                   aiReceipt!.attestation as `0x${string}`
                 ]
               })
-            : isStablecoinContractVersion(contractVersion)
+            : isStablecoinContractVersion(actionContractVersion)
             ? walletClient.writeContract({
                 account: account as Address,
                 chain: arcTestnet,
                 address: contractAddress,
-                abi: contractVersion === "v4" ? arcPredictionMarketV4Abi : arcPredictionMarketV3Abi,
+                abi: actionContractVersion === "v4" ? arcPredictionMarketV4Abi : arcPredictionMarketV3Abi,
                 functionName: "resolve",
                 args: [BigInt(marketId), outcome, evidenceHash, storedReceiptHash]
               })
@@ -5715,8 +5734,8 @@ export default function App() {
             .map((log) => {
               try {
                 return decodeEventLog({
-                  abi: isStablecoinContractVersion(contractVersion)
-                    ? stablecoinMarketAbi(contractVersion)
+                  abi: isStablecoinContractVersion(actionContractVersion)
+                    ? stablecoinMarketAbi(actionContractVersion)
                     : arcPredictionMarketAbi,
                   data: log.data,
                   topics: log.topics
@@ -5730,7 +5749,7 @@ export default function App() {
             | { marketId?: bigint; outcome?: number; outcomeId?: number; disputeDeadline?: bigint }
             | undefined;
           const eventOutcome =
-            contractVersion === "v5" && args?.outcomeId !== undefined
+            actionContractVersion === "v5" && args?.outcomeId !== undefined
               ? v5OutcomeToLegacy(Number(args.outcomeId))
               : Number(args?.outcome ?? outcome) as Outcome;
           markMarketResultProposed(
