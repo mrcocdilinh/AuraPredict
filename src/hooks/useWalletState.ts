@@ -138,7 +138,9 @@ export function useWalletState({
       return;
     }
     try {
-      const walletClient = getWalletClient(provider ?? selectedWalletProvider ?? window.ethereum ?? null);
+      const walletClient = getWalletClient(
+        (provider ?? selectedWalletProvider ?? window.ethereum ?? null) as EthereumProvider | null
+      );
       const chainId = await walletClient.getChainId();
       setIsArcNetwork(BigInt(chainId) === ARC_CHAIN_ID_DECIMAL);
     } catch {
@@ -212,7 +214,7 @@ export function useWalletState({
   const connectWallet = useCallback(async (provider?: EthereumProvider | null) => {
     setNotice("");
     setConnecting(true);
-    const providerToUse = provider ?? selectedWalletProvider ?? window.ethereum ?? null;
+    const providerToUse = (provider ?? selectedWalletProvider ?? window.ethereum ?? null) as EthereumProvider | null;
     const walletClient = getWalletClient(providerToUse);
     const addresses = await walletClient.requestAddresses();
     // Embedded wallets (email/social via AppKit) are already pinned to Arc and

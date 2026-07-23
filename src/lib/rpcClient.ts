@@ -3,8 +3,8 @@ import { ARC_RPC_URL, arcTestnet } from "../arc";
 import { ARC_RPC_URLS, WALLETCONNECT_PROJECT_ID, ARC_CHAIN_ID_NUMBER } from "../constants";
 import type { EthereumProvider } from "../types";
 
-export function getInjectedProvider(provider?: EthereumProvider | null) {
-  const injected = provider ?? window.ethereum;
+export function getInjectedProvider(provider?: EthereumProvider | null): EthereumProvider {
+  const injected = (provider ?? window.ethereum) as EthereumProvider | undefined;
   if (!injected) {
     throw new Error("Open AuraOn inside a wallet browser such as Zerion, MetaMask, Rabby, or OKX.");
   }

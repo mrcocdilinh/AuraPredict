@@ -165,6 +165,7 @@ contract ArcPredictionMarketV5 {
     string public constant CONTRACT_VERSION = "AURAPREDICT_V5";
 
     address public owner;
+    address public pendingOwner;
     address public resolutionAuthority;
     address public trustedForwarder;
     address public aiAttestationSigner;
@@ -186,6 +187,7 @@ contract ArcPredictionMarketV5 {
     uint256 private reentrancyStatus = UNLOCKED;
 
     event OwnershipTransferred(address indexed oldOwner, address indexed newOwner);
+    event OwnershipTransferStarted(address indexed currentOwner, address indexed pendingOwner);
     event SettlementAssetConfigured(address indexed token, bool enabled, string symbol, uint8 decimals);
     event TrustedForwarderUpdated(address indexed forwarder);
     event MarketDraftSubmitted(uint256 indexed marketId, address indexed creator, address indexed token, uint16 outcomeCount);
@@ -239,8 +241,17 @@ contract ArcPredictionMarketV5 {
 
     function transferOwnership(address newOwner) external onlyOwner {
         if (newOwner == address(0)) revert InvalidInput();
-        emit OwnershipTransferred(owner, newOwner);
-        owner = newOwner;
+        pendingOwner = newOwner;
+        emit OwnershipTransferStarted(owner, newOwner);
+    }
+
+    function acceptOwnership() external {
+        address sender = _msgSender();
+        if (sender != pendingOwner) revert NotAuthorized();
+        address oldOwner = owner;
+        owner = sender;
+        pendingOwner = address(0);
+        emit OwnershipTransferred(oldOwner, sender);
     }
 
     function setResolutionAuthority(address authority) external onlyOwner {
@@ -498,6 +509,7 @@ contract ArcPredictionMarketV5 {
         if (!market.reportOpen) revert InvalidState();
         market.reportOpen = false;
         if (accepted) {
+            _refundResolutionBonds(market);
             market.state = MarketState.Canceled;
             market.finalOutcome = NO_OUTCOME;
             _credit(market.token, market.reporter, market.reportBond + market.creatorBond);
@@ -515,6 +527,7 @@ contract ArcPredictionMarketV5 {
     function finalize(uint256 marketId) external nonReentrant {
         Market storage market = _market(marketId);
         if (market.state != MarketState.Proposed) revert InvalidState();
+        if (market.reportOpen) revert InvalidState();
         if (market.authorityReviewRequired && !_isAuthority(market, _msgSender())) revert NotAuthorized();
         if (!market.authorityReviewRequired && block.timestamp < market.proposedAt + market.disputeWindow) revert TooEarly();
         _finalize(marketId, market, market.proposedOutcome, market.evidenceHash);
@@ -524,6 +537,7 @@ contract ArcPredictionMarketV5 {
         Market storage market = _market(marketId);
         if (!_isAuthority(market, _msgSender())) revert NotAuthorized();
         if (market.state != MarketState.Proposed && market.state != MarketState.Disputed) revert InvalidState();
+        if (market.reportOpen) revert InvalidState();
         _finalize(marketId, market, outcomeId, evidenceHash);
     }
 
@@ -831,6 +845,11 @@ contract ArcPredictionMarketV5 {
     }
 
     function _cancel(uint256 marketId, Market storage market, bool slashCreatorBond, bytes32 reasonHash) private {
+        _refundResolutionBonds(market);
+        if (market.reportOpen) {
+            market.reportOpen = false;
+            _credit(market.token, market.reporter, market.reportBond);
+        }
         market.finalOutcome = NO_OUTCOME;
         market.state = MarketState.Canceled;
         if (slashCreatorBond && market.creatorBond > 0) {
@@ -842,6 +861,15 @@ contract ArcPredictionMarketV5 {
         }
         market.creatorBond = 0;
         emit MarketCanceled(marketId, _msgSender(), reasonHash, slashCreatorBond);
+    }
+
+    function _refundResolutionBonds(Market storage market) private {
+        if (market.state == MarketState.Proposed) {
+            _credit(market.token, market.proposer, market.resolverBond);
+        } else if (market.state == MarketState.Disputed) {
+            _credit(market.token, market.proposer, market.resolverBond);
+            _credit(market.token, market.disputer, market.disputeBond);
+        }
     }
 
     function _claimFor(uint256 marketId, address user, bool skipUnavailable) private returns (uint256 payout) {

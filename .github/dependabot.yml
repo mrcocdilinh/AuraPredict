@@ -1,0 +1,21 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      circle:
+        patterns:
+          - "@circle-fin/*"
+      wallet:
+        patterns:
+          - "@reown/*"
+          - "@walletconnect/*"
+      build-and-test:
+        dependency-type: development
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly

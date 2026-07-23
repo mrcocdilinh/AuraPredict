@@ -1,7 +1,6 @@
-import type { Address, Hash } from "viem";
+import type { Address, EIP1193Provider, Hash } from "viem";
 
-export type EthereumProvider = {
-  request: (args: { method: string; params?: unknown[] }) => Promise<unknown>;
+export type EthereumProvider = EIP1193Provider & {
   disconnect?: () => Promise<void> | void;
   on?: (event: string, handler: (...args: unknown[]) => void) => void;
   removeListener?: (event: string, handler: (...args: unknown[]) => void) => void;
@@ -78,12 +77,6 @@ export type UnifiedBalanceWalletBalance = {
   tokenAddress: Address;
   error?: string;
 };
-
-declare global {
-  interface Window {
-    readonly ethereum?: EthereumProvider;
-  }
-}
 
 export enum Outcome {
   Unresolved = 0,

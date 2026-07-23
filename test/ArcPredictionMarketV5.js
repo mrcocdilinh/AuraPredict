@@ -182,6 +182,105 @@ describe("ArcPredictionMarket V5", function () {
     assert.equal(await market.pendingWithdrawals(await usdc.getAddress(), reporter.address), ethers.parseUnits("6", 6));
   });
 
+  it("uses two-step ownership transfer so an invalid recipient cannot immediately strand admin control", async function () {
+    const { market, owner, alice, bob } = await deployFixture();
+    await market.connect(owner).transferOwnership(alice.address);
+    assert.equal(await market.owner(), owner.address);
+    assert.equal(await market.pendingOwner(), alice.address);
+    await assert.rejects(market.connect(bob).acceptOwnership(), /NotAuthorized/);
+    await market.connect(alice).acceptOwnership();
+    assert.equal(await market.owner(), alice.address);
+    assert.equal(await market.pendingOwner(), ethers.ZeroAddress);
+  });
+
+  it("refunds resolver and reporter bonds when a proposed market is canceled by an accepted report", async function () {
+    const { market, usdc, owner, alice, bob, reporter } = await deployFixture();
+    await market.connect(alice).submitMarketDraft(await inputFor(usdc));
+    await market.connect(owner).approveMarket(0);
+    await market.connect(bob).placePosition(0, 0, ethers.parseUnits("2", 6));
+    await increaseTime(4201);
+    await market.connect(alice).proposeOutcome(
+      0,
+      0,
+      ethers.id("evidence"),
+      ethers.id("receipt"),
+      NO_OUTCOME,
+      0,
+      9000,
+      ethers.id("manual")
+    );
+    await market.connect(reporter).reportMarket(0, ethers.id("bad-market"));
+    await market.connect(owner).resolveReport(0, true, ethers.id("confirmed"));
+
+    assert.equal(
+      await market.pendingWithdrawals(await usdc.getAddress(), alice.address),
+      ethers.parseUnits("2", 6)
+    );
+    assert.equal(
+      await market.pendingWithdrawals(await usdc.getAddress(), reporter.address),
+      ethers.parseUnits("6", 6)
+    );
+  });
+
+  it("refunds resolver, disputer, and reporter bonds on owner cancellation", async function () {
+    const { market, usdc, owner, alice, bob, reporter } = await deployFixture();
+    await market.connect(owner).createMultiOutcomeMarket(await inputFor(usdc));
+    await market.connect(alice).placePosition(0, 0, ethers.parseUnits("2", 6));
+    await market.connect(bob).placePosition(0, 1, ethers.parseUnits("2", 6));
+    await increaseTime(4201);
+    await market.connect(owner).proposeOutcome(
+      0,
+      0,
+      ethers.id("evidence"),
+      ethers.id("receipt"),
+      NO_OUTCOME,
+      0,
+      9000,
+      ethers.id("manual")
+    );
+    await market.connect(alice).disputeWithReason(0, ethers.id("wrong"));
+    await market.connect(owner).ownerCancelMarket(0, false, ethers.id("neutral-cancel"));
+
+    assert.equal(
+      await market.pendingWithdrawals(await usdc.getAddress(), owner.address),
+      ethers.parseUnits("7", 6)
+    );
+    assert.equal(
+      await market.pendingWithdrawals(await usdc.getAddress(), alice.address),
+      ethers.parseUnits("1", 6)
+    );
+
+    await market.connect(owner).createMultiOutcomeMarket(await inputFor(usdc));
+    await market.connect(reporter).reportMarket(1, ethers.id("review"));
+    await market.connect(owner).ownerCancelMarket(1, false, ethers.id("neutral-cancel"));
+    assert.equal(
+      await market.pendingWithdrawals(await usdc.getAddress(), reporter.address),
+      ethers.parseUnits("1", 6)
+    );
+  });
+
+  it("does not finalize while a funded report is awaiting owner review", async function () {
+    const { market, usdc, owner, alice, reporter } = await deployFixture();
+    await market.connect(owner).createMultiOutcomeMarket(await inputFor(usdc));
+    await market.connect(alice).placePosition(0, 0, ethers.parseUnits("2", 6));
+    await increaseTime(4201);
+    await market.connect(owner).proposeOutcome(
+      0,
+      0,
+      ethers.id("evidence"),
+      ethers.id("receipt"),
+      NO_OUTCOME,
+      0,
+      9000,
+      ethers.id("manual")
+    );
+    await market.connect(reporter).reportMarket(0, ethers.id("review"));
+    await increaseTime(Number(await market.disputeWindow()) + 1);
+    await assert.rejects(market.connect(owner).finalize(0), /InvalidState/);
+    await market.connect(owner).resolveReport(0, false, ethers.id("rejected"));
+    await market.connect(owner).finalize(0);
+  });
+
   it("accepts ERC-2771 style forwarded calls for seedless smart-wallet flows", async function () {
     const { market, usdc, owner, alice, forwarder } = await deployFixture();
     await market.connect(owner).setTrustedForwarder(forwarder.address);

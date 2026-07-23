@@ -23,6 +23,7 @@ import {
 import { x402GetJson, x402Enabled } from "./x402Client.mjs";
 import { requireMarketPayment, x402ServerEnabled } from "./x402Server.mjs";
 import { scoreEvidenceSearchResult } from "./evidenceSearchPolicy.mjs";
+import { baseSecurityHeaders, checkRateLimit } from "./httpSecurity.mjs";
 import {
   NUMERIC_COMPARATORS,
   compareObservedValue,
@@ -96,6 +97,10 @@ const GROQ_API_KEYS = String(process.env.GROQ_API_KEYS || "")
 const GROQ_BASE_URL = String(process.env.GROQ_BASE_URL || "https://api.groq.com/openai/v1").trim().replace(/\/$/, "");
 const GROQ_MODEL = String(process.env.GROQ_MODEL || "llama-3.3-70b-versatile").trim();
 const RESOLUTION_ADMIN_TOKEN = String(process.env.AURA_RESOLUTION_ADMIN_TOKEN || "").trim();
+const TRUST_PROXY = String(process.env.AURA_TRUST_PROXY || "").trim() === "1";
+const API_RATE_LIMIT_MAX = Math.max(10, Number(process.env.AURA_API_RATE_LIMIT_MAX || 120) || 120);
+const AI_RATE_LIMIT_MAX = Math.max(1, Number(process.env.AURA_AI_RATE_LIMIT_MAX || 20) || 20);
+const CIRCLE_AUTH_RATE_LIMIT_MAX = Math.max(1, Number(process.env.AURA_CIRCLE_AUTH_RATE_LIMIT_MAX || 10) || 10);
 // Re-reading every market's on-chain state each poll is the dominant RPC cost.
 // Arc has deterministic finality, so events are the primary state source. A
 // full reconciliation is only a low-frequency safety audit; set 0 to disable.
@@ -6322,7 +6327,7 @@ function periodStartFor(value) {
 function json(res, status, payload) {
   const body = JSON.stringify(payload);
   res.writeHead(status, {
-    "content-type": "application/json; charset=utf-8",
+    ...baseSecurityHeaders("application/json; charset=utf-8"),
     "access-control-allow-origin": "*",
     "access-control-allow-methods": "GET, POST, OPTIONS",
     "access-control-allow-headers": "content-type, authorization, x-aura-admin-token"
@@ -6332,7 +6337,9 @@ function json(res, status, payload) {
 
 function html(res, status, body) {
   res.writeHead(status, {
-    "content-type": "text/html; charset=utf-8",
+    ...baseSecurityHeaders("text/html; charset=utf-8"),
+    "content-security-policy":
+      "default-src 'none'; style-src 'unsafe-inline'; img-src https: data:; frame-ancestors https://app.auraon.xyz",
     "access-control-allow-origin": "*",
     "access-control-allow-methods": "GET, OPTIONS",
     "access-control-allow-headers": "content-type, authorization, x-aura-admin-token"
@@ -6360,6 +6367,27 @@ async function route(req, res) {
   const segments = url.pathname.split("/").filter(Boolean);
 
   try {
+    if (req.method === "POST") {
+      const isAiRoute = url.pathname.startsWith("/api/ai/");
+      const isCircleAuthRoute =
+        url.pathname.startsWith("/api/wallet/circle/login/") ||
+        url.pathname === "/api/wallet/circle/session" ||
+        url.pathname === "/api/wallet/circle/init-wallet";
+      const rate = checkRateLimit(
+        req,
+        isAiRoute ? "ai" : isCircleAuthRoute ? "circle-auth" : "api-write",
+        {
+          trustProxy: TRUST_PROXY,
+          windowMs: isAiRoute || isCircleAuthRoute ? 5 * 60_000 : 60_000,
+          max: isAiRoute ? AI_RATE_LIMIT_MAX : isCircleAuthRoute ? CIRCLE_AUTH_RATE_LIMIT_MAX : API_RATE_LIMIT_MAX
+        }
+      );
+      if (!rate.allowed) {
+        res.setHeader("retry-after", String(rate.retryAfterSeconds));
+        return json(res, 429, { error: "Too many requests.", retryAfterSeconds: rate.retryAfterSeconds });
+      }
+    }
+
     if (url.pathname === "/" || url.pathname === "/health") {
       const evidenceSearchProvider = evidenceSearchProviderConfig();
       json(res, 200, {
@@ -6387,6 +6415,8 @@ async function route(req, res) {
     }
 
     if (url.pathname === "/api/sync") {
+      if (req.method !== "POST") return notFound(res);
+      if (!adminAuthorized(req)) return json(res, 401, { error: "Unauthorized." });
       void syncOnce();
       json(res, 202, { ok: true, status: "sync started" });
       return;

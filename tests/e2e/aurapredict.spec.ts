@@ -176,10 +176,18 @@ const markets = [
 ];
 
 async function mockAuraBackend(page: Page) {
-  await page.route("http://127.0.0.1:8787/**", async (route) => {
+  const handleIndexerRequest = async (route: Route) => {
     const url = new URL(route.request().url());
     const pathname = url.pathname;
-    if (pathname === "/health") return route.fulfill({ json: { ok: true, marketCount: markets.length } });
+    if (pathname === "/health") {
+      return route.fulfill({
+        json: {
+          ok: true,
+          marketCount: markets.length,
+          updatedAt: new Date().toISOString()
+        }
+      });
+    }
     if (pathname === "/api/stats") {
       return route.fulfill({
         json: {
@@ -312,7 +320,12 @@ async function mockAuraBackend(page: Page) {
     }
     if (pathname === "/api/ai/hot-markets") return route.fulfill({ json: { markets: [], updatedAt: new Date().toISOString() } });
     return route.fulfill({ json: { ok: true } });
-  });
+  };
+  // Development uses localhost while the production preview built by Playwright
+  // embeds the public indexer origin. Mock both so E2E exercises the exact build
+  // artifact that will be deployed.
+  await page.route("http://127.0.0.1:8787/**", handleIndexerRequest);
+  await page.route("https://api.auraon.xyz/**", handleIndexerRequest);
 }
 
 async function mockConnectedWallet(page: Page) {
@@ -416,7 +429,7 @@ test.beforeEach(async ({ page }) => {
 });
 
 test("create market form defaults to authority/oracle review", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/", { waitUntil: "domcontentloaded" });
   await page.getByRole("button", { name: /Create Market/i }).first().click();
 
   await expect(page.getByRole("dialog", { name: /Create market/i })).toBeVisible();
@@ -428,7 +441,7 @@ test("create market form defaults to authority/oracle review", async ({ page }) 
 });
 
 test("create market explains all resolution modes and UTC timing", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/", { waitUntil: "domcontentloaded" });
   await page.getByRole("button", { name: /Create Market/i }).first().click();
 
   const mode = page.getByLabel(/Resolution mode/i);
@@ -448,7 +461,7 @@ test("create market explains all resolution modes and UTC timing", async ({ page
 });
 
 test("market detail exposes stake, resolution, dispute, finalize and claim surfaces", async ({ page }) => {
-  await page.goto("/?market=1");
+  await page.goto("/?market=1", { waitUntil: "domcontentloaded" });
   await expect(page.getByRole("heading", { name: /Will AuraOn let users stake YES or NO/i })).toBeVisible();
   await expect(page.getByText(/Public preview/i)).toBeVisible();
   await expect(page.getByRole("img", { name: /Market odds chart/i })).toBeVisible();
@@ -465,12 +478,12 @@ test("market detail exposes stake, resolution, dispute, finalize and claim surfa
   await page.getByRole("tab", { name: /Top Holders/i }).click();
   await expect(page.getByText(/Top traders/i)).toBeVisible();
 
-  await page.goto("/?market=2");
+  await page.goto("/?market=2", { waitUntil: "domcontentloaded" });
   await expect(page.getByRole("heading", { name: /dispute and finalization controls/i })).toBeVisible();
   await expect(page.getByText(/Connect wallet to interact/i)).toBeVisible();
   await expect(page.getByText(/Public preview/i)).toBeVisible();
 
-  await page.goto("/?market=3");
+  await page.goto("/?market=3", { waitUntil: "domcontentloaded" });
   await expect(page.getByRole("heading", { name: /claim state after a market is finalized/i })).toBeVisible();
   await expect(page.getByText(/Finalized/i).first()).toBeVisible();
   await expect(page.getByText(/Connect wallet to interact/i)).toBeVisible();
@@ -478,7 +491,7 @@ test("market detail exposes stake, resolution, dispute, finalize and claim surfa
 
 test("Unified Balance funding modal documents pending and retry states", async ({ page }) => {
   await mockConnectedWallet(page);
-  await page.goto("/");
+  await page.goto("/", { waitUntil: "domcontentloaded" });
   await page.getByRole("button", { name: /Create Market/i }).first().click();
   const createDialog = page.getByRole("dialog", { name: /Create market/i });
   await createDialog.getByRole("button", { name: /^Unified Balance$/i }).click();
@@ -496,7 +509,7 @@ test("Unified Balance funding modal documents pending and retry states", async (
 
 test("wallet notifications expose claim all and claim filters", async ({ page }) => {
   await mockConnectedWallet(page);
-  await page.goto("/");
+  await page.goto("/", { waitUntil: "domcontentloaded" });
 
   await expect(page.getByLabel(/Notifications/i)).toBeVisible();
   await page.getByLabel(/Notifications/i).click();

@@ -27,6 +27,7 @@ import { arcPredictionMarketV3Abi, arcPredictionMarketV4Abi, settlementTokenAbi 
 import { arcPredictionMarketV2Abi as arcPredictionMarketAbi } from "./contracts/arcPredictionMarketV2Abi";
 import { arcPredictionMarketV5Abi } from "./contracts/arcPredictionMarketV5Abi";
 import { claimAllResultNotice, type ClaimAllFailure } from "./lib/claims";
+import { InteractiveOddsChart } from "./components/InteractiveOddsChart";
 import {
   Outcome,
   type EthereumProvider,
@@ -1042,7 +1043,7 @@ export default function App() {
     return participated ? userParticipated : !userParticipated;
   });
   const collectionMarkets = [...participationFilteredCollectionMarkets].sort((a, b) => {
-    let result = 0;
+    let result: number;
     if (collectionSortKey === "volume") {
       result = compareBigint(marketVolume(a), marketVolume(b));
     } else if (collectionSortKey === "participants") {
@@ -1810,14 +1811,14 @@ export default function App() {
       protocolFeesByToken[asset.token.toLowerCase()] ??
       (sameAddress(asset.token, defaultSettlementToken) ? accumulatedProtocolFees : 0n)
   }));
-  const walletOptions =
+  const walletOptions: Eip6963ProviderDetail[] =
     walletProviders.length > 0
       ? walletProviders
       : window.ethereum
         ? [
             {
               info: { uuid: "browser-wallet", name: "Browser Wallet" },
-              provider: window.ethereum
+              provider: window.ethereum as EthereumProvider
             }
           ]
         : [];
@@ -6596,7 +6597,8 @@ export default function App() {
   };
 
   useEffect(() => {
-    if (!window.ethereum) return;
+    const injected = window.ethereum as EthereumProvider | undefined;
+    if (!injected) return;
 
     const handleAccounts = (accounts: unknown) => {
       const next = Array.isArray(accounts) ? String(accounts[0] || "") : "";
@@ -6619,21 +6621,22 @@ export default function App() {
     };
 
     const handleChainChanged = () => {
-      void refreshNetworkState(window.ethereum ?? null);
+      void refreshNetworkState(injected);
     };
 
-    window.ethereum.on?.("accountsChanged", handleAccounts);
-    window.ethereum.on?.("chainChanged", handleChainChanged);
+    injected.on?.("accountsChanged", handleAccounts);
+    injected.on?.("chainChanged", handleChainChanged);
 
     return () => {
-      window.ethereum?.removeListener?.("accountsChanged", handleAccounts);
-      window.ethereum?.removeListener?.("chainChanged", handleChainChanged);
+      injected.removeListener?.("accountsChanged", handleAccounts);
+      injected.removeListener?.("chainChanged", handleChainChanged);
     };
   }, [refreshNetworkState, refreshWalletBalance, registerUser]);
 
 
   useEffect(() => {
-    if (!window.ethereum) return;
+    const injected = window.ethereum as EthereumProvider | undefined;
+    if (!injected) return;
 
     let mounted = true;
 
@@ -6647,8 +6650,8 @@ export default function App() {
         const next = Array.isArray(accounts) ? String(accounts[0] || "") : "";
         if (!mounted || !next) return;
 
-        setSelectedWalletProvider(window.ethereum ?? null);
-        const walletClient = getWalletClient(window.ethereum ?? null);
+        setSelectedWalletProvider(injected!);
+        const walletClient = getWalletClient(injected!);
         const chainId = await walletClient.getChainId();
         setAccount(next);
         registerUser(next);
@@ -7762,90 +7765,22 @@ export default function App() {
                 {chartTradeCount}
               </span>
             </div>
-            <div
-              className="chart-frame"
-              onPointerLeave={() => setChartHoverRatio(null)}
-              onPointerEnter={(event) => {
-                const rect = event.currentTarget.getBoundingClientRect();
-                setChartHoverRatio(Math.min(1, Math.max(0, (event.clientX - rect.left) / Math.max(1, rect.width))));
-              }}
-              onPointerMove={(event) => {
-                const rect = event.currentTarget.getBoundingClientRect();
-                setChartHoverRatio(Math.min(1, Math.max(0, (event.clientX - rect.left) / Math.max(1, rect.width))));
-              }}
-              onPointerDown={(event) => {
-                event.currentTarget.setPointerCapture(event.pointerId);
-                const rect = event.currentTarget.getBoundingClientRect();
-                setChartHoverRatio(Math.min(1, Math.max(0, (event.clientX - rect.left) / Math.max(1, rect.width))));
-              }}
-            >
-              <svg className="detail-chart" viewBox="0 0 100 58" preserveAspectRatio="none" role="img" aria-label="Market odds chart">
-                <path className="edge-grid" d="M8 8H92 M8 19.5H92 M8 31H92 M8 42.5H92 M8 54H92" />
-                <path
-                  className={`detail-yes-line ${selectedChartSide === Outcome.Yes ? "is-focused" : "is-muted"}`}
-                  d={chartYesPath}
-                />
-                <path
-                  className={`detail-no-line ${selectedChartSide === Outcome.No ? "is-focused" : "is-muted"}`}
-                  d={chartNoPath}
-                />
-                {chartLastPoint && (
-                  <>
-                    <circle className="chart-end-dot yes" cx={chartLastPoint.x} cy={chartYForPercent(chartLastPoint.yesPercent)} r="1.2" />
-                    <circle className="chart-end-dot no" cx={chartLastPoint.x} cy={chartYForPercent(chartLastPoint.noPercent)} r="1.2" />
-                  </>
-                )}
-              </svg>
-              {chartFocusPoint && (
-                <>
-                  <span className={`chart-crosshair ${chartPointerActive ? "is-active" : "is-idle"}`} style={{ left: `${chartFocusPoint.x}%` }} />
-                  <span
-                    className={`chart-hover-dot yes ${chartPointerActive ? "is-active" : "is-idle"}`}
-                    style={{ left: `${chartFocusPoint.x}%`, top: `${(chartFocusYesY / 58) * 100}%` }}
-                  />
-                  <span
-                    className={`chart-hover-dot no ${chartPointerActive ? "is-active" : "is-idle"}`}
-                    style={{ left: `${chartFocusPoint.x}%`, top: `${(chartFocusNoY / 58) * 100}%` }}
-                  />
-                  {chartPointerActive && (
-                    <div
-                      className={`chart-tooltip chart-unified-tooltip is-${chartTooltipSide}`}
-                      style={{ left: `${chartTooltipLeft}%` }}
-                    >
-                      <span className="chart-unified-time">{chartTimeLabel(chartFocusPoint.timestamp, true)}</span>
-                      <div className="chart-unified-row">
-                        <span className="chart-unified-dot yes" />
-                        <span className="chart-unified-label">YES</span>
-                        <strong className="tooltip-yes">{chartFocusPoint.yesPercent.toFixed(1)}%</strong>
-                      </div>
-                      <div className="chart-unified-row">
-                        <span className="chart-unified-dot no" />
-                        <span className="chart-unified-label">NO</span>
-                        <strong className="tooltip-no">{chartFocusPoint.noPercent.toFixed(1)}%</strong>
-                      </div>
-                    </div>
-                  )}
-                </>
-              )}
-              <div className="chart-y-labels" aria-hidden="true">
-                {chartYTicks.map((tick) => (
-                  <span key={`${tick.y}-${tick.label}`} style={{ top: `${(tick.y / 58) * 100}%` }}>
-                    {tick.label}
-                  </span>
-                ))}
-              </div>
-            </div>
-            <div className="chart-time-row">
-                {detailChartTicks.map((tick, index) => (
-                  <span
-                    className={index === 0 ? "is-first" : index === detailChartTicks.length - 1 ? "is-last" : ""}
-                    key={`${tick.x}-${tick.label}`}
-                    style={{ left: `${tick.x}%` }}
-                  >
-                    {tick.label}
-                  </span>
-                ))}
-            </div>
+            <InteractiveOddsChart
+              yesPath={chartYesPath}
+              noPath={chartNoPath}
+              selectedSide={selectedChartSide}
+              lastPoint={chartLastPoint}
+              focusPoint={chartFocusPoint}
+              pointerActive={chartPointerActive}
+              focusYesY={chartFocusYesY}
+              focusNoY={chartFocusNoY}
+              tooltipLeft={chartTooltipLeft}
+              tooltipSide={chartTooltipSide}
+              yTicks={chartYTicks}
+              timeTicks={detailChartTicks}
+              timeLabel={(timestamp) => chartTimeLabel(timestamp, true)}
+              onHoverRatio={setChartHoverRatio}
+            />
           </section>
 
           {hasWalletAccess && (
